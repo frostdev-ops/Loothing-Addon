@@ -1,0 +1,46 @@
+## Interface: 120000
+## Title: Loothing
+## Notes: Loot Council addon for WoW 12.0+ with ranked choice voting
+## Author: James Kueller
+## Version: 1.0.0
+## SavedVariables: LoothingDB
+## Dependencies: Loolib
+## X-Category: Raid
+## X-Website: https://github.com/jkueller/loothing
+## X-License: MIT
+
+# Locale
+Locale\enUS.lua
+
+# Core
+Core\Constants.lua
+Core\Utils.lua
+Debug\TestMode.lua
+Core\Init.lua
+Core\Settings.lua
+
+# Data Layer
+Data\ItemData.lua
+Data\VoteData.lua
+Data\Session.lua
+Data\History.lua
+
+# Council Logic
+Council\CouncilManager.lua
+Council\VotingEngine.lua
+Council\VotingSession.lua
+
+# Communication
+Comm\Protocol.lua
+Comm\MessageHandler.lua
+Comm\Sync.lua
+
+# UI Implementation
+UI\Minimap.lua
+UI\ItemRow.lua
+UI\VotePanel.lua
+UI\ResultsPanel.lua
+UI\SessionPanel.lua
+UI\HistoryPanel.lua
+UI\SettingsPanel.lua
+UI\MainFrame.lua
