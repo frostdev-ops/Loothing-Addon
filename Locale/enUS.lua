@@ -94,10 +94,14 @@ L["CLEAR_HISTORY"] = "Clear History"
 L["CONFIRM_CLEAR"] = "Clear all loot history?"
 L["CONFIRM_CLEAR_HISTORY"] = "Clear all loot history?"
 L["EXPORT"] = "Export"
+L["EXPORT_HISTORY"] = "Export History"
+L["EXPORT_EQDKP"] = "EQdkp"
+L["EXPORT_EQDKP_DESC"] = "Export to EQdkp-Plus XML format"
 L["ENTRIES_COUNT"] = "Total: %d entries"
 L["ENTRIES_FILTERED"] = "Showing: %d of %d entries"
 L["SEARCH"] = "Search..."
 L["SELECT_ALL"] = "Select All"
+L["ALL_WINNERS"] = "All Winners"
 L["AWARDED_TO"] = "Awarded to: %s"
 L["FROM_ENCOUNTER"] = "From: %s"
 L["WITH_VOTES"] = "Votes: %d"
@@ -130,6 +134,14 @@ L["SHOW_MINIMAP_BUTTON"] = "Show minimap button"
 L["UI_SCALE"] = "UI Scale"
 L["ADD"] = "Add"
 
+-- Auto-Pass
+L["AUTOPASS_SETTINGS"] = "Auto-Pass Settings"
+L["ENABLE_AUTOPASS"] = "Enable Auto-Pass"
+L["AUTOPASS_DESC"] = "Automatically pass on items you cannot use"
+L["AUTOPASS_WEAPONS"] = "Auto-pass weapons (wrong primary stats)"
+L["AUTOPASS_BOE"] = "Auto-pass Bind-on-Equip items"
+L["AUTOPASS_TRANSMOG"] = "Auto-pass known transmog appearances"
+
 -- Errors
 L["ERROR_NOT_IN_RAID"] = "You must be in a raid"
 L["ERROR_NOT_LEADER"] = "You must be the raid leader or assistant"
@@ -144,6 +156,21 @@ L["SYNCING"] = "Syncing..."
 L["SYNC_COMPLETE"] = "Sync complete"
 L["SYNC_REQUEST"] = "Requesting sync from raid leader"
 
+-- Guild Sync
+L["SYNC_SETTINGS"] = "Sync Settings"
+L["SYNC_HISTORY"] = "Sync History"
+L["SYNC_SETTINGS_GUILD"] = "Sync Settings to Guild"
+L["SYNC_HISTORY_GUILD"] = "Sync History to Guild"
+L["SYNC_SETTINGS_REQUEST"] = "%s wants to sync their settings to you"
+L["SYNC_HISTORY_REQUEST"] = "%s wants to sync their history (%d days) to you"
+L["ACCEPT_SYNC"] = "Accept Sync"
+L["DECLINE_SYNC"] = "Decline Sync"
+L["SETTINGS_SYNCED"] = "Settings synced from %s"
+L["HISTORY_SYNCED"] = "%d history entries synced from %s"
+L["SYNC_IN_PROGRESS"] = "Sync already in progress"
+L["SYNC_TIMEOUT"] = "Sync timed out"
+L["SYNC_DAYS"] = "Days of history"
+
 -- Tooltips
 L["TOOLTIP_ITEM_LEVEL"] = "Item Level: %d"
 L["TOOLTIP_LOOTER"] = "Looted by: %s"
@@ -156,6 +183,10 @@ L["STATUS_VOTING"] = "Voting"
 L["STATUS_TALLIED"] = "Tallied"
 L["STATUS_AWARDED"] = "Awarded"
 L["STATUS_SKIPPED"] = "Skipped"
+
+-- Response Settings
+L["RESPONSE_SETTINGS"] = "Response Settings"
+L["RESET_RESPONSES"] = "Reset to Defaults"
 
 -- Minimap
 L["MINIMAP_LEFT_CLICK"] = "Left-click to toggle window"

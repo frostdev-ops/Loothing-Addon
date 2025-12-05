@@ -307,6 +307,24 @@ function LoothingCommMixin:RouteMessage(msgType, payload, sender, channel)
     elseif msgType == LOOTHING_MSG_TYPE.VERSION_RESPONSE then
         self:HandleVersionResponse(payload, sender)
 
+    elseif msgType == LOOTHING_MSG_TYPE.SYNC_SETTINGS_REQUEST then
+        self:HandleSettingsSyncRequest(payload, sender)
+
+    elseif msgType == LOOTHING_MSG_TYPE.SYNC_SETTINGS_ACK then
+        self:HandleSettingsSyncAck(payload, sender)
+
+    elseif msgType == LOOTHING_MSG_TYPE.SYNC_SETTINGS_DATA then
+        self:HandleSettingsData(payload, sender)
+
+    elseif msgType == LOOTHING_MSG_TYPE.SYNC_HISTORY_REQUEST then
+        self:HandleHistorySyncRequest(payload, sender)
+
+    elseif msgType == LOOTHING_MSG_TYPE.SYNC_HISTORY_ACK then
+        self:HandleHistorySyncAck(payload, sender)
+
+    elseif msgType == LOOTHING_MSG_TYPE.SYNC_HISTORY_DATA then
+        self:HandleHistoryData(payload, sender)
+
     else
         Loothing:Debug("Unknown message type:", msgType)
     end
@@ -475,6 +493,43 @@ function LoothingCommMixin:HandleVersionResponse(payload, sender)
         version = version,
         sender = sender,
     })
+end
+
+function LoothingCommMixin:HandleSettingsSyncRequest(payload, sender)
+    if Loothing.Sync then
+        Loothing.Sync:HandleSettingsSyncRequest(sender)
+    end
+end
+
+function LoothingCommMixin:HandleSettingsSyncAck(payload, sender)
+    if Loothing.Sync then
+        Loothing.Sync:HandleSettingsSyncAck(sender)
+    end
+end
+
+function LoothingCommMixin:HandleSettingsData(payload, sender)
+    if Loothing.Sync and payload[1] then
+        Loothing.Sync:HandleSettingsData(payload[1], sender)
+    end
+end
+
+function LoothingCommMixin:HandleHistorySyncRequest(payload, sender)
+    if Loothing.Sync then
+        local days = tonumber(payload[1]) or 7
+        Loothing.Sync:HandleHistorySyncRequest(sender, days)
+    end
+end
+
+function LoothingCommMixin:HandleHistorySyncAck(payload, sender)
+    if Loothing.Sync then
+        Loothing.Sync:HandleHistorySyncAck(sender)
+    end
+end
+
+function LoothingCommMixin:HandleHistoryData(payload, sender)
+    if Loothing.Sync and payload[1] then
+        Loothing.Sync:HandleHistoryData(payload[1], sender)
+    end
 end
 
 --[[--------------------------------------------------------------------

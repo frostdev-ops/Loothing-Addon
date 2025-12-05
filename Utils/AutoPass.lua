@@ -227,6 +227,11 @@ function LoothingAutoPass:ShouldAutoPass(itemLink, playerClass)
         return false
     end
 
+    -- Check master toggle
+    if Loothing.Settings and not Loothing.Settings:GetAutoPassEnabled() then
+        return false
+    end
+
     -- Default to player's class
     if not playerClass then
         local _, class = UnitClass("player")
@@ -269,8 +274,38 @@ function LoothingAutoPass:ShouldAutoPass(itemLink, playerClass)
         end
 
         -- Then check weapon stats (for classes that can equip but wrong stats)
-        if self:ShouldAutoPassWeapon(itemLink, playerClass) then
+        -- Only check stats if weapon setting is enabled
+        if Loothing.Settings and Loothing.Settings:GetAutoPassWeapons() then
+            if self:ShouldAutoPassWeapon(itemLink, playerClass) then
+                return true
+            end
+        end
+    end
+
+    -- Check BoE items
+    if Loothing.Settings and Loothing.Settings:GetAutoPassBoE() then
+        local isBound = C_Item.IsBound(itemLink)
+        local bindType = select(14, C_Item.GetItemInfo(itemLink))
+        -- bindType 2 = Bind on Equip, 3 = Bind on Use
+        if not isBound and bindType == 2 then
             return true
+        end
+    end
+
+    -- Check transmog (if appearance is already known)
+    if Loothing.Settings and Loothing.Settings:GetAutoPassTransmog() then
+        -- Check if item is transmoggable
+        if C_TransmogCollection and C_Item.IsDressableItemByID then
+            local canBeTransmogged = C_Item.IsDressableItemByID(itemID)
+            if canBeTransmogged then
+                local _, appearanceID = C_TransmogCollection.GetItemInfo(itemLink)
+                if appearanceID then
+                    local sourceInfo = C_TransmogCollection.GetSourceInfo(appearanceID)
+                    if sourceInfo and sourceInfo.isCollected then
+                        return true
+                    end
+                end
+            end
         end
     end
 
@@ -314,8 +349,36 @@ function LoothingAutoPass:GetAutoPassReason(itemLink, playerClass)
         end
 
         -- Check weapon stats
-        if self:ShouldAutoPassWeapon(itemLink, playerClass) then
-            return "Wrong primary stats for class"
+        if Loothing.Settings and Loothing.Settings:GetAutoPassWeapons() then
+            if self:ShouldAutoPassWeapon(itemLink, playerClass) then
+                return "Wrong primary stats for class"
+            end
+        end
+    end
+
+    -- Check BoE
+    if Loothing.Settings and Loothing.Settings:GetAutoPassBoE() then
+        local isBound = C_Item.IsBound(itemLink)
+        local bindType = select(14, C_Item.GetItemInfo(itemLink))
+        if not isBound and bindType == 2 then
+            return "Bind-on-Equip item (can be sold/traded)"
+        end
+    end
+
+    -- Check transmog
+    if Loothing.Settings and Loothing.Settings:GetAutoPassTransmog() then
+        local itemID = LoothingUtils.GetItemID(itemLink)
+        if itemID and C_TransmogCollection and C_Item.IsDressableItemByID then
+            local canBeTransmogged = C_Item.IsDressableItemByID(itemID)
+            if canBeTransmogged then
+                local _, appearanceID = C_TransmogCollection.GetItemInfo(itemLink)
+                if appearanceID then
+                    local sourceInfo = C_TransmogCollection.GetSourceInfo(appearanceID)
+                    if sourceInfo and sourceInfo.isCollected then
+                        return "Transmog appearance already known"
+                    end
+                end
+            end
         end
     end
 

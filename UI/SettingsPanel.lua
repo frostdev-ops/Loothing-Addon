@@ -16,6 +16,7 @@ LoothingSettingsPanelMixin = {}
 function LoothingSettingsPanelMixin:Init(parent)
     self.parent = parent
     self.councilRows = {}
+    self.responseRows = {}
 
     self:CreateFrame()
     self:CreateElements()
@@ -42,6 +43,9 @@ function LoothingSettingsPanelMixin:CreateElements()
     content:SetSize(scrollFrame:GetWidth(), 800)
     scrollFrame:SetScrollChild(content)
 
+    -- Store reference to mixin for nested callbacks
+    content.mixin = self
+
     self.scrollFrame = scrollFrame
     self.content = content
 
@@ -60,6 +64,16 @@ function LoothingSettingsPanelMixin:CreateElements()
     yOffset = yOffset - 16
     yOffset = self:CreateSection(L["UI_SETTINGS"], yOffset)
     yOffset = self:CreateUISettings(yOffset)
+
+    -- Auto-Pass Settings Section
+    yOffset = yOffset - 16
+    yOffset = self:CreateSection(L["AUTOPASS_SETTINGS"], yOffset)
+    yOffset = self:CreateAutoPassSettings(yOffset)
+
+    -- Response Settings Section
+    yOffset = yOffset - 16
+    yOffset = self:CreateSection(L["RESPONSE_SETTINGS"], yOffset)
+    yOffset = self:CreateResponseSettings(yOffset)
 
     -- Update content height
     self.content:SetHeight(math.abs(yOffset) + 20)
@@ -449,6 +463,295 @@ function LoothingSettingsPanelMixin:CreateUISettings(yOffset)
 end
 
 --[[--------------------------------------------------------------------
+    Auto-Pass Settings
+----------------------------------------------------------------------]]
+
+--- Create auto-pass settings controls
+-- @param yOffset number
+-- @return number - New yOffset
+function LoothingSettingsPanelMixin:CreateAutoPassSettings(yOffset)
+    local L = LOOTHING_LOCALE
+
+    -- Enable Auto-Pass (master toggle)
+    local enableCheck = CreateFrame("CheckButton", nil, self.content, "UICheckButtonTemplate")
+    enableCheck:SetPoint("TOPLEFT", 12, yOffset)
+    enableCheck.text:SetText(L["ENABLE_AUTOPASS"])
+    enableCheck.text:SetFontObject(GameFontNormal)
+    enableCheck:SetScript("OnClick", function(checkBtn)
+        local enabled = checkBtn:GetChecked()
+        if Loothing.Settings then
+            Loothing.Settings:SetAutoPassEnabled(enabled)
+        end
+        -- Enable/disable sub-options via mixin reference
+        local panel = checkBtn:GetParent().mixin
+        if panel and panel.autoPassWeaponsCheck then
+            panel.autoPassWeaponsCheck:SetEnabled(enabled)
+            panel.autoPassBoECheck:SetEnabled(enabled)
+            panel.autoPassTransmogCheck:SetEnabled(enabled)
+        end
+    end)
+    self.autoPassEnabledCheck = enableCheck
+
+    yOffset = yOffset - 26
+
+    -- Description text
+    local descText = self.content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    descText:SetPoint("TOPLEFT", 32, yOffset)
+    descText:SetText(L["AUTOPASS_DESC"])
+    descText:SetTextColor(0.6, 0.6, 0.6)
+
+    yOffset = yOffset - 18
+
+    -- Auto-pass weapons with wrong stats
+    local weaponsCheck = CreateFrame("CheckButton", nil, self.content, "UICheckButtonTemplate")
+    weaponsCheck:SetPoint("TOPLEFT", 32, yOffset)
+    weaponsCheck.text:SetText(L["AUTOPASS_WEAPONS"])
+    weaponsCheck.text:SetFontObject(GameFontNormal)
+    weaponsCheck:SetScript("OnClick", function(self)
+        if Loothing.Settings then
+            Loothing.Settings:SetAutoPassWeapons(self:GetChecked())
+        end
+    end)
+    self.autoPassWeaponsCheck = weaponsCheck
+
+    yOffset = yOffset - 26
+
+    -- Auto-pass BoE items
+    local boeCheck = CreateFrame("CheckButton", nil, self.content, "UICheckButtonTemplate")
+    boeCheck:SetPoint("TOPLEFT", 32, yOffset)
+    boeCheck.text:SetText(L["AUTOPASS_BOE"])
+    boeCheck.text:SetFontObject(GameFontNormal)
+    boeCheck:SetScript("OnClick", function(self)
+        if Loothing.Settings then
+            Loothing.Settings:SetAutoPassBoE(self:GetChecked())
+        end
+    end)
+    self.autoPassBoECheck = boeCheck
+
+    yOffset = yOffset - 26
+
+    -- Auto-pass known transmog
+    local transmogCheck = CreateFrame("CheckButton", nil, self.content, "UICheckButtonTemplate")
+    transmogCheck:SetPoint("TOPLEFT", 32, yOffset)
+    transmogCheck.text:SetText(L["AUTOPASS_TRANSMOG"])
+    transmogCheck.text:SetFontObject(GameFontNormal)
+    transmogCheck:SetScript("OnClick", function(self)
+        if Loothing.Settings then
+            Loothing.Settings:SetAutoPassTransmog(self:GetChecked())
+        end
+    end)
+    self.autoPassTransmogCheck = transmogCheck
+
+    yOffset = yOffset - 30
+
+    return yOffset
+end
+
+--[[--------------------------------------------------------------------
+    Response Settings
+----------------------------------------------------------------------]]
+
+--- Create response settings controls
+-- @param yOffset number
+-- @return number - New yOffset
+function LoothingSettingsPanelMixin:CreateResponseSettings(yOffset)
+    local L = LOOTHING_LOCALE
+
+    -- Reset to defaults button
+    local resetButton = CreateFrame("Button", nil, self.content, "UIPanelButtonTemplate")
+    resetButton:SetSize(150, 22)
+    resetButton:SetPoint("TOPLEFT", 16, yOffset)
+    resetButton:SetText(L["RESET_RESPONSES"])
+    resetButton:SetScript("OnClick", function()
+        if Loothing.ResponseManager then
+            Loothing.ResponseManager:ResetToDefaults()
+            self:RefreshResponseList()
+        end
+    end)
+
+    yOffset = yOffset - 34
+
+    -- Create rows container
+    self.responseListContainer = CreateFrame("Frame", nil, self.content)
+    self.responseListContainer:SetPoint("TOPLEFT", 16, yOffset)
+    self.responseListContainer:SetPoint("TOPRIGHT", -16, yOffset)
+    self.responseListContainer:SetHeight(200)
+
+    -- Populate response list
+    self:RefreshResponseList()
+
+    yOffset = yOffset - 210
+
+    return yOffset
+end
+
+--- Refresh response list
+function LoothingSettingsPanelMixin:RefreshResponseList()
+    -- Clear existing rows
+    for _, rowData in pairs(self.responseRows) do
+        if rowData.row then
+            rowData.row:Hide()
+            rowData.row:SetParent(nil)
+        end
+    end
+    wipe(self.responseRows)
+
+    if not Loothing.ResponseManager or not self.responseListContainer then
+        return
+    end
+
+    local responses = Loothing.ResponseManager:GetSortedResponses()
+    local yOffset = 0
+
+    for _, resp in ipairs(responses) do
+        yOffset = self:CreateResponseRow(resp, yOffset)
+    end
+end
+
+--- Create a response row
+-- @param responseData table - { id, name, color, icon, sort }
+-- @param yOffset number
+-- @return number - New yOffset
+function LoothingSettingsPanelMixin:CreateResponseRow(responseData, yOffset)
+    local row = CreateFrame("Frame", nil, self.responseListContainer)
+    row:SetPoint("TOPLEFT", 0, yOffset)
+    row:SetPoint("TOPRIGHT", 0, yOffset)
+    row:SetHeight(28)
+
+    -- Color swatch button
+    local colorButton = CreateFrame("Button", nil, row)
+    colorButton:SetSize(20, 20)
+    colorButton:SetPoint("LEFT", 0, 0)
+
+    local colorTex = colorButton:CreateTexture(nil, "BACKGROUND")
+    colorTex:SetAllPoints()
+    local r, g, b, a = unpack(responseData.color)
+    colorTex:SetColorTexture(r, g, b, a or 1)
+
+    -- Border for color swatch
+    local colorBorder = colorButton:CreateTexture(nil, "BORDER")
+    colorBorder:SetAllPoints()
+    colorBorder:SetColorTexture(0.3, 0.3, 0.3, 1)
+    colorBorder:SetDrawLayer("BORDER", -1)
+
+    colorButton:SetScript("OnClick", function()
+        self:ShowColorPicker(responseData.id, responseData.color)
+    end)
+
+    -- Response name (editable)
+    local nameEdit = CreateFrame("EditBox", nil, row, "InputBoxTemplate")
+    nameEdit:SetSize(120, 20)
+    nameEdit:SetPoint("LEFT", colorButton, "RIGHT", 8, 0)
+    nameEdit:SetText(responseData.name)
+    nameEdit:SetAutoFocus(false)
+    nameEdit:SetScript("OnEnterPressed", function(self)
+        if Loothing.ResponseManager then
+            Loothing.ResponseManager:UpdateResponse(responseData.id, { name = self:GetText() })
+        end
+        self:ClearFocus()
+    end)
+    nameEdit:SetScript("OnEscapePressed", function(self)
+        self:ClearFocus()
+    end)
+
+    -- Reorder buttons (up/down)
+    local upButton = CreateFrame("Button", nil, row)
+    upButton:SetSize(16, 16)
+    upButton:SetPoint("LEFT", nameEdit, "RIGHT", 16, 0)
+    upButton:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollUp-Up")
+    upButton:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollUp-Up")
+    upButton:GetHighlightTexture():SetAlpha(0.5)
+    upButton:SetScript("OnClick", function()
+        self:MoveResponse(responseData.id, -1)
+    end)
+
+    local downButton = CreateFrame("Button", nil, row)
+    downButton:SetSize(16, 16)
+    downButton:SetPoint("LEFT", upButton, "RIGHT", 2, 0)
+    downButton:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up")
+    downButton:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up")
+    downButton:GetHighlightTexture():SetAlpha(0.5)
+    downButton:SetScript("OnClick", function()
+        self:MoveResponse(responseData.id, 1)
+    end)
+
+    -- Store row reference
+    self.responseRows[responseData.id] = {
+        row = row,
+        colorTex = colorTex,
+        nameEdit = nameEdit,
+    }
+
+    row:Show()
+    return yOffset - 32
+end
+
+--- Show color picker for a response
+-- @param responseID number
+-- @param currentColor table - { r, g, b, a }
+function LoothingSettingsPanelMixin:ShowColorPicker(responseID, currentColor)
+    local r, g, b, a = unpack(currentColor)
+
+    local function callback(restore)
+        local newR, newG, newB
+        if restore then
+            newR, newG, newB = r, g, b
+        else
+            newR, newG, newB = ColorPickerFrame:GetColorRGB()
+        end
+
+        if Loothing.ResponseManager then
+            Loothing.ResponseManager:SetResponseColor(responseID, newR, newG, newB, a)
+        end
+
+        -- Update UI
+        local rowData = self.responseRows[responseID]
+        if rowData and rowData.colorTex then
+            rowData.colorTex:SetColorTexture(newR, newG, newB, a or 1)
+        end
+    end
+
+    ColorPickerFrame:SetupColorPickerAndShow({
+        r = r,
+        g = g,
+        b = b,
+        swatchFunc = callback,
+        cancelFunc = callback,
+    })
+end
+
+--- Move response up or down in sort order
+-- @param responseID number
+-- @param direction number - -1 for up, 1 for down
+function LoothingSettingsPanelMixin:MoveResponse(responseID, direction)
+    if not Loothing.ResponseManager then return end
+
+    local responses = Loothing.ResponseManager:GetSortedResponses()
+    local currentIndex
+
+    for i, resp in ipairs(responses) do
+        if resp.id == responseID then
+            currentIndex = i
+            break
+        end
+    end
+
+    if not currentIndex then return end
+
+    local targetIndex = currentIndex + direction
+    if targetIndex < 1 or targetIndex > #responses then return end
+
+    -- Swap sort orders
+    local current = responses[currentIndex]
+    local target = responses[targetIndex]
+
+    Loothing.ResponseManager:SetResponseSort(current.id, target.sort)
+    Loothing.ResponseManager:SetResponseSort(target.id, current.sort)
+
+    self:RefreshResponseList()
+end
+
+--[[--------------------------------------------------------------------
     Refresh
 ----------------------------------------------------------------------]]
 
@@ -488,8 +791,24 @@ function LoothingSettingsPanelMixin:Refresh()
     local scale = Loothing.Settings:Get("settings.uiScale") or 1.0
     self.scaleSlider:SetValue(scale)
 
+    -- Auto-pass settings
+    local autoPassEnabled = Loothing.Settings:GetAutoPassEnabled()
+    self.autoPassEnabledCheck:SetChecked(autoPassEnabled)
+
+    self.autoPassWeaponsCheck:SetChecked(Loothing.Settings:GetAutoPassWeapons())
+    self.autoPassWeaponsCheck:SetEnabled(autoPassEnabled)
+
+    self.autoPassBoECheck:SetChecked(Loothing.Settings:GetAutoPassBoE())
+    self.autoPassBoECheck:SetEnabled(autoPassEnabled)
+
+    self.autoPassTransmogCheck:SetChecked(Loothing.Settings:GetAutoPassTransmog())
+    self.autoPassTransmogCheck:SetEnabled(autoPassEnabled)
+
     -- Council list
     self:RefreshCouncilList()
+
+    -- Response list
+    self:RefreshResponseList()
 end
 
 --[[--------------------------------------------------------------------

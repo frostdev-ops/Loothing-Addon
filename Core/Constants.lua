@@ -126,6 +126,14 @@ LOOTHING_MSG_TYPE = {
     PLAYER_INFO_REQUEST = "PIQ", -- ML -> Player: Request gear info
     PLAYER_INFO_RESPONSE = "PIS", -- Player -> ML: Send gear info
 
+    -- Guild Sync (Settings and History)
+    SYNC_SETTINGS_REQUEST = "SSR",   -- ML -> Target: Request to sync settings
+    SYNC_SETTINGS_ACK = "SSA",       -- Target -> ML: Accept settings sync
+    SYNC_SETTINGS_DATA = "SSD",      -- ML -> Target: Settings payload
+    SYNC_HISTORY_REQUEST = "SHR",    -- ML -> Target: Request to sync history
+    SYNC_HISTORY_ACK = "SHA",        -- Target -> ML: Accept history sync
+    SYNC_HISTORY_DATA = "SHD",       -- ML -> Target: History payload
+
     -- Chunked messages
     CHUNK = "C",                -- Chunked message part
 }
@@ -152,6 +160,13 @@ LOOTHING_DEFAULT_SETTINGS = {
         announceChannel = "RAID",
         uiScale = 1.0,
         mainFramePosition = nil,
+    },
+
+    autoPass = {
+        enabled = true,
+        weapons = true,
+        boe = false,
+        transmog = false,
     },
 
     responses = {

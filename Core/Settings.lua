@@ -70,6 +70,17 @@ function LoothingSettingsMixin:ValidateStructure()
     if not self.db.history then
         self.db.history = {}
     end
+
+    -- AutoPass
+    if not self.db.autoPass then
+        self.db.autoPass = LoothingUtils.DeepCopy(defaults.autoPass)
+    else
+        for key, value in pairs(defaults.autoPass) do
+            if self.db.autoPass[key] == nil then
+                self.db.autoPass[key] = LoothingUtils.DeepCopy(value)
+            end
+        end
+    end
 end
 
 --- Save settings (called on logout)
@@ -350,4 +361,56 @@ end
 --- Clear history
 function LoothingSettingsMixin:ClearHistory()
     self:Set("history", {})
+end
+
+--[[--------------------------------------------------------------------
+    Auto-Pass Settings
+----------------------------------------------------------------------]]
+
+--- Get auto-pass enabled setting
+-- @return boolean
+function LoothingSettingsMixin:GetAutoPassEnabled()
+    return self:Get("autoPass.enabled") ~= false
+end
+
+--- Set auto-pass enabled
+-- @param enabled boolean
+function LoothingSettingsMixin:SetAutoPassEnabled(enabled)
+    self:Set("autoPass.enabled", enabled)
+end
+
+--- Get auto-pass weapons setting
+-- @return boolean
+function LoothingSettingsMixin:GetAutoPassWeapons()
+    return self:Get("autoPass.weapons") ~= false
+end
+
+--- Set auto-pass weapons
+-- @param enabled boolean
+function LoothingSettingsMixin:SetAutoPassWeapons(enabled)
+    self:Set("autoPass.weapons", enabled)
+end
+
+--- Get auto-pass BoE setting
+-- @return boolean
+function LoothingSettingsMixin:GetAutoPassBoE()
+    return self:Get("autoPass.boe") == true
+end
+
+--- Set auto-pass BoE
+-- @param enabled boolean
+function LoothingSettingsMixin:SetAutoPassBoE(enabled)
+    self:Set("autoPass.boe", enabled)
+end
+
+--- Get auto-pass transmog setting
+-- @return boolean
+function LoothingSettingsMixin:GetAutoPassTransmog()
+    return self:Get("autoPass.transmog") == true
+end
+
+--- Set auto-pass transmog
+-- @param enabled boolean
+function LoothingSettingsMixin:SetAutoPassTransmog(enabled)
+    self:Set("autoPass.transmog", enabled)
 end

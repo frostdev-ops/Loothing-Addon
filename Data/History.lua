@@ -595,3 +595,146 @@ function LoothingHistoryMixin:ExportJSON()
 
     return table.concat(parts, "\n")
 end
+
+--- Export history to EQdkp-Plus XML format
+-- @return string
+function LoothingHistoryMixin:ExportEQdkp()
+    local lines = {}
+
+    -- Collect unique zones, bosses, and members
+    local zones = {}
+    local zoneIndex = {}
+    local bosses = {}
+    local bossIndex = {}
+    local members = {}
+    local memberSet = {}
+
+    for _, entry in self.filteredEntries:Enumerate() do
+        local zone = entry.encounterName or "Unknown"
+        if not zoneIndex[zone] then
+            zones[#zones + 1] = zone
+            zoneIndex[zone] = #zones
+        end
+
+        local boss = entry.encounterName or "Unknown"
+        local bossKey = boss .. "_" .. (entry.timestamp or 0)
+        if not bossIndex[bossKey] then
+            bosses[#bosses + 1] = {
+                name = boss,
+                time = entry.timestamp or 0,
+                zone = zoneIndex[zone]
+            }
+            bossIndex[bossKey] = #bosses
+        end
+
+        local winner = entry.winner
+        if winner and not memberSet[winner] then
+            memberSet[winner] = true
+            members[#members + 1] = winner
+        end
+    end
+
+    -- Get player info
+    local playerName = UnitName("player")
+    local realmName = GetRealmName()
+
+    -- XML Header
+    lines[#lines + 1] = '<?xml version="1.0" encoding="UTF-8"?>'
+    lines[#lines + 1] = '<RaidLog>'
+
+    -- Head section
+    lines[#lines + 1] = '    <head>'
+    lines[#lines + 1] = '        <export>'
+    lines[#lines + 1] = string.format('            <name>%s</name>', "Loothing")
+    lines[#lines + 1] = string.format('            <version>%s</version>', LOOTHING_VERSION)
+    lines[#lines + 1] = '        </export>'
+    lines[#lines + 1] = '        <tracker>'
+    lines[#lines + 1] = '            <name>Loothing Loot Council</name>'
+    lines[#lines + 1] = string.format('            <version>%s</version>', LOOTHING_VERSION)
+    lines[#lines + 1] = '        </tracker>'
+    lines[#lines + 1] = '        <gameinfo>'
+    lines[#lines + 1] = '            <game>World of Warcraft</game>'
+    lines[#lines + 1] = '            <language>en</language>'
+    lines[#lines + 1] = string.format('            <charactername>%s</charactername>', self:EscapeXML(playerName))
+    lines[#lines + 1] = string.format('            <servername>%s</servername>', self:EscapeXML(realmName))
+    lines[#lines + 1] = '        </gameinfo>'
+    lines[#lines + 1] = '    </head>'
+
+    -- Raid data section
+    lines[#lines + 1] = '    <raiddata>'
+
+    -- Zones
+    lines[#lines + 1] = '        <zones>'
+    for i, zone in ipairs(zones) do
+        lines[#lines + 1] = string.format('            <zone id="%d" name="%s"/>', i, self:EscapeXML(zone))
+    end
+    lines[#lines + 1] = '        </zones>'
+
+    -- Boss kills
+    lines[#lines + 1] = '        <bosskills>'
+    for i, boss in ipairs(bosses) do
+        lines[#lines + 1] = string.format('            <bosskill id="%d" name="%s" time="%d" zone="%d"/>',
+            i, self:EscapeXML(boss.name), boss.time, boss.zone)
+    end
+    lines[#lines + 1] = '        </bosskills>'
+
+    -- Members
+    lines[#lines + 1] = '        <members>'
+    for _, member in ipairs(members) do
+        local shortName = LoothingUtils.GetShortName(member)
+        lines[#lines + 1] = string.format('            <member name="%s"/>', self:EscapeXML(shortName))
+    end
+    lines[#lines + 1] = '        </members>'
+
+    -- Items
+    lines[#lines + 1] = '        <items>'
+    for _, entry in self.filteredEntries:Enumerate() do
+        local itemID = entry.itemID or 0
+        local itemName = entry.itemName or "Unknown"
+        local winner = LoothingUtils.GetShortName(entry.winner) or "Unknown"
+        local timestamp = entry.timestamp or 0
+        local votes = entry.votes or 0
+        local boss = entry.encounterName or "Unknown"
+        local zone = entry.encounterName or "Unknown"
+
+        -- Get response name
+        local responseName = ""
+        if entry.winnerResponse and LOOTHING_RESPONSE_INFO[entry.winnerResponse] then
+            responseName = LOOTHING_RESPONSE_INFO[entry.winnerResponse].name
+        end
+
+        lines[#lines + 1] = '            <item>'
+        lines[#lines + 1] = string.format('                <itemid>%d</itemid>', itemID)
+        lines[#lines + 1] = string.format('                <name>%s</name>', self:EscapeXML(itemName))
+        lines[#lines + 1] = string.format('                <member>%s</member>', self:EscapeXML(winner))
+        lines[#lines + 1] = string.format('                <time>%d</time>', timestamp)
+        lines[#lines + 1] = '                <count>1</count>'
+        lines[#lines + 1] = string.format('                <cost>%d</cost>', votes)
+        lines[#lines + 1] = string.format('                <note>Response: %s</note>', self:EscapeXML(responseName))
+        lines[#lines + 1] = string.format('                <boss>%s</boss>', self:EscapeXML(boss))
+        lines[#lines + 1] = string.format('                <zone>%s</zone>', self:EscapeXML(zone))
+        lines[#lines + 1] = '            </item>'
+    end
+    lines[#lines + 1] = '        </items>'
+
+    lines[#lines + 1] = '    </raiddata>'
+    lines[#lines + 1] = '</RaidLog>'
+
+    return table.concat(lines, "\n")
+end
+
+--- Escape special characters for XML
+-- @param str string
+-- @return string
+function LoothingHistoryMixin:EscapeXML(str)
+    if not str then return "" end
+
+    str = tostring(str)
+    str = str:gsub("&", "&amp;")
+    str = str:gsub("<", "&lt;")
+    str = str:gsub(">", "&gt;")
+    str = str:gsub('"', "&quot;")
+    str = str:gsub("'", "&apos;")
+
+    return str
+end

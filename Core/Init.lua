@@ -28,6 +28,38 @@ Loothing.UI = nil
 local L = LOOTHING_LOCALE
 
 --[[--------------------------------------------------------------------
+    Static Popup Dialogs
+----------------------------------------------------------------------]]
+
+StaticPopupDialogs["LOOTHING_ACCEPT_SETTINGS_SYNC"] = {
+    text = "%s wants to sync their Loothing settings to you. Accept?",
+    button1 = "Accept",
+    button2 = "Decline",
+    OnAccept = function(self, data)
+        if data and data.onAccept then
+            data.onAccept()
+        end
+    end,
+    timeout = 60,
+    whileDead = true,
+    hideOnEscape = true,
+}
+
+StaticPopupDialogs["LOOTHING_ACCEPT_HISTORY_SYNC"] = {
+    text = "%s wants to sync their loot history (%s days) to you. Accept?",
+    button1 = "Accept",
+    button2 = "Decline",
+    OnAccept = function(self, data)
+        if data and data.onAccept then
+            data.onAccept()
+        end
+    end,
+    timeout = 60,
+    whileDead = true,
+    hideOnEscape = true,
+}
+
+--[[--------------------------------------------------------------------
     Event Frame
 ----------------------------------------------------------------------]]
 
@@ -240,6 +272,36 @@ local function RegisterSlashCommands()
         elseif cmd == "debug" then
             Loothing.debug = not Loothing.debug
             print("Loothing debug mode:", Loothing.debug and "ON" or "OFF")
+        elseif cmd == "sync" then
+            -- /lt sync settings guild
+            -- /lt sync history guild 7
+            local subCmd, target, days = args:match("^(%S*)%s*(%S*)%s*(%S*)$")
+            subCmd = subCmd and subCmd:lower() or ""
+
+            if subCmd == "settings" then
+                if not target or target == "" then
+                    target = "guild"
+                end
+                if Loothing.Sync then
+                    Loothing.Sync:RequestSettingsSync(target)
+                else
+                    print("|cffff0000[Loothing]|r Sync module not available")
+                end
+            elseif subCmd == "history" then
+                if not target or target == "" then
+                    target = "guild"
+                end
+                local numDays = tonumber(days) or 7
+                if Loothing.Sync then
+                    Loothing.Sync:RequestHistorySync(target, numDays)
+                else
+                    print("|cffff0000[Loothing]|r Sync module not available")
+                end
+            else
+                print("Sync commands:")
+                print("  /lt sync settings [guild|playername] - Sync settings")
+                print("  /lt sync history [guild|playername] [days] - Sync history")
+            end
         else
             print(L["SLASH_HELP"])
         end
