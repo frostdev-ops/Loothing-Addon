@@ -495,7 +495,7 @@ end
 -- @return boolean
 function LoothingSessionMixin:IsMasterLooter()
     if self.masterLooter then
-        return self.masterLooter == LoothingUtils.GetPlayerFullName()
+        return LoothingUtils.IsSamePlayer(self.masterLooter, LoothingUtils.GetPlayerFullName())
     end
     return Loothing.handleLoot == true
 end
@@ -1621,8 +1621,28 @@ function LoothingSessionMixin:HandleRemoteVoteCommit(data)
     end
 
     -- Validate responses payload
-    if type(data.responses) ~= "table" or #data.responses == 0 then
+    if type(data.responses) ~= "table" then
         Loothing:Debug("Rejected vote commit with invalid responses from:", tostring(data.voter))
+        return
+    end
+
+    -- Empty responses = vote retraction
+    if #data.responses == 0 then
+        if not data.voter then return end
+        item:RemoveVote(data.voter)
+        if Loothing.Comm and item.candidateManager then
+            local candidates = item.candidateManager:GetAllCandidates()
+            for _, candidate in ipairs(candidates) do
+                self:UpdateCandidateVoters(item, candidate.playerName)
+                Loothing.Comm:QueueForBatch(LOOTHING_MSG_TYPE.VOTE_UPDATE, {
+                    itemGUID      = item.guid,
+                    candidateName = candidate.playerName,
+                    voters        = candidate.voters,
+                    sessionID     = self.sessionID,
+                }, nil, "NORMAL")
+            end
+            Loothing.Comm:FlushAll()
+        end
         return
     end
 

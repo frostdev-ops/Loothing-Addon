@@ -657,16 +657,12 @@ function LoothingVotePanelMixin:SubmitVote()
         end
     end
 
-    -- Get player info
-    local playerName = LoothingUtils.GetPlayerFullName()
-    local _, playerClass = UnitClass("player")
-
     -- Copy responses
     local responses = { unpack(self.selectedResponses) }
 
-    -- Submit via session (include note)
+    -- Submit via session
     if Loothing.Session then
-        Loothing.Session:SubmitVote(self.item.guid, playerName, playerClass, responses, note)
+        Loothing.Session:SubmitVote(self.item.guid, responses)
     end
 
     self:TriggerEvent("OnVoteSubmitted", self.item, responses)

@@ -20,6 +20,29 @@ All notable changes to Loothing will be documented in this file.
 - **Bulk bar visibility**: ML-only action buttons are hidden (not just disabled) for non-ML users. Select All / Deselect buttons remain visible for all users
 - **Scroll frame anchor adjustment**: Scroll frame top anchor shifts down by 28px when the bulk bar is visible, matching the existing `ToggleFilterBar()` pattern
 
+### Fixed
+
+#### VotePanel Call Signature Mismatch (vote commit rejection)
+- **Council votes were rejected by ML with "Rejected vote commit with invalid responses"**: `VotePanel:SubmitVote()` was calling `Session:SubmitVote(guid, playerName, playerClass, responses, note)` but `Session:SubmitVote` only accepts `(itemGUID, responses)`. The `responses` parameter in Session was receiving `playerName` (a string), causing `type(data.responses) ~= "table"` to reject every vote
+- **Fix**: Removed unused `playerName` and `playerClass` locals from `VotePanel:SubmitVote()`; call is now `Session:SubmitVote(self.item.guid, responses)`
+
+#### SESSION_END Rejected from ML After Heartbeat Timeout
+- **Clients rejected SESSION_END from the ML with "Rejected SESSION_END from non-ML"**: `isMasterLooter()` in `Comm/Handlers/Core.lua` relied solely on `Session:GetMasterLooter()`, which returns `nil` after `EndSession()` clears `self.masterLooter`. When a heartbeat timeout ended the session before the SESSION_END message arrived, the ML check failed for all 18+ handler call sites
+- **Fix**: `isMasterLooter()` now falls back to `Settings:GetMasterLooter()` when the session ML is nil, preserving authorization through the end-of-session window
+- **Also fixed**: `Session:IsMasterLooter()` now uses `LoothingUtils.IsSamePlayer()` instead of `==` for cross-realm name comparison safety
+
+#### MLDB Key Collision Corrupts Button Colors After Sync
+- **Synced RollFrame/VotePanel buttons appeared white after MLDB broadcast**: `MLDB:ReplaceKeys()` recursed into ALL nested tables using the full compression/decompression map. Color tables `{r=0, g=1, b=0}` were corrupted during decompression because `DECOMPRESSION_KEYS["r"] = "reason"`, producing `{reason=0, g=1, b=0}` — the red channel was lost and all buttons rendered white
+- **Fix**: Added `LEAF_KEYS` set marking `color`/`c` and `whisperKeys`/`wk` as leaf tables. `ReplaceKeys()` skips key replacement when entering a leaf subtable and propagates the `isLeaf` flag to all nested levels, preventing collision for the full leaf subtree
+
+#### Vote Retraction from Non-ML Council Silently Failed
+- **Non-ML council members could not retract votes**: `RetractAllVotes()` sends `{}` (empty responses) via `SendVoteCommit` to signal retraction, but `HandleRemoteVoteCommit` rejected any payload with `#data.responses == 0`
+- **Fix**: Split the validation — non-table payloads are still rejected, but an empty table is now treated as a retraction: calls `item:RemoveVote(data.voter)` and broadcasts updated voter lists to the council (mirroring the ML-local retraction path). Added nil guard on `data.voter` to prevent spurious broadcasts when voter is absent
+
+#### Loolib: Global LUA_WARNING Noise
+- **Blizzard and third-party addon warnings appeared as "[Loolib ERROR]"**: `LoolibErrorHandlerMixin:OnLuaWarning()` captured all `LUA_WARNING` events globally (e.g., Blizzard's `EditModeManager.lua` trying to anchor `ChatFrame1` to the missing `LeftChatPanel` region in WoW 12.0), unlike `ADDON_ACTION_BLOCKED/FORBIDDEN` which filter by addon name
+- **Fix**: `OnLuaWarning` now captures the call stack at warning time and only records the warning if any frame references `AddOns/Loolib/` or a registered Loolib-based addon path. Blizzard and unrelated third-party warnings are silently ignored
+
 ## [1.1.4-r2] - 2026-03-08
 
 ### Added

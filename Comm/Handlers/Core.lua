@@ -16,8 +16,14 @@ LoothingCommMixin = LoothingCommMixin or {}
 -- @param sender string
 -- @return boolean
 local function isMasterLooter(sender)
-    if not Loothing.Session then return false end
-    local ml = Loothing.Session:GetMasterLooter()
+    if not sender then return false end
+    local ml
+    if Loothing.Session then
+        ml = Loothing.Session:GetMasterLooter()
+    end
+    if not ml and Loothing.Settings then
+        ml = Loothing.Settings:GetMasterLooter()
+    end
     if not ml then return false end
     return LoothingUtils.IsSamePlayer(ml, sender)
 end

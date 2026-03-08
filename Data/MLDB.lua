@@ -133,6 +133,18 @@ for key, code in pairs(COMPRESSION_KEYS) do
     DECOMPRESSION_KEYS[code] = key
 end
 
+-- Keys whose child tables are leaf/value tables (not structural).
+-- Recursing into these with the compression map corrupts their keys
+-- (e.g. color {r,g,b} → {reason,g,b} because "r" maps to "reason").
+local LEAF_KEYS = {
+    -- Uncompressed key names
+    color = true,
+    whisperKeys = true,
+    -- Compressed codes
+    c  = true,   -- color
+    wk = true,   -- whisperKeys
+}
+
 --[[--------------------------------------------------------------------
     Initialization
 ----------------------------------------------------------------------]]
@@ -299,17 +311,19 @@ end
 --- Recursively replace keys in a table
 -- @param tbl table - Table to process
 -- @param replacements table - Key replacement map
+-- @param isLeaf boolean? - If true, skip key replacement (value table)
 -- @return table - New table with replaced keys
-function LoothingMLDBMixin:ReplaceKeys(tbl, replacements)
+function LoothingMLDBMixin:ReplaceKeys(tbl, replacements, isLeaf)
     local result = {}
 
     for key, value in pairs(tbl) do
-        -- Replace key if mapping exists
-        local newKey = replacements[key] or key
+        -- Replace key if mapping exists (skip for leaf tables — their keys are data)
+        local newKey = (not isLeaf and replacements[key]) or key
 
-        -- Recursively handle nested tables
         if type(value) == "table" then
-            result[newKey] = self:ReplaceKeys(value, replacements)
+            -- Don't recurse into leaf/value tables (e.g. color, whisperKeys).
+            -- Propagate isLeaf downward so nested tables inside a leaf stay protected.
+            result[newKey] = self:ReplaceKeys(value, replacements, isLeaf or LEAF_KEYS[key] or LEAF_KEYS[newKey])
         else
             result[newKey] = value
         end
