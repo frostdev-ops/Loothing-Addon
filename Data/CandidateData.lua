@@ -32,6 +32,8 @@ function LoothingCandidateMixin:Init(playerName, playerClass)
     self.gear2ilvl = 0
     self.ilvlDiff = 0
     self.itemsWonThisSession = 0
+    self.itemsWonInstance = 0
+    self.itemsWonWeekly = 0
     self.councilVotes = 0
 end
 

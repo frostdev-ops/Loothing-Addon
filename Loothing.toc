@@ -80,6 +80,7 @@ Loot\GroupLootDisplay.lua
 Council\CouncilManager.lua
 Council\CouncilMembers.lua
 Council\CouncilSettings.lua
+Council\ObserverManager.lua
 Council\VotingEngine.lua
 Council\VotingSession.lua
 
@@ -109,6 +110,7 @@ UI\SessionPanel.lua
 UI\AddItemFrame.lua
 UI\HistoryPanel.lua
 UI\TradePanel.lua
+UI\RosterPanel.lua
 UI\RollFrame.lua
 UI\RollFrame\UI.lua
 UI\RollFrame\Events.lua

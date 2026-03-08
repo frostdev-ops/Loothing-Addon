@@ -208,10 +208,18 @@ function LoothingWhisperHandlerMixin:MatchCommand(command)
         return nil
     end
 
-    -- Check each button for whisperKey match or text match
+    -- Check each button for whisperKeys array or text match
     for _, button in ipairs(buttons) do
-        -- Check explicit whisperKey on button (if set)
-        if button.whisperKey then
+        -- Check per-button whisperKeys array
+        if button.whisperKeys and type(button.whisperKeys) == "table" then
+            for _, key in ipairs(button.whisperKeys) do
+                local k = key:lower():gsub("^!", "")
+                if k == command then
+                    return button.id, button.text
+                end
+            end
+        -- Fallback: legacy single whisperKey string
+        elseif button.whisperKey then
             local key = button.whisperKey:lower():gsub("^!", "")
             if key == command then
                 return button.id, button.text
@@ -234,19 +242,12 @@ function LoothingWhisperHandlerMixin:MatchCommand(command)
     return nil
 end
 
---- Get the active button set's buttons
+--- Get the active response set's buttons
 -- @return table|nil - Array of button definitions
 function LoothingWhisperHandlerMixin:GetActiveButtons()
     if not Loothing.Settings then return nil end
-
-    local settings = Loothing.Settings:Get("buttonSets")
-    if not settings or not settings.sets then return nil end
-
-    local activeIdx = settings.activeSet or 1
-    local activeSet = settings.sets[activeIdx]
-    if not activeSet then return nil end
-
-    return activeSet.buttons
+    local buttons = Loothing.Settings:GetResponseButtons()
+    return #buttons > 0 and buttons or nil
 end
 
 --- Find the target item for a whisper response
@@ -306,14 +307,19 @@ end
 function LoothingWhisperHandlerMixin:SubmitWhisperResponse(item, playerName, responseID, itemIndex)
     if not Loothing.Session then return end
 
+    -- Generate a silent roll for the whisper response
+    local rollSettings = Loothing.Settings and Loothing.Settings:Get("rollFrame.rollRange")
+    local whisperRollMin = rollSettings and rollSettings.min or 1
+    local whisperRollMax = rollSettings and rollSettings.max or 100
+
     -- Create a response payload matching the PlayerResponse format
     local payload = {
         itemGUID = item.guid,
         response = responseID,
         note = nil,
-        roll = nil,
-        rollMin = 1,
-        rollMax = 100,
+        roll = math.random(whisperRollMin, whisperRollMax),
+        rollMin = whisperRollMin,
+        rollMax = whisperRollMax,
         playerName = playerName,
         sessionID = Loothing.Session and Loothing.Session:GetSessionID() or nil,
         source = "whisper",

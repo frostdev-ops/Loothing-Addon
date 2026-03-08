@@ -32,6 +32,7 @@ Loothing.RollTracker = nil
 Loothing.GroupLoot = nil
 Loothing.Session = nil
 Loothing.Council = nil
+Loothing.Observer = nil
 Loothing.Comm = nil
 Loothing.Sync = nil
 Loothing.AckTracker = nil
@@ -197,6 +198,12 @@ local function InitializeModules()
     if LoothingCouncilMixin then
         Loothing.Council = LoolibCreateFromMixins(LoothingCouncilMixin)
         Loothing.Council:Init()
+    end
+
+    -- Initialize observer manager
+    if LoothingObserverMixin then
+        Loothing.Observer = LoolibCreateFromMixins(LoothingObserverMixin)
+        Loothing.Observer:Init()
     end
 
     -- Initialize communication (LoolibComm handles prefix registration + CHAT_MSG_ADDON)

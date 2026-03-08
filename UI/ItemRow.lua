@@ -84,7 +84,6 @@ function LoothingItemRowMixin:CreateElements()
 
     -- Item name
     self.nameText = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    self.nameText:SetPoint("TOPLEFT", self.icon, "TOPRIGHT", PADDING + 2, -2)
     self.nameText:SetJustifyH("LEFT")
     self.nameText:SetWordWrap(false)
 
@@ -103,21 +102,13 @@ function LoothingItemRowMixin:CreateElements()
     -- Action button (rightmost element in chain)
     self.actionButton = CreateFrame("Button", nil, self.frame, "UIPanelButtonTemplate")
     self.actionButton:SetSize(70, 22)
-    self.actionButton:SetPoint("RIGHT", -PADDING, 0)
 
     -- Status text (left of action button)
     self.statusText = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    self.statusText:SetPoint("RIGHT", self.actionButton, "LEFT", -8, 0)
-    self.statusText:SetJustifyH("RIGHT")
 
     -- Vote count / Timer (left of status text)
     self.infoText = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    self.infoText:SetPoint("RIGHT", self.statusText, "LEFT", -8, 0)
-    self.infoText:SetJustifyH("RIGHT")
     self.infoText:SetTextColor(1, 1, 1)
-
-    -- Anchor name text to flow up to the info/status chain
-    self.nameText:SetPoint("RIGHT", self.infoText, "LEFT", -8, 0)
 
     self.actionButton:SetScript("OnClick", function()
         self:OnActionClick()
@@ -125,9 +116,11 @@ function LoothingItemRowMixin:CreateElements()
 
     -- Winner text (shown when awarded)
     self.winnerText = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    self.winnerText:SetPoint("RIGHT", self.actionButton, "LEFT", -8, 0)
     self.winnerText:SetJustifyH("RIGHT")
+    self.winnerText:SetWordWrap(false)
     self.winnerText:Hide()
+
+    self:ApplyDefaultLayout()
 end
 
 --- Setup event scripts
@@ -209,6 +202,53 @@ function LoothingItemRowMixin:Refresh()
 
     -- Winner
     self:UpdateWinner()
+
+    -- Keep the text chain aligned for the current item state.
+    self:UpdateLayout()
+end
+
+--- Restore the default row layout used outside ML-only pending controls.
+function LoothingItemRowMixin:ApplyDefaultLayout()
+    self.actionButton:ClearAllPoints()
+    self.actionButton:SetPoint("RIGHT", -PADDING, 0)
+
+    self.statusText:ClearAllPoints()
+    self.statusText:SetPoint("RIGHT", self.actionButton, "LEFT", -8, 0)
+    self.statusText:SetJustifyH("RIGHT")
+
+    self.infoText:ClearAllPoints()
+    self.infoText:SetPoint("RIGHT", self.statusText, "LEFT", -8, 0)
+    self.infoText:SetJustifyH("RIGHT")
+
+    self.nameText:ClearAllPoints()
+    self.nameText:SetPoint("TOPLEFT", self.icon, "TOPRIGHT", PADDING + 2, -2)
+    self.nameText:SetPoint("RIGHT", self.infoText, "LEFT", -8, 0)
+
+    self.winnerText:ClearAllPoints()
+    self.winnerText:SetWidth(0)
+    self.winnerText:SetPoint("RIGHT", self.actionButton, "LEFT", -8, 0)
+    self.winnerText:SetJustifyH("RIGHT")
+    self.winnerText:SetWordWrap(false)
+end
+
+--- Adjust the row layout for the current display state.
+function LoothingItemRowMixin:UpdateLayout()
+    local isAwarded = self.item and self.item.state == LOOTHING_ITEM_STATE.AWARDED and self.item.winner
+
+    if isAwarded == self._layoutAwarded then return end
+    self._layoutAwarded = isAwarded
+
+    if isAwarded then
+        -- Awarded chain: nameText → winnerText → statusText → actionButton(hidden)
+        self.winnerText:ClearAllPoints()
+        self.winnerText:SetPoint("RIGHT", self.statusText, "LEFT", -8, 0)
+
+        self.nameText:ClearAllPoints()
+        self.nameText:SetPoint("TOPLEFT", self.icon, "TOPRIGHT", PADDING + 2, -2)
+        self.nameText:SetPoint("RIGHT", self.winnerText, "LEFT", -8, 0)
+    else
+        self:ApplyDefaultLayout()
+    end
 end
 
 --- Update status display
@@ -284,17 +324,17 @@ function LoothingItemRowMixin:UpdateActionButton()
         end
 
     elseif state == LOOTHING_ITEM_STATE.VOTING then
-        if isCouncil then
+        if isML then
+            self.actionButton:SetText(L["END_VOTE"])
+            self.actionButton:Show()
+            self.actionButton:Enable()
+        elseif isCouncil then
             local hasVoted = self.item:HasVoted(LoothingUtils.GetPlayerFullName())
             if hasVoted then
                 self.actionButton:SetText(L["CHANGE_VOTE"])
             else
                 self.actionButton:SetText(L["VOTE"])
             end
-            self.actionButton:Show()
-            self.actionButton:Enable()
-        elseif isML then
-            self.actionButton:SetText(L["END_VOTE"])
             self.actionButton:Show()
             self.actionButton:Enable()
         else
@@ -348,6 +388,7 @@ end
 --- Clear the display
 function LoothingItemRowMixin:Clear()
     self.item = nil
+    self._layoutAwarded = nil
 
     self.icon:SetTexture(nil)
     self.iconBorder:SetVertexColor(1, 1, 1)
@@ -358,6 +399,7 @@ function LoothingItemRowMixin:Clear()
     self.infoText:SetText("")
     self.winnerText:Hide()
     self.actionButton:Hide()
+    self:ApplyDefaultLayout()
 end
 
 --[[--------------------------------------------------------------------

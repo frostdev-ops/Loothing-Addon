@@ -689,11 +689,11 @@ function LoothingRollFrameMixin:RefreshResponseButtons()
     wipe(self.responseButtons)
     wipe(self.responseButtonsArray)
 
-    local buttons = Loothing.Settings and Loothing.Settings:GetButtons() or {}
+    local buttons = Loothing.Settings and Loothing.Settings:GetResponseButtons() or {}
     if #buttons == 0 and LOOTHING_DEFAULT_SETTINGS then
-        local defaultSet = LOOTHING_DEFAULT_SETTINGS.buttonSets
-            and LOOTHING_DEFAULT_SETTINGS.buttonSets.sets
-            and LOOTHING_DEFAULT_SETTINGS.buttonSets.sets[1]
+        local defaultSet = LOOTHING_DEFAULT_SETTINGS.responseSets
+            and LOOTHING_DEFAULT_SETTINGS.responseSets.sets
+            and LOOTHING_DEFAULT_SETTINGS.responseSets.sets[1]
         if defaultSet and defaultSet.buttons then
             buttons = defaultSet.buttons
         end
@@ -831,11 +831,8 @@ function LoothingRollFrameMixin:RefreshResponseButtons()
                 CreateColor(0.06, 0.06, 0.06, 0.0))
         end
 
-        -- Icon from LOOTHING_RESPONSE_INFO if available
-        local iconPath = nil
-        if btnData.id and LOOTHING_RESPONSE_INFO and LOOTHING_RESPONSE_INFO[btnData.id] then
-            iconPath = LOOTHING_RESPONSE_INFO[btnData.id].icon
-        end
+        -- Icon from btnData.icon directly (set by ResponseManager from responseSets)
+        local iconPath = btnData.icon
         if iconPath then
             button.icon:SetTexture(iconPath)
             button.icon:Show()

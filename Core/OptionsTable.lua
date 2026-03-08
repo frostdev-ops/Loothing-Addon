@@ -65,7 +65,7 @@ local function BuildArgs()
     if sessionSettings and sessionSettings.args then
         local srcArgs = sessionSettings.args
         local order = 1
-        for _, key in ipairs({ "voting", "buttonSets", "typeCodeAssignment" }) do
+        for _, key in ipairs({ "voting", "responseButtons" }) do
             local group = inlineGroup(srcArgs[key])
             if group then
                 group.order = order

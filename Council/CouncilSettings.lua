@@ -111,6 +111,36 @@ function LoothingCouncilMixin:IsPlayerCouncilMember()
     return self:IsMember(playerName)
 end
 
+--- Check if the current player can vote (council member AND not ML-observer)
+-- @return boolean
+function LoothingCouncilMixin:CanPlayerVote()
+    if not self:IsPlayerCouncilMember() then
+        return false
+    end
+    if Loothing.Observer and Loothing.Observer:IsMLObserver() then
+        return false
+    end
+    return true
+end
+
+--- Get council members in the raid who are eligible to vote (excludes ML if in observer mode)
+-- @return table - Array of player names
+function LoothingCouncilMixin:GetVotingEligibleMembers()
+    local members = self:GetMembersInRaid()
+    if not (Loothing.Observer and Loothing.Observer:IsMLObserver()) then
+        return members
+    end
+    local ml = Loothing.Session and Loothing.Session:GetMasterLooter()
+    if not ml then return members end
+    local result = {}
+    for _, name in ipairs(members) do
+        if not LoothingUtils.IsSamePlayer(name, ml) then
+            result[#result + 1] = name
+        end
+    end
+    return result
+end
+
 -- Display helper
 function LoothingCouncilMixin:GetMemberInfo(name)
     name = LoothingUtils.NormalizeName(name)

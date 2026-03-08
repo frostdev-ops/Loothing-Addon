@@ -1,6 +1,6 @@
 --[[--------------------------------------------------------------------
     Loothing - Loot Council Addon for WoW 12.0+
-    ResponseManager - Manage custom response configuration
+    ResponseManager - Unified response configuration from responseSets
 ----------------------------------------------------------------------]]
 
 local Loolib = LibStub("Loolib")
@@ -13,194 +13,118 @@ LoothingResponseManagerMixin = {}
 
 --- Initialize response manager
 function LoothingResponseManagerMixin:Init()
-    -- Will use Loothing.Settings.db.responses
-    self.responses = nil
+    -- Populated on LoadResponses(); kept as a reference to the active set's buttons
+    self.buttons = nil
 end
 
---- Load responses from settings
+--- Load responses from the active responseSets set
 function LoothingResponseManagerMixin:LoadResponses()
-    if not Loothing.Settings then
-        return
+    if not Loothing.Settings then return end
+
+    local rs = Loothing.Settings:GetResponseSets()
+    local activeId = rs.activeSet or 1
+    self.buttons = Loothing.Settings:GetResponseButtons(activeId)
+    if #self.buttons == 0 then
+        self.buttons = LoothingUtils.DeepCopy(LOOTHING_DEFAULT_SETTINGS.responseSets.sets[1].buttons)
     end
 
-    self.responses = Loothing.Settings:Get("responses")
-
-    -- Ensure all default responses exist
-    if not self.responses then
-        self.responses = LoothingUtils.DeepCopy(LOOTHING_DEFAULT_SETTINGS.responses)
-        Loothing.Settings:Set("responses", self.responses)
-    end
-
-    -- Update global LOOTHING_RESPONSE_INFO to match configured responses
     self:UpdateGlobalResponseInfo()
 end
 
---- Update global LOOTHING_RESPONSE_INFO from settings
+--- Update LOOTHING_RESPONSE_INFO from the active set's buttons
+-- Numeric entries are cleared and rebuilt; string-keyed system entries are untouched.
 function LoothingResponseManagerMixin:UpdateGlobalResponseInfo()
-    if not self.responses then return end
+    -- Clear numeric response IDs
+    for k in pairs(LOOTHING_RESPONSE_INFO) do
+        if type(k) == "number" then
+            LOOTHING_RESPONSE_INFO[k] = nil
+        end
+    end
 
-    for responseID, responseData in pairs(self.responses) do
-        LOOTHING_RESPONSE_INFO[responseID] = {
-            name = responseData.name,
-            color = responseData.color,
-            icon = responseData.icon,
+    for index, btn in ipairs(self.buttons or {}) do
+        local responseId = btn.id or index
+        local color = LoothingUtils.ColorToNamed(btn.color)
+        LOOTHING_RESPONSE_INFO[responseId] = {
+            name  = btn.responseText or btn.text,
+            color = color,
+            icon  = btn.icon,
         }
     end
 end
 
---- Get response configuration
--- @param responseID number - LOOTHING_RESPONSE value
--- @return table|nil - { name, color, icon, sort }
-function LoothingResponseManagerMixin:GetResponse(responseID)
-    if not self.responses then
-        self:LoadResponses()
-    end
-
-    return self.responses and self.responses[responseID]
-end
-
---- Get all responses
--- @return table - { [responseID] = responseData }
+--- Get all buttons in the active set (array)
+-- @return table - Array of button data
 function LoothingResponseManagerMixin:GetAllResponses()
-    if not self.responses then
-        self:LoadResponses()
-    end
-
-    return self.responses or {}
+    if not self.buttons then self:LoadResponses() end
+    return self.buttons or {}
 end
 
---- Get responses sorted by sort order
--- @return table - Array of { id, name, color, icon, sort }
+--- Get buttons sorted by sort order
+-- @return table - Sorted array of { id, name, color, icon, sort }
 function LoothingResponseManagerMixin:GetSortedResponses()
-    local responses = self:GetAllResponses()
+    local buttons = self:GetAllResponses()
     local sorted = {}
 
-    for id, data in pairs(responses) do
+    for _, btn in ipairs(buttons) do
         sorted[#sorted + 1] = {
-            id = id,
-            name = data.name,
-            color = data.color,
-            icon = data.icon,
-            sort = data.sort or 999,
+            id   = btn.id,
+            name = btn.responseText or btn.text,
+            color = btn.color,
+            icon  = btn.icon,
+            sort  = btn.sort or 999,
         }
     end
 
-    table.sort(sorted, function(a, b)
-        return a.sort < b.sort
-    end)
-
+    table.sort(sorted, function(a, b) return a.sort < b.sort end)
     return sorted
 end
 
---- Update a response
+--- Get a button by numeric ID
 -- @param responseID number
--- @param data table - { name, color, icon, sort }
-function LoothingResponseManagerMixin:UpdateResponse(responseID, data)
-    if not self.responses then
-        self:LoadResponses()
+-- @return table|nil
+function LoothingResponseManagerMixin:GetResponse(responseID)
+    for _, btn in ipairs(self:GetAllResponses()) do
+        if btn.id == responseID then return btn end
     end
-
-    if not self.responses[responseID] then
-        self.responses[responseID] = {}
-    end
-
-    -- Update fields
-    if data.name then
-        self.responses[responseID].name = data.name
-    end
-    if data.color then
-        self.responses[responseID].color = data.color
-    end
-    if data.icon then
-        self.responses[responseID].icon = data.icon
-    end
-    if data.sort then
-        self.responses[responseID].sort = data.sort
-    end
-
-    -- Save to settings
-    Loothing.Settings:Set("responses", self.responses)
-
-    -- Update global info
-    self:UpdateGlobalResponseInfo()
+    return nil
 end
 
---- Set response color
--- @param responseID number
--- @param r number - 0-1
--- @param g number - 0-1
--- @param b number - 0-1
--- @param a number - 0-1 (optional, default 1.0)
-function LoothingResponseManagerMixin:SetResponseColor(responseID, r, g, b, a)
-    local response = self:GetResponse(responseID)
-    if not response then return end
-
-    response.color = { r, g, b, a or 1.0 }
-    Loothing.Settings:Set("responses", self.responses)
-    self:UpdateGlobalResponseInfo()
-end
-
---- Set response sort order
--- @param responseID number
--- @param sortOrder number
-function LoothingResponseManagerMixin:SetResponseSort(responseID, sortOrder)
-    local response = self:GetResponse(responseID)
-    if not response then return end
-
-    response.sort = sortOrder
-    Loothing.Settings:Set("responses", self.responses)
-end
-
---- Reorder responses
--- @param orderedIDs table - Array of response IDs in desired order
-function LoothingResponseManagerMixin:ReorderResponses(orderedIDs)
-    for i, responseID in ipairs(orderedIDs) do
-        self:SetResponseSort(responseID, i)
+--- Find a button by responseText or text (case-insensitive)
+-- @param name string
+-- @return table|nil
+function LoothingResponseManagerMixin:GetResponseByName(name)
+    if type(name) ~= "string" then return nil end
+    local lname = name:lower()
+    for _, btn in ipairs(self:GetAllResponses()) do
+        if btn.responseText and btn.responseText:lower() == lname then return btn end
+        if btn.text and btn.text:lower() == lname then return btn end
     end
+    return nil
 end
 
---- Reset responses to defaults
-function LoothingResponseManagerMixin:ResetToDefaults()
-    self.responses = LoothingUtils.DeepCopy(LOOTHING_DEFAULT_SETTINGS.responses)
-    Loothing.Settings:Set("responses", self.responses)
-    self:UpdateGlobalResponseInfo()
-end
-
---- Serialize responses for sync
--- @return table - Serialized response data
+--- Serialize full responseSets for sync
+-- @return table
 function LoothingResponseManagerMixin:Serialize()
-    local serialized = {}
-
-    for id, data in pairs(self.responses or {}) do
-        serialized[id] = {
-            name = data.name,
-            color = data.color,
-            icon = data.icon,
-            sort = data.sort,
-        }
-    end
-
-    return serialized
+    if not Loothing.Settings then return {} end
+    return LoothingUtils.DeepCopy(Loothing.Settings:GetResponseSets())
 end
 
---- Deserialize responses from sync
--- @param data table - Serialized response data
+--- Deserialize responseSets received from sync
+-- @param data table
 function LoothingResponseManagerMixin:Deserialize(data)
     if not data then return end
-
-    self.responses = {}
-
-    for id, responseData in pairs(data) do
-        self.responses[tonumber(id)] = {
-            name = responseData.name,
-            color = responseData.color,
-            icon = responseData.icon,
-            sort = responseData.sort,
-        }
+    if Loothing.Settings then
+        Loothing.Settings:Set("responseSets", data)
     end
+    self:LoadResponses()
+end
 
-    Loothing.Settings:Set("responses", self.responses)
-    self:UpdateGlobalResponseInfo()
+--- Reset the active set to defaults
+function LoothingResponseManagerMixin:ResetToDefaults()
+    if not Loothing.Settings then return end
+    local defaults = LoothingUtils.DeepCopy(LOOTHING_DEFAULT_SETTINGS.responseSets)
+    Loothing.Settings:Set("responseSets", defaults)
+    self:LoadResponses()
 end
 
 --[[--------------------------------------------------------------------

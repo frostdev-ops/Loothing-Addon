@@ -92,6 +92,11 @@ function LoothingCommMixin:HandleSessionStart(data, sender)
         Loothing:Debug("Rejected SESSION_START from non-leader/assistant:", sender)
         return
     end
+    -- If we already have a known ML from local detection, validate sender matches
+    if Loothing.masterLooter and Loothing.masterLooter ~= "" and sender ~= Loothing.masterLooter then
+        Loothing:Debug("Rejected SESSION_START from %s - local ML is %s", sender, Loothing.masterLooter)
+        return
+    end
     data.masterLooter = sender
     self:TriggerEvent("OnSessionStart", data)
 end
@@ -227,6 +232,11 @@ function LoothingCommMixin:HandleSyncData(data, sender)
         Loothing:Debug("Rejected SYNC_DATA from non-ML/leader:", sender)
         return
     end
+    -- If we already have a known ML from local detection, validate sender matches
+    if Loothing.masterLooter and Loothing.masterLooter ~= "" and sender ~= Loothing.masterLooter then
+        Loothing:Debug("Rejected SYNC_DATA from %s - local ML is %s", sender, Loothing.masterLooter)
+        return
+    end
     data.masterLooter = sender
     self:TriggerEvent("OnSyncData", data)
 end
@@ -246,6 +256,20 @@ function LoothingCommMixin:HandleCouncilRoster(data, sender)
 end
 
 --[[--------------------------------------------------------------------
+    Observer Roster Handler
+----------------------------------------------------------------------]]
+
+function LoothingCommMixin:HandleObserverRoster(data, sender)
+    if not data then return end
+    if not isMasterLooter(sender) then
+        Loothing:Debug("Rejected OBSERVER_ROSTER from non-ML:", sender)
+        return
+    end
+    data.masterLooter = sender
+    self:TriggerEvent("OnObserverRoster", data)
+end
+
+--[[--------------------------------------------------------------------
     Player Info Handlers
 ----------------------------------------------------------------------]]
 
@@ -261,6 +285,10 @@ end
 
 function LoothingCommMixin:HandlePlayerInfoResponse(data, sender)
     if not data then return end
+    if not isGroupMember(sender) then
+        Loothing:Debug("Rejected PLAYER_INFO_RESPONSE from non-group member:", sender)
+        return
+    end
     -- Normalize nil-like values
     if data.slot1Link == "" then data.slot1Link = nil end
     if data.slot2Link == "" then data.slot2Link = nil end
@@ -435,24 +463,40 @@ end
 ----------------------------------------------------------------------]]
 
 function LoothingCommMixin:HandleSettingsSyncRequest(data, sender)
+    if not isGroupMember(sender) then
+        Loothing:Debug("Rejected SETTINGS_SYNC_REQUEST from non-group member:", sender)
+        return
+    end
     if Loothing.Sync then
         Loothing.Sync:HandleSettingsSyncRequest(sender)
     end
 end
 
 function LoothingCommMixin:HandleSettingsSyncAck(data, sender)
+    if not isGroupMember(sender) then
+        Loothing:Debug("Rejected SETTINGS_SYNC_ACK from non-group member:", sender)
+        return
+    end
     if Loothing.Sync then
         Loothing.Sync:HandleSettingsSyncAck(sender)
     end
 end
 
 function LoothingCommMixin:HandleSettingsData(data, sender)
+    if not isGroupMember(sender) then
+        Loothing:Debug("Rejected SETTINGS_DATA from non-group member:", sender)
+        return
+    end
     if Loothing.Sync and data then
         Loothing.Sync:HandleSettingsData(data.data, sender)
     end
 end
 
 function LoothingCommMixin:HandleHistorySyncRequest(data, sender)
+    if not isGroupMember(sender) then
+        Loothing:Debug("Rejected HISTORY_SYNC_REQUEST from non-group member:", sender)
+        return
+    end
     if Loothing.Sync then
         local days = (data and data.days) or 7
         Loothing.Sync:HandleHistorySyncRequest(sender, days)
@@ -460,12 +504,20 @@ function LoothingCommMixin:HandleHistorySyncRequest(data, sender)
 end
 
 function LoothingCommMixin:HandleHistorySyncAck(data, sender)
+    if not isGroupMember(sender) then
+        Loothing:Debug("Rejected HISTORY_SYNC_ACK from non-group member:", sender)
+        return
+    end
     if Loothing.Sync then
         Loothing.Sync:HandleHistorySyncAck(sender)
     end
 end
 
 function LoothingCommMixin:HandleHistoryData(data, sender)
+    if not isGroupMember(sender) then
+        Loothing:Debug("Rejected HISTORY_DATA from non-group member:", sender)
+        return
+    end
     if Loothing.Sync and data then
         Loothing.Sync:HandleHistoryData(data.data, sender)
     end

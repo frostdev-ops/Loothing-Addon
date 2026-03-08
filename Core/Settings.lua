@@ -34,6 +34,7 @@ local PROFILE_DEFAULTS = {
     version = 1,
 
     council = CopyDefaults(LOOTHING_DEFAULT_SETTINGS.council),
+    observers = CopyDefaults(LOOTHING_DEFAULT_SETTINGS.observers),
     settings = CopyDefaults(LOOTHING_DEFAULT_SETTINGS.settings),
     announcements = CopyDefaults(LOOTHING_DEFAULT_SETTINGS.announcements),
     autoPass = CopyDefaults(LOOTHING_DEFAULT_SETTINGS.autoPass),
@@ -46,6 +47,7 @@ local PROFILE_DEFAULTS = {
     ml = CopyDefaults(LOOTHING_DEFAULT_SETTINGS.ml),
     historySettings = CopyDefaults(LOOTHING_DEFAULT_SETTINGS.historySettings),
     buttonSets = CopyDefaults(LOOTHING_DEFAULT_SETTINGS.buttonSets),
+    responseSets = CopyDefaults(LOOTHING_DEFAULT_SETTINGS.responseSets),
     filters = CopyDefaults(LOOTHING_DEFAULT_SETTINGS.filters),
     groupLoot = CopyDefaults(LOOTHING_DEFAULT_SETTINGS.groupLoot),
     rollFrame = CopyDefaults(LOOTHING_DEFAULT_SETTINGS.rollFrame),
@@ -1056,16 +1058,54 @@ function LoothingSettingsMixin:SetHideVotes(enabled)
     self:Set("voting.hideVotes", enabled)
 end
 
---- Get observe mode setting
+--- Get observe mode setting (DEPRECATED - redirects to GetOpenObservation)
 -- @return boolean
 function LoothingSettingsMixin:GetObserveMode()
-    return self:Get("voting.observe", false)
+    return self:GetOpenObservation()
 end
 
---- Set observe mode setting
+--- Set observe mode setting (DEPRECATED - redirects to SetOpenObservation)
 -- @param enabled boolean
 function LoothingSettingsMixin:SetObserveMode(enabled)
-    self:Set("voting.observe", enabled)
+    self:SetOpenObservation(enabled)
+end
+
+-- Observer settings
+function LoothingSettingsMixin:GetObserverList()
+    return self:Get("observers.list", {})
+end
+function LoothingSettingsMixin:SetObserverList(list)
+    self:Set("observers.list", list)
+end
+
+function LoothingSettingsMixin:GetOpenObservation()
+    return self:Get("observers.openObservation", false)
+end
+function LoothingSettingsMixin:SetOpenObservation(enabled)
+    self:Set("observers.openObservation", enabled == true)
+    -- Keep old voting.observe in sync for backward compat
+    self:Set("voting.observe", enabled == true)
+end
+
+function LoothingSettingsMixin:GetMLIsObserver()
+    return self:Get("observers.mlIsObserver", false)
+end
+function LoothingSettingsMixin:SetMLIsObserver(enabled)
+    self:Set("observers.mlIsObserver", enabled == true)
+end
+
+function LoothingSettingsMixin:GetObserverPermissions()
+    return self:Get("observers.permissions", {
+        seeVoteCounts = true,
+        seeVoterIdentities = false,
+        seeResponses = true,
+        seeNotes = false,
+    })
+end
+function LoothingSettingsMixin:SetObserverPermission(key, enabled)
+    local perms = self:GetObserverPermissions()
+    perms[key] = enabled == true
+    self:Set("observers.permissions", perms)
 end
 
 --- Get auto-add rolls setting
@@ -1581,6 +1621,425 @@ function LoothingSettingsMixin:SetWhisperKey(setId, key)
         set.whisperKey = key
         self:UpdateButtonSet(setId, set)
     end
+end
+
+--[[--------------------------------------------------------------------
+    Response Sets Settings (unified model)
+----------------------------------------------------------------------]]
+
+local function GetDefaultResponseSetTemplate(setId)
+    local defaults = LOOTHING_DEFAULT_SETTINGS.responseSets and LOOTHING_DEFAULT_SETTINGS.responseSets.sets or {}
+    return defaults[setId] or defaults[1] or { name = "Default", buttons = {} }
+end
+
+local function NormalizeResponseColor(color, fallback)
+    return LoothingUtils.ColorToArray(color or fallback or { 1, 1, 1, 1 })
+end
+
+local function NormalizeResponseWhisperKeys(keys, fallback)
+    if type(keys) == "table" then
+        return LoothingUtils.DeepCopy(keys)
+    end
+    if type(fallback) == "table" then
+        return LoothingUtils.DeepCopy(fallback)
+    end
+    return {}
+end
+
+local function NormalizeResponseSetData(setId, setData)
+    local defaultSet = GetDefaultResponseSetTemplate(setId)
+    local sourceButtons = type(setData) == "table" and type(setData.buttons) == "table" and setData.buttons or nil
+    if not sourceButtons or #sourceButtons == 0 then
+        sourceButtons = defaultSet.buttons or {}
+    end
+
+    local orderedButtons = {}
+    for i, btn in ipairs(sourceButtons) do
+        orderedButtons[i] = btn
+    end
+    table.sort(orderedButtons, function(a, b)
+        local aSort = type(a) == "table" and (a.sort or a.id) or nil
+        local bSort = type(b) == "table" and (b.sort or b.id) or nil
+        return (aSort or math.huge) < (bSort or math.huge)
+    end)
+
+    local usedIds = {}
+    local buttons = {}
+    for i, btn in ipairs(orderedButtons) do
+        local defaultBtn = defaultSet.buttons and defaultSet.buttons[i] or nil
+        local normalized = {}
+
+        local rawId = type(btn) == "table" and tonumber(btn.id) or nil
+        local id = rawId and rawId > 0 and math.floor(rawId) or nil
+        if not id or usedIds[id] then
+            id = 1
+            while usedIds[id] do
+                id = id + 1
+            end
+        end
+        usedIds[id] = true
+
+        local text = type(btn) == "table" and btn.text or nil
+        text = text or (defaultBtn and defaultBtn.text) or ("Button " .. id)
+
+        normalized.id = id
+        normalized.text = text
+        normalized.responseText = (type(btn) == "table" and btn.responseText) or text
+        normalized.color = NormalizeResponseColor(type(btn) == "table" and btn.color or nil, defaultBtn and defaultBtn.color)
+        normalized.icon = (type(btn) == "table" and btn.icon ~= nil) and btn.icon or (defaultBtn and defaultBtn.icon) or nil
+        normalized.sort = i
+        normalized.whisperKeys = NormalizeResponseWhisperKeys(type(btn) == "table" and btn.whisperKeys or nil, defaultBtn and defaultBtn.whisperKeys)
+        if type(btn) == "table" and btn.requireNotes ~= nil then
+            normalized.requireNotes = btn.requireNotes == true
+        elseif defaultBtn then
+            normalized.requireNotes = defaultBtn.requireNotes == true
+        else
+            normalized.requireNotes = false
+        end
+
+        buttons[i] = normalized
+    end
+
+    return {
+        name = (type(setData) == "table" and setData.name) or defaultSet.name or ("Set " .. tostring(setId)),
+        buttons = buttons,
+    }
+end
+
+function LoothingSettingsMixin:NormalizeResponseSets(data)
+    local defaults = LOOTHING_DEFAULT_SETTINGS.responseSets or {}
+    local source = type(data) == "table" and data or defaults
+    local normalized = {
+        activeSet = tonumber(source.activeSet) or defaults.activeSet or 1,
+        sets = {},
+        typeCodeMap = {},
+    }
+
+    local sourceSets = type(source.sets) == "table" and source.sets or {}
+    for setId, setData in pairs(sourceSets) do
+        if type(setId) == "number" then
+            normalized.sets[setId] = NormalizeResponseSetData(setId, setData)
+        end
+    end
+
+    if not normalized.sets[1] then
+        normalized.sets[1] = NormalizeResponseSetData(1, defaults.sets and defaults.sets[1] or nil)
+    end
+
+    if not normalized.sets[normalized.activeSet] then
+        normalized.activeSet = 1
+    end
+
+    local sourceTypeCodeMap = type(source.typeCodeMap) == "table" and source.typeCodeMap or {}
+    for typeCode, setId in pairs(sourceTypeCodeMap) do
+        if normalized.sets[setId] then
+            normalized.typeCodeMap[typeCode] = setId
+        end
+    end
+
+    return normalized
+end
+
+local function ResponseSetsNeedRepair(source, normalized)
+    if type(source) ~= "table" then
+        return true
+    end
+    if source.activeSet ~= normalized.activeSet then
+        return true
+    end
+    if type(source.sets) ~= "table" or not source.sets[1] then
+        return true
+    end
+    if type(source.typeCodeMap) ~= "table" then
+        return true
+    end
+
+    for setId, normalizedSet in pairs(normalized.sets or {}) do
+        local rawSet = source.sets[setId]
+        if type(rawSet) ~= "table" or type(rawSet.buttons) ~= "table" then
+            return true
+        end
+        if rawSet.name ~= normalizedSet.name or #rawSet.buttons ~= #normalizedSet.buttons then
+            return true
+        end
+
+        for i, normalizedBtn in ipairs(normalizedSet.buttons) do
+            local rawBtn = rawSet.buttons[i]
+            if type(rawBtn) ~= "table"
+                or rawBtn.id ~= normalizedBtn.id
+                or rawBtn.sort ~= normalizedBtn.sort
+                or rawBtn.text == nil
+                or rawBtn.responseText == nil
+                or rawBtn.color == nil
+                or type(rawBtn.whisperKeys) ~= "table"
+            then
+                return true
+            end
+        end
+    end
+
+    for typeCode, setId in pairs(source.typeCodeMap) do
+        if normalized.typeCodeMap[typeCode] ~= setId then
+            return true
+        end
+    end
+    for typeCode, setId in pairs(normalized.typeCodeMap) do
+        if source.typeCodeMap[typeCode] ~= setId then
+            return true
+        end
+    end
+
+    return false
+end
+
+--- Get full responseSets data
+-- @return table - { activeSet, sets, typeCodeMap }
+function LoothingSettingsMixin:GetResponseSets()
+    local stored = self:Get("responseSets", nil)
+    local normalized = self:NormalizeResponseSets(stored)
+
+    if ResponseSetsNeedRepair(stored, normalized) then
+        self:Set("responseSets", LoothingUtils.DeepCopy(normalized))
+    end
+
+    return LoothingUtils.DeepCopy(normalized)
+end
+
+--- Get active response set ID
+-- @return number
+function LoothingSettingsMixin:GetActiveResponseSet()
+    return self:Get("responseSets.activeSet", 1)
+end
+
+--- Set active response set
+-- @param id number
+function LoothingSettingsMixin:SetActiveResponseSet(id)
+    local rs = self:GetResponseSets()
+    if rs.sets and rs.sets[id] then
+        self:Set("responseSets.activeSet", id)
+    end
+end
+
+--- Get a response set by ID
+-- @param id number
+-- @return table|nil
+function LoothingSettingsMixin:GetResponseSetById(id)
+    local rs = self:GetResponseSets()
+    return rs.sets and rs.sets[id]
+end
+
+--- Get buttons for the active set, or a specific set
+-- @param setId number|nil - If nil, uses active set
+-- @return table - Array of button data
+function LoothingSettingsMixin:GetResponseButtons(setId)
+    local id = setId or self:GetActiveResponseSet()
+    local set = self:GetResponseSetById(id)
+    if set and set.buttons then
+        return LoothingUtils.DeepCopy(set.buttons)
+    end
+    return {}
+end
+
+--- Add a new response set
+-- @param name string
+-- @param buttons table|nil - Initial buttons (uses default response template if nil)
+-- @return number - New set ID
+function LoothingSettingsMixin:AddResponseSet(name, buttons)
+    local rs = self:GetResponseSets()
+    if not rs.sets then rs.sets = {} end
+
+    local maxId = 0
+    for id in pairs(rs.sets) do
+        if id > maxId then maxId = id end
+    end
+
+    local newId = maxId + 1
+    rs.sets[newId] = {
+        name = name,
+        buttons = buttons or LoothingUtils.DeepCopy(GetDefaultResponseSetTemplate(1).buttons),
+    }
+    self:Set("responseSets", self:NormalizeResponseSets(rs))
+    return newId
+end
+
+--- Remove a response set (cannot remove set 1)
+-- @param id number
+-- @return boolean
+function LoothingSettingsMixin:RemoveResponseSet(id)
+    if id == 1 then return false end
+
+    local rs = self:GetResponseSets()
+    if not rs.sets or not rs.sets[id] then return false end
+
+    rs.sets[id] = nil
+    if (rs.activeSet or 1) == id then
+        rs.activeSet = 1
+    end
+    self:Set("responseSets", rs)
+    return true
+end
+
+--- Update response set data (merges fields)
+-- @param id number
+-- @param data table
+-- @return boolean
+function LoothingSettingsMixin:UpdateResponseSet(id, data)
+    local rs = self:GetResponseSets()
+    if not rs.sets or not rs.sets[id] then return false end
+
+    for k, v in pairs(data) do
+        rs.sets[id][k] = v
+    end
+    self:Set("responseSets", rs)
+    return true
+end
+
+--- Add a button to a response set
+-- @param setId number
+-- @param data table - Button fields (text, responseText, color, icon, whisperKeys, requireNotes)
+-- @return number|nil - New button ID
+function LoothingSettingsMixin:AddResponseButton(setId, data)
+    local rs = self:GetResponseSets()
+    if not rs.sets or not rs.sets[setId] then return nil end
+
+    local buttons = rs.sets[setId].buttons or {}
+    if #buttons >= 10 then return nil end
+
+    local maxId = 0
+    for _, btn in ipairs(buttons) do
+        if btn.id > maxId then maxId = btn.id end
+    end
+
+    local newBtn = {
+        id           = maxId + 1,
+        text         = data.text or "New Button",
+        responseText = data.responseText or data.text or "NEW",
+        color        = data.color or { 1.0, 1.0, 1.0, 1.0 },
+        icon         = data.icon,
+        sort         = #buttons + 1,
+        whisperKeys  = data.whisperKeys or {},
+        requireNotes = data.requireNotes or false,
+    }
+
+    buttons[#buttons + 1] = newBtn
+    rs.sets[setId].buttons = buttons
+    self:Set("responseSets", rs)
+    return newBtn.id
+end
+
+--- Remove a button from a response set (minimum 1 button enforced)
+-- @param setId number
+-- @param btnId number
+-- @return boolean
+function LoothingSettingsMixin:RemoveResponseButton(setId, btnId)
+    local rs = self:GetResponseSets()
+    if not rs.sets or not rs.sets[setId] then return false end
+
+    local buttons = rs.sets[setId].buttons or {}
+    if #buttons <= 1 then return false end
+
+    for i, btn in ipairs(buttons) do
+        if btn.id == btnId then
+            table.remove(buttons, i)
+            for j, b in ipairs(buttons) do b.sort = j end
+            rs.sets[setId].buttons = buttons
+            self:Set("responseSets", rs)
+            return true
+        end
+    end
+    return false
+end
+
+--- Update a button's fields
+-- @param setId number
+-- @param btnId number
+-- @param data table
+-- @return boolean
+function LoothingSettingsMixin:UpdateResponseButton(setId, btnId, data)
+    local rs = self:GetResponseSets()
+    if not rs.sets or not rs.sets[setId] then return false end
+
+    local buttons = rs.sets[setId].buttons or {}
+    for _, btn in ipairs(buttons) do
+        if btn.id == btnId then
+            for k, v in pairs(data) do btn[k] = v end
+            rs.sets[setId].buttons = buttons
+            self:Set("responseSets", rs)
+            return true
+        end
+    end
+    return false
+end
+
+--- Reorder a button to a new sort position
+-- @param setId number
+-- @param btnId number
+-- @param newSort number
+function LoothingSettingsMixin:ReorderResponseButton(setId, btnId, newSort)
+    local rs = self:GetResponseSets()
+    if not rs.sets or not rs.sets[setId] then return end
+
+    local buttons = rs.sets[setId].buttons or {}
+    local oldSort, targetIdx
+    for i, btn in ipairs(buttons) do
+        if btn.id == btnId then
+            oldSort = btn.sort
+            targetIdx = i
+            break
+        end
+    end
+    if not targetIdx then return end
+
+    newSort = math.max(1, math.min(#buttons, newSort))
+
+    for _, btn in ipairs(buttons) do
+        if btn.id ~= btnId then
+            if oldSort < newSort then
+                if btn.sort > oldSort and btn.sort <= newSort then
+                    btn.sort = btn.sort - 1
+                end
+            else
+                if btn.sort >= newSort and btn.sort < oldSort then
+                    btn.sort = btn.sort + 1
+                end
+            end
+        end
+    end
+    buttons[targetIdx].sort = newSort
+    table.sort(buttons, function(a, b) return a.sort < b.sort end)
+    for i, btn in ipairs(buttons) do btn.sort = i end
+
+    rs.sets[setId].buttons = buttons
+    self:Set("responseSets", rs)
+end
+
+--- Get the typeCode -> setId mapping
+-- @return table
+function LoothingSettingsMixin:GetTypeCodeMap()
+    local rs = self:GetResponseSets()
+    return rs.typeCodeMap or {}
+end
+
+--- Assign a button set to a type code
+-- @param typeCode string
+-- @param setId number
+function LoothingSettingsMixin:SetTypeCodeForSet(typeCode, setId)
+    local rs = self:GetResponseSets()
+    if not rs.typeCodeMap then rs.typeCodeMap = {} end
+    rs.typeCodeMap[typeCode] = setId
+    self:Set("responseSets", rs)
+end
+
+--- Clear a type-code override so it falls back to the default mapping or active set
+-- @param typeCode string
+function LoothingSettingsMixin:ClearTypeCodeForSet(typeCode)
+    local rs = self:GetResponseSets()
+    if not rs.typeCodeMap then
+        return
+    end
+
+    rs.typeCodeMap[typeCode] = nil
+    self:Set("responseSets", rs)
 end
 
 --[[--------------------------------------------------------------------

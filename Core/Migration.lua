@@ -206,6 +206,84 @@ function LoothingMigration:RegisterMigrations()
 
         Loothing:Debug("Migration 1.2.0: Protocol v1→v2 transition complete")
     end)
+
+    -- Migration 1.3.0: Merge responses + buttonSets -> responseSets
+    self:Register("1.3.0", "Merge responses + buttonSets into responseSets", function(profileDB, globalDB)
+        -- Skip if already migrated
+        if profileDB.responseSets and profileDB.responseSets.sets then
+            Loothing:Debug("Migration 1.3.0: responseSets already present, skipping merge")
+            return
+        end
+
+        local defaults = LOOTHING_DEFAULT_SETTINGS.responseSets
+        local rs = {
+            activeSet  = 1,
+            sets       = {},
+            typeCodeMap = {},
+        }
+
+        -- Migrate buttonSets -> responseSets
+        local oldSets = profileDB.buttonSets and profileDB.buttonSets.sets
+        local oldResponses = profileDB.responses  -- keyed by numeric LOOTHING_RESPONSE id
+
+        if oldSets then
+            rs.activeSet = profileDB.buttonSets.activeSet or 1
+
+            for setId, oldSet in pairs(oldSets) do
+                local newButtons = {}
+                for _, btn in ipairs(oldSet.buttons or {}) do
+                    -- Merge icon + responseText from old responses table if available
+                    local oldResp = oldResponses and oldResponses[btn.id]
+                    local icon = (oldResp and oldResp.icon)
+                        or (LOOTHING_DEFAULT_SETTINGS.responseSets.sets[1]
+                            and (function()
+                                for _, db in ipairs(LOOTHING_DEFAULT_SETTINGS.responseSets.sets[1].buttons) do
+                                    if db.id == btn.id then return db.icon end
+                                end
+                            end)())
+
+                    -- Convert per-set whisperKey string to per-button whisperKeys array
+                    local whisperKeys = {}
+                    if oldSet.whisperKey and oldSet.whisperKey ~= "" then
+                        local stripped = oldSet.whisperKey:gsub("^!", ""):lower()
+                        -- Assign to button 1 (the "primary" button), empty for others
+                        if btn.sort == 1 or btn.id == 1 then
+                            whisperKeys = { stripped }
+                        end
+                    end
+
+                    newButtons[#newButtons + 1] = {
+                        id           = btn.id,
+                        text         = btn.text or "",
+                        responseText = (oldResp and oldResp.name) or btn.text or "",
+                        color        = btn.color or { 1, 1, 1, 1 },
+                        icon         = icon,
+                        sort         = btn.sort or #newButtons + 1,
+                        whisperKeys  = whisperKeys,
+                        requireNotes = false,
+                    }
+                end
+
+                rs.sets[setId] = {
+                    name    = oldSet.name or ("Set " .. setId),
+                    buttons = newButtons,
+                }
+            end
+
+            -- Migrate typeCodeMap
+            if profileDB.buttonSets.typeCodeMap then
+                for tc, sid in pairs(profileDB.buttonSets.typeCodeMap) do
+                    rs.typeCodeMap[tc] = sid
+                end
+            end
+        else
+            -- No old data: use defaults
+            rs = LoothingUtils.DeepCopy(defaults)
+        end
+
+        profileDB.responseSets = rs
+        Loothing:Debug("Migration 1.3.0: Merged responses + buttonSets -> responseSets")
+    end)
 end
 
 --[[--------------------------------------------------------------------

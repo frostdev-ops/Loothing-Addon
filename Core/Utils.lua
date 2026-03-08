@@ -552,3 +552,33 @@ end
 function LoothingUtils.EscapePattern(str)
     return str:gsub("([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
 end
+
+--[[--------------------------------------------------------------------
+    Color Utilities
+----------------------------------------------------------------------]]
+
+--- Convert array-format color {r, g, b, a} to named-field format {r=, g=, b=, a=}
+-- Accepts either format; if already named, returns as-is.
+-- @param color table
+-- @return table - Named format {r=, g=, b=, a=}
+function LoothingUtils.ColorToNamed(color)
+    if not color then return { r = 1, g = 1, b = 1, a = 1 } end
+    if color.r ~= nil then return color end
+    return { r = color[1] or 1, g = color[2] or 1, b = color[3] or 1, a = color[4] or 1 }
+end
+
+--- Convert named-field color {r=, g=, b=, a=} to array format {r, g, b, a}
+-- Accepts either format; if already array, returns as-is.
+-- @param color table
+-- @return table - Array format {r, g, b, a}
+function LoothingUtils.ColorToArray(color)
+    if not color then return { 1, 1, 1, 1 } end
+    if color.r ~= nil then
+        return { color.r, color.g or 1, color.b or 1, color.a or 1 }
+    end
+    if color[1] ~= nil then
+        -- Ensure a dense 4-element array (guards against sparse arrays from SV stripping)
+        return { color[1], color[2] or 0, color[3] or 0, color[4] or 1 }
+    end
+    return { 1, 1, 1, 1 }
+end

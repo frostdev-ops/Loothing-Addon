@@ -347,21 +347,21 @@ function LoothingItemMixin:GetTypeCode()
 end
 
 --- Get the button/response set for this item's type code
--- @return table - Buttons and responses for this type code
+-- @return table - Buttons array for the resolved set
 function LoothingItemMixin:GetResponseSet()
-    if not Loothing.Settings then
-        return nil
+    if not Loothing.Settings then return nil end
+
+    -- Check typeCodeMap for a type-specific set
+    if self.typeCode then
+        local typeCodeMap = Loothing.Settings:GetTypeCodeMap()
+        local setId = typeCodeMap[self.typeCode] or typeCodeMap["default"]
+        if setId then
+            return Loothing.Settings:GetResponseButtons(setId)
+        end
     end
 
-    -- Look for type-specific button set, fall back to default
-    local buttons = Loothing.Settings:GetButtons()
-    if type(buttons) == "table" and self.typeCode and buttons[self.typeCode] then
-        return buttons[self.typeCode]
-    end
-    if type(buttons) == "table" and buttons.default then
-        return buttons.default
-    end
-    return buttons
+    -- Fall back to active set
+    return Loothing.Settings:GetResponseButtons()
 end
 
 --[[--------------------------------------------------------------------

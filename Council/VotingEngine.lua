@@ -9,6 +9,17 @@
 
 LoothingVotingEngine = {}
 
+--- Enumerate votes from either a DataProvider or a plain array
+-- @param votes table - DataProvider or array
+-- @return function - Iterator function
+local function EnumerateVotes(votes)
+    if votes.Enumerate then
+        return votes:Enumerate()
+    else
+        return ipairs(votes)
+    end
+end
+
 --[[--------------------------------------------------------------------
     Generic Tally - Dispatches to appropriate method based on voting mode
 ----------------------------------------------------------------------]]
@@ -42,8 +53,7 @@ function LoothingVotingEngine:GetCandidatesFromVotes(votes)
     local candidateSet = {}
     local candidates = {}
 
-    local enumerate = votes.Enumerate and function() return votes:Enumerate() end or function() return ipairs(votes) end
-    for _, vote in enumerate() do
+    for _, vote in EnumerateVotes(votes) do
         local firstChoice = vote.responses and vote.responses[1]
         if firstChoice and not candidateSet[firstChoice] then
             candidateSet[firstChoice] = true
@@ -83,8 +93,7 @@ function LoothingVotingEngine:TallySimple(votes, candidates)
     end
 
     -- Count votes
-    local enumerate = votes.Enumerate and function() return votes:Enumerate() end or function() return ipairs(votes) end
-    for _, vote in enumerate() do
+    for _, vote in EnumerateVotes(votes) do
         local firstChoice = vote.responses and vote.responses[1]
         if firstChoice and counts[firstChoice] then
             -- If we have candidates, only count if voter voted for a candidate
@@ -141,8 +150,7 @@ function LoothingVotingEngine:TallyRankedChoice(votes, candidates)
 
     -- Convert votes to working format
     local workingVotes = {}
-    local enumerate = votes.Enumerate and function() return votes:Enumerate() end or function() return ipairs(votes) end
-    for _, vote in enumerate() do
+    for _, vote in EnumerateVotes(votes) do
         if vote.responses and #vote.responses > 0 then
             workingVotes[#workingVotes + 1] = {
                 voter = vote.voter,
@@ -309,11 +317,7 @@ function LoothingVotingEngine:CountVotes(votes)
         return votes:GetSize()
     end
 
-    local count = 0
-    for _ in ipairs(votes) do
-        count = count + 1
-    end
-    return count
+    return #votes
 end
 
 --- Get voters by their first-choice response
@@ -326,8 +330,7 @@ function LoothingVotingEngine:GroupVotersByResponse(votes)
         groups[response] = {}
     end
 
-    local enumerate = votes.Enumerate and function() return votes:Enumerate() end or function() return ipairs(votes) end
-    for _, vote in enumerate() do
+    for _, vote in EnumerateVotes(votes) do
         local firstChoice = vote.responses and vote.responses[1]
         if firstChoice and groups[firstChoice] then
             groups[firstChoice][#groups[firstChoice] + 1] = vote.voter

@@ -63,9 +63,10 @@ end
 
 function LoothingCouncilTableMixin:OnVotingStarted(item)
     local isCouncil = Loothing.Council and Loothing.Council:IsPlayerCouncilMember()
-    local mldb = Loothing.MLDB and Loothing.MLDB:Get()
-    local observeEnabled = mldb and mldb.observe
-    if isCouncil or observeEnabled then
+    local isML = Loothing.Session and Loothing.Session:IsMasterLooter()
+    local isObserver = Loothing.Observer and Loothing.Observer:IsPlayerObserver()
+    local isMLObserver = Loothing.Observer and Loothing.Observer:IsMLObserver()
+    if isCouncil or isML or isObserver or isMLObserver then
         self:Show()
         self:SelectItemTab(item.guid)
     end

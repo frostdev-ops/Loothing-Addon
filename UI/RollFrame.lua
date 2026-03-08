@@ -805,6 +805,14 @@ function LoothingRollFrameMixin:SendResponse(note)
     -- Get roll for this specific item
     local roll, rollMin, rollMax = self:GetItemRoll(itemGUID)
 
+    -- Always include a roll — generate silently if no explicit /roll was done
+    if not roll then
+        local rollSettings = Loothing.Settings and Loothing.Settings:Get("rollFrame.rollRange")
+        rollMin = rollSettings and rollSettings.min or 1
+        rollMax = rollSettings and rollSettings.max or 100
+        roll = math.random(rollMin, rollMax)
+    end
+
     -- Use passed note or get from edit box
     note = note or (self.noteEditBox and self.noteEditBox:GetText()) or ""
 

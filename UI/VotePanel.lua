@@ -314,8 +314,8 @@ function LoothingVotePanelMixin:RefreshResponseButtons()
 
     if not Loothing.Settings then return end
 
-    -- Get buttons from active set
-    local buttons = Loothing.Settings:GetButtons()
+    -- Get buttons from active response set
+    local buttons = Loothing.Settings:GetResponseButtons()
     if not buttons or #buttons == 0 then return end
 
     -- Sort by sort order
@@ -334,8 +334,8 @@ function LoothingVotePanelMixin:RefreshResponseButtons()
         button:SetSize(PANEL_WIDTH - 50, buttonHeight)
         button:SetPoint("TOPLEFT", 0, yOffset - (i - 1) * (buttonHeight + spacing))
 
-        -- Parse color
-        local r, g, b = unpack(btnData.color)
+        -- Parse color (normalize to array format in case of named-field colors from sync)
+        local r, g, b = unpack(LoothingUtils.ColorToArray(btnData.color))
 
         -- Update sub-region colors
         button.bg:SetColorTexture(r * 0.3, g * 0.3, b * 0.3, 0.5)
@@ -357,18 +357,10 @@ function LoothingVotePanelMixin:RefreshResponseButtons()
     end
 end
 
---- Update button visibility based on numButtons setting
+--- Update button visibility (all buttons in the active set are shown)
 function LoothingVotePanelMixin:UpdateButtonVisibility()
-    if not Loothing.Settings then return end
-
-    local numButtons = Loothing.Settings:GetNumButtons()
-
-    for i, button in ipairs(self.responseButtonsArray) do
-        if i <= numButtons then
-            button:Show()
-        else
-            button:Hide()
-        end
+    for _, button in ipairs(self.responseButtonsArray) do
+        button:Show()
     end
 end
 

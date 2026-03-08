@@ -41,7 +41,16 @@ local REFRESH_THROTTLE = 0.15
 local function IsObserverOnly()
     local isCouncil = Loothing.Council and Loothing.Council:IsPlayerCouncilMember()
     local isML = Loothing.Session and Loothing.Session:IsMasterLooter()
-    return not isCouncil and not isML
+    if not isCouncil and not isML then
+        return true  -- Regular observer
+    end
+    if isML and Loothing.Observer and Loothing.Observer:IsMLObserver() then
+        return true  -- ML in observer mode
+    end
+    if isML and not isCouncil then
+        return true  -- ML not on council = implicit observer
+    end
+    return false
 end
 
 function LoothingCouncilTableMixin:Init(parent)
@@ -759,9 +768,9 @@ function LoothingCouncilTableMixin:CreateActionButtons()
     self.resultsButton:SetPoint("RIGHT", -4, 0)
     self.resultsButton:SetText("Results")
     self.resultsButton:SetScript("OnClick", function()
-        if self.currentItem and Loothing.ResultsPanel then
-            Loothing.ResultsPanel:SetItem(self.currentItem)
-            Loothing.ResultsPanel:Show()
+        if self.currentItem and Loothing.UI and Loothing.UI.ResultsPanel then
+            Loothing.UI.ResultsPanel:SetItem(self.currentItem)
+            Loothing.UI.ResultsPanel:Show()
         end
     end)
 
@@ -791,7 +800,7 @@ function LoothingCouncilTableMixin:UpdateActionButtons()
 
     -- Results button (visible to anyone when an item is selected)
     if self.resultsButton then
-        if self.currentItem and Loothing.ResultsPanel then
+        if self.currentItem and Loothing.UI and Loothing.UI.ResultsPanel then
             self.resultsButton:Show()
         else
             self.resultsButton:Hide()
@@ -918,7 +927,7 @@ function LoothingCouncilTableMixin:UpdateVoterProgress()
         return
     end
 
-    local expectedVoters = Loothing.Council and Loothing.Council:GetMembersInRaid() or {}
+    local expectedVoters = Loothing.Council and Loothing.Council:GetVotingEligibleMembers() or {}
     local totalExpected = #expectedVoters
 
     -- Count unique voters on this item
@@ -956,7 +965,7 @@ end
 function LoothingCouncilTableMixin:ShowVoterProgressTooltip(anchor)
     if not self.currentItem then return end
 
-    local expectedVoters = Loothing.Council and Loothing.Council:GetMembersInRaid() or {}
+    local expectedVoters = Loothing.Council and Loothing.Council:GetVotingEligibleMembers() or {}
     if #expectedVoters == 0 then return end
 
     -- Build set of who has voted

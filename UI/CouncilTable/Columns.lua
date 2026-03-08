@@ -13,6 +13,9 @@ LoothingCouncilTableMixin.COLUMNS = {
     { id = "response",     name = "Response",  width = 120, maxWidth = 200, flex = 2, sortable = true,  settingsKey = "response" },
     { id = "ilvl",         name = "iLvl",      width = 40,  maxWidth = 48,  flex = 0, sortable = true,  settingsKey = "ilvl" },
     { id = "ilvlDiff",     name = "+/-",       width = 40,  maxWidth = 48,  flex = 0, sortable = true,  settingsKey = "ilvlDiff" },
+    { id = "wonSession",   name = "Won",       width = 32,  maxWidth = 40,  flex = 0, sortable = true,  settingsKey = "wonSession" },
+    { id = "wonInstance",  name = "Inst",      width = 32,  maxWidth = 40,  flex = 0, sortable = true,  settingsKey = "wonInstance" },
+    { id = "wonWeekly",    name = "Wk",        width = 32,  maxWidth = 40,  flex = 0, sortable = true,  settingsKey = "wonWeekly" },
     { id = "gear1",        name = "G1",        width = 28,  maxWidth = 28,  flex = 0, sortable = false, settingsKey = "gear1" },
     { id = "gear2",        name = "G2",        width = 28,  maxWidth = 28,  flex = 0, sortable = false, settingsKey = "gear2" },
     { id = "roll",         name = "Roll",      width = 40,  maxWidth = 55,  flex = 1, sortable = true,  settingsKey = "roll" },
@@ -30,6 +33,15 @@ LoothingCouncilTableMixin.COLUMN_SORT_MAP = {
     ilvl = "ilvl",
     ilvlDiff = "ilvlDiff",
     vote = "councilVotes",
+    wonSession = "itemsWonThisSession",
+    wonInstance = "itemsWonInstance",
+    wonWeekly = "itemsWonWeekly",
+}
+
+LoothingCouncilTableMixin.COLUMN_TOOLTIPS = {
+    wonSession = "Items won this session",
+    wonInstance = "Items won in this instance + difficulty",
+    wonWeekly = "Items won this week",
 }
 
 -- Role icon textures
@@ -212,6 +224,19 @@ function LoothingCouncilTableMixin:RebuildColumnHeaders()
             end
         end
 
+        -- Column header tooltips
+        local tooltip = self.COLUMN_TOOLTIPS and self.COLUMN_TOOLTIPS[col.id]
+        if tooltip then
+            btn:SetScript("OnEnter", function(b)
+                GameTooltip:SetOwner(b, "ANCHOR_BOTTOM")
+                GameTooltip:AddLine(tooltip, 1, 1, 1)
+                GameTooltip:Show()
+            end)
+            btn:SetScript("OnLeave", function()
+                GameTooltip:Hide()
+            end)
+        end
+
         self.headerButtons[col.id] = btn
         xOffset = xOffset + w + padding
     end
@@ -309,6 +334,13 @@ end
 
 -- Response (color bar + text)
 LoothingCouncilTableMixin.CellUpdaters.response = function(self, cell, candidate)
+    local canSeeResponses = not Loothing.Observer or Loothing.Observer:CanPlayerSeeResponses()
+    if not canSeeResponses then
+        cell.text:SetText("?")
+        cell.text:SetTextColor(0.5, 0.5, 0.5)
+        if cell.colorBar then cell.colorBar:Hide() end
+        return
+    end
     local responseId = candidate.response
     local responseInfo = responseId and LOOTHING_RESPONSE_INFO[responseId]
 
@@ -372,6 +404,39 @@ LoothingCouncilTableMixin.CellUpdaters.ilvlDiff = function(self, cell, candidate
         cell.text:SetText("|cffffff000|r")
     else
         cell.text:SetText("")
+    end
+end
+
+-- Items won this session
+LoothingCouncilTableMixin.CellUpdaters.wonSession = function(self, cell, candidate)
+    local count = candidate.itemsWonThisSession or 0
+    cell.text:SetText(tostring(count))
+    if count > 0 then
+        cell.text:SetTextColor(1, 0.82, 0) -- Gold
+    else
+        cell.text:SetTextColor(0.4, 0.4, 0.4)
+    end
+end
+
+-- Items won this instance + difficulty
+LoothingCouncilTableMixin.CellUpdaters.wonInstance = function(self, cell, candidate)
+    local count = candidate.itemsWonInstance or 0
+    cell.text:SetText(tostring(count))
+    if count > 0 then
+        cell.text:SetTextColor(1, 0.6, 0) -- Orange
+    else
+        cell.text:SetTextColor(0.4, 0.4, 0.4)
+    end
+end
+
+-- Items won this week
+LoothingCouncilTableMixin.CellUpdaters.wonWeekly = function(self, cell, candidate)
+    local count = candidate.itemsWonWeekly or 0
+    cell.text:SetText(tostring(count))
+    if count > 0 then
+        cell.text:SetTextColor(0.6, 0.8, 1) -- Light blue
+    else
+        cell.text:SetTextColor(0.4, 0.4, 0.4)
     end
 end
 
@@ -441,6 +506,11 @@ end
 
 -- Note icon (hover to see note)
 LoothingCouncilTableMixin.CellUpdaters.note = function(self, cell, candidate)
+    local canSeeNotes = not Loothing.Observer or Loothing.Observer:CanPlayerSeeNotes()
+    if not canSeeNotes then
+        if cell.icon then cell.icon:Hide() end
+        return
+    end
     if candidate.note and candidate.note ~= "" then
         if cell.icon then
             cell.icon:SetTexture("Interface\\Buttons\\UI-GuildButton-PublicNote-Up")
@@ -475,7 +545,8 @@ LoothingCouncilTableMixin.CellUpdaters.vote = function(self, cell, candidate)
     local hideVotes = Loothing.Settings and Loothing.Settings:GetHideVotes() and not isML
 
     -- Vote count to the left of the button
-    if hideVotes then
+    local canSeeVoteCounts = not Loothing.Observer or Loothing.Observer:CanPlayerSeeVoteCounts()
+    if hideVotes or not canSeeVoteCounts then
         cell.text:SetText("")
     else
         cell.text:SetText(voteCount > 0 and tostring(voteCount) or "")
@@ -488,10 +559,13 @@ LoothingCouncilTableMixin.CellUpdaters.vote = function(self, cell, candidate)
             if not c.candidate then return end
             local voters = c.candidate.voters
             if not voters or #voters == 0 then return end
+            local canSeeCount = not Loothing.Observer or Loothing.Observer:CanPlayerSeeVoteCounts()
+            if not canSeeCount then return end
             local anonymous = Loothing.Settings and Loothing.Settings:GetAnonymousVoting()
             GameTooltip:SetOwner(c, "ANCHOR_RIGHT")
             GameTooltip:AddLine("Votes: " .. #voters, 1, 0.82, 0)
-            if not anonymous then
+            local canSeeIds = not Loothing.Observer or Loothing.Observer:CanPlayerSeeVoterIdentities()
+            if not anonymous and canSeeIds then
                 for _, voterName in ipairs(voters) do
                     local short = voterName:match("^([^%-]+)")
                     GameTooltip:AddLine(short or voterName, 1, 1, 1)
@@ -508,10 +582,10 @@ LoothingCouncilTableMixin.CellUpdaters.vote = function(self, cell, candidate)
 
     -- Vote toggle button
     if cell.voteButton then
-        local isCouncil = Loothing.Council and Loothing.Council:IsPlayerCouncilMember()
+        local canVote = Loothing.Council and Loothing.Council:CanPlayerVote()
         local hasVoted = candidate.hasMyVote
 
-        if isCouncil then
+        if canVote then
             cell.voteButton:Show()
             cell.voteButton:SetAlpha(1)
             cell.voteButton:Enable()
@@ -521,9 +595,8 @@ LoothingCouncilTableMixin.CellUpdaters.vote = function(self, cell, candidate)
                 cell.voteButton:SetText("Vote")
             end
         else
-            -- Observer mode: show button but disabled
-            local mldb = Loothing.MLDB and Loothing.MLDB:Get()
-            if mldb and mldb.observe then
+            local isObserver = Loothing.Observer and (Loothing.Observer:IsPlayerObserver() or Loothing.Observer:IsMLObserver())
+            if isObserver then
                 cell.voteButton:Show()
                 cell.voteButton:SetAlpha(0.4)
                 cell.voteButton:Disable()

@@ -50,6 +50,44 @@ All notable changes to Loothing will be documented in this file.
 - `LoothingHistoryMixin:BuildPlayerCountCache()` — single-pass history scan returning per-player instance and weekly loot counts
 - `LoothingCandidateMixin` now initializes `itemsWonInstance` and `itemsWonWeekly` fields (ephemeral, not serialized)
 - Test mode generates random values for all three loot count columns
+- **Roster Tab** (`UI/RosterPanel.lua`): New 4th tab in the MainFrame showing all group/raid members at a glance
+  - Columns: online status dot, class icon + class-colored name, role icon, item level, Loothing version (color-coded green/orange/gray), council membership checkmark, loot history count, raid rank
+  - All columns are sortable (click header to sort, click again to toggle asc/desc); offline players always sort to bottom
+  - Summary header shows member/online/installed/council counts
+  - Rich tooltip on hover shows spec, item level, subgroup, version details, council status, and loot history breakdown by response type
+  - "Query Versions" button triggers VersionCheck with lazy callback registration (only subscribes on first use)
+  - Empty state shown when not in a group
+  - History counts use a single O(H) pass (not per-player) for efficient data gathering
+  - Pooled row frames with proper `ClearAllPoints()` on child elements to prevent anchor accumulation on reuse
+  - Column header buttons created once and repositioned on resize (no frame leaks)
+  - Right-click context menu on roster rows with:
+    - Toggle council membership (Add/Remove from Council)
+    - Toggle observer status (Add/Remove as Observer)
+    - Set/Clear Master Looter designation
+    - Whisper player
+    - Promote to Leader / Promote to Assistant / Demote (raid leader/assistant only)
+    - Uninvite from group (raid leader/assistant only)
+  - Master Looter indicator: gold `[ML]` tag displayed next to the current ML's name
+  - Observer status shown in tooltip (light blue "Observer" line)
+  - Council column uses `GetMembersInRaid()` for correct test mode + auto-include support
+  - Item level sourced from `GetAverageItemLevel()` for local player (PlayerCache fallback for others)
+  - Localized `TAB_ROSTER` + 13 roster keys in all 11 locale files
+  - 8 new locale keys for context menu actions
+- **Observer System Overhaul**: Complete replacement of the single `voting.observe` boolean with a full observer management system
+  - **ML Observer Mode**: Master Looter can optionally observe (sees everything, manages sessions/awards, but cannot vote). Toggle in Session Settings
+  - **Observer List**: ML-managed list of specific players who can observe voting sessions. Add/remove via roster right-click menu
+  - **Open Observation**: Replaces old "Observe Mode" — when enabled, all raid members can observe (subject to permissions)
+  - **Configurable Permissions**: Granular control over what observers can see: vote counts, voter identities, candidate responses, candidate notes. Council and ML always see everything
+  - **Observer Sync**: Observer roster and permissions broadcast via OBSERVER_ROSTER comm message and included in late-join sync packets
+  - New module: `Council/ObserverManager.lua` — observer list management, permission queries, remote roster support
+  - New comm message: `OBSERVER_ROSTER` (ML → Raid) for observer list and permission sync
+  - New settings: `observers.list`, `observers.openObservation`, `observers.mlIsObserver`, `observers.permissions.*`
+  - MLDB compression keys for observer settings sync
+  - 22 new locale strings across all 11 locale files
+  - CouncilTable vote button uses `CanPlayerVote()` (council AND not ML-observer)
+  - CouncilTable voter progress excludes ML when in observer mode
+  - Response, notes, vote count, and voter identity columns permission-gated for observers
+  - Backward compatible: old `voting.observe` kept in sync with `observers.openObservation`
 
 ## [1.1.0] - 2026-03-07
 

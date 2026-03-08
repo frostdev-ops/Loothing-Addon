@@ -43,8 +43,9 @@ for name, id in pairs(CLASS_NAME_TO_ID) do
     CLASS_ID_TO_NAME[id] = name
 end
 
--- All classes flag (bits 1-13 set)
-local ALL_CLASSES_FLAG = 0x1FFF
+-- All classes flag - computed from CLASS_ID_TO_NAME to auto-adjust when new classes are added
+-- (CLASS_ID_TO_NAME has sequential integer keys 1..N, so # works correctly)
+local ALL_CLASSES_FLAG = bit.lshift(1, #CLASS_ID_TO_NAME) - 1
 
 --[[--------------------------------------------------------------------
     Armor Type Tables

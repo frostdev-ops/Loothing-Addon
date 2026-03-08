@@ -548,6 +548,7 @@ function LoothingSessionPanelMixin:RefreshItems()
 
     for _, item in ipairs(itemArray) do
         local row = self:AcquireItemRow()
+        self:ResetMLControls(row)
         row:SetItem(item)
 
         row:GetFrame():SetPoint("TOPLEFT", 0, yOffset)
@@ -603,6 +604,25 @@ function LoothingSessionPanelMixin:RefreshItems()
 
     -- Update content height
     self.listContent:SetHeight(math.abs(yOffset) + 20)
+end
+
+--- Hide ML-only controls and restore the row's default layout.
+-- @param row table - Item row
+function LoothingSessionPanelMixin:ResetMLControls(row)
+    local frame = row and row:GetFrame()
+    if not frame then return end
+
+    if frame._deleteButton then
+        frame._deleteButton:Hide()
+    end
+
+    if frame._awardLaterCB then
+        frame._awardLaterCB:Hide()
+    end
+
+    -- Force layout recalculation on next SetItem by clearing cached state
+    row._layoutAwarded = nil
+    row:ApplyDefaultLayout()
 end
 
 --- Add ML-specific controls to an item row (delete button, award later checkbox)
@@ -726,10 +746,10 @@ function LoothingSessionPanelMixin:OnEndVote(item)
     self:RefreshItems()
 end
 
---- Open vote panel for an item
+--- Open vote panel for an item (routes to RollFrame since VotePanel is disabled)
 function LoothingSessionPanelMixin:OnVote(item)
-    if Loothing.UI and Loothing.UI.VotePanel then
-        Loothing.UI.VotePanel:SetItem(item)
+    if Loothing.UI and Loothing.UI.RollFrame then
+        Loothing.UI.RollFrame:SetItem(item)
     end
 end
 

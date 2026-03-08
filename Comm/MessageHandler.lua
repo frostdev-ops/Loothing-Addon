@@ -29,6 +29,7 @@ local COMM_EVENTS = {
     "OnSyncRequest",
     "OnSyncData",
     "OnCouncilRoster",
+    "OnObserverRoster",
     "OnPlayerInfoRequest",
     "OnPlayerInfoResponse",
     "OnPlayerResponse",
@@ -88,6 +89,7 @@ local HANDLERS = {
     [LOOTHING_MSG_TYPE.SYNC_REQUEST]            = "HandleSyncRequest",
     [LOOTHING_MSG_TYPE.SYNC_DATA]               = "HandleSyncData",
     [LOOTHING_MSG_TYPE.COUNCIL_ROSTER]          = "HandleCouncilRoster",
+    [LOOTHING_MSG_TYPE.OBSERVER_ROSTER]         = "HandleObserverRoster",
     [LOOTHING_MSG_TYPE.PLAYER_INFO_REQUEST]     = "HandlePlayerInfoRequest",
     [LOOTHING_MSG_TYPE.PLAYER_INFO_RESPONSE]    = "HandlePlayerInfoResponse",
     [LOOTHING_MSG_TYPE.PLAYER_RESPONSE]         = "HandlePlayerResponse",
@@ -341,6 +343,12 @@ end
 -- @param distribution string
 function LoothingCommMixin:HandleXRealm(data, sender, distribution)
     if not data or not data.target then return end
+
+    -- Prevent recursive processing: inner message must not be XREALM or BATCH
+    if data.command == LOOTHING_MSG_TYPE.XREALM or data.command == LOOTHING_MSG_TYPE.BATCH then
+        Loothing:Debug("HandleXRealm: blocked recursive", data.command, "from", sender)
+        return
+    end
 
     local localName = LoothingUtils.GetPlayerFullName()
     if not LoothingUtils.IsSamePlayer(data.target, localName) then

@@ -7,20 +7,6 @@
 local L = LOOTHING_LOCALE
 local unpack = unpack
 
--- Shared values function for button set dropdowns
-local function GetButtonSetValues()
-    local sets = Loothing.Settings:GetButtonSets()
-    local t = {}
-    if sets and sets.sets then
-        for id, set in pairs(sets.sets) do
-            t[id] = set.name
-        end
-    end
-    return t
-end
-
--- Type codes that can be assigned to specific button sets
-local TYPE_CODES = { "default", "WEAPON", "RARE", "TOKEN", "PETS", "MOUNTS", "RECIPE", "SPECIAL", "CATALYST" }
 
 local function GetSessionSettingsOptions()
     local opts = {
@@ -139,20 +125,39 @@ local function GetSessionSettingsOptions()
                         get = function() return Loothing.Settings:GetHideVotes() end,
                         set = function(_, v) Loothing.Settings:SetHideVotes(v) end,
                     },
-                    observe = {
+                    mlIsObserver = {
                         type = "toggle",
-                        name = L["OBSERVE_MODE"],
-                        desc = L["OBSERVE_MODE_DESC"],
+                        name = L["CONFIG_ML_OBSERVER"] or "ML Observer Mode",
+                        desc = L["CONFIG_ML_OBSERVER_DESC"] or "Master Looter can see everything and manage sessions but cannot vote",
                         order = 14,
                         width = "half",
-                        get = function() return Loothing.Settings:GetObserveMode() end,
-                        set = function(_, v) Loothing.Settings:SetObserveMode(v) end,
+                        get = function() return Loothing.Settings:GetMLIsObserver() end,
+                        set = function(_, v)
+                            Loothing.Settings:SetMLIsObserver(v)
+                            if Loothing.MLDB and Loothing.MLDB:IsML() then
+                                Loothing.MLDB:BroadcastToRaid()
+                            end
+                        end,
+                    },
+                    openObservation = {
+                        type = "toggle",
+                        name = L["OPEN_OBSERVATION"] or "Open Observation",
+                        desc = L["OPEN_OBSERVATION_DESC"] or "Allow all raid members to observe voting",
+                        order = 15,
+                        width = "half",
+                        get = function() return Loothing.Settings:GetOpenObservation() end,
+                        set = function(_, v)
+                            Loothing.Settings:SetOpenObservation(v)
+                            if Loothing.MLDB and Loothing.MLDB:IsML() then
+                                Loothing.MLDB:BroadcastToRaid()
+                            end
+                        end,
                     },
                     autoAddRolls = {
                         type = "toggle",
                         name = L["AUTO_ADD_ROLLS"],
                         desc = L["AUTO_ADD_ROLLS_DESC"],
-                        order = 15,
+                        order = 16,
                         width = "half",
                         get = function() return Loothing.Settings:GetAutoAddRolls() end,
                         set = function(_, v) Loothing.Settings:SetAutoAddRolls(v) end,
@@ -161,152 +166,36 @@ local function GetSessionSettingsOptions()
                         type = "toggle",
                         name = L["REQUIRE_NOTES"],
                         desc = L["REQUIRE_NOTES_DESC"],
-                        order = 16,
+                        order = 17,
                         width = "half",
                         get = function() return Loothing.Settings:GetRequireNotes() end,
                         set = function(_, v) Loothing.Settings:SetRequireNotes(v) end,
                     },
-                    numButtons = {
-                        type = "range",
-                        name = L["NUM_BUTTONS"],
-                        desc = L["NUM_BUTTONS_DESC"],
-                        order = 17,
-                        min = 1,
-                        max = 10,
-                        step = 1,
-                        get = function() return Loothing.Settings:GetNumButtons() end,
-                        set = function(_, v) Loothing.Settings:SetNumButtons(v) end,
-                    },
                 },
             },
             -- ============================================================
-            -- Response Buttons
+            -- Response Buttons (visual editor launcher)
             -- ============================================================
-            buttonSets = {
+            responseButtons = {
                 type = "group",
                 name = L["CONFIG_BUTTON_SETS"] or "Response Buttons",
                 order = 2,
                 args = {
                     desc = {
                         type = "description",
-                        name = "Configure response button sets. Each set defines the buttons shown to candidates when rolling on items.",
+                        name = "Configure response button sets, icons, whisper keys, and type-code assignments using the visual editor.",
                         order = 0,
+                        width = "full",
                     },
-                    activeSet = {
-                        type = "select",
-                        name = "Active Button Set",
+                    openEditor = {
+                        type = "execute",
+                        name = "Open Response Button Editor",
                         order = 1,
-                        values = GetButtonSetValues,
-                        get = function() return Loothing.Settings:GetActiveButtonSet() end,
-                        set = function(_, v) Loothing.Settings:SetActiveButtonSet(v) end,
-                    },
-                    setName = {
-                        type = "input",
-                        name = "Set Name",
-                        order = 2,
-                        get = function()
-                            local id = Loothing.Settings:GetActiveButtonSet()
-                            local set = Loothing.Settings:GetButtonSet(id)
-                            return set and set.name or ""
-                        end,
-                        set = function(_, v)
-                            local id = Loothing.Settings:GetActiveButtonSet()
-                            Loothing.Settings:UpdateButtonSet(id, { name = v })
-                        end,
-                    },
-                    whisperKey = {
-                        type = "input",
-                        name = "Whisper Key",
-                        desc = "The whisper key players can use to respond (e.g., '!need')",
-                        order = 3,
-                        get = function()
-                            local id = Loothing.Settings:GetActiveButtonSet()
-                            local set = Loothing.Settings:GetButtonSet(id)
-                            return set and set.whisperKey or ""
-                        end,
-                        set = function(_, v)
-                            local id = Loothing.Settings:GetActiveButtonSet()
-                            Loothing.Settings:UpdateButtonSet(id, { whisperKey = v })
-                        end,
-                    },
-                    setMgmtHeader = {
-                        type = "header",
-                        name = "Manage Sets",
-                        order = 5,
-                    },
-                    newSetName = {
-                        type = "input",
-                        name = "New Set Name",
-                        order = 6,
-                        get = function() return "" end,
-                        set = function(_, v)
-                            if v and v ~= "" then
-                                local defaultButtons = {
-                                    { id = 1, text = "Need", color = {0,1,0,1}, sort = 1 },
-                                    { id = 2, text = "Pass", color = {0.5,0.5,0.5,1}, sort = 2 },
-                                }
-                                Loothing.Settings:AddButtonSet(v, defaultButtons)
-                            end
-                        end,
-                    },
-                    copySet = {
-                        type = "execute",
-                        name = "Copy Active Set",
-                        order = 7,
                         func = function()
-                            local id = Loothing.Settings:GetActiveButtonSet()
-                            local set = Loothing.Settings:GetButtonSet(id)
-                            if set then
-                                local newId = Loothing.Settings:AddButtonSet(set.name .. " (Copy)", set.buttons)
-                                Loothing.Settings:SetActiveButtonSet(newId)
+                            if Loothing.ResponseButtonSettings then
+                                Loothing.ResponseButtonSettings:Show()
                             end
                         end,
-                    },
-                    deleteSet = {
-                        type = "execute",
-                        name = "Delete Active Set",
-                        order = 8,
-                        confirm = function() return "Delete this button set? This cannot be undone." end,
-                        func = function()
-                            local id = Loothing.Settings:GetActiveButtonSet()
-                            local sets = Loothing.Settings:GetButtonSets()
-                            if sets and sets.sets then
-                                local count = 0
-                                for _ in pairs(sets.sets) do count = count + 1 end
-                                if count <= 1 then
-                                    Loothing:Print("Cannot delete the last button set")
-                                    return
-                                end
-                            end
-                            Loothing.Settings:RemoveButtonSet(id)
-                            local remaining = Loothing.Settings:GetButtonSets()
-                            if remaining and remaining.sets then
-                                for newId in pairs(remaining.sets) do
-                                    Loothing.Settings:SetActiveButtonSet(newId)
-                                    break
-                                end
-                            end
-                        end,
-                    },
-                    buttonsHeader = {
-                        type = "header",
-                        name = "Buttons",
-                        order = 10,
-                    },
-                },
-            },
-            -- ============================================================
-            -- Type Code Assignment
-            -- ============================================================
-            typeCodeAssignment = {
-                type = "group",
-                name = L["CONFIG_TYPECODE_ASSIGNMENT"] or "Type Code Assignment",
-                order = 3,
-                args = {
-                    desc = {
-                        type = "description",
-                        name = "Assign which button set to use for each item type code. Items matching a specific type code will show the assigned button set instead of the default.",
-                        order = 0,
                     },
                 },
             },
@@ -508,88 +397,6 @@ local function GetSessionSettingsOptions()
             },
         },
     }
-
-    -- Generate per-button editor entries (buttons 1-10) in the buttonSets group
-    local btnArgs = opts.args.buttonSets.args
-    for i = 1, 10 do
-        local hiddenFunc = function()
-            local id = Loothing.Settings:GetActiveButtonSet()
-            local buttons = Loothing.Settings:GetButtons(id)
-            return not buttons or not buttons[i]
-        end
-
-        btnArgs["btn" .. i .. "Text"] = {
-            type = "input",
-            name = "Button " .. i .. " Text",
-            order = 10 + i * 4,
-            hidden = hiddenFunc,
-            get = function()
-                local id = Loothing.Settings:GetActiveButtonSet()
-                local buttons = Loothing.Settings:GetButtons(id)
-                return buttons and buttons[i] and buttons[i].text or ""
-            end,
-            set = function(_, v)
-                local id = Loothing.Settings:GetActiveButtonSet()
-                Loothing.Settings:UpdateButton(id, i, { text = v })
-            end,
-        }
-
-        btnArgs["btn" .. i .. "Color"] = {
-            type = "color",
-            name = "Color",
-            order = 10 + i * 4 + 1,
-            hasAlpha = true,
-            hidden = hiddenFunc,
-            get = function()
-                local id = Loothing.Settings:GetActiveButtonSet()
-                local buttons = Loothing.Settings:GetButtons(id)
-                if buttons and buttons[i] and buttons[i].color then
-                    return unpack(buttons[i].color)
-                end
-                return 1, 1, 1, 1
-            end,
-            set = function(_, r, g, b, a)
-                local id = Loothing.Settings:GetActiveButtonSet()
-                Loothing.Settings:UpdateButton(id, i, { color = { r, g, b, a } })
-            end,
-        }
-
-        btnArgs["btn" .. i .. "Sort"] = {
-            type = "range",
-            name = "Sort Order",
-            order = 10 + i * 4 + 2,
-            min = 1,
-            max = 10,
-            step = 1,
-            hidden = hiddenFunc,
-            get = function()
-                local id = Loothing.Settings:GetActiveButtonSet()
-                local buttons = Loothing.Settings:GetButtons(id)
-                return buttons and buttons[i] and buttons[i].sort or i
-            end,
-            set = function(_, v)
-                local id = Loothing.Settings:GetActiveButtonSet()
-                Loothing.Settings:UpdateButton(id, i, { sort = v })
-            end,
-        }
-    end
-
-    -- Generate per-typeCode assignment selects
-    local tcArgs = opts.args.typeCodeAssignment.args
-    for idx, typeCode in ipairs(TYPE_CODES) do
-        tcArgs[typeCode] = {
-            type = "select",
-            name = typeCode,
-            order = idx,
-            values = GetButtonSetValues,
-            get = function()
-                return Loothing.Settings:Get("buttonSets.typeCodeMap." .. typeCode, 1)
-            end,
-            set = function(_, v)
-                Loothing.Settings:Set("buttonSets.typeCodeMap." .. typeCode, v)
-            end,
-        }
-    end
 
     -- Generate award reason entries (reasons 1-20)
     local reasonArgs = opts.args.awardReasons.args

@@ -124,7 +124,7 @@ function LoothingVotingSessionMixin:Start(timeout)
 
     -- Get expected voters from council
     if Loothing.Council then
-        self.expectedVoters = Loothing.Council:GetMembersInRaid()
+        self.expectedVoters = Loothing.Council:GetVotingEligibleMembers()
     end
 
     -- Set timeout

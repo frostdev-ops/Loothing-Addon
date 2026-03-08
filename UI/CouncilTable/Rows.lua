@@ -254,6 +254,18 @@ function LoothingCouncilTableMixin:EnrichCandidates(candidates)
         end
     end
 
+    -- Build loot count cache from history (single pass)
+    local countCache
+    if Loothing.History then
+        local instanceName, difficultyID
+        if self.currentItem and self.currentItem.instanceData then
+            instanceName = self.currentItem.instanceData.instance
+            difficultyID = self.currentItem.instanceData.difficultyID
+        end
+        local resetTime = Loothing.History:GetLastWeeklyResetTime()
+        countCache = Loothing.History:BuildPlayerCountCache(instanceName, difficultyID, resetTime)
+    end
+
     for _, candidate in ipairs(candidates) do
         -- Role from raid roster
         local rosterEntry = rosterByName[candidate.playerName]
@@ -267,6 +279,19 @@ function LoothingCouncilTableMixin:EnrichCandidates(candidates)
         local g1 = candidate.gear1ilvl or 0
         local g2 = candidate.gear2ilvl or 0
         candidate.equippedIlvl = math.max(g1, g2)
+
+        -- Loot count enrichment from history cache
+        if countCache and not (LoothingTestMode and LoothingTestMode.enabled) then
+            local normalized = LoothingUtils.NormalizeName(candidate.playerName or candidate.name)
+            local counts = normalized and countCache[normalized]
+            if counts then
+                candidate.itemsWonInstance = counts.instance
+                candidate.itemsWonWeekly = counts.weekly
+            else
+                candidate.itemsWonInstance = 0
+                candidate.itemsWonWeekly = 0
+            end
+        end
     end
 end
 
@@ -436,7 +461,7 @@ function LoothingCouncilTableMixin:ShowCandidateContextMenu(row, candidate)
             for id, info in pairs(LOOTHING_RESPONSE_INFO) do
                 rootDescription:CreateButton(string.format("Award: %s", info.name), function()
                     if Loothing.Session then
-                        Loothing.Session:AwardItem(itemGUID, candidate.name, id)
+                        Loothing.Session:AwardItem(itemGUID, candidate.name, info.name)
                         self:TriggerEvent("OnCandidateAwarded", self.currentItem, candidate)
                     end
                 end)
@@ -520,7 +545,7 @@ function LoothingCouncilTableMixin:ShowCandidateContextMenu(row, candidate)
                             end
                         end
                         if Loothing.Session then
-                            Loothing.Session:AwardItem(self.currentItem.guid, enc.name, deReasonId)
+                            Loothing.Session:AwardItem(self.currentItem.guid, enc.name, nil, deReasonId)
                             self:TriggerEvent("OnCandidateAwarded", self.currentItem, { name = enc.name })
                         end
                     end)
@@ -546,9 +571,9 @@ function LoothingCouncilTableMixin:OnVoteClick(candidate)
         return
     end
 
-    -- Observers can see the table but cannot vote
-    if not (Loothing.Council and Loothing.Council:IsPlayerCouncilMember()) then
-        Loothing:Debug("OnVoteClick: not a council member")
+    -- Observers and ML-observers can see the table but cannot vote
+    if not (Loothing.Council and Loothing.Council:CanPlayerVote()) then
+        Loothing:Debug("OnVoteClick: not eligible to vote")
         return
     end
 

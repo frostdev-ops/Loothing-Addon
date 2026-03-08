@@ -30,24 +30,36 @@ local COMPRESSION_KEYS = {
     ["anonymousVoting"] = "av",
     ["hideVotes"] = "hv",
     ["votingTimeout"] = "vt",
-    ["responses"] = "rs",
     ["sortOrder"] = "so",
     ["observe"] = "ob",
-    ["numButtons"] = "nb",
     ["mlSeesVotes"] = "msv",
     ["requireNotes"] = "rn",
     ["autoAddRolls"] = "aar",
 
-    -- Response fields
+    -- responseSets fields
+    ["responseSets"] = "rs2",
+    ["activeSet"] = "as",
+    ["typeCodeMap"] = "tcm",
+    ["responseText"] = "rt",
+    ["whisperKeys"] = "wk",
+    ["buttons"] = "btns",
+
+    -- Per-button fields
     ["name"] = "n",
     ["color"] = "c",
     ["icon"] = "i",
     ["sort"] = "s",
+    ["text"] = "t",
+    ["id"] = "id",
 
-    -- Button set mapping
-    ["typeCodeMap"] = "tcm",
-    ["activeButtonSet"] = "abs",
-    ["buttonSets"] = "bs",
+    -- Observer settings
+    ["mlIsObserver"] = "mio",
+    ["openObservation"] = "oo",
+    ["observerPermissions"] = "op",
+    ["seeVoteCounts"] = "svc",
+    ["seeVoterIdentities"] = "svi",
+    ["seeResponses"] = "sr",
+    ["seeNotes"] = "sn",
 }
 
 -- Reverse mapping (code -> key)
@@ -113,15 +125,19 @@ function LoothingMLDBMixin:GatherSettings()
 
     -- Voting settings
     local votingSettings = Loothing.Settings:Get("voting", {})
-    settings.selfVote = votingSettings.selfVote or false
-    settings.multiVote = votingSettings.multiVote or false
+    settings.selfVote       = votingSettings.selfVote or false
+    settings.multiVote      = votingSettings.multiVote or false
     settings.anonymousVoting = votingSettings.anonymousVoting or false
-    settings.hideVotes = votingSettings.hideVotes or false
-    settings.observe = votingSettings.observe or false
-    settings.numButtons = votingSettings.numButtons or 5
-    settings.mlSeesVotes = votingSettings.mlSeesVotes or false
-    settings.requireNotes = votingSettings.requireNotes or false
-    settings.autoAddRolls = votingSettings.autoAddRolls or true
+    settings.hideVotes      = votingSettings.hideVotes or false
+    settings.observe        = votingSettings.observe or false
+    settings.mlSeesVotes    = votingSettings.mlSeesVotes or false
+    settings.requireNotes   = votingSettings.requireNotes or false
+    settings.autoAddRolls   = votingSettings.autoAddRolls ~= false  -- default true
+
+    -- Observer settings
+    settings.mlIsObserver = Loothing.Settings:Get("observers.mlIsObserver", false)
+    settings.openObservation = Loothing.Settings:Get("observers.openObservation", false)
+    settings.observerPermissions = Loothing.Settings:GetObserverPermissions()
 
     -- Voting timeout
     settings.votingTimeout = Loothing.Settings:Get("settings.votingTimeout", 30)
@@ -129,73 +145,8 @@ function LoothingMLDBMixin:GatherSettings()
     -- Sort order
     settings.sortOrder = Loothing.Settings:Get("councilTable.sortColumn", "response")
 
-    -- Response button configurations
-    -- Only send non-default responses to reduce size
-    if Loothing.ResponseManager then
-        local responses = Loothing.ResponseManager:GetAllResponses()
-        local changedResponses = {}
-
-        for id, response in pairs(responses) do
-            -- Compare to default to see if it was customized
-            local defaultResponse = LOOTHING_RESPONSE_INFO[id]
-            local hasChanged = false
-
-            if not defaultResponse then
-                hasChanged = true
-            else
-                -- Check if name or color changed
-                if response.name ~= defaultResponse.name then
-                    hasChanged = true
-                end
-
-                if response.color then
-                    local defaultColor = defaultResponse.color
-                    if not defaultColor or
-                       response.color.r ~= defaultColor.r or
-                       response.color.g ~= defaultColor.g or
-                       response.color.b ~= defaultColor.b then
-                        hasChanged = true
-                    end
-                end
-            end
-
-            if hasChanged then
-                changedResponses[id] = {
-                    name = response.name,
-                    color = response.color,
-                    icon = response.icon,
-                    sort = response.sort or id,
-                }
-            end
-        end
-
-        -- Only include if there are changes
-        if next(changedResponses) then
-            settings.responses = changedResponses
-        end
-    end
-
-    -- Per-typeCode button set mapping
-    local typeCodeMap = Loothing.Settings:Get("buttonSets.typeCodeMap")
-    if typeCodeMap and next(typeCodeMap) then
-        settings.typeCodeMap = typeCodeMap
-    end
-
-    -- Active button set ID
-    settings.activeButtonSet = Loothing.Settings:GetActiveButtonSet()
-
-    -- Button sets (send full set definitions so candidates know button labels/colors)
-    local buttonSets = Loothing.Settings:GetButtonSets()
-    if buttonSets and buttonSets.sets then
-        local setsData = {}
-        for id, set in pairs(buttonSets.sets) do
-            setsData[id] = {
-                name = set.name,
-                buttons = set.buttons,
-            }
-        end
-        settings.buttonSets = setsData
-    end
+    -- Unified responseSets (full structure)
+    settings.responseSets = Loothing.Settings:GetResponseSets()
 
     return settings
 end
@@ -377,9 +328,6 @@ function LoothingMLDBMixin:ApplyFromML(settings, sender)
         if settings.observe ~= nil then
             votingSettings.observe = settings.observe
         end
-        if settings.numButtons ~= nil then
-            votingSettings.numButtons = settings.numButtons
-        end
         if settings.mlSeesVotes ~= nil then
             votingSettings.mlSeesVotes = settings.mlSeesVotes
         end
@@ -401,34 +349,23 @@ function LoothingMLDBMixin:ApplyFromML(settings, sender)
         if settings.sortOrder then
             Loothing.Settings:Set("councilTable.sortColumn", settings.sortOrder)
         end
+
+        -- Apply observer settings
+        if settings.mlIsObserver ~= nil then
+            Loothing.Settings:Set("observers.mlIsObserver", settings.mlIsObserver)
+        end
+        if settings.openObservation ~= nil then
+            Loothing.Settings:Set("observers.openObservation", settings.openObservation)
+            Loothing.Settings:Set("voting.observe", settings.openObservation)
+        end
+        if settings.observerPermissions then
+            Loothing.Settings:Set("observers.permissions", settings.observerPermissions)
+        end
     end
 
-    -- Apply response configurations
-    if settings.responses and Loothing.ResponseManager then
-        for id, response in pairs(settings.responses) do
-            local responseID = tonumber(id) or id
-
-            -- Convert color array to table format
-            local color = response.color
-            if color and type(color) == "table" then
-                -- Check if it's an array [r, g, b, a]
-                if color[1] then
-                    color = {
-                        r = color[1] or 1,
-                        g = color[2] or 1,
-                        b = color[3] or 1,
-                        a = color[4] or 1,
-                    }
-                end
-            end
-
-            Loothing.ResponseManager:UpdateResponse(responseID, {
-                name = response.name,
-                color = color,
-                icon = response.icon,
-                sort = response.sort,
-            })
-        end
+    -- Apply unified responseSets
+    if settings.responseSets and Loothing.ResponseManager then
+        Loothing.ResponseManager:Deserialize(settings.responseSets)
     end
 
     -- Trigger applied event

@@ -46,6 +46,10 @@ function LoothingSyncMixin:RegisterCommEvents()
     Loothing.Comm:RegisterCallback("OnSyncData", function(_, data)
         self:HandleSyncData(data)
     end, self)
+
+    Loothing.Comm:RegisterCallback("OnObserverRoster", function(_, data)
+        self:HandleObserverRoster(data)
+    end, self)
 end
 
 --[[--------------------------------------------------------------------
@@ -171,10 +175,20 @@ function LoothingSyncMixin:ApplySyncData(data)
         Loothing.Council:SetRemoteRoster(data.councilRoster)
     end
 
+    -- Restore observer roster from sync packet
+    if data.observerRoster and Loothing.Observer then
+        Loothing.Observer:SetRemoteObserverList(data.observerRoster)
+    end
+
     if not Loothing.Session then return end
 
     -- Check if there's an active session
     if data.state == LOOTHING_SESSION_STATE.INACTIVE then
+        -- If the local client still has an active session, clean it up
+        if Loothing.Session:IsActive() then
+            Loothing:Debug("Sync reports INACTIVE but local session is active, ending stale session")
+            Loothing.Session:EndSession()
+        end
         return
     end
 
@@ -294,6 +308,16 @@ function LoothingSyncMixin:GatherSyncData()
         end
     end
 
+    -- Include observer roster
+    if Loothing.Observer then
+        syncData.observerRoster = {
+            list = Loothing.Observer:GetObservers(),
+            permissions = Loothing.Settings and Loothing.Settings:GetObserverPermissions() or {},
+            openObservation = Loothing.Settings and Loothing.Settings:GetOpenObservation() or false,
+            mlIsObserver = Loothing.Settings and Loothing.Settings:GetMLIsObserver() or false,
+        }
+    end
+
     return syncData
 end
 
@@ -332,6 +356,36 @@ function LoothingSyncMixin:CheckNeedSync()
             self.pendingSyncCheckTimer = nil
             self:RequestSync(syncTarget)
         end)
+    end
+end
+
+--[[--------------------------------------------------------------------
+    Observer Roster Sync
+----------------------------------------------------------------------]]
+
+--- Broadcast observer roster to raid (ML-only)
+function LoothingSyncMixin:BroadcastObserverRoster()
+    if not Loothing.Session or not Loothing.Session:IsMasterLooter() then return end
+    if not Loothing.Observer then return end
+
+    local data = {
+        list = Loothing.Observer:GetObservers(),
+        permissions = Loothing.Settings and Loothing.Settings:GetObserverPermissions() or {},
+        openObservation = Loothing.Settings and Loothing.Settings:GetOpenObservation() or false,
+        mlIsObserver = Loothing.Settings and Loothing.Settings:GetMLIsObserver() or false,
+    }
+    Loothing.Comm:Send(LOOTHING_MSG_TYPE.OBSERVER_ROSTER, data)
+end
+
+--- Handle received observer roster (non-ML players)
+-- @param data table - { list, permissions, openObservation, mlIsObserver }
+function LoothingSyncMixin:HandleObserverRoster(data)
+    if not Loothing.Observer then return end
+    if not data.masterLooter then return end
+
+    -- Non-ML players mirror the ML's observer roster
+    if not LoothingUtils.IsRaidLeaderOrAssistant() then
+        Loothing.Observer:SetRemoteObserverList(data)
     end
 end
 
@@ -410,12 +464,12 @@ function LoothingSyncMixin:GatherSettings()
     local settings = {}
 
     if Loothing.ResponseManager then
-        settings.responses = Loothing.ResponseManager:Serialize()
+        settings.responseSets = Loothing.ResponseManager:Serialize()
     end
 
     if Loothing.Settings then
         settings.voting = {
-            mode = Loothing.Settings:GetVotingMode(),
+            mode    = Loothing.Settings:GetVotingMode(),
             timeout = Loothing.Settings:GetVotingTimeout(),
         }
     end
@@ -487,8 +541,8 @@ end
 --- Apply received settings
 -- @param settings table
 function LoothingSyncMixin:ApplySettings(settings)
-    if settings.responses and Loothing.ResponseManager then
-        Loothing.ResponseManager:Deserialize(settings.responses)
+    if settings.responseSets and Loothing.ResponseManager then
+        Loothing.ResponseManager:Deserialize(settings.responseSets)
     end
 
     if settings.voting and Loothing.Settings then
@@ -625,14 +679,26 @@ function LoothingSyncMixin:HandleHistoryData(data, sender)
 
     self.awaitingHistoryFrom = nil
 
-    -- Import history entries (avoid duplicates)
+    -- Import history entries (avoid duplicates, validate required fields)
     local imported = 0
+    local skipped = 0
     for _, entry in ipairs(data) do
-        local existing = Loothing.History:GetEntryByGUID(entry.guid)
-        if not existing then
-            Loothing.History:AddEntry(entry)
-            imported = imported + 1
+        -- Validate required fields before importing
+        if not entry.itemLink or not entry.winner then
+            skipped = skipped + 1
+            Loothing:Debug("HandleHistoryData: skipped entry missing required fields",
+                "itemLink:", entry.itemLink ~= nil, "winner:", entry.winner ~= nil)
+        else
+            local existing = Loothing.History:GetEntryByGUID(entry.guid)
+            if not existing then
+                Loothing.History:AddEntry(entry)
+                imported = imported + 1
+            end
         end
+    end
+
+    if skipped > 0 then
+        Loothing:Debug("HandleHistoryData: skipped", skipped, "entries with missing fields from", sender)
     end
 
     Loothing:Print(string.format("Imported %d history entries from %s", imported, sender))

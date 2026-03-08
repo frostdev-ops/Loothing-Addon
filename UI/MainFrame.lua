@@ -144,6 +144,7 @@ function LoothingMainFrameMixin:CreateTabs()
 
     local tabDefs = {
         { id = "session", name = L["TAB_SESSION"] },
+        { id = "roster", name = L["TAB_ROSTER"] },
         { id = "trade", name = L["TAB_TRADE"] },
         { id = "history", name = L["TAB_HISTORY"] },
     }
@@ -245,6 +246,15 @@ function LoothingMainFrameMixin:CreatePanels()
     self.panels.session = {
         frame = sessionFrame,
         panel = CreateLoothingSessionPanel(sessionFrame),
+    }
+
+    -- Roster panel
+    local rosterFrame = CreateFrame("Frame", nil, self.contentContainer)
+    rosterFrame:SetAllPoints()
+    rosterFrame:Hide()
+    self.panels.roster = {
+        frame = rosterFrame,
+        panel = CreateLoothingRosterPanel(rosterFrame),
     }
 
     -- Trade panel
@@ -455,6 +465,12 @@ end
 -- @return table
 function LoothingMainFrameMixin:GetTradePanel()
     return self.panels.trade and self.panels.trade.panel
+end
+
+--- Get roster panel
+-- @return table
+function LoothingMainFrameMixin:GetRosterPanel()
+    return self.panels.roster and self.panels.roster.panel
 end
 
 --- Get history panel

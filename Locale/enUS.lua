@@ -157,7 +157,23 @@ L["CLEAR"] = "Clear"
 L["TAB_SESSION"] = "Session"
 L["TAB_TRADE"] = "Trade"
 L["TAB_HISTORY"] = "History"
+L["TAB_ROSTER"] = "Roster"
 L["TAB_SETTINGS"] = "Settings"
+
+-- Roster
+L["ROSTER_SUMMARY"] = "%d Members | %d Online | %d Installed | %d Council"
+L["ROSTER_NO_GROUP"] = "Not in a group"
+L["ROSTER_QUERY_VERSIONS"] = "Query Versions"
+L["ROSTER_ADD_COUNCIL"] = "Add to Council"
+L["ROSTER_REMOVE_COUNCIL"] = "Remove from Council"
+L["ROSTER_SET_ML"] = "Set as Master Looter"
+L["ROSTER_CLEAR_ML"] = "Remove as Master Looter"
+L["ROSTER_PROMOTE_LEADER"] = "Promote to Leader"
+L["ROSTER_PROMOTE_ASSISTANT"] = "Promote to Assistant"
+L["ROSTER_DEMOTE"] = "Demote"
+L["ROSTER_UNINVITE"] = "Uninvite"
+L["ROSTER_ADD_OBSERVER"] = "Add as Observer"
+L["ROSTER_REMOVE_OBSERVER"] = "Remove as Observer"
 
 -- Settings
 L["SETTINGS"] = "Settings"
@@ -868,6 +884,37 @@ L["SYNCING_TO"] = "Syncing %s to %s..."
 L["DATE_RANGE"] = "Date Range:"
 L["FILTER_BY_WINNER"] = "Filter by %s"
 L["DELETE_ENTRY"] = "Delete Entry"
+
+-- Observer System
+L["OBSERVERS"] = "Observers"
+L["OBSERVER"] = "Observer"
+L["OBSERVER_LIST"] = "Observer List"
+L["ADD_OBSERVER"] = "Add Observer"
+L["REMOVE_OBSERVER"] = "Remove Observer"
+L["IS_OBSERVER"] = "%s is now an observer"
+L["REMOVED_OBSERVER"] = "%s removed from observers"
+L["NO_OBSERVERS"] = "No observers added"
+
+-- ML Observer
+L["CONFIG_ML_OBSERVER"] = "ML Observer Mode"
+L["CONFIG_ML_OBSERVER_DESC"] = "Master Looter can see everything and manage sessions but cannot vote"
+
+-- Open Observation (replaces OBSERVE_MODE)
+L["OPEN_OBSERVATION"] = "Open Observation"
+L["OPEN_OBSERVATION_DESC"] = "Allow all raid members to observe voting (adds everyone as an observer)"
+
+-- Observer Permissions
+L["OBSERVER_PERMISSIONS"] = "Observer Permissions"
+L["OBSERVER_SEE_VOTE_COUNTS"] = "See Vote Counts"
+L["OBSERVER_SEE_VOTE_COUNTS_DESC"] = "Observers can see how many votes each candidate has"
+L["OBSERVER_SEE_VOTER_IDS"] = "See Voter Identities"
+L["OBSERVER_SEE_VOTER_IDS_DESC"] = "Observers can see who voted for each candidate"
+L["OBSERVER_SEE_RESPONSES"] = "See Responses"
+L["OBSERVER_SEE_RESPONSES_DESC"] = "Observers can see what response each candidate selected"
+L["OBSERVER_SEE_NOTES"] = "See Notes"
+L["OBSERVER_SEE_NOTES_DESC"] = "Observers can see candidate notes"
+L["CONFIG_OBSERVER_REMOVE_ALL"] = "Remove All Observers"
+L["CONFIG_OBSERVER_REMOVE_ALL_DESC"] = "Remove all observers from the list"
 
 -- Make locale available globally
 LOOTHING_LOCALE = L

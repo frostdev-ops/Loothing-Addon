@@ -99,7 +99,7 @@ function LoothingSessionMixin:ShowRollFrameForItem(item)
     end
 end
 
---- Deprecated: Use ShowRollFrameForItem instead
+-- DEPRECATED: Use ShowRollFrameForItem instead. Kept for external consumer compatibility.
 -- @param item table - The item to display
 function LoothingSessionMixin:ShowVotePanelForItem(item)
     -- Redirect to RollFrame
@@ -112,8 +112,12 @@ end
 function LoothingSessionMixin:ShowResultsPanelForItem(item, results)
     if not item then return end
 
-    -- Check if player is a council member
-    if not Loothing.Council or not Loothing.Council:IsPlayerCouncilMember() then
+    -- Check if player is a council member, ML, or observer
+    local isCouncil = Loothing.Council and Loothing.Council:IsPlayerCouncilMember()
+    local isML = self:IsMasterLooter()
+    local isObserver = Loothing.Observer and Loothing.Observer:IsPlayerObserver()
+    local isMLObserver = Loothing.Observer and Loothing.Observer:IsMLObserver()
+    if not isCouncil and not isML and not isObserver and not isMLObserver then
         return
     end
 
@@ -121,10 +125,7 @@ function LoothingSessionMixin:ShowResultsPanelForItem(item, results)
     local panel = Loothing.UI and Loothing.UI.ResultsPanel
     if panel and type(panel.SetItem) == "function" and type(panel.Show) == "function" then
         local success, err = pcall(function()
-            panel:SetItem(item)
-            if results and type(panel.SetResults) == "function" then
-                panel:SetResults(results)
-            end
+            panel:SetItem(item, results)
             panel:Show()
         end)
         if not success then
@@ -207,30 +208,70 @@ function LoothingSessionMixin:RegisterCommEvents()
 end
 
 --- Handle tradability status for a looted item
--- @param data table - { itemLink, timeRemaining, playerName }
+-- @param data table - { itemLink, timeRemaining, playerName, guid, itemID }
 function LoothingSessionMixin:HandleTradable(data)
     if not data or not data.itemLink then return end
-    for _, item in self.items:Enumerate() do
-        if item.itemLink == data.itemLink then
-            item.isTradable = true
-            item.tradeTimeRemaining = data.timeRemaining
-            self:TriggerEvent("OnItemTradabilityChanged", item)
-            return
+
+    -- Find the matching item: prefer GUID > itemID+looter > itemLink fallback
+    local matched = nil
+    if data.guid then
+        matched = self:GetItemByGUID(data.guid)
+    end
+    if not matched and data.itemID then
+        for _, item in self.items:Enumerate() do
+            if item.itemID == data.itemID and data.playerName and item.looter == data.playerName then
+                matched = item
+                break
+            end
         end
+    end
+    if not matched then
+        for _, item in self.items:Enumerate() do
+            if item.itemLink == data.itemLink and (not data.playerName or item.looter == data.playerName) then
+                matched = item
+                break
+            end
+        end
+    end
+
+    if matched then
+        matched.isTradable = true
+        matched.tradeTimeRemaining = data.timeRemaining
+        self:TriggerEvent("OnItemTradabilityChanged", matched)
     end
 end
 
 --- Handle non-tradability status for a looted item
--- @param data table - { itemLink, playerName }
+-- @param data table - { itemLink, playerName, guid, itemID }
 function LoothingSessionMixin:HandleNonTradable(data)
     if not data or not data.itemLink then return end
-    for _, item in self.items:Enumerate() do
-        if item.itemLink == data.itemLink then
-            item.isTradable = false
-            item.tradeTimeRemaining = nil
-            self:TriggerEvent("OnItemTradabilityChanged", item)
-            return
+
+    -- Find the matching item: prefer GUID > itemID+looter > itemLink fallback
+    local matched = nil
+    if data.guid then
+        matched = self:GetItemByGUID(data.guid)
+    end
+    if not matched and data.itemID then
+        for _, item in self.items:Enumerate() do
+            if item.itemID == data.itemID and data.playerName and item.looter == data.playerName then
+                matched = item
+                break
+            end
         end
+    end
+    if not matched then
+        for _, item in self.items:Enumerate() do
+            if item.itemLink == data.itemLink and (not data.playerName or item.looter == data.playerName) then
+                matched = item
+                break
+            end
+        end
+    end
+
+    if matched then
+        matched.isTradable = false
+        matched.tradeTimeRemaining = nil
+        self:TriggerEvent("OnItemTradabilityChanged", matched)
     end
 end
 
@@ -364,6 +405,11 @@ function LoothingSessionMixin:EndSession()
         Loothing.AckTracker:StopHeartbeat()
     end
 
+    -- Clear remote council roster so local roster becomes primary again
+    if Loothing.Council then
+        Loothing.Council:ClearRemoteRoster()
+    end
+
     -- Broadcast to raid (only ML should broadcast end)
     if wasML then
         Loothing.Comm:BroadcastSessionEnd()
@@ -463,6 +509,11 @@ end
 -- @return table|nil - The item, or nil if failed
 function LoothingSessionMixin:AddItem(itemLink, looter, guid, force)
     if self.state == LOOTHING_SESSION_STATE.INACTIVE then
+        return nil
+    end
+
+    if self.state == LOOTHING_SESSION_STATE.CLOSED then
+        Loothing:Debug("Cannot add items to a closed session")
         return nil
     end
 
@@ -590,6 +641,11 @@ end
 function LoothingSessionMixin:StartVoting(guid, timeout, skipBroadcast)
     if not self:IsMasterLooter() then
         Loothing:Debug("Not master looter, cannot start voting")
+        return false
+    end
+
+    if self.state == LOOTHING_SESSION_STATE.CLOSED then
+        Loothing:Debug("Cannot start voting on a closed session")
         return false
     end
 
@@ -741,7 +797,7 @@ function LoothingSessionMixin:CancelVoting(guid)
         local itemsToCancel = {}
         for _, item in self.items:Enumerate() do
             if item:IsVoting() then
-                table.insert(itemsToCancel, item)
+                itemsToCancel[#itemsToCancel + 1] = item
             end
         end
 
@@ -795,7 +851,7 @@ function LoothingSessionMixin:EndVotingForItem(guid)
     return results
 end
 
---- Legacy: End voting (now requires guid or ends all)
+-- DEPRECATED: Use EndVotingForItem(guid) instead. Kept for external consumer compatibility.
 -- @param guid string - Optional item GUID
 -- @return table|nil - Tally results for last item
 function LoothingSessionMixin:EndVoting(guid)
@@ -1529,14 +1585,19 @@ function LoothingSessionMixin:HandleRemoteVoteRequest(data)
     -- Show RollFrame for everyone (including council)
     self:ShowRollFrameForItem(item)
 
-    -- Show CouncilTable for council members
+    -- Show CouncilTable for council, ML, and observers
+    local showTable = false
     if Loothing.Council and Loothing.Council:IsPlayerCouncilMember() then
-        if Loothing.UI and Loothing.UI.CouncilTable then
-            Loothing.UI.CouncilTable:Show()
-            -- Ensure it selects the item
-            if Loothing.UI.CouncilTable.SelectItemTab then
-                Loothing.UI.CouncilTable:SelectItemTab(item.guid)
-            end
+        showTable = true
+    elseif self:IsMasterLooter() then
+        showTable = true
+    elseif Loothing.Observer and (Loothing.Observer:IsPlayerObserver() or Loothing.Observer:IsMLObserver()) then
+        showTable = true
+    end
+    if showTable and Loothing.UI and Loothing.UI.CouncilTable then
+        Loothing.UI.CouncilTable:Show()
+        if Loothing.UI.CouncilTable.SelectItemTab then
+            Loothing.UI.CouncilTable:SelectItemTab(item.guid)
         end
     end
 end
@@ -1939,6 +2000,12 @@ function LoothingSessionMixin:HandlePlayerResponse(data)
 
     if roll and roll > 0 then
         candidate:SetRoll(roll, rollMin or 1, rollMax or 100)
+    else
+        -- Fallback: generate a silent roll if response arrived without one
+        local rollSettings = Loothing.Settings and Loothing.Settings:Get("rollFrame.rollRange")
+        local fallbackMin = rollSettings and rollSettings.min or 1
+        local fallbackMax = rollSettings and rollSettings.max or 100
+        candidate:SetRoll(math.random(fallbackMin, fallbackMax), fallbackMin, fallbackMax)
     end
 
     -- Update items won count for this player

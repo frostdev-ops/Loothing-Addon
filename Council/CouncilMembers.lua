@@ -12,7 +12,7 @@ LoothingCouncilMixin = LoothingCouncilMixin or {}
 function LoothingCouncilMixin:AddMember(name)
     name = LoothingUtils.NormalizeName(name)
 
-    if self:IsMember(name) then
+    if self.members[name] then
         return false, "Player is already a council member"
     end
 

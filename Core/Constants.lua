@@ -4,7 +4,7 @@
 ----------------------------------------------------------------------]]
 
 -- Addon info
-LOOTHING_VERSION = "1.0.1"
+LOOTHING_VERSION = "1.1.1"
 LOOTHING_PROTOCOL_VERSION = 3
 LOOTHING_ADDON_PREFIX = "LOOTHING"
 
@@ -55,6 +55,46 @@ LOOTHING_RESPONSE_INFO = {
         name = "PASS",
         color = { r = 0.5, g = 0.5, b = 0.5, a = 1.0 },       -- Gray
         icon = "Interface\\Buttons\\UI-GroupLoot-Pass-Up",
+    },
+}
+
+--[[--------------------------------------------------------------------
+    System Responses (non-editable, string-keyed)
+----------------------------------------------------------------------]]
+
+LOOTHING_SYSTEM_RESPONSE = {
+    AUTOPASS    = "AUTOPASS",
+    WAIT        = "WAIT",
+    TIMEOUT     = "TIMEOUT",
+    NOTANNOUNCED = "NOTANNOUNCED",
+    AWARDED     = "AWARDED",
+}
+
+LOOTHING_SYSTEM_RESPONSE_INFO = {
+    [LOOTHING_SYSTEM_RESPONSE.AUTOPASS] = {
+        name  = "Auto Pass",
+        color = { r = 0.5, g = 0.5, b = 0.5, a = 0.7 },
+        icon  = "Interface\\Buttons\\UI-GroupLoot-Pass-Up",
+    },
+    [LOOTHING_SYSTEM_RESPONSE.WAIT] = {
+        name  = "Waiting",
+        color = { r = 1.0, g = 1.0, b = 0.5, a = 1.0 },
+        icon  = nil,
+    },
+    [LOOTHING_SYSTEM_RESPONSE.TIMEOUT] = {
+        name  = "Timeout",
+        color = { r = 0.7, g = 0.3, b = 0.3, a = 1.0 },
+        icon  = nil,
+    },
+    [LOOTHING_SYSTEM_RESPONSE.NOTANNOUNCED] = {
+        name  = "Not Announced",
+        color = { r = 0.5, g = 0.5, b = 0.5, a = 1.0 },
+        icon  = nil,
+    },
+    [LOOTHING_SYSTEM_RESPONSE.AWARDED] = {
+        name  = "Awarded",
+        color = { r = 1.0, g = 0.84, b = 0.0, a = 1.0 },
+        icon  = "Interface\\Buttons\\UI-GroupLoot-Coin-Up",
     },
 }
 
@@ -169,6 +209,9 @@ LOOTHING_MSG_TYPE = {
     BATCH     = "BT",            -- ML/Council: container wrapping multiple messages
     HEARTBEAT = "HB",            -- ML -> Raid: periodic state digest for auto-recovery
     ACK       = "AK",            -- Universal point-to-point acknowledgment
+
+    -- Observer roster
+    OBSERVER_ROSTER = "OR",         -- ML -> Raid: Observer list + permissions
 }
 
 --[[--------------------------------------------------------------------
@@ -206,7 +249,6 @@ LOOTHING_DEFAULT_SETTINGS = {
         observe = false,            -- Show voting frame but don't allow voting
         autoAddRolls = true,        -- Automatically add /roll results to candidates
         requireNotes = false,       -- Require voters to add a note with their vote
-        numButtons = 5,             -- Number of response buttons shown (1-10)
         mlSeesVotes = false,        -- ML sees votes even when anonymous
     },
 
@@ -392,6 +434,35 @@ LOOTHING_DEFAULT_SETTINGS = {
         },
     },
 
+    -- Unified response sets (replaces separate responses + buttonSets)
+    -- Per-button schema: { id, text, responseText, color{array}, icon, sort, whisperKeys{array}, requireNotes }
+    responseSets = {
+        activeSet = 1,
+        sets = {
+            [1] = {
+                name = "Default",
+                buttons = {
+                    { id = 1, text = "Need",     responseText = "NEED",     color = { 0.0, 1.0, 0.0, 1.0 }, icon = "Interface\\Buttons\\UI-GroupLoot-Dice-Up", sort = 1, whisperKeys = { "need" },               requireNotes = false },
+                    { id = 2, text = "Greed",    responseText = "GREED",    color = { 1.0, 1.0, 0.0, 1.0 }, icon = "Interface\\Buttons\\UI-GroupLoot-Coin-Up", sort = 2, whisperKeys = { "greed" },              requireNotes = false },
+                    { id = 3, text = "Offspec",  responseText = "OFFSPEC",  color = { 1.0, 0.5, 0.0, 1.0 }, icon = "Interface\\Icons\\Ability_DualWield",     sort = 3, whisperKeys = { "offspec", "os" },       requireNotes = false },
+                    { id = 4, text = "Transmog", responseText = "TRANSMOG", color = { 1.0, 0.0, 1.0, 1.0 }, icon = "Interface\\Icons\\INV_Arcane_Orb",        sort = 4, whisperKeys = { "transmog", "tmog" },   requireNotes = false },
+                    { id = 5, text = "Pass",     responseText = "PASS",     color = { 0.5, 0.5, 0.5, 1.0 }, icon = "Interface\\Buttons\\UI-GroupLoot-Pass-Up",sort = 5, whisperKeys = { "pass" },               requireNotes = false },
+                },
+            },
+            [2] = {
+                name = "Gear Priority",
+                buttons = {
+                    { id = 1, text = "BIS",           responseText = "BIS",      color = { 1.0, 0.0, 0.0, 1.0 }, icon = "Interface\\Buttons\\UI-GroupLoot-Dice-Up", sort = 1, whisperKeys = { "bis" },                  requireNotes = false },
+                    { id = 2, text = "Major Upgrade",  responseText = "MAJOR",    color = { 0.0, 1.0, 0.0, 1.0 }, icon = nil,                                       sort = 2, whisperKeys = { "major", "upgrade" },      requireNotes = false },
+                    { id = 3, text = "Minor Upgrade",  responseText = "MINOR",    color = { 1.0, 1.0, 0.0, 1.0 }, icon = nil,                                       sort = 3, whisperKeys = { "minor" },                 requireNotes = false },
+                    { id = 4, text = "Sidegrade",      responseText = "SIDEGRADE",color = { 1.0, 0.5, 0.0, 1.0 }, icon = nil,                                       sort = 4, whisperKeys = { "sidegrade", "side" },    requireNotes = false },
+                    { id = 5, text = "Pass",           responseText = "PASS",     color = { 0.5, 0.5, 0.5, 1.0 }, icon = "Interface\\Buttons\\UI-GroupLoot-Pass-Up",sort = 5, whisperKeys = { "pass" },               requireNotes = false },
+                },
+            },
+        },
+        typeCodeMap = {},  -- typeCode -> setId (e.g., "WEAPON" -> 2)
+    },
+
     filters = {
         enabled = true,
         byClass = {},              -- Table of class names to show (empty = all)
@@ -449,6 +520,18 @@ LOOTHING_DEFAULT_SETTINGS = {
         tieBreaker = "ROLL",       -- "ROLL", "ML_CHOICE", "REVOTE"
         autoAwardOnUnanimous = false,
         requireConfirmation = true,
+    },
+
+    observers = {
+        list = {},                          -- ML-managed observer player names
+        openObservation = false,            -- When true, all raid members can observe
+        mlIsObserver = false,               -- ML sees everything but cannot vote
+        permissions = {
+            seeVoteCounts = true,
+            seeVoterIdentities = false,
+            seeResponses = true,
+            seeNotes = false,
+        },
     },
 }
 
