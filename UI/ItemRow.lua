@@ -270,6 +270,8 @@ function LoothingItemRowMixin:UpdateStatus()
         -- Show vote count or time remaining
         local voteCount = self.item:GetVoteCount()
         local timeRemaining = self.item:GetTimeRemaining()
+        local isML = Loothing.Session and Loothing.Session:IsMasterLooter()
+        local hideVotes = Loothing.Settings and Loothing.Settings:GetHideVotes() and not isML
 
         if timeRemaining == math.huge then
             self.infoText:SetText(L["NO_LIMIT"] or "No Limit")
@@ -277,6 +279,8 @@ function LoothingItemRowMixin:UpdateStatus()
         elseif timeRemaining > 0 then
             self.infoText:SetText(string.format("%ds", math.ceil(timeRemaining)))
             self.infoText:SetTextColor(1, 1, 0)
+        elseif hideVotes then
+            self.infoText:SetText("")
         else
             self.infoText:SetText(string.format("%d %s", voteCount, L["VOTES"]))
             self.infoText:SetTextColor(1, 1, 1)
@@ -286,9 +290,15 @@ function LoothingItemRowMixin:UpdateStatus()
         self.statusText:SetText(L["STATUS_TALLIED"])
         self.statusText:SetTextColor(1, 0.82, 0)
 
+        local isML = Loothing.Session and Loothing.Session:IsMasterLooter()
+        local hideVotes = Loothing.Settings and Loothing.Settings:GetHideVotes() and not isML
         local voteCount = self.item:GetVoteCount()
-        self.infoText:SetText(string.format("%d %s", voteCount, L["VOTES"]))
-        self.infoText:SetTextColor(1, 1, 1)
+        if hideVotes then
+            self.infoText:SetText("")
+        else
+            self.infoText:SetText(string.format("%d %s", voteCount, L["VOTES"]))
+            self.infoText:SetTextColor(1, 1, 1)
+        end
 
     elseif state == LOOTHING_ITEM_STATE.AWARDED then
         self.statusText:SetText(L["STATUS_AWARDED"])

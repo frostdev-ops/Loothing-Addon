@@ -42,10 +42,10 @@ LoothingAddItemFrameMixin = {}
 
 function LoothingAddItemFrameMixin:Init()
     self.activeTab = 1
-    self.resolvedLink = nil   -- Tab 1 resolved item
-    self.selectedLink = nil   -- Tab 2/3 selected item
+    self.itemQueue = {}
     self.bagRows = {}
     self.recentRows = {}
+    self.queueRows = {}
     self:BuildFrame()
 end
 
@@ -240,53 +240,165 @@ function LoothingAddItemFrameMixin:BuildEnterItemPanel()
     dragLabel:SetText(L["DRAG_ITEM_HERE"] or "Drop item here")
     dragLabel:SetTextColor(0.5, 0.5, 0.7)
 
-    -- Item preview
-    local preview = CreateFrame("Frame", nil, panel, "BackdropTemplate")
-    preview:SetPoint("TOPLEFT", 0, -102)
-    preview:SetPoint("TOPRIGHT", 0, -102)
-    preview:SetHeight(56)
-    preview:SetBackdrop({
+    -- Queue list (replaces single-item preview)
+    self:BuildQueueList(panel)
+end
+
+function LoothingAddItemFrameMixin:BuildQueueList(panel)
+    local scroll = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", 0, -102)
+    scroll:SetPoint("BOTTOMRIGHT", -20, 0)
+    self.queueScroll = scroll
+
+    local sc = CreateFrame("Frame", nil, scroll)
+    sc:SetWidth(scroll:GetWidth())
+    sc:SetHeight(1)
+    scroll:SetScrollChild(sc)
+    self.queueContent = sc
+
+    -- Empty hint
+    local emptyHint = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    emptyHint:SetPoint("TOP", 0, -118)
+    emptyHint:SetText("Queued items will appear here")
+    emptyHint:SetTextColor(0.4, 0.4, 0.4)
+    self.queueEmptyHint = emptyHint
+end
+
+function LoothingAddItemFrameMixin:RefreshQueueList()
+    for _, row in ipairs(self.queueRows) do row:Hide() end
+    wipe(self.queueRows)
+
+    if #self.itemQueue == 0 then
+        self.queueEmptyHint:Show()
+        self.queueScroll:Hide()
+        return
+    end
+
+    self.queueEmptyHint:Hide()
+    self.queueScroll:Show()
+
+    local yOffset = 0
+    for _, entry in ipairs(self.itemQueue) do
+        local row = self:CreateQueueRow(self.queueContent, entry)
+        row:SetPoint("TOPLEFT", 0, yOffset)
+        row:SetWidth(self.queueContent:GetWidth())
+        row:Show()
+        yOffset = yOffset - 38
+        self.queueRows[#self.queueRows + 1] = row
+    end
+    self.queueContent:SetHeight(math.abs(yOffset) + 8)
+end
+
+function LoothingAddItemFrameMixin:CreateQueueRow(parent, itemData)
+    local row = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    row:SetHeight(36)
+    row:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Buttons\\WHITE8x8",
         tile = false, edgeSize = 1,
         insets = { left = 1, right = 1, top = 1, bottom = 1 },
     })
-    preview:SetBackdropColor(0.05, 0.05, 0.05, 0.9)
-    preview:SetBackdropBorderColor(0.2, 0.2, 0.2, 1)
-    preview:Hide()
-    self.preview = preview
+    row:SetBackdropColor(0.08, 0.08, 0.08, 1)
+    row:SetBackdropBorderColor(0.15, 0.15, 0.15, 1)
 
-    local previewIcon = preview:CreateTexture(nil, "ARTWORK")
-    previewIcon:SetSize(40, 40)
-    previewIcon:SetPoint("LEFT", 8, 0)
-    self.previewIcon = previewIcon
+    -- Quality-colored left bar
+    local qBar = row:CreateTexture(nil, "ARTWORK")
+    qBar:SetSize(3, 34)
+    qBar:SetPoint("LEFT", 1, 0)
+    if itemData.quality and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[itemData.quality] then
+        local c = ITEM_QUALITY_COLORS[itemData.quality]
+        qBar:SetColorTexture(c.r, c.g, c.b, 1)
+    else
+        qBar:SetColorTexture(0.5, 0.5, 0.5, 1)
+    end
 
-    local previewName = preview:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    previewName:SetPoint("TOPLEFT", previewIcon, "TOPRIGHT", 8, -4)
-    previewName:SetPoint("RIGHT", -8, 0)
-    previewName:SetJustifyH("LEFT")
-    self.previewName = previewName
+    -- Icon
+    local icon = row:CreateTexture(nil, "ARTWORK")
+    icon:SetSize(28, 28)
+    icon:SetPoint("LEFT", 6, 0)
+    if itemData.icon then
+        icon:SetTexture(itemData.icon)
+    end
 
-    local previewIlvl = preview:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    previewIlvl:SetPoint("BOTTOMLEFT", previewIcon, "BOTTOMRIGHT", 8, 4)
-    previewIlvl:SetTextColor(0.7, 0.7, 0.7)
-    self.previewIlvl = previewIlvl
+    -- Name
+    local nameText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    nameText:SetPoint("TOPLEFT", icon, "TOPRIGHT", 6, -3)
+    nameText:SetPoint("TOPRIGHT", -28, -3)
+    nameText:SetJustifyH("LEFT")
+    nameText:SetText(itemData.name or "")
+    if itemData.quality and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[itemData.quality] then
+        local c = ITEM_QUALITY_COLORS[itemData.quality]
+        nameText:SetTextColor(c.r, c.g, c.b)
+    end
+
+    -- iLvl
+    local ilvlText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    ilvlText:SetPoint("BOTTOMLEFT", icon, "BOTTOMRIGHT", 6, 3)
+    ilvlText:SetTextColor(0.7, 0.7, 0.7)
+    if itemData.ilvl and itemData.ilvl > 0 then
+        ilvlText:SetText("iLvl " .. itemData.ilvl)
+    end
+
+    -- Remove button
+    local removeBtn = CreateFrame("Button", nil, row)
+    removeBtn:SetSize(20, 20)
+    removeBtn:SetPoint("RIGHT", -4, 0)
+    local removeTxt = removeBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    removeTxt:SetPoint("CENTER")
+    removeTxt:SetText("X")
+    removeTxt:SetTextColor(0.8, 0.3, 0.3)
+    removeBtn:SetScript("OnClick", function()
+        self:RemoveFromQueue(itemData.link)
+        self:RefreshQueueList()
+    end)
+    removeBtn:SetScript("OnEnter", function()
+        removeTxt:SetTextColor(1, 0.4, 0.4)
+    end)
+    removeBtn:SetScript("OnLeave", function()
+        removeTxt:SetTextColor(0.8, 0.3, 0.3)
+    end)
+
+    -- Tooltip
+    row:EnableMouse(true)
+    row:SetScript("OnEnter", function(btn)
+        GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
+        GameTooltip:SetHyperlink(itemData.link)
+        GameTooltip:Show()
+    end)
+    row:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+
+    return row
 end
 
 function LoothingAddItemFrameMixin:OnItemInputChanged(text)
-    self.resolvedLink = nil
-    self.addBtn:SetEnabled(false)
-    self.preview:Hide()
     if not text or text == "" then return end
 
+    -- Increment generation to invalidate stale resolve callbacks
+    -- (prevents partial typing from queuing intermediate item IDs)
+    self._resolveGen = (self._resolveGen or 0) + 1
+    local gen = self._resolveGen
+
     ResolveItem(text, function(link, name, ilvl, quality, icon)
-        -- Guard: frame may have closed or input changed
+        -- Guard: stale resolve, frame closed, or wrong tab
+        if gen ~= self._resolveGen then return end
         if not self.frame:IsShown() then return end
-        self.resolvedLink = link
-        self:ShowPreview(link, name, ilvl, quality, icon)
-        if self.activeTab == 1 then
-            self.addBtn:SetEnabled(true)
-        end
+        if self.activeTab ~= 1 then return end
+
+        -- Duplicate guard
+        if self:IsInQueue(link) then return end
+
+        self.itemQueue[#self.itemQueue + 1] = {
+            link = link,
+            name = name,
+            ilvl = ilvl,
+            quality = quality,
+            icon = icon,
+        }
+        self.editBox:SetText("")
+        self:RefreshQueueList()
+        self:UpdateAddButton()
     end)
 end
 
@@ -296,25 +408,6 @@ function LoothingAddItemFrameMixin:AcceptDraggedItem()
         ClearCursor()
         self.editBox:SetText(itemLink or tostring(itemID))
     end
-end
-
-function LoothingAddItemFrameMixin:ShowPreview(link, name, ilvl, quality, icon)
-    self.previewIcon:SetTexture(icon)
-    self.previewName:SetText(name or link)
-
-    if quality and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[quality] then
-        local c = ITEM_QUALITY_COLORS[quality]
-        self.previewName:SetTextColor(c.r, c.g, c.b)
-    else
-        self.previewName:SetTextColor(1, 1, 1)
-    end
-
-    if ilvl and ilvl > 0 then
-        self.previewIlvl:SetText("iLvl " .. ilvl)
-    else
-        self.previewIlvl:SetText("")
-    end
-    self.preview:Show()
 end
 
 --[[--------------------------------------------------------------------
@@ -348,8 +441,8 @@ end
 function LoothingAddItemFrameMixin:RefreshRecentDrops()
     for _, row in ipairs(self.recentRows) do row:Hide() end
     wipe(self.recentRows)
-    self.selectedLink = nil
-    self.addBtn:SetEnabled(false)
+    wipe(self.itemQueue)
+    self:UpdateAddButton()
 
     local drops = {}
 
@@ -392,10 +485,7 @@ function LoothingAddItemFrameMixin:RefreshRecentDrops()
 
     local yOffset = 0
     for _, drop in ipairs(drops) do
-        local row = self:CreateItemRow(self.recentContent, drop, function(data)
-            self.selectedLink = data.link
-            self.addBtn:SetEnabled(true)
-        end)
+        local row = self:CreateItemRow(self.recentContent, drop)
         row:SetPoint("TOPLEFT", 0, yOffset)
         row:SetWidth(self.recentContent:GetWidth())
         row:Show()
@@ -448,8 +538,8 @@ end
 function LoothingAddItemFrameMixin:RefreshBagList()
     for _, row in ipairs(self.bagRows) do row:Hide() end
     wipe(self.bagRows)
-    self.selectedLink = nil
-    self.addBtn:SetEnabled(false)
+    wipe(self.itemQueue)
+    self:UpdateAddButton()
 
     local equipOnly = self.bagEquipOnly and self.bagEquipOnly:GetChecked()
     local items = {}
@@ -487,10 +577,7 @@ function LoothingAddItemFrameMixin:RefreshBagList()
 
     local yOffset = 0
     for _, item in ipairs(items) do
-        local row = self:CreateItemRow(self.bagsContent, item, function(data)
-            self.selectedLink = data.link
-            self.addBtn:SetEnabled(true)
-        end)
+        local row = self:CreateItemRow(self.bagsContent, item)
         row:SetPoint("TOPLEFT", 0, yOffset)
         row:SetWidth(self.bagsContent:GetWidth())
         row:Show()
@@ -501,10 +588,10 @@ function LoothingAddItemFrameMixin:RefreshBagList()
 end
 
 --[[--------------------------------------------------------------------
-    Shared Item Row
+    Shared Item Row (Tabs 2 & 3 — toggle multi-select)
 ----------------------------------------------------------------------]]
 
-function LoothingAddItemFrameMixin:CreateItemRow(parent, itemData, onSelect)
+function LoothingAddItemFrameMixin:CreateItemRow(parent, itemData)
     local row = CreateFrame("Button", nil, parent, "BackdropTemplate")
     row:SetHeight(36)
     row:SetBackdrop({
@@ -568,16 +655,29 @@ function LoothingAddItemFrameMixin:CreateItemRow(parent, itemData, onSelect)
     hl:SetAllPoints()
     hl:SetColorTexture(1, 1, 1, 0.05)
 
+    -- Toggle multi-select on click
+    row._selected = false
     row:SetScript("OnClick", function(btn)
-        -- Deselect peer rows
-        for _, peer in ipairs(self.bagRows) do
-            if peer ~= btn then peer:SetBackdropColor(0.08, 0.08, 0.08, 1) end
+        if btn._selected then
+            -- Deselect
+            btn._selected = false
+            btn:SetBackdropColor(0.08, 0.08, 0.08, 1)
+            self:RemoveFromQueue(itemData.link)
+        else
+            -- Select — guard duplicates
+            if not self:IsInQueue(itemData.link) then
+                btn._selected = true
+                btn:SetBackdropColor(0.12, 0.12, 0.28, 1)
+                self.itemQueue[#self.itemQueue + 1] = {
+                    link = itemData.link,
+                    name = itemData.name,
+                    ilvl = itemData.ilvl or 0,
+                    quality = itemData.quality,
+                    icon = iconTex,
+                }
+            end
         end
-        for _, peer in ipairs(self.recentRows) do
-            if peer ~= btn then peer:SetBackdropColor(0.08, 0.08, 0.08, 1) end
-        end
-        btn:SetBackdropColor(0.12, 0.12, 0.28, 1)
-        if onSelect then onSelect(itemData) end
+        self:UpdateAddButton()
     end)
 
     row:SetScript("OnEnter", function(btn)
@@ -593,14 +693,45 @@ function LoothingAddItemFrameMixin:CreateItemRow(parent, itemData, onSelect)
 end
 
 --[[--------------------------------------------------------------------
+    Queue Helpers
+----------------------------------------------------------------------]]
+
+function LoothingAddItemFrameMixin:IsInQueue(link)
+    for _, entry in ipairs(self.itemQueue) do
+        if entry.link == link then return true end
+    end
+    return false
+end
+
+function LoothingAddItemFrameMixin:RemoveFromQueue(link)
+    for i = #self.itemQueue, 1, -1 do
+        if self.itemQueue[i].link == link then
+            table.remove(self.itemQueue, i)
+            break
+        end
+    end
+    self:UpdateAddButton()
+end
+
+function LoothingAddItemFrameMixin:UpdateAddButton()
+    local count = #self.itemQueue
+    if count == 0 then
+        self.addBtn:SetEnabled(false)
+        self.addBtn:SetText(L["ADD"] or "Add")
+    else
+        self.addBtn:SetEnabled(true)
+        self.addBtn:SetText((L["ADD"] or "Add") .. " (" .. count .. ")")
+    end
+end
+
+--[[--------------------------------------------------------------------
     Tab Management
 ----------------------------------------------------------------------]]
 
 function LoothingAddItemFrameMixin:SelectTab(index)
     self.activeTab = index
-    self.selectedLink = nil
-    self.resolvedLink = nil
-    self.addBtn:SetEnabled(false)
+    wipe(self.itemQueue)
+    self:UpdateAddButton()
 
     for i, tab in ipairs(self.tabButtons) do
         if i == index then
@@ -617,12 +748,8 @@ function LoothingAddItemFrameMixin:SelectTab(index)
     self.fromBagsPanel:SetShown(index == 3)
 
     if index == 1 then
-        self.addBtn:SetText(L["ADD"] or "Add")
-    else
-        self.addBtn:SetText(L["ADD_SELECTED"] or "Add Selected")
-    end
-
-    if index == 2 then
+        self:RefreshQueueList()
+    elseif index == 2 then
         self:RefreshRecentDrops()
     elseif index == 3 then
         self:RefreshBagList()
@@ -634,19 +761,26 @@ end
 ----------------------------------------------------------------------]]
 
 function LoothingAddItemFrameMixin:OnAddClick()
-    local link = (self.activeTab == 1) and self.resolvedLink or self.selectedLink
-    if not link then return end
+    if #self.itemQueue == 0 then return end
 
     if not Loothing.Session then
         print("|cffff0000[Loothing]|r Session module not available.")
         return
     end
 
-    local item = Loothing.Session:AddItem(link, UnitName("player"), nil, true)
-    if item then
+    local added = 0
+    for _, entry in ipairs(self.itemQueue) do
+        local item = Loothing.Session:AddItem(entry.link, UnitName("player"), nil, true)
+        if item then
+            added = added + 1
+        end
+    end
+
+    if added > 0 then
+        Loothing:Print(added .. " item(s) added to session.")
         self:Hide()
     else
-        print("|cffff0000[Loothing]|r Failed to add item to session.")
+        print("|cffff0000[Loothing]|r Failed to add items to session.")
     end
 end
 
@@ -655,6 +789,7 @@ end
 ----------------------------------------------------------------------]]
 
 function LoothingAddItemFrameMixin:Show()
+    wipe(self.itemQueue)
     self.frame:Show()
     self:SelectTab(1)
     self.editBox:SetFocus()
@@ -663,10 +798,8 @@ end
 function LoothingAddItemFrameMixin:Hide()
     self.frame:Hide()
     self.editBox:SetText("")
-    self.resolvedLink = nil
-    self.selectedLink = nil
+    wipe(self.itemQueue)
     self.addBtn:SetEnabled(false)
-    self.preview:Hide()
 end
 
 function LoothingAddItemFrameMixin:IsShown()

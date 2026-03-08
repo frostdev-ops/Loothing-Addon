@@ -243,13 +243,19 @@ function LoothingResultsPanelMixin:SetItem(item, results)
     end
 
     -- Vote summary from candidateManager
-    local cm = item.candidateManager
-    if cm then
-        local totalVotes = cm:GetTotalVotes()
-        self.voteSummary:SetText(string.format(LOOTHING_LOCALE["TOTAL_VOTES"], totalVotes))
+    local isML = Loothing.Session and Loothing.Session:IsMasterLooter()
+    local hideVotes = Loothing.Settings and Loothing.Settings:GetHideVotes() and not isML
+    if hideVotes then
+        self.voteSummary:SetText("")
     else
-        local voteCount = item:GetVoteCount()
-        self.voteSummary:SetText(string.format(LOOTHING_LOCALE["TOTAL_VOTES"], voteCount))
+        local cm = item.candidateManager
+        if cm then
+            local totalVotes = cm:GetTotalVotes()
+            self.voteSummary:SetText(string.format(LOOTHING_LOCALE["TOTAL_VOTES"], totalVotes))
+        else
+            local voteCount = item:GetVoteCount()
+            self.voteSummary:SetText(string.format(LOOTHING_LOCALE["TOTAL_VOTES"], voteCount))
+        end
     end
 
     -- Display candidate-centric results
@@ -378,6 +384,9 @@ function LoothingResultsPanelMixin:UpdateWinnerSection(winner, totalVotes, candi
         return
     end
 
+    local isML = Loothing.Session and Loothing.Session:IsMasterLooter()
+    local hideVotes = Loothing.Settings and Loothing.Settings:GetHideVotes() and not isML
+
     -- Detect ties
     local maxVotes = winner and winner.councilVotes or 0
     local tied = {}
@@ -396,7 +405,11 @@ function LoothingResultsPanelMixin:UpdateWinnerSection(winner, totalVotes, candi
         self.winnerText:SetText("|cffffcc00Tie:|r " .. table.concat(names, ", "))
     elseif winner then
         local coloredName = winner:GetColoredName()
-        self.winnerText:SetText(string.format("Recommended: %s (%d votes)", coloredName, maxVotes))
+        if hideVotes then
+            self.winnerText:SetText("Recommended: " .. coloredName)
+        else
+            self.winnerText:SetText(string.format("Recommended: %s (%d votes)", coloredName, maxVotes))
+        end
     end
 end
 

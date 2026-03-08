@@ -2,6 +2,33 @@
 
 All notable changes to Loothing will be documented in this file.
 
+## [1.1.4-r3] - 2026-03-08
+
+### Added
+
+#### Bulk Add Items to Session
+- **AddItemFrame now supports queuing multiple items before adding**: Previously, each item required opening the frame, adding one item, and the frame closing. Now items accumulate in a queue before being submitted all at once
+- **Tab 1 (Enter Item)**: Paste/drag items one after another — each resolved item appends to a scrollable queue list with per-item remove buttons. Duplicate links are rejected. EditBox auto-clears after each successful queue
+- **Tabs 2 & 3 (Recent Drops / From Bags)**: Rows now toggle multi-select on click instead of exclusive single-select. Selected rows highlight (`0.12, 0.12, 0.28`), deselected rows reset. Queue tracks all selected items across the list
+- **Add button shows count**: Button text updates to "Add (N)" reflecting current queue size; disabled when queue is empty
+- **Bulk add on submit**: `OnAddClick` loops over the queue, calling `Session:AddItem()` for each entry, then reports the total added count
+- **Queue cleared on tab switch and frame open/close**: Prevents stale state from carrying across tabs or sessions
+- **Stale resolve guard**: Added generation counter (`_resolveGen`) to `OnItemInputChanged` — only the most recent resolve callback is honored, preventing partial typing of item IDs from queuing intermediate items
+
+### Fixed
+
+#### "Hide Vote Counts" Session Setting Not Working
+- **Vote counts displayed regardless of `hideVotes` setting**: The `GetHideVotes()` check was only applied in `CouncilTable/Columns.lua`. Three other UI locations displayed vote counts unconditionally:
+  - **ItemRow.lua** (VOTING state): Showed `"X Votes"` when timer expired, ignoring hideVotes
+  - **ItemRow.lua** (TALLIED state): Always showed vote count text
+  - **ResultsPanel.lua** (`SetItem`): Total votes summary always displayed in item header
+  - **ResultsPanel.lua** (`UpdateWinnerSection`): Winner recommendation showed `"(X votes)"` suffix
+- **Fix**: All four locations now check `Loothing.Settings:GetHideVotes()` with ML bypass (ML always sees counts). Non-ML council members see empty text when hideVotes is enabled
+
+#### AddItemFrame Queue Desync on Filter Toggle
+- **Tab 3 "Equipment Only" checkbox caused stale queue**: Toggling the checkbox called `RefreshBagList()` directly (not via `SelectTab`), which rebuilt all rows but left `itemQueue` populated with entries from destroyed rows. New rows started unselected while queue still held old data
+- **Fix**: Both `RefreshBagList()` and `RefreshRecentDrops()` now wipe `itemQueue` and update the Add button when rebuilding rows
+
 ## [1.1.4-r2] - 2026-03-08
 
 ### Fixed
