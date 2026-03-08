@@ -46,6 +46,7 @@ Loothing.WhisperHandler = nil
 Loothing.ErrorHandler = nil
 Loothing.Announcer = nil
 Loothing.AutoAward = nil
+Loothing.ResponseButtonSettings = nil
 Loothing.UI = nil
 
 -- Localization shortcut
@@ -245,6 +246,11 @@ local function InitializeModules()
     -- Initialize voting engine (singleton, not a mixin)
     if LoothingVotingEngine then
         Loothing.VotingEngine = LoothingVotingEngine
+    end
+
+    -- Initialize response button settings frame
+    if CreateLoothingResponseButtonSettings then
+        Loothing.ResponseButtonSettings = CreateLoothingResponseButtonSettings()
     end
 
     -- Initialize UI last (depends on all other modules)
@@ -721,6 +727,15 @@ local function RegisterEvents()
     if Loothing.Comm and Loothing.Sync then
         Loothing.Comm:RegisterCallback("OnCouncilRoster", function(_, data)
             Loothing.Sync:HandleCouncilRoster(data)
+        end, Loothing)
+    end
+
+    -- Wire Session award → TradeQueue (only for items the local player looted)
+    if Loothing.Session and Loothing.TradeQueue then
+        Loothing.Session:RegisterCallback("OnItemAwarded", function(_, item, winner)
+            if item.looter and LoothingUtils.IsSamePlayer(item.looter, LoothingUtils.GetPlayerFullName()) then
+                Loothing.TradeQueue:AddToQueue(item.guid, item.itemLink, winner, item.timestamp)
+            end
         end, Loothing)
     end
 
