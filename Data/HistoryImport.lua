@@ -69,8 +69,14 @@ function LoothingHistoryImportMixin:DetectFormat(text)
         return nil, "Empty import text"
     end
 
-    -- Get first line to detect format
-    local firstLine = text:match("^([^\n]+)")
+    -- Get first non-comment line to detect format
+    local firstLine
+    for line in text:gmatch("([^\n]+)") do
+        if not line:match("^%s*#") then
+            firstLine = line
+            break
+        end
+    end
     if not firstLine then
         return nil, "Could not read first line"
     end
@@ -107,6 +113,15 @@ function LoothingHistoryImportMixin:ParseDelimited(text, delimiter)
     for line in text:gmatch("([^\n]+)") do
         lines[#lines + 1] = line
     end
+
+    -- Filter out comment lines (metadata headers from Loothing exports)
+    local filtered = {}
+    for _, line in ipairs(lines) do
+        if not line:match("^%s*#") then
+            filtered[#filtered + 1] = line
+        end
+    end
+    lines = filtered
 
     if #lines == 0 then
         return nil, "No lines found in import text"

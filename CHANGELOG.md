@@ -13,6 +13,31 @@ All notable changes to Loothing will be documented in this file.
 - **Frame pools converted**: ScrollableList item pool and TabbedPanel tab button pool switched from `CreateLoolibFramePool` (XML template) to `CreateLoolibObjectPool` (Lua creator function) for default templates; consumer-provided XML templates still work via `SetItemTemplate()`
 - **Redundant strata calls removed**: Cleaned up duplicate `SetFrameStrata` calls that were already set by init functions (Dialog modal overlay, Dropdown menu, Dropdown submenu)
 
+### Added
+
+#### History Export
+- **Export metadata headers**: All 7 export formats now include addon name, version, date/time, character, realm, guild, and entry count
+  - CSV/TSV: `# ` comment-prefixed header lines (parsers skip `#` lines)
+  - Lua: `-- ` comment-prefixed header lines
+  - BBCode: `[b]Loothing Data Export[/b]` block
+  - Discord: Markdown-formatted header with `#` heading and `**bold**` fields
+  - JSON: `"metadata"` object wrapping the `"entries"` array (`{ "metadata": {...}, "entries": [...] }`)
+  - EQdkp: `<exportinfo>` XML section with guild, rank, date, time, and entry count
+- **Shared metadata helpers**: `GetExportMetadata()` and `FormatCommentHeader()` eliminate duplicated guild/character/date logic across exporters
+- **"Copy for Web Import" compact export** (`ExportCompact()`): One-click export producing a single opaque string for pasting into the web app
+  - Format: `LOOTHING:1:<base64(zlib(json))>` — version-tagged, compressed, base64-encoded JSON
+  - Uses Loolib's existing `CompressZlib` (level 9) and `EncodeForPrint` (standard base64) — no new dependencies
+  - Inner JSON is the same `{ metadata, entries }` structure from `ExportJSON()`
+  - Web-side decompression: `zlib.inflateSync(Buffer.from(payload, 'base64'))`
+- **"Web" export button** in HistoryPanel export dialog — sits after EQdkp, before Select All
+  - Export dialog widened from 500px to 580px to accommodate the 8th format button
+
+### Fixed
+
+#### History Import
+- **Metadata headers broke CSV/TSV import**: `DetectFormat()` now skips `#`-prefixed comment lines when detecting format from the first line
+- **Comment lines parsed as data rows**: `ParseDelimited()` filters out `#`-comment lines before processing, preventing metadata headers from appearing as malformed entries
+
 ### Changed
 - **Loolib version bump**: TOC `1.0.0` → `1.1.3`, LibStub minor `1` → `2`, README updated
 - **Loolib TOC**: `UI\Templates\Templates.xml` → `UI\Templates\Templates.lua`

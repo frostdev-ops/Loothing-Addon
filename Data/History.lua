@@ -634,9 +634,47 @@ end
     Export
 ----------------------------------------------------------------------]]
 
+--- Get metadata for export headers
+-- @return table - Metadata fields
+function LoothingHistoryMixin:GetExportMetadata()
+    local guildName, guildRank = GetGuildInfo("player")
+    return {
+        addonName = "Loothing",
+        version = LOOTHING_VERSION,
+        exportDate = date("%Y-%m-%d"),
+        exportTime = date("%H:%M:%S"),
+        playerName = UnitName("player"),
+        realmName = GetNormalizedRealmName(),
+        guildName = guildName or "",
+        guildRank = guildRank or "",
+        entryCount = self:GetFilteredCount(),
+    }
+end
+
+--- Format metadata as comment-style header lines
+-- @param meta table - From GetExportMetadata()
+-- @param prefix string - Line prefix ("# " for CSV/TSV, "-- " for Lua)
+-- @return string - Multi-line header (no trailing newline)
+function LoothingHistoryMixin:FormatCommentHeader(meta, prefix)
+    local guildDisplay = (meta.guildName ~= "") and meta.guildName or "N/A"
+    local rankDisplay = (meta.guildRank ~= "") and meta.guildRank or "N/A"
+    return table.concat({
+        prefix .. "Loothing Data Export",
+        prefix .. "Version: " .. meta.version,
+        prefix .. "Date: " .. meta.exportDate,
+        prefix .. "Time: " .. meta.exportTime,
+        prefix .. "Character: " .. meta.playerName,
+        prefix .. "Realm: " .. meta.realmName,
+        prefix .. "Guild: " .. guildDisplay,
+        prefix .. "Rank: " .. rankDisplay,
+        prefix .. "Entries: " .. meta.entryCount,
+    }, "\n")
+end
+
 --- Export history to CSV format (23 columns, RCLootCouncil-compatible)
 -- @return string
 function LoothingHistoryMixin:ExportCSV()
+    local meta = self:GetExportMetadata()
     local lines = {}
 
     -- Header (23 columns)
@@ -687,12 +725,13 @@ function LoothingHistoryMixin:ExportCSV()
         }, ",")
     end
 
-    return table.concat(lines, "\n")
+    return self:FormatCommentHeader(meta, "# ") .. "\n" .. table.concat(lines, "\n")
 end
 
 --- Export history to TSV format (tab-separated, same columns as CSV)
 -- @return string
 function LoothingHistoryMixin:ExportTSV()
+    local meta = self:GetExportMetadata()
     local lines = {}
 
     -- Header (23 columns, tab-separated)
@@ -742,12 +781,13 @@ function LoothingHistoryMixin:ExportTSV()
         }, "\t")
     end
 
-    return table.concat(lines, "\n")
+    return self:FormatCommentHeader(meta, "# ") .. "\n" .. table.concat(lines, "\n")
 end
 
 --- Export history to Lua table format
 -- @return string
 function LoothingHistoryMixin:ExportLua()
+    local meta = self:GetExportMetadata()
     local parts = { "return {" }
 
     local function esc(s)
@@ -779,13 +819,24 @@ function LoothingHistoryMixin:ExportLua()
     end
 
     parts[#parts + 1] = "}"
-    return table.concat(parts, "\n")
+    return self:FormatCommentHeader(meta, "-- ") .. "\n" .. table.concat(parts, "\n")
 end
 
 --- Export history to BBCode format for forums
 -- @return string
 function LoothingHistoryMixin:ExportBBCode()
-    local lines = {}
+    local meta = self:GetExportMetadata()
+    local guildDisplay = (meta.guildName ~= "") and meta.guildName or "N/A"
+    local rankDisplay = (meta.guildRank ~= "") and meta.guildRank or "N/A"
+    local lines = {
+        "[b]Loothing Data Export[/b]",
+        "Version: " .. meta.version,
+        "Date: " .. meta.exportDate .. " " .. meta.exportTime,
+        "Character: " .. meta.playerName .. " - " .. meta.realmName,
+        "Guild: " .. guildDisplay .. " (" .. rankDisplay .. ")",
+        "Entries: " .. meta.entryCount,
+        "",
+    }
     local winners = {}
 
     -- Group by winner
@@ -841,7 +892,18 @@ end
 --- Export history to Discord markdown format
 -- @return string
 function LoothingHistoryMixin:ExportDiscord()
-    local lines = {}
+    local meta = self:GetExportMetadata()
+    local guildDisplay = (meta.guildName ~= "") and meta.guildName or "N/A"
+    local rankDisplay = (meta.guildRank ~= "") and meta.guildRank or "N/A"
+    local lines = {
+        "# Loothing Data Export",
+        "**Version:** " .. meta.version .. " | **Exported:** " .. meta.exportDate .. " " .. meta.exportTime,
+        "**Character:** " .. meta.playerName .. " - " .. meta.realmName,
+        "**Guild:** " .. guildDisplay .. " (" .. rankDisplay .. ")",
+        "**Entries:** " .. meta.entryCount,
+        "---",
+        "",
+    }
     local winners = {}
 
     -- Group by winner
@@ -982,12 +1044,29 @@ function LoothingHistoryMixin:ExportJSON()
         }
     end
 
-    local parts = { "[" }
+    local meta = self:GetExportMetadata()
+    local guildDisplay = (meta.guildName ~= "") and meta.guildName or "N/A"
+    local rankDisplay = (meta.guildRank ~= "") and meta.guildRank or "N/A"
+
+    local parts = { "{" }
+    parts[#parts + 1] = '  "metadata": ' .. toJSON({
+        addon = meta.addonName,
+        version = meta.version,
+        exportDate = meta.exportDate,
+        exportTime = meta.exportTime,
+        character = meta.playerName,
+        realm = meta.realmName,
+        guild = guildDisplay,
+        guildRank = rankDisplay,
+        entryCount = meta.entryCount,
+    }, "  ") .. ","
+    parts[#parts + 1] = '  "entries": ['
     for i, e in ipairs(entries) do
         local comma = i < #entries and "," or ""
-        parts[#parts + 1] = "  " .. toJSON(e, "  ") .. comma
+        parts[#parts + 1] = "    " .. toJSON(e, "    ") .. comma
     end
-    parts[#parts + 1] = "]"
+    parts[#parts + 1] = "  ]"
+    parts[#parts + 1] = "}"
 
     return table.concat(parts, "\n")
 end
@@ -1030,9 +1109,10 @@ function LoothingHistoryMixin:ExportEQdkp()
         end
     end
 
-    -- Get player info
-    local playerName = UnitName("player")
-    local realmName = GetNormalizedRealmName()
+    -- Get export metadata
+    local meta = self:GetExportMetadata()
+    local guildDisplay = (meta.guildName ~= "") and meta.guildName or "N/A"
+    local rankDisplay = (meta.guildRank ~= "") and meta.guildRank or "N/A"
 
     -- XML Header
     lines[#lines + 1] = '<?xml version="1.0" encoding="UTF-8"?>'
@@ -1051,9 +1131,16 @@ function LoothingHistoryMixin:ExportEQdkp()
     lines[#lines + 1] = '        <gameinfo>'
     lines[#lines + 1] = '            <game>World of Warcraft</game>'
     lines[#lines + 1] = '            <language>en</language>'
-    lines[#lines + 1] = string.format('            <charactername>%s</charactername>', self:EscapeXML(playerName))
-    lines[#lines + 1] = string.format('            <servername>%s</servername>', self:EscapeXML(realmName))
+    lines[#lines + 1] = string.format('            <charactername>%s</charactername>', self:EscapeXML(meta.playerName))
+    lines[#lines + 1] = string.format('            <servername>%s</servername>', self:EscapeXML(meta.realmName))
     lines[#lines + 1] = '        </gameinfo>'
+    lines[#lines + 1] = '        <exportinfo>'
+    lines[#lines + 1] = string.format('            <guild>%s</guild>', self:EscapeXML(guildDisplay))
+    lines[#lines + 1] = string.format('            <guildrank>%s</guildrank>', self:EscapeXML(rankDisplay))
+    lines[#lines + 1] = string.format('            <exportdate>%s</exportdate>', meta.exportDate)
+    lines[#lines + 1] = string.format('            <exporttime>%s</exporttime>', meta.exportTime)
+    lines[#lines + 1] = string.format('            <entrycount>%d</entrycount>', meta.entryCount)
+    lines[#lines + 1] = '        </exportinfo>'
     lines[#lines + 1] = '    </head>'
 
     -- Raid data section
@@ -1117,6 +1204,16 @@ function LoothingHistoryMixin:ExportEQdkp()
     lines[#lines + 1] = '</RaidLog>'
 
     return table.concat(lines, "\n")
+end
+
+--- Export history as compact string for web import
+-- Format: LOOTHING:1:<base64(zlib(json))>
+-- @return string
+function LoothingHistoryMixin:ExportCompact()
+    local jsonStr = self:ExportJSON()
+    local compressed = LoolibCompressor:CompressZlib(jsonStr, 9)
+    local encoded = LoolibCompressor:EncodeForPrint(compressed)
+    return "LOOTHING:1:" .. encoded
 end
 
 --- Escape special characters for XML
