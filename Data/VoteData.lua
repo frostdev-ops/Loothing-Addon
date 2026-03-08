@@ -350,7 +350,11 @@ function LoothingVoteCollectionMixin:GetVotesByResponse()
 
     for _, vote in self.votes:Enumerate() do
         local firstChoice = vote.responses[1]
-        if firstChoice and grouped[firstChoice] then
+        if firstChoice then
+            if not grouped[firstChoice] then
+                -- Custom/dynamic response ID (e.g. from MLDB button sets)
+                grouped[firstChoice] = {}
+            end
             grouped[firstChoice][#grouped[firstChoice] + 1] = vote
         end
     end
@@ -369,7 +373,11 @@ function LoothingVoteCollectionMixin:GetResponseCounts()
 
     for _, vote in self.votes:Enumerate() do
         local firstChoice = vote.responses[1]
-        if firstChoice and counts[firstChoice] then
+        if firstChoice then
+            if not counts[firstChoice] then
+                -- Custom/dynamic response ID (e.g. from MLDB button sets)
+                counts[firstChoice] = 0
+            end
             counts[firstChoice] = counts[firstChoice] + 1
         end
     end
@@ -453,8 +461,8 @@ function LoothingVoteAnalysis.GetLeadingResponse(votes)
         counts[response] = 0
     end
 
-    local enumerate = votes.Enumerate and votes:Enumerate() or ipairs(votes)
-    for _, vote in enumerate do
+    local enumerate = votes.Enumerate and function() return votes:Enumerate() end or function() return ipairs(votes) end
+    for _, vote in enumerate() do
         local firstChoice = type(vote.responses) == "table" and vote.responses[1]
         if firstChoice and counts[firstChoice] then
             counts[firstChoice] = counts[firstChoice] + 1
@@ -484,8 +492,8 @@ function LoothingVoteAnalysis.IsTied(votes)
         counts[response] = 0
     end
 
-    local enumerate = votes.Enumerate and votes:Enumerate() or ipairs(votes)
-    for _, vote in enumerate do
+    local enumerate = votes.Enumerate and function() return votes:Enumerate() end or function() return ipairs(votes) end
+    for _, vote in enumerate() do
         local firstChoice = type(vote.responses) == "table" and vote.responses[1]
         if firstChoice and counts[firstChoice] then
             counts[firstChoice] = counts[firstChoice] + 1
@@ -516,8 +524,8 @@ end
 function LoothingVoteAnalysis.GetVotersForResponse(votes, responseType)
     local voters = {}
 
-    local enumerate = votes.Enumerate and votes:Enumerate() or ipairs(votes)
-    for _, vote in enumerate do
+    local enumerate = votes.Enumerate and function() return votes:Enumerate() end or function() return ipairs(votes) end
+    for _, vote in enumerate() do
         local firstChoice = type(vote.responses) == "table" and vote.responses[1]
         if firstChoice == responseType then
             voters[#voters + 1] = vote.voter

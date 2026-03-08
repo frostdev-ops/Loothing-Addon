@@ -4,8 +4,8 @@
 ----------------------------------------------------------------------]]
 
 -- Addon info
-LOOTHING_VERSION = "1.0.0"
-LOOTHING_PROTOCOL_VERSION = 1
+LOOTHING_VERSION = "1.0.1"
+LOOTHING_PROTOCOL_VERSION = 3
 LOOTHING_ADDON_PREFIX = "LOOTHING"
 
 --[[--------------------------------------------------------------------
@@ -33,27 +33,27 @@ LOOTHING_RESPONSE_PRIORITY = {
 LOOTHING_RESPONSE_INFO = {
     [LOOTHING_RESPONSE.NEED] = {
         name = "NEED",
-        color = { 0.0, 1.0, 0.0, 1.0 },       -- Green
+        color = { r = 0.0, g = 1.0, b = 0.0, a = 1.0 },       -- Green
         icon = "Interface\\Buttons\\UI-GroupLoot-Dice-Up",
     },
     [LOOTHING_RESPONSE.GREED] = {
         name = "GREED",
-        color = { 1.0, 1.0, 0.0, 1.0 },       -- Yellow
+        color = { r = 1.0, g = 1.0, b = 0.0, a = 1.0 },       -- Yellow
         icon = "Interface\\Buttons\\UI-GroupLoot-Coin-Up",
     },
     [LOOTHING_RESPONSE.OFFSPEC] = {
         name = "OFFSPEC",
-        color = { 1.0, 0.5, 0.0, 1.0 },       -- Orange
+        color = { r = 1.0, g = 0.5, b = 0.0, a = 1.0 },       -- Orange
         icon = "Interface\\Icons\\Ability_DualWield",
     },
     [LOOTHING_RESPONSE.TRANSMOG] = {
         name = "TRANSMOG",
-        color = { 1.0, 0.0, 1.0, 1.0 },       -- Magenta
+        color = { r = 1.0, g = 0.0, b = 1.0, a = 1.0 },       -- Magenta
         icon = "Interface\\Icons\\INV_Arcane_Orb",
     },
     [LOOTHING_RESPONSE.PASS] = {
         name = "PASS",
-        color = { 0.5, 0.5, 0.5, 1.0 },       -- Gray
+        color = { r = 0.5, g = 0.5, b = 0.5, a = 1.0 },       -- Gray
         icon = "Interface\\Buttons\\UI-GroupLoot-Pass-Up",
     },
 }
@@ -90,6 +90,17 @@ LOOTHING_VOTING_MODE = {
 }
 
 --[[--------------------------------------------------------------------
+    Session Trigger Mode
+----------------------------------------------------------------------]]
+
+LOOTHING_SESSION_TRIGGER = {
+    MANUAL = "manual",
+    AUTO = "auto",
+    PROMPT = "prompt",
+    AFTER_ROLLS = "afterRolls",
+}
+
+--[[--------------------------------------------------------------------
     Message Types (Communication Protocol)
 ----------------------------------------------------------------------]]
 
@@ -97,6 +108,7 @@ LOOTHING_MSG_TYPE = {
     -- Session management
     SESSION_START = "SS",       -- ML -> Raid: Start session
     SESSION_END = "SE",         -- ML -> Raid: End session
+    STOP_HANDLE_LOOT = "SHL",   -- ML -> Raid: ML stopped handling loot entirely
 
     -- Item management
     ITEM_ADD = "IA",            -- ML -> Raid: Add item to session
@@ -106,6 +118,7 @@ LOOTHING_MSG_TYPE = {
     VOTE_REQUEST = "VR",        -- ML -> Council: Request votes
     VOTE_COMMIT = "VC",         -- Council -> ML: Submit vote
     VOTE_CANCEL = "VX",         -- ML -> Council: Cancel voting
+    VOTE_RESULTS = "VRR",       -- ML -> Council/Raid: Publish vote results/closure
 
     -- Awards
     VOTE_AWARD = "VA",          -- ML -> Raid: Announce winner
@@ -134,8 +147,28 @@ LOOTHING_MSG_TYPE = {
     SYNC_HISTORY_ACK = "SHA",        -- Target -> ML: Accept history sync
     SYNC_HISTORY_DATA = "SHD",       -- ML -> Target: History payload
 
-    -- Chunked messages
-    CHUNK = "C",                -- Chunked message part
+    -- Cross-realm relay
+    XREALM = "XR",             -- Cross-realm whisper relay via group channel
+
+    -- Roll/Vote System Message Types (added for candidate response flow)
+    PLAYER_RESPONSE = "PR",      -- Raid member -> ML: Submit response/roll for item
+    PLAYER_RESPONSE_ACK = "PA",  -- ML -> Raid member: Acknowledge response received
+
+    -- MLDB (Master Looter Database)
+    MLDB_BROADCAST = "MLDB",     -- ML -> Raid: Broadcast ML settings
+
+    -- Candidate/Vote Sync (Council visibility)
+    CANDIDATE_UPDATE = "CU",     -- ML -> Council: Candidate response/data update
+    VOTE_UPDATE = "VU",          -- ML -> Council: Vote update
+
+    -- Trade tracking
+    TRADABLE = "TR",             -- Candidate -> Group: Player looted tradeable item
+    NON_TRADABLE = "NT",         -- Candidate -> Group: Player looted non-tradeable item
+
+    -- Burst / resilience infrastructure
+    BATCH     = "BT",            -- ML/Council: container wrapping multiple messages
+    HEARTBEAT = "HB",            -- ML -> Raid: periodic state digest for auto-recovery
+    ACK       = "AK",            -- Universal point-to-point acknowledgment
 }
 
 --[[--------------------------------------------------------------------
@@ -154,12 +187,70 @@ LOOTHING_DEFAULT_SETTINGS = {
     settings = {
         votingMode = LOOTHING_VOTING_MODE.SIMPLE,
         votingTimeout = 30,
-        autoStartSession = false,
+        sessionTriggerMode = "prompt",
         showMinimapButton = true,
-        announceAwards = true,
-        announceChannel = "RAID",
         uiScale = 1.0,
         mainFramePosition = nil,
+        autoTrade = true,
+        masterLooter = nil,  -- Explicit ML assignment (nil = use raid leader)
+        appendRealmNames = false,   -- Append realm to cross-realm names
+        printResponses = false,     -- Print responses to chat
+        autoGroupLootGuildOnly = false, -- Only use in guild groups
+    },
+
+    voting = {
+        selfVote = false,           -- Allow council members to vote for themselves
+        multiVote = false,          -- Allow voting for multiple candidates per item
+        anonymousVoting = false,    -- Hide who voted for whom until award
+        hideVotes = false,          -- Hide vote counts until all votes are in
+        observe = false,            -- Show voting frame but don't allow voting
+        autoAddRolls = true,        -- Automatically add /roll results to candidates
+        requireNotes = false,       -- Require voters to add a note with their vote
+        numButtons = 5,             -- Number of response buttons shown (1-10)
+        mlSeesVotes = false,        -- ML sees votes even when anonymous
+    },
+
+    announcements = {
+        announceAwards = true,
+        announceItems = true,
+        announceBossKill = false,
+        announceConsiderations = false,  -- Announce items being considered
+
+        -- Multi-line award announcements (up to 5 lines, each with channel + message)
+        -- Tokens: {item}, {winner}, {reason}, {notes}, {ilvl}, {type}, {oldItem}, {ml}, {session}, {votes}
+        awardLines = {
+            { enabled = true, channel = "RAID", text = "{item} awarded to {winner} for {reason}" },
+            { enabled = false, channel = "NONE", text = "" },
+            { enabled = false, channel = "NONE", text = "" },
+            { enabled = false, channel = "NONE", text = "" },
+            { enabled = false, channel = "NONE", text = "" },
+        },
+
+        -- Multi-line item announcements (up to 5 lines)
+        itemLines = {
+            { enabled = true, channel = "RAID", text = "Now accepting rolls for {item} (iLvl {ilvl})" },
+            { enabled = false, channel = "NONE", text = "" },
+            { enabled = false, channel = "NONE", text = "" },
+            { enabled = false, channel = "NONE", text = "" },
+            { enabled = false, channel = "NONE", text = "" },
+        },
+
+        -- Considerations announcements (when ML is reviewing item)
+        considerationsChannel = "RAID",
+        considerationsText = "{ml} is considering {item} for distribution",
+
+        -- Session announcements
+        sessionStartChannel = "RAID",
+        sessionStartText = "Loot council session started for {session}",
+        sessionEndChannel = "RAID",
+        sessionEndText = "Loot council session ended",
+
+        -- Legacy fields for backward compatibility (used if awardLines not present)
+        awardChannel = "RAID",
+        awardChannelSecondary = "NONE",
+        awardText = "{item} awarded to {winner} for {reason}",
+        itemChannel = "RAID",
+        itemText = "Now accepting rolls for {item}",
     },
 
     autoPass = {
@@ -167,6 +258,30 @@ LOOTHING_DEFAULT_SETTINGS = {
         weapons = true,
         boe = false,
         transmog = false,
+        trinkets = false,           -- Auto pass trinkets
+        transmogSource = false,     -- Auto pass transmog sources
+        silent = false,             -- Don't print auto-pass messages
+    },
+
+    ignoreItems = {
+        enabled = true,
+        items = {
+            -- Format: [itemID] = true
+            -- Example: [12345] = true
+        },
+        ignoreEnchantingMaterials = true,
+        ignoreCraftingReagents = true,
+        ignoreConsumables = true,
+        ignorePermanentEnhancements = false,  -- gems, enchants, etc
+    },
+
+    autoAward = {
+        enabled = false,
+        lowerThreshold = 2,      -- Uncommon
+        upperThreshold = 4,      -- Epic (items between lower and upper will be auto-awarded)
+        awardTo = "",            -- Player name or "disenchanter"
+        reason = "Auto Award",   -- Reason shown in history
+        includeBoE = false,      -- Include Bind on Equip items
     },
 
     responses = {
@@ -202,7 +317,139 @@ LOOTHING_DEFAULT_SETTINGS = {
         },
     },
 
-    history = {},
+    awardReasons = {
+        enabled = true,
+        requireReason = false,    -- Require selecting a reason before awarding
+        numReasons = 6,           -- Number of active reasons (1-20)
+        reasons = {
+            { id = 1, name = "Main Spec", color = { 0.0, 1.0, 0.0, 1.0 }, sort = 1, log = true, disenchant = false },
+            { id = 2, name = "Off Spec", color = { 1.0, 0.5, 0.0, 1.0 }, sort = 2, log = true, disenchant = false },
+            { id = 3, name = "PvP", color = { 1.0, 0.0, 0.0, 1.0 }, sort = 3, log = true, disenchant = false },
+            { id = 4, name = "Disenchant", color = { 0.5, 0.0, 0.5, 1.0 }, sort = 4, log = true, disenchant = true },
+            { id = 5, name = "Free Roll", color = { 0.5, 0.5, 0.5, 1.0 }, sort = 5, log = true, disenchant = false },
+            { id = 6, name = "Bank", color = { 0.3, 0.3, 0.8, 1.0 }, sort = 6, log = true, disenchant = false },
+        },
+    },
+
+    frame = {
+        autoOpen = false,           -- Auto open frames when loot available
+        autoClose = false,          -- Auto close after session ends
+        minimizeInCombat = false,   -- Hide frames during combat
+        showSpecIcon = false,       -- Show spec icons instead of class
+        closeWithEscape = false,    -- Allow ESC to close frames
+        timeoutFlash = false,       -- Flash on voting timeout
+        blockTradesDuringVoting = false, -- Block trades while voting
+        chatFrameName = "ChatFrame1",    -- Output chat frame
+    },
+
+    ml = {
+        usageMode = "ask_gl",       -- "never", "gl" (group loot), "ask_gl"
+        onlyUseInRaids = true,      -- Disable in dungeons
+        allowOutOfRaid = false,     -- Allow when out of instance
+        skipSessionFrame = true,    -- Auto-start without session frame
+        sortItems = false,          -- Auto-sort items
+        autoAddBoEs = false,        -- Include BoE in auto-add
+        autoAddPets = false,        -- Include pets in auto-add
+        printCompletedTrades = false, -- Print trade confirmations
+        rejectTrade = false,        -- Reject invalid trades
+        awardLater = false,         -- Allow awarding to ML for later
+    },
+
+    historySettings = {
+        enabled = true,             -- Enable loot history
+        sendHistory = false,        -- Send to group members
+        sendToGuild = false,        -- Send to guild instead
+        savePersonalLoot = false,   -- Log personal loot items
+    },
+
+    history = {},  -- Actual history data (array of entries)
+
+    buttonSets = {
+        activeSet = 1,              -- Currently active button set
+        sets = {
+            [1] = {
+                name = "Default",
+                buttons = {
+                    { id = 1, text = "Need", color = { 0.0, 1.0, 0.0, 1.0 }, sort = 1 },
+                    { id = 2, text = "Greed", color = { 1.0, 1.0, 0.0, 1.0 }, sort = 2 },
+                    { id = 3, text = "Offspec", color = { 1.0, 0.5, 0.0, 1.0 }, sort = 3 },
+                    { id = 4, text = "Transmog", color = { 1.0, 0.0, 1.0, 1.0 }, sort = 4 },
+                    { id = 5, text = "Pass", color = { 0.5, 0.5, 0.5, 1.0 }, sort = 5 },
+                },
+                whisperKey = "!need",  -- Key players whisper to respond
+            },
+            [2] = {
+                name = "Gear Priority",
+                buttons = {
+                    { id = 1, text = "BIS", color = { 1.0, 0.0, 0.0, 1.0 }, sort = 1 },
+                    { id = 2, text = "Major Upgrade", color = { 0.0, 1.0, 0.0, 1.0 }, sort = 2 },
+                    { id = 3, text = "Minor Upgrade", color = { 1.0, 1.0, 0.0, 1.0 }, sort = 3 },
+                    { id = 4, text = "Sidegrade", color = { 1.0, 0.5, 0.0, 1.0 }, sort = 4 },
+                    { id = 5, text = "Pass", color = { 0.5, 0.5, 0.5, 1.0 }, sort = 5 },
+                },
+                whisperKey = "!bis",
+            },
+        },
+    },
+
+    filters = {
+        enabled = true,
+        byClass = {},              -- Table of class names to show (empty = all)
+        byResponse = {},           -- Table of response IDs to show (empty = all)
+        byGuildRank = {},          -- Table of guild rank indices to show (empty = all)
+        showOnlyEquippable = false, -- Only show candidates who can equip the item
+        hidePassedItems = true,     -- Hide items that have been passed on
+    },
+
+    groupLoot = {
+        enabled = true,            -- Enable auto-roll on group loot
+        hideFrames = true,         -- Hide GroupLootFrame UI after auto-rolling
+        qualityThreshold = 4,      -- Minimum quality for auto-roll (4 = Epic)
+    },
+
+    -- ============================================================================
+    -- Roll/Vote System Settings
+    -- ============================================================================
+
+    -- RollFrame settings (popup for raid members to respond to loot)
+    rollFrame = {
+        autoShow = true,           -- Auto-popup when voting starts
+        autoRollOnSubmit = false,  -- Auto-trigger /roll when submitting response
+        rollRange = { min = 1, max = 100 },  -- Roll range
+        requireNote = false,       -- Require note before submit
+        showGearComparison = true, -- Show equipped gear comparison
+        position = nil,            -- Saved position { point, x, y }
+        timeoutEnabled = true,     -- Enable/disable timeout timer
+        timeoutDuration = 30,      -- Timeout duration in seconds (0-200)
+    },
+
+    -- CouncilTable settings (table view of candidates for ML/council)
+    councilTable = {
+        columns = {
+            player = true,
+            class = false,
+            response = true,
+            roll = true,
+            note = true,
+            ilvl = true,
+            ilvlDiff = true,
+            gear1 = true,
+            gear2 = true,
+            itemsWon = true,
+            councilVotes = true,
+        },
+        sortColumn = "response",
+        sortAscending = true,
+        rowHeight = 24,
+    },
+
+    -- Winner determination settings
+    winnerDetermination = {
+        mode = "ML_CONFIRM",       -- "HIGHEST_VOTES", "ML_CONFIRM", "AUTO_HIGHEST_CONFIRM"
+        tieBreaker = "ROLL",       -- "ROLL", "ML_CHOICE", "REVOTE"
+        autoAwardOnUnanimous = false,
+        requireConfirmation = true,
+    },
 }
 
 --[[--------------------------------------------------------------------
@@ -242,12 +489,24 @@ LOOTHING_UI = {
 ----------------------------------------------------------------------]]
 
 LOOTHING_TIMING = {
+    NO_TIMEOUT = 0,             -- Sentinel: voting runs until ML manually ends it
     DEFAULT_VOTE_TIMEOUT = 30,
+    VOTING_DEFAULT = 30,        -- Alias used in VotingSession / VotePanel
     MIN_VOTE_TIMEOUT = 10,
     MAX_VOTE_TIMEOUT = 120,
     SYNC_TIMEOUT = 10,
     MESSAGE_THROTTLE = 0.1,     -- Seconds between messages
-    CHUNK_SIZE = 240,           -- Max chars per chunk (leave room for header)
+    -- CHUNK_SIZE removed: LoolibComm handles message chunking internally
+
+    -- RollFrame timeout
+    DEFAULT_ROLL_TIMEOUT = 30,
+    MIN_ROLL_TIMEOUT = 5,       -- Minimum 5 seconds (0 would be instant timeout)
+    MAX_ROLL_TIMEOUT = 200,
+
+    -- Session prompt
+    LOOT_DEBOUNCE_DELAY = 2.5,  -- Wait for all boss loot to distribute before prompting
+    SESSION_PROMPT_TIMEOUT = 30, -- How long ML has to respond to session prompt
+    LOOT_BUFFER_TTL = 60,       -- Max seconds to keep buffered loot (no session started)
 }
 
 --[[--------------------------------------------------------------------

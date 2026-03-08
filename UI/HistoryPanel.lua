@@ -9,13 +9,20 @@ local Loolib = LibStub("Loolib")
     LoothingHistoryPanelMixin
 ----------------------------------------------------------------------]]
 
-LoothingHistoryPanelMixin = {}
+LoothingHistoryPanelMixin = LoolibCreateFromMixins(LoolibCallbackRegistryMixin)
+
+local HISTORY_PANEL_EVENTS = {}
 
 --- Initialize the history panel
 -- @param parent Frame - Parent frame
 function LoothingHistoryPanelMixin:Init(parent)
+    LoolibCallbackRegistryMixin.OnLoad(self)
+    self:GenerateCallbackEvents(HISTORY_PANEL_EVENTS)
     self.parent = parent
     self.historyRows = {}
+    self.selectedDate = nil
+    self.selectedPlayer = nil
+    self.displayedCount = 0
 
     self:CreateFrame()
     self:CreateElements()
@@ -33,28 +40,56 @@ end
 function LoothingHistoryPanelMixin:CreateElements()
     local L = LOOTHING_LOCALE
 
-    -- Filter bar
+    -- Three-pane container
+    local container = CreateFrame("Frame", nil, self.frame)
+    container:SetPoint("TOPLEFT", 8, -8)
+    container:SetPoint("BOTTOMRIGHT", -8, 50)
+    self.paneContainer = container
+
+    -- Left pane: Date list
+    local datePane = CreateFrame("Frame", nil, container, "BackdropTemplate")
+    datePane:SetPoint("TOPLEFT")
+    datePane:SetPoint("BOTTOMLEFT")
+    datePane:SetWidth(120)
+    datePane:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background" })
+    datePane:SetBackdropColor(0, 0, 0, 0.3)
+    self.datePane = datePane
+
+    -- Center pane: Player list
+    local playerPane = CreateFrame("Frame", nil, container, "BackdropTemplate")
+    playerPane:SetPoint("TOPLEFT", datePane, "TOPRIGHT", 2, 0)
+    playerPane:SetPoint("BOTTOMLEFT", datePane, "BOTTOMRIGHT", 2, 0)
+    playerPane:SetWidth(140)
+    playerPane:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background" })
+    playerPane:SetBackdropColor(0, 0, 0, 0.3)
+    self.playerPane = playerPane
+
+    -- Right pane: History (filter bar + list)
+    local historyPane = CreateFrame("Frame", nil, container)
+    historyPane:SetPoint("TOPLEFT", playerPane, "TOPRIGHT", 2, 0)
+    historyPane:SetPoint("BOTTOMRIGHT")
+    self.historyPane = historyPane
+
+    -- Create sub-elements
+    self:CreateDateList()
+    self:CreatePlayerList()
     self:CreateFilterBar()
-
-    -- History list
     self:CreateHistoryList()
-
-    -- Footer with stats/export
     self:CreateFooter()
 end
 
---- Create filter bar
+--- Create filter bar with response, class, instance, and date range filters
 function LoothingHistoryPanelMixin:CreateFilterBar()
     local L = LOOTHING_LOCALE
 
-    local filterBar = CreateFrame("Frame", nil, self.frame)
-    filterBar:SetPoint("TOPLEFT", 8, -8)
-    filterBar:SetPoint("TOPRIGHT", -8, -8)
+    local filterBar = CreateFrame("Frame", nil, self.historyPane)
+    filterBar:SetPoint("TOPLEFT", 0, 0)
+    filterBar:SetPoint("TOPRIGHT", 0, 0)
     filterBar:SetHeight(30)
 
     -- Search box
     local searchBox = CreateFrame("EditBox", nil, filterBar, "InputBoxTemplate")
-    searchBox:SetSize(150, 20)
+    searchBox:SetSize(120, 20)
     searchBox:SetPoint("LEFT")
     searchBox:SetAutoFocus(false)
     searchBox:SetScript("OnTextChanged", function(self)
@@ -74,23 +109,37 @@ function LoothingHistoryPanelMixin:CreateFilterBar()
 
     -- Winner filter dropdown
     local winnerButton = CreateFrame("Button", nil, filterBar, "UIPanelButtonTemplate")
-    winnerButton:SetSize(100, 20)
-    winnerButton:SetPoint("LEFT", searchBox, "RIGHT", 16, 0)
+    winnerButton:SetSize(80, 20)
+    winnerButton:SetPoint("LEFT", searchBox, "RIGHT", 8, 0)
     winnerButton:SetText(L["ALL_WINNERS"])
     winnerButton:SetScript("OnClick", function()
         self:ShowWinnerDropdown()
     end)
-
-    local winnerLabel = filterBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    winnerLabel:SetPoint("BOTTOMLEFT", winnerButton, "TOPLEFT", 0, 2)
-    winnerLabel:SetText(L["WINNER"])
-    winnerLabel:SetTextColor(0.7, 0.7, 0.7)
-
     self.winnerButton = winnerButton
+
+    -- Response filter
+    local responseButton = CreateFrame("Button", nil, filterBar, "UIPanelButtonTemplate")
+    responseButton:SetSize(80, 20)
+    responseButton:SetPoint("LEFT", winnerButton, "RIGHT", 4, 0)
+    responseButton:SetText("Response")
+    responseButton:SetScript("OnClick", function()
+        self:ShowResponseFilterDropdown()
+    end)
+    self.responseFilterButton = responseButton
+
+    -- Class filter
+    local classButton = CreateFrame("Button", nil, filterBar, "UIPanelButtonTemplate")
+    classButton:SetSize(60, 20)
+    classButton:SetPoint("LEFT", responseButton, "RIGHT", 4, 0)
+    classButton:SetText("Class")
+    classButton:SetScript("OnClick", function()
+        self:ShowClassFilterDropdown()
+    end)
+    self.classFilterButton = classButton
 
     -- Clear filters button
     local clearButton = CreateFrame("Button", nil, filterBar, "UIPanelButtonTemplate")
-    clearButton:SetSize(60, 20)
+    clearButton:SetSize(50, 20)
     clearButton:SetPoint("RIGHT")
     clearButton:SetText(L["CLEAR"])
     clearButton:SetScript("OnClick", function()
@@ -99,27 +148,90 @@ function LoothingHistoryPanelMixin:CreateFilterBar()
 
     -- Entry count
     self.countText = filterBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    self.countText:SetPoint("RIGHT", clearButton, "LEFT", -16, 0)
+    self.countText:SetPoint("RIGHT", clearButton, "LEFT", -8, 0)
     self.countText:SetTextColor(0.7, 0.7, 0.7)
 
     filterBar.mixin = self
     self.filterBar = filterBar
 end
 
+--- Show response filter dropdown
+function LoothingHistoryPanelMixin:ShowResponseFilterDropdown()
+    MenuUtil.CreateContextMenu(self.responseFilterButton, function(ownerRegion, rootDescription)
+        rootDescription:CreateButton("All Responses", function()
+            self:SetResponseFilter(nil)
+        end)
+        rootDescription:CreateDivider()
+
+        for id, info in pairs(LOOTHING_RESPONSE_INFO) do
+            rootDescription:CreateButton(info.name, function()
+                self:SetResponseFilter(id)
+            end)
+        end
+    end)
+end
+
+--- Set response filter
+function LoothingHistoryPanelMixin:SetResponseFilter(responseId)
+    if not Loothing.History then return end
+    local filter = Loothing.History.filter or {}
+    filter.response = responseId
+
+    if responseId then
+        local info = LOOTHING_RESPONSE_INFO[responseId]
+        self.responseFilterButton:SetText(info and info.name or "?")
+    else
+        self.responseFilterButton:SetText("Response")
+    end
+
+    Loothing.History:SetFilter(filter)
+    self:Refresh()
+end
+
+--- Show class filter dropdown
+function LoothingHistoryPanelMixin:ShowClassFilterDropdown()
+    local classes = { "WARRIOR", "PALADIN", "HUNTER", "ROGUE", "PRIEST", "DEATHKNIGHT",
+                      "SHAMAN", "MAGE", "WARLOCK", "MONK", "DRUID", "DEMONHUNTER", "EVOKER" }
+
+    MenuUtil.CreateContextMenu(self.classFilterButton, function(ownerRegion, rootDescription)
+        rootDescription:CreateButton("All Classes", function()
+            self:SetClassFilter(nil)
+        end)
+        rootDescription:CreateDivider()
+
+        for _, class in ipairs(classes) do
+            rootDescription:CreateButton(class, function()
+                self:SetClassFilter(class)
+            end)
+        end
+    end)
+end
+
+--- Set class filter
+function LoothingHistoryPanelMixin:SetClassFilter(class)
+    if not Loothing.History then return end
+    local filter = Loothing.History.filter or {}
+    filter.class = class
+
+    self.classFilterButton:SetText(class or "Class")
+    Loothing.History:SetFilter(filter)
+    self:Refresh()
+end
+
 --- Create history list
 function LoothingHistoryPanelMixin:CreateHistoryList()
-    local container = CreateFrame("Frame", nil, self.frame, "BackdropTemplate")
-    container:SetPoint("TOPLEFT", 8, -46)
-    container:SetPoint("BOTTOMRIGHT", -8, 50)
+    local container = CreateFrame("Frame", nil, self.historyPane, "BackdropTemplate")
+    container:SetPoint("TOPLEFT", 0, -38)
+    container:SetPoint("BOTTOMRIGHT", 0, 0)
     container:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true,
-        tileSize = 8,
-        edgeSize = 12,
-        insets = { left = 2, right = 2, top = 2, bottom = 2 },
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        tile = false,
+        edgeSize = 1,
+        insets = { left = 1, right = 1, top = 1, bottom = 1 },
     })
     container:SetBackdropColor(0.05, 0.05, 0.05, 0.9)
+    container:SetBackdropBorderColor(0.2, 0.2, 0.2, 1)
 
     -- Column headers
     local headerFrame = CreateFrame("Frame", nil, container)
@@ -158,12 +270,28 @@ function LoothingHistoryPanelMixin:CreateHistoryList()
     scrollFrame:SetPoint("BOTTOMRIGHT", -24, 4)
 
     local content = CreateFrame("Frame", nil, scrollFrame)
-    content:SetSize(scrollFrame:GetWidth(), 800)
+    content:SetSize(1, 800)
     scrollFrame:SetScrollChild(content)
+
+    scrollFrame:SetScript("OnSizeChanged", function(sf, w, h)
+        content:SetWidth(w)
+    end)
 
     self.listContainer = container
     self.listContent = content
     self.scrollFrame = scrollFrame
+
+    -- Frame pool for history rows
+    self.rowPool = CreateFramePool("Button", self.listContent, nil, function(pool, row)
+        row:Hide()
+        row:ClearAllPoints()
+        row:SetScript("OnEnter", nil)
+        row:SetScript("OnLeave", nil)
+        row:SetScript("OnClick", nil)
+        if row.colorBar then
+            row.colorBar:Hide()
+        end
+    end)
 
     -- Empty state
     self.emptyText = container:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -202,130 +330,385 @@ function LoothingHistoryPanelMixin:CreateFooter()
     self.footer = footer
 end
 
+--- Create date list in the left pane
+function LoothingHistoryPanelMixin:CreateDateList()
+    -- Header
+    local header = self.datePane:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    header:SetPoint("TOP", 0, -4)
+    header:SetText("Dates")
+
+    -- Scroll frame
+    local scroll = CreateFrame("ScrollFrame", nil, self.datePane, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", 4, -20)
+    scroll:SetPoint("BOTTOMRIGHT", -22, 4)
+
+    local content = CreateFrame("Frame", nil, scroll)
+    content:SetWidth(scroll:GetWidth())
+    scroll:SetScrollChild(content)
+
+    self.dateScroll = scroll
+    self.dateContent = content
+    self.dateButtonPool = CreateFramePool("Button", content)
+
+    -- "All Dates" button at top
+    local allBtn = CreateFrame("Button", nil, content)
+    allBtn:SetSize(110, 20)
+    allBtn:SetPoint("TOPLEFT", 2, -2)
+    allBtn.text = allBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    allBtn.text:SetAllPoints()
+    allBtn.text:SetText("|cffffd700All Dates|r")
+    allBtn:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+    allBtn:SetScript("OnClick", function()
+        self.selectedDate = nil
+        self:Refresh()
+    end)
+    self.allDatesBtn = allBtn
+end
+
+--- Create player list in the center pane
+function LoothingHistoryPanelMixin:CreatePlayerList()
+    -- Header
+    local header = self.playerPane:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    header:SetPoint("TOP", 0, -4)
+    header:SetText("Players")
+
+    -- Scroll frame
+    local scroll = CreateFrame("ScrollFrame", nil, self.playerPane, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", 4, -20)
+    scroll:SetPoint("BOTTOMRIGHT", -22, 4)
+
+    local content = CreateFrame("Frame", nil, scroll)
+    content:SetWidth(scroll:GetWidth())
+    scroll:SetScrollChild(content)
+
+    self.playerScroll = scroll
+    self.playerContent = content
+    self.playerButtonPool = CreateFramePool("Button", content)
+
+    -- "All Players" button at top
+    local allBtn = CreateFrame("Button", nil, content)
+    allBtn:SetSize(130, 20)
+    allBtn:SetPoint("TOPLEFT", 2, -2)
+    allBtn.text = allBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    allBtn.text:SetAllPoints()
+    allBtn.text:SetText("|cffffd700All Players|r")
+    allBtn:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+    allBtn:SetScript("OnClick", function()
+        self.selectedPlayer = nil
+        self:Refresh()
+    end)
+    self.allPlayersBtn = allBtn
+end
+
 --[[--------------------------------------------------------------------
     Display
 ----------------------------------------------------------------------]]
 
 --- Refresh the history display
 function LoothingHistoryPanelMixin:Refresh()
+    self:RefreshDateList()
+    self:RefreshPlayerList()
     self:RefreshList()
     self:UpdateCount()
 end
 
+--- Refresh the date list in the left pane
+function LoothingHistoryPanelMixin:RefreshDateList()
+    self.dateButtonPool:ReleaseAll()
+
+    if not Loothing.History then return end
+
+    local dates = {}
+    local seen = {}
+
+    for _, entry in Loothing.History:GetEntries():Enumerate() do
+        if entry.timestamp then
+            local d = date("%Y-%m-%d", entry.timestamp)
+            if not seen[d] then
+                seen[d] = true
+                dates[#dates + 1] = d
+            end
+        end
+    end
+
+    -- Newest first
+    table.sort(dates, function(a, b) return a > b end)
+
+    -- Update "All Dates" highlight
+    if not self.selectedDate then
+        self.allDatesBtn.text:SetText("|cffffd700All Dates|r")
+    else
+        self.allDatesBtn.text:SetText("All Dates")
+    end
+
+    local yOffset = -24  -- Below "All Dates" button
+    for _, d in ipairs(dates) do
+        local btn = self.dateButtonPool:Acquire()
+        btn:SetSize(110, 18)
+        btn:SetPoint("TOPLEFT", self.dateContent, "TOPLEFT", 2, yOffset)
+
+        if not btn.text then
+            btn.text = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            btn.text:SetAllPoints()
+            btn:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+        end
+
+        local isSelected = self.selectedDate == d
+        btn.text:SetText(isSelected and ("|cffffd700" .. d .. "|r") or d)
+
+        local dateValue = d
+        btn:SetScript("OnClick", function()
+            self.selectedDate = dateValue
+            self:Refresh()
+        end)
+        btn:Show()
+
+        yOffset = yOffset - 18
+    end
+
+    self.dateContent:SetHeight(math.abs(yOffset) + 4)
+end
+
+--- Refresh the player list in the center pane
+function LoothingHistoryPanelMixin:RefreshPlayerList()
+    self.playerButtonPool:ReleaseAll()
+
+    if not Loothing.History then return end
+
+    local players = {}
+    local seen = {}
+
+    for _, entry in Loothing.History:GetEntries():Enumerate() do
+        -- Apply date filter from left pane
+        local passesDate = true
+        if self.selectedDate then
+            local entryDate = entry.timestamp and date("%Y-%m-%d", entry.timestamp)
+            if entryDate ~= self.selectedDate then
+                passesDate = false
+            end
+        end
+
+        if passesDate and entry.winner and not seen[entry.winner] then
+            seen[entry.winner] = true
+            players[#players + 1] = { name = entry.winner, class = entry.class }
+        end
+    end
+
+    table.sort(players, function(a, b) return a.name < b.name end)
+
+    -- Auto-deselect player if no longer in list
+    if self.selectedPlayer and not seen[self.selectedPlayer] then
+        self.selectedPlayer = nil
+    end
+
+    -- Update "All Players" highlight
+    if not self.selectedPlayer then
+        self.allPlayersBtn.text:SetText("|cffffd700All Players|r")
+    else
+        self.allPlayersBtn.text:SetText("All Players")
+    end
+
+    local yOffset = -24  -- Below "All Players" button
+    for _, player in ipairs(players) do
+        local btn = self.playerButtonPool:Acquire()
+        btn:SetSize(130, 18)
+        btn:SetPoint("TOPLEFT", self.playerContent, "TOPLEFT", 2, yOffset)
+
+        if not btn.text then
+            btn.text = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            btn.text:SetAllPoints()
+            btn:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+        end
+
+        -- Class-color the name
+        local displayName = player.name
+        local classColor = RAID_CLASS_COLORS and player.class and RAID_CLASS_COLORS[player.class]
+        if classColor then
+            displayName = string.format("|cff%02x%02x%02x%s|r",
+                classColor.r * 255, classColor.g * 255, classColor.b * 255, player.name)
+        end
+
+        if self.selectedPlayer == player.name then
+            displayName = "|cffffd700>|r " .. displayName
+        end
+        btn.text:SetText(displayName)
+
+        local playerName = player.name
+        btn:SetScript("OnClick", function()
+            self.selectedPlayer = playerName
+            self:Refresh()
+        end)
+        btn:Show()
+
+        yOffset = yOffset - 18
+    end
+
+    self.playerContent:SetHeight(math.abs(yOffset) + 4)
+end
+
 --- Refresh the history list
 function LoothingHistoryPanelMixin:RefreshList()
-    -- Clear existing rows
-    for _, row in ipairs(self.historyRows) do
-        row:Hide()
-    end
+    self.rowPool:ReleaseAll()
     wipe(self.historyRows)
 
     if not Loothing.History then
         self.emptyText:Show()
+        self.displayedCount = 0
         return
     end
 
     local entries = Loothing.History:GetFilteredEntries()
     if not entries or entries:GetSize() == 0 then
         self.emptyText:Show()
+        self.displayedCount = 0
         return
     end
-
-    self.emptyText:Hide()
 
     local yOffset = 0
     local rowHeight = 36
     local spacing = 2
 
     for _, entry in entries:Enumerate() do
-        local row = self:CreateHistoryRow(entry, yOffset)
-        self.historyRows[#self.historyRows + 1] = row
-        yOffset = yOffset - rowHeight - spacing
+        local passesFilter = true
+
+        -- Date pane filter
+        if self.selectedDate and passesFilter then
+            local entryDate = entry.timestamp and date("%Y-%m-%d", entry.timestamp)
+            if entryDate ~= self.selectedDate then
+                passesFilter = false
+            end
+        end
+
+        -- Player pane filter
+        if self.selectedPlayer and passesFilter then
+            if entry.winner ~= self.selectedPlayer then
+                passesFilter = false
+            end
+        end
+
+        if passesFilter then
+            local row = self.rowPool:Acquire()
+            self:SetupHistoryRow(row, entry, yOffset)
+            self.historyRows[#self.historyRows + 1] = row
+            yOffset = yOffset - rowHeight - spacing
+        end
+    end
+
+    self.displayedCount = #self.historyRows
+
+    if self.displayedCount > 0 then
+        self.emptyText:Hide()
+    else
+        self.emptyText:Show()
     end
 
     self.listContent:SetHeight(math.abs(yOffset) + 20)
 end
 
---- Create a history row
--- @param entry table - History entry
--- @param yOffset number
--- @return Frame
-function LoothingHistoryPanelMixin:CreateHistoryRow(entry, yOffset)
-    local row = CreateFrame("Button", nil, self.listContent)
-    row:SetPoint("TOPLEFT", 0, yOffset)
-    row:SetPoint("TOPRIGHT", 0, yOffset)
+--- Initialize child elements on a pooled row (called once per frame)
+-- @param row Button - Pooled row frame
+local function InitHistoryRowElements(row)
     row:SetHeight(36)
 
     -- Background
-    local bg = row:CreateTexture(nil, "BACKGROUND")
-    bg:SetAllPoints()
-    bg:SetColorTexture(0.1, 0.1, 0.1, 0.5)
+    row.bg = row:CreateTexture(nil, "BACKGROUND")
+    row.bg:SetAllPoints()
+    row.bg:SetColorTexture(0.1, 0.1, 0.1, 0.5)
 
     -- Highlight
-    local highlight = row:CreateTexture(nil, "HIGHLIGHT")
-    highlight:SetAllPoints()
-    highlight:SetColorTexture(1, 1, 1, 0.1)
+    row.hl = row:CreateTexture(nil, "HIGHLIGHT")
+    row.hl:SetAllPoints()
+    row.hl:SetColorTexture(1, 1, 1, 0.1)
 
     -- Date
-    local dateText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    dateText:SetPoint("LEFT", 4, 0)
-    dateText:SetWidth(76)
-    dateText:SetJustifyH("LEFT")
-
-    if entry.timestamp then
-        dateText:SetText(LoothingUtils.FormatDate(entry.timestamp))
-    else
-        dateText:SetText("")
-    end
-    dateText:SetTextColor(0.7, 0.7, 0.7)
+    row.dateText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    row.dateText:SetPoint("LEFT", 4, 0)
+    row.dateText:SetWidth(76)
+    row.dateText:SetJustifyH("LEFT")
 
     -- Item icon
-    local icon = row:CreateTexture(nil, "ARTWORK")
-    icon:SetSize(28, 28)
-    icon:SetPoint("LEFT", 84, 0)
-
-    local texture = entry.itemID and GetItemIcon(entry.itemID) or "Interface\\Icons\\INV_Misc_QuestionMark"
-    icon:SetTexture(texture)
+    row.icon = row:CreateTexture(nil, "ARTWORK")
+    row.icon:SetSize(28, 28)
+    row.icon:SetPoint("LEFT", 84, 0)
 
     -- Quality border
-    local quality = entry.quality or 1
-    local r, g, b = C_Item.GetItemQualityColor(quality)
-
-    local border = row:CreateTexture(nil, "OVERLAY")
-    border:SetSize(30, 30)
-    border:SetPoint("CENTER", icon, "CENTER")
-    border:SetTexture("Interface\\Common\\WhiteIconFrame")
-    border:SetVertexColor(r, g, b)
+    row.iconBorder = row:CreateTexture(nil, "OVERLAY")
+    row.iconBorder:SetSize(30, 30)
+    row.iconBorder:SetPoint("CENTER", row.icon, "CENTER")
+    row.iconBorder:SetTexture("Interface\\Common\\WhiteIconFrame")
 
     -- Item name
-    local nameText = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    nameText:SetPoint("LEFT", icon, "RIGHT", 8, 0)
-    nameText:SetPoint("RIGHT", -150, 0)
-    nameText:SetJustifyH("LEFT")
-    nameText:SetWordWrap(false)
-    nameText:SetText(entry.itemName or "Unknown Item")
-    nameText:SetTextColor(r, g, b)
+    row.nameText = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    row.nameText:SetPoint("LEFT", row.icon, "RIGHT", 8, 0)
+    row.nameText:SetPoint("RIGHT", -150, 0)
+    row.nameText:SetJustifyH("LEFT")
+    row.nameText:SetWordWrap(false)
 
     -- Winner
-    local winnerText = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    winnerText:SetPoint("RIGHT", -4, 0)
-    winnerText:SetWidth(120)
-    winnerText:SetJustifyH("RIGHT")
+    row.winnerText = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    row.winnerText:SetPoint("RIGHT", -4, 0)
+    row.winnerText:SetWidth(120)
+    row.winnerText:SetJustifyH("RIGHT")
 
-    if entry.winner then
-        local shortName = LoothingUtils.GetShortName(entry.winner)
-        winnerText:SetText(shortName)
+    -- Response color bar (created once, toggled per entry)
+    row.colorBar = row:CreateTexture(nil, "ARTWORK")
+    row.colorBar:SetSize(3, 32)
+    row.colorBar:SetPoint("RIGHT", row.winnerText, "LEFT", -4, 0)
+    row.colorBar:Hide()
+
+    row._initialized = true
+end
+
+--- Setup a pooled history row with entry data
+-- @param row Button - Acquired pooled frame
+-- @param entry table - History entry
+-- @param yOffset number
+function LoothingHistoryPanelMixin:SetupHistoryRow(row, entry, yOffset)
+    -- Initialize child elements on first use
+    if not row._initialized then
+        InitHistoryRowElements(row)
+    end
+
+    -- Position
+    row:ClearAllPoints()
+    row:SetPoint("TOPLEFT", 0, yOffset)
+    row:SetPoint("TOPRIGHT", 0, yOffset)
+
+    -- Date
+    if entry.timestamp then
+        row.dateText:SetText(LoothingUtils.FormatDate(entry.timestamp))
     else
-        winnerText:SetText("")
+        row.dateText:SetText("")
+    end
+    row.dateText:SetTextColor(0.7, 0.7, 0.7)
+
+    -- Icon
+    local texture = entry.itemID and GetItemIcon(entry.itemID) or "Interface\\Icons\\INV_Misc_QuestionMark"
+    row.icon:SetTexture(texture)
+
+    -- Quality color
+    local quality = entry.quality or 1
+    local r, g, b = C_Item.GetItemQualityColor(quality)
+    row.iconBorder:SetVertexColor(r, g, b)
+
+    -- Item name
+    row.nameText:SetText(entry.itemName or "Unknown Item")
+    row.nameText:SetTextColor(r, g, b)
+
+    -- Winner
+    if entry.winner then
+        row.winnerText:SetText(LoothingUtils.GetShortName(entry.winner))
+    else
+        row.winnerText:SetText("")
     end
 
     -- Response color bar
     if entry.winnerResponse and LOOTHING_RESPONSE_INFO[entry.winnerResponse] then
         local info = LOOTHING_RESPONSE_INFO[entry.winnerResponse]
-        local colorBar = row:CreateTexture(nil, "ARTWORK")
-        colorBar:SetSize(3, 32)
-        colorBar:SetPoint("RIGHT", winnerText, "LEFT", -4, 0)
-        colorBar:SetColorTexture(info.color.r, info.color.g, info.color.b, 1)
+        row.colorBar:SetColorTexture(info.color.r, info.color.g, info.color.b, 1)
+        row.colorBar:Show()
+    else
+        row.colorBar:Hide()
     end
 
     -- Tooltip
@@ -359,17 +742,69 @@ function LoothingHistoryPanelMixin:CreateHistoryRow(entry, yOffset)
         GameTooltip:Hide()
     end)
 
-    -- Click to link
+    -- Click handling (left = shift-link, right = context menu)
     row:SetScript("OnClick", function(_, button)
         if button == "LeftButton" and entry.itemLink then
             if IsShiftKeyDown() then
                 ChatEdit_InsertLink(entry.itemLink)
             end
+        elseif button == "RightButton" then
+            self:ShowHistoryRowContextMenu(row, entry)
         end
     end)
+    row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 
     row:Show()
-    return row
+end
+
+--- Show context menu for a history row
+-- @param row Frame
+-- @param entry table
+function LoothingHistoryPanelMixin:ShowHistoryRowContextMenu(row, entry)
+    local L = LOOTHING_LOCALE or {}
+
+    MenuUtil.CreateContextMenu(row, function(ownerRegion, rootDescription)
+        rootDescription:CreateTitle(entry.itemName or "Unknown")
+
+        -- Link in chat
+        if entry.itemLink then
+            rootDescription:CreateButton(L["LINK_IN_CHAT"] or "Link in Chat", function()
+                ChatEdit_InsertLink(entry.itemLink)
+            end)
+        end
+
+        -- Filter by winner
+        if entry.winner then
+            rootDescription:CreateButton(
+                string.format(L["FILTER_BY_WINNER"] or "Filter by %s", LoothingUtils.GetShortName(entry.winner)),
+                function()
+                    self:SetWinnerFilter(entry.winner)
+                end
+            )
+        end
+
+        -- Filter by encounter
+        if entry.encounterName then
+            rootDescription:CreateButton(string.format("Filter by %s", entry.encounterName), function()
+                if Loothing.History then
+                    local filter = Loothing.History.filter or {}
+                    filter.instance = entry.encounterName
+                    Loothing.History:SetFilter(filter)
+                    self:Refresh()
+                end
+            end)
+        end
+
+        rootDescription:CreateDivider()
+
+        -- Delete entry
+        rootDescription:CreateButton(L["DELETE_ENTRY"] or "Delete Entry", function()
+            if Loothing.History and entry.id then
+                Loothing.History:DeleteEntry(entry.id)
+                self:Refresh()
+            end
+        end)
+    end)
 end
 
 --- Update count display
@@ -380,12 +815,12 @@ function LoothingHistoryPanelMixin:UpdateCount()
     end
 
     local total = Loothing.History:GetCount()
-    local filtered = Loothing.History:GetFilteredCount()
+    local displayed = self.displayedCount or 0
 
-    if total == filtered then
+    if total == displayed then
         self.countText:SetText(string.format(LOOTHING_LOCALE["ENTRIES_COUNT"], total))
     else
-        self.countText:SetText(string.format(LOOTHING_LOCALE["ENTRIES_FILTERED"], filtered, total))
+        self.countText:SetText(string.format(LOOTHING_LOCALE["ENTRIES_FILTERED"], displayed, total))
     end
 end
 
@@ -412,26 +847,18 @@ function LoothingHistoryPanelMixin:ShowWinnerDropdown()
     local L = LOOTHING_LOCALE
     local winners = Loothing.History:GetUniqueWinners()
 
-    local menu = {
-        { text = L["ALL_WINNERS"], notCheckable = true, func = function()
+    MenuUtil.CreateContextMenu(self.winnerButton, function(ownerRegion, rootDescription)
+        rootDescription:CreateButton(L["ALL_WINNERS"], function()
             self:SetWinnerFilter(nil)
-        end },
-        { text = "", notCheckable = true, disabled = true },
-    }
+        end)
+        rootDescription:CreateDivider()
 
-    for _, winner in ipairs(winners) do
-        table.insert(menu, {
-            text = LoothingUtils.GetShortName(winner),
-            notCheckable = true,
-            func = function()
+        for _, winner in ipairs(winners) do
+            rootDescription:CreateButton(LoothingUtils.GetShortName(winner), function()
                 self:SetWinnerFilter(winner)
-            end
-        })
-    end
-
-    if EasyMenu then
-        EasyMenu(menu, CreateFrame("Frame", "LoothingWinnerMenu", UIParent, "UIDropDownMenuTemplate"), self.winnerButton, 0, 0, "MENU")
-    end
+            end)
+        end
+    end)
 end
 
 --- Set winner filter
@@ -462,6 +889,15 @@ function LoothingHistoryPanelMixin:ClearFilters()
 
     self.searchBox:SetText("")
     self.winnerButton:SetText(L["ALL_WINNERS"])
+    if self.responseFilterButton then
+        self.responseFilterButton:SetText("Response")
+    end
+    if self.classFilterButton then
+        self.classFilterButton:SetText("Class")
+    end
+
+    self.selectedDate = nil
+    self.selectedPlayer = nil
 
     Loothing.History:ClearFilter()
     self:Refresh()
@@ -512,12 +948,16 @@ function LoothingHistoryPanelMixin:ShowExportDialog()
         editBox:SetMultiLine(true)
         editBox:SetAutoFocus(false)
         editBox:SetFontObject(GameFontHighlightSmall)
-        editBox:SetSize(scrollFrame:GetWidth(), 300)
+        editBox:SetSize(1, 300)
         scrollFrame:SetScrollChild(editBox)
+
+        scrollFrame:SetScript("OnSizeChanged", function(sf, w, h)
+            editBox:SetWidth(w)
+        end)
 
         -- Format buttons
         local csvButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-        csvButton:SetSize(50, 22)
+        csvButton:SetSize(45, 22)
         csvButton:SetPoint("BOTTOMLEFT", 16, 16)
         csvButton:SetText("CSV")
         csvButton:SetScript("OnClick", function()
@@ -525,9 +965,18 @@ function LoothingHistoryPanelMixin:ShowExportDialog()
             editBox:HighlightText()
         end)
 
+        local tsvButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+        tsvButton:SetSize(45, 22)
+        tsvButton:SetPoint("LEFT", csvButton, "RIGHT", 4, 0)
+        tsvButton:SetText("TSV")
+        tsvButton:SetScript("OnClick", function()
+            editBox:SetText(Loothing.History:ExportTSV())
+            editBox:HighlightText()
+        end)
+
         local luaButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-        luaButton:SetSize(50, 22)
-        luaButton:SetPoint("LEFT", csvButton, "RIGHT", 4, 0)
+        luaButton:SetSize(45, 22)
+        luaButton:SetPoint("LEFT", tsvButton, "RIGHT", 4, 0)
         luaButton:SetText("Lua")
         luaButton:SetScript("OnClick", function()
             editBox:SetText(Loothing.History:ExportLua())
@@ -591,24 +1040,15 @@ end
 
 --- Confirm and clear history
 function LoothingHistoryPanelMixin:ConfirmClearHistory()
-    local L = LOOTHING_LOCALE
-
-    StaticPopupDialogs["LOOTHING_CLEAR_HISTORY"] = {
-        text = L["CONFIRM_CLEAR_HISTORY"],
-        button1 = L["YES"],
-        button2 = L["NO"],
-        OnAccept = function()
+    LoothingPopups:Show("LOOTHING_CONFIRM_DELETE_HISTORY", {
+        count = "all",
+        onAccept = function()
             if Loothing.History then
                 Loothing.History:ClearHistory()
                 self:Refresh()
             end
         end,
-        timeout = 0,
-        whileDead = true,
-        hideOnEscape = true,
-    }
-
-    StaticPopup_Show("LOOTHING_CLEAR_HISTORY")
+    })
 end
 
 --[[--------------------------------------------------------------------

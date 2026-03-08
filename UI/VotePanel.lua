@@ -19,6 +19,9 @@ local VOTE_PANEL_EVENTS = {
 local PANEL_WIDTH = 350
 local PANEL_HEIGHT = 400
 
+-- Pool of recycled response button frames to avoid orphaning on each refresh
+local responseButtonPool = {}
+
 --- Initialize the vote panel
 function LoothingVotePanelMixin:Init()
     LoolibCallbackRegistryMixin.OnLoad(self)
@@ -99,6 +102,9 @@ function LoothingVotePanelMixin:CreateElements()
     -- Timer bar
     self:CreateTimerBar()
 
+    -- Note input
+    self:CreateNoteInput()
+
     -- Submit button
     self.submitButton = CreateFrame("Button", nil, self.frame, "UIPanelButtonTemplate")
     self.submitButton:SetSize(100, 26)
@@ -107,6 +113,73 @@ function LoothingVotePanelMixin:CreateElements()
     self.submitButton:SetScript("OnClick", function()
         self:SubmitVote()
     end)
+end
+
+--- Create note input field
+function LoothingVotePanelMixin:CreateNoteInput()
+    local L = LOOTHING_LOCALE
+
+    -- Container for note input
+    local container = CreateFrame("Frame", nil, self.frame)
+    container:SetPoint("BOTTOMLEFT", 20, 80)
+    container:SetPoint("BOTTOMRIGHT", -20, 80)
+    container:SetHeight(30)
+
+    -- Label
+    local label = container:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    label:SetPoint("TOPLEFT", 0, 0)
+    label:SetText(L["NOTE"] or "Note:")
+    label:SetTextColor(0.8, 0.8, 0.8)
+
+    -- Edit box
+    local editBox = CreateFrame("EditBox", "LoothingVotePanelNoteInput", container, "InputBoxTemplate")
+    editBox:SetPoint("TOPLEFT", label, "TOPRIGHT", 5, 3)
+    editBox:SetPoint("BOTTOMRIGHT", 0, 0)
+    editBox:SetAutoFocus(false)
+    editBox:SetMaxLetters(100)
+    editBox:SetScript("OnEnterPressed", function(self)
+        self:ClearFocus()
+    end)
+    editBox:SetScript("OnEscapePressed", function(self)
+        self:ClearFocus()
+    end)
+
+    self.noteInput = editBox
+    self.noteContainer = container
+
+    -- Required indicator (shown when notes are required)
+    local requiredText = container:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    requiredText:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -2)
+    requiredText:SetText("*" .. (L["REQUIRED"] or "Required"))
+    requiredText:SetTextColor(1, 0.3, 0.3)
+    requiredText:Hide()
+    self.noteRequiredText = requiredText
+end
+
+--- Get the current note text
+-- @return string
+function LoothingVotePanelMixin:GetNote()
+    if self.noteInput then
+        return self.noteInput:GetText() or ""
+    end
+    return ""
+end
+
+--- Clear the note input
+function LoothingVotePanelMixin:ClearNote()
+    if self.noteInput then
+        self.noteInput:SetText("")
+    end
+end
+
+--- Update note input visibility based on settings
+function LoothingVotePanelMixin:UpdateNoteInputVisibility()
+    if not self.noteContainer then return end
+
+    local requireNotes = Loothing.Settings and Loothing.Settings:GetRequireNotes()
+    if self.noteRequiredText then
+        self.noteRequiredText:SetShown(requireNotes)
+    end
 end
 
 --- Create item display area
@@ -153,7 +226,7 @@ function LoothingVotePanelMixin:CreateResponseButtons()
     local container = CreateFrame("Frame", nil, self.frame)
     container:SetPoint("TOPLEFT", 20, -120)
     container:SetPoint("TOPRIGHT", -20, -120)
-    container:SetHeight(150)
+    container:SetHeight(320)  -- Increased to accommodate up to 10 buttons
 
     -- Label
     local label = container:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -161,76 +234,142 @@ function LoothingVotePanelMixin:CreateResponseButtons()
     label:SetText(L["SELECT_RESPONSE"])
 
     self.responseButtons = {}
+    self.responseButtonsArray = {}
+    self.responseContainer = container
+    self.responseContainerLabel = label
+
+    -- Initial button creation will happen in RefreshResponseButtons
+    self:RefreshResponseButtons()
+end
+
+--- Acquire a response button from the pool, or create a new one
+-- @param parent Frame - Parent frame for newly created buttons
+-- @return Button
+local function AcquireResponseButton(parent)
+    local button = table.remove(responseButtonPool)
+    if button then
+        button:SetParent(parent)
+        button:ClearAllPoints()
+        button:Show()
+        return button
+    end
+
+    -- Create a new button with all sub-regions; colors/text are set by caller
+    button = CreateFrame("Button", nil, parent)
+
+    local bg = button:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    button.bg = bg
+
+    local highlight = button:CreateTexture(nil, "HIGHLIGHT")
+    highlight:SetAllPoints()
+    button.highlight = highlight
+
+    local selected = button:CreateTexture(nil, "BORDER")
+    selected:SetAllPoints()
+    selected:Hide()
+    button.selected = selected
+
+    local colorBar = button:CreateTexture(nil, "ARTWORK")
+    colorBar:SetPoint("LEFT", 2, 0)
+    button.colorBar = colorBar
+
+    local text = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    text:SetPoint("LEFT", colorBar, "RIGHT", 8, 0)
+    text:SetTextColor(1, 1, 1)
+    button.text = text
+
+    local rank = button:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    rank:SetPoint("RIGHT", -8, 0)
+    rank:SetTextColor(1, 0.82, 0)
+    rank:Hide()
+    button.rank = rank
+
+    return button
+end
+
+--- Release a response button back to the pool
+-- @param button Button
+local function ReleaseResponseButton(button)
+    button:SetScript("OnClick", nil)
+    button:ClearAllPoints()
+    button:Hide()
+    button:SetParent(nil)
+    button.buttonId = nil
+    button.buttonData = nil
+    button.selected:Hide()
+    button.rank:Hide()
+    button.rank:SetText("")
+    responseButtonPool[#responseButtonPool + 1] = button
+end
+
+--- Refresh response buttons based on active button set
+function LoothingVotePanelMixin:RefreshResponseButtons()
+    -- Return existing buttons to the pool instead of orphaning them
+    for _, button in ipairs(self.responseButtonsArray) do
+        ReleaseResponseButton(button)
+    end
+    wipe(self.responseButtons)
+    wipe(self.responseButtonsArray)
+
+    if not Loothing.Settings then return end
+
+    -- Get buttons from active set
+    local buttons = Loothing.Settings:GetButtons()
+    if not buttons or #buttons == 0 then return end
+
+    -- Sort by sort order
+    local sortedButtons = {}
+    for _, btn in ipairs(buttons) do
+        table.insert(sortedButtons, btn)
+    end
+    table.sort(sortedButtons, function(a, b) return a.sort < b.sort end)
+
     local buttonHeight = 28
     local spacing = 4
     local yOffset = -24
 
-    -- Create button for each response type
-    local responseOrder = {
-        LOOTHING_RESPONSE.NEED,
-        LOOTHING_RESPONSE.GREED,
-        LOOTHING_RESPONSE.OFFSPEC,
-        LOOTHING_RESPONSE.TRANSMOG,
-        LOOTHING_RESPONSE.PASS,
-    }
+    for i, btnData in ipairs(sortedButtons) do
+        local button = AcquireResponseButton(self.responseContainer)
+        button:SetSize(PANEL_WIDTH - 50, buttonHeight)
+        button:SetPoint("TOPLEFT", 0, yOffset - (i - 1) * (buttonHeight + spacing))
 
-    for i, response in ipairs(responseOrder) do
-        local info = LOOTHING_RESPONSE_INFO[response]
-        if info then
-            local button = CreateFrame("Button", nil, container)
-            button:SetSize(PANEL_WIDTH - 50, buttonHeight)
-            button:SetPoint("TOPLEFT", 0, yOffset - (i - 1) * (buttonHeight + spacing))
+        -- Parse color
+        local r, g, b = unpack(btnData.color)
 
-            -- Background
-            local bg = button:CreateTexture(nil, "BACKGROUND")
-            bg:SetAllPoints()
-            bg:SetColorTexture(info.color.r * 0.3, info.color.g * 0.3, info.color.b * 0.3, 0.5)
-            button.bg = bg
+        -- Update sub-region colors
+        button.bg:SetColorTexture(r * 0.3, g * 0.3, b * 0.3, 0.5)
+        button.highlight:SetColorTexture(r, g, b, 0.3)
+        button.selected:SetColorTexture(r, g, b, 0.5)
+        button.colorBar:SetSize(4, buttonHeight - 4)
+        button.colorBar:SetColorTexture(r, g, b, 1)
+        button.text:SetText(btnData.text)
 
-            -- Highlight
-            local highlight = button:CreateTexture(nil, "HIGHLIGHT")
-            highlight:SetAllPoints()
-            highlight:SetColorTexture(info.color.r, info.color.g, info.color.b, 0.3)
+        button.buttonId = btnData.id
+        button.buttonData = btnData
 
-            -- Selected indicator
-            local selected = button:CreateTexture(nil, "BORDER")
-            selected:SetAllPoints()
-            selected:SetColorTexture(info.color.r, info.color.g, info.color.b, 0.5)
-            selected:Hide()
-            button.selected = selected
+        button:SetScript("OnClick", function()
+            self:OnResponseClick(button)
+        end)
 
-            -- Color bar
-            local colorBar = button:CreateTexture(nil, "ARTWORK")
-            colorBar:SetSize(4, buttonHeight - 4)
-            colorBar:SetPoint("LEFT", 2, 0)
-            colorBar:SetColorTexture(info.color.r, info.color.g, info.color.b, 1)
+        self.responseButtons[btnData.id] = button
+        self.responseButtonsArray[i] = button
+    end
+end
 
-            -- Text
-            local text = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-            text:SetPoint("LEFT", colorBar, "RIGHT", 8, 0)
-            text:SetText(info.name)
-            text:SetTextColor(1, 1, 1)
-            button.text = text
+--- Update button visibility based on numButtons setting
+function LoothingVotePanelMixin:UpdateButtonVisibility()
+    if not Loothing.Settings then return end
 
-            -- Rank number (for ranked choice)
-            local rank = button:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-            rank:SetPoint("RIGHT", -8, 0)
-            rank:SetTextColor(1, 0.82, 0)
-            rank:Hide()
-            button.rank = rank
+    local numButtons = Loothing.Settings:GetNumButtons()
 
-            button.response = response
-            button.info = info
-
-            button:SetScript("OnClick", function()
-                self:OnResponseClick(button)
-            end)
-
-            self.responseButtons[response] = button
+    for i, button in ipairs(self.responseButtonsArray) do
+        if i <= numButtons then
+            button:Show()
+        else
+            button:Hide()
         end
     end
-
-    self.responseContainer = container
 end
 
 --- Create ranked choice display
@@ -271,8 +410,8 @@ end
 --- Create timer bar
 function LoothingVotePanelMixin:CreateTimerBar()
     local container = CreateFrame("Frame", nil, self.frame)
-    container:SetPoint("BOTTOMLEFT", 20, 55)
-    container:SetPoint("BOTTOMRIGHT", -20, 55)
+    container:SetPoint("BOTTOMLEFT", 20, 50)
+    container:SetPoint("BOTTOMRIGHT", -20, 50)
     container:SetHeight(20)
 
     -- Background
@@ -338,8 +477,8 @@ function LoothingVotePanelMixin:SetItem(item)
     -- Reset response buttons
     self:ResetResponseButtons()
 
-    -- Check for existing vote
-    local existingVote = item:GetVoteByVoter(LoothingUtils.GetPlayerName())
+    -- Check for existing vote (only if item has the method)
+    local existingVote = item.GetVoteByVoter and item:GetVoteByVoter(LoothingUtils.GetPlayerFullName())
     if existingVote and existingVote.responses then
         for i, response in ipairs(existingVote.responses) do
             if self.votingMode == LOOTHING_VOTING_MODE.RANKED_CHOICE then
@@ -352,10 +491,39 @@ function LoothingVotePanelMixin:SetItem(item)
         self:UpdateResponseButtons()
     end
 
+    -- Apply observe mode
+    self:ApplyObserveMode()
+
+    -- Update button visibility based on settings
+    self:UpdateButtonVisibility()
+
     -- Update timer
     self:StartTimer()
 
     self:Show()
+end
+
+--- Apply observe mode restrictions
+function LoothingVotePanelMixin:ApplyObserveMode()
+    if not Loothing.Settings then return end
+
+    local observeMode = Loothing.Settings:GetObserveMode()
+
+    -- Disable submit button in observe mode
+    if self.submitButton then
+        self.submitButton:SetEnabled(not observeMode)
+        if observeMode then
+            self.submitButton:SetText("Observe Mode")
+        else
+            local L = LOOTHING_LOCALE
+            self.submitButton:SetText(L["SUBMIT_VOTE"] or "Submit Vote")
+        end
+    end
+
+    -- Disable response buttons in observe mode
+    for _, button in pairs(self.responseButtons) do
+        button:SetEnabled(not observeMode)
+    end
 end
 
 --[[--------------------------------------------------------------------
@@ -365,24 +533,24 @@ end
 --- Handle response button click
 -- @param button Frame
 function LoothingVotePanelMixin:OnResponseClick(button)
-    local response = button.response
+    local buttonId = button.buttonId
 
     if self.votingMode == LOOTHING_VOTING_MODE.RANKED_CHOICE then
         -- Ranked choice - add to ranking
-        self:AddToRanking(response)
+        self:AddToRanking(buttonId)
     else
         -- Simple mode - single selection
-        self.selectedResponses = { response }
+        self.selectedResponses = { buttonId }
         self:UpdateResponseButtons()
     end
 end
 
 --- Add response to ranking (ranked choice mode)
--- @param response number
-function LoothingVotePanelMixin:AddToRanking(response)
+-- @param buttonId number
+function LoothingVotePanelMixin:AddToRanking(buttonId)
     -- Check if already ranked
-    for i, r in ipairs(self.selectedResponses) do
-        if r == response then
+    for i, id in ipairs(self.selectedResponses) do
+        if id == buttonId then
             -- Remove from ranking
             table.remove(self.selectedResponses, i)
             self:UpdateResponseButtons()
@@ -391,7 +559,7 @@ function LoothingVotePanelMixin:AddToRanking(response)
     end
 
     -- Add to end of ranking
-    self.selectedResponses[#self.selectedResponses + 1] = response
+    self.selectedResponses[#self.selectedResponses + 1] = buttonId
     self:UpdateResponseButtons()
 end
 
@@ -449,10 +617,10 @@ function LoothingVotePanelMixin:UpdateRankingText()
     end
 
     local parts = {}
-    for i, response in ipairs(self.selectedResponses) do
-        local info = LOOTHING_RESPONSE_INFO[response]
-        if info then
-            parts[#parts + 1] = string.format("%d. %s", i, info.name)
+    for i, buttonId in ipairs(self.selectedResponses) do
+        local button = self.responseButtons[buttonId]
+        if button and button.buttonData then
+            parts[#parts + 1] = string.format("%d. %s", i, button.buttonData.text)
         end
     end
 
@@ -479,16 +647,34 @@ function LoothingVotePanelMixin:SubmitVote()
         return
     end
 
+    -- Check for observe mode
+    if Loothing.Settings and Loothing.Settings:GetObserveMode() then
+        print("|cff00ccff[Loothing]|r You are in observe mode and cannot cast votes.")
+        return
+    end
+
+    -- Check for required notes
+    local note = self:GetNote()
+    if Loothing.Settings and Loothing.Settings:GetRequireNotes() then
+        if note == "" then
+            print("|cff00ccff[Loothing]|r You must add a note with your vote.")
+            if self.noteInput then
+                self.noteInput:SetFocus()
+            end
+            return
+        end
+    end
+
     -- Get player info
-    local playerName = LoothingUtils.GetPlayerName()
+    local playerName = LoothingUtils.GetPlayerFullName()
     local _, playerClass = UnitClass("player")
 
     -- Copy responses
     local responses = { unpack(self.selectedResponses) }
 
-    -- Submit via session
+    -- Submit via session (include note)
     if Loothing.Session then
-        Loothing.Session:SubmitVote(self.item.guid, playerName, playerClass, responses)
+        Loothing.Session:SubmitVote(self.item.guid, playerName, playerClass, responses, note)
     end
 
     self:TriggerEvent("OnVoteSubmitted", self.item, responses)
@@ -529,6 +715,15 @@ function LoothingVotePanelMixin:UpdateTimer()
 
     local remaining = self.item:GetTimeRemaining()
 
+    -- No-timeout mode: show "No Limit", full bar, never auto-close
+    if remaining == math.huge then
+        self.timerText:SetText(LOOTHING_LOCALE["NO_LIMIT"] or "No Limit")
+        local maxWidth = self.timerContainer:GetWidth() - 2
+        self.timerBar:SetWidth(math.max(0.001, maxWidth))
+        self.timerBar:SetColorTexture(0.2, 0.6, 0.2, 1)
+        return
+    end
+
     if remaining <= 0 then
         self.timerText:SetText(LOOTHING_LOCALE["TIME_EXPIRED"])
         self.timerBar:SetWidth(0.001)
@@ -536,7 +731,8 @@ function LoothingVotePanelMixin:UpdateTimer()
 
         -- Auto-close after a delay
         C_Timer.After(1, function()
-            if self.frame:IsShown() and self.item and self.item:GetTimeRemaining() <= 0 then
+            local itemRemaining = self.frame:IsShown() and self.item and self.item:GetTimeRemaining() or 0
+            if itemRemaining ~= math.huge and itemRemaining <= 0 then
                 self:Hide()
             end
         end)
@@ -545,7 +741,7 @@ function LoothingVotePanelMixin:UpdateTimer()
 
     -- Calculate progress
     local timeout = self.item.voteTimeout or LOOTHING_TIMING.VOTING_DEFAULT
-    local progress = remaining / timeout
+    local progress = (timeout > 0) and (remaining / timeout) or 1
 
     -- Update bar
     local maxWidth = self.timerContainer:GetWidth() - 2

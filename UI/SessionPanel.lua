@@ -25,7 +25,8 @@ function LoothingSessionPanelMixin:Init(parent)
 
     self.parent = parent
     self.selectedItem = nil
-    self.itemRows = {}
+    self.itemRows = {}      -- active rows (in use this frame)
+    self.itemRowPool = {}   -- recycled rows waiting for reuse
 
     self:CreateFrame()
     self:CreateElements()
@@ -46,6 +47,9 @@ function LoothingSessionPanelMixin:CreateElements()
 
     -- Header area
     self:CreateHeader()
+
+    -- Filter bar
+    self:CreateFilterBar()
 
     -- Item list area
     self:CreateItemList()
@@ -85,6 +89,40 @@ function LoothingSessionPanelMixin:CreateHeader()
     self.header = header
 end
 
+--- Create filter bar
+function LoothingSessionPanelMixin:CreateFilterBar()
+    -- Initialize filters if not already done
+    if not Loothing.Filters then
+        Loothing.Filters = LoolibCreateAndInitFromMixin(LoothingFiltersMixin)
+    end
+
+    -- Create filter bar
+    local filterBar = Loothing.Filters:CreateFilterBar(self.frame)
+    filterBar:SetPoint("TOPLEFT", 8, -66)
+    filterBar:SetPoint("TOPRIGHT", -8, -66)
+
+    -- Initially hidden - can be toggled
+    filterBar:Hide()
+
+    self.filterBar = filterBar
+
+    -- Register for filter changes
+    Loothing.Filters:RegisterCallback("OnFiltersChanged", function()
+        self:Refresh()
+    end, self)
+end
+
+--- Toggle filter bar visibility
+function LoothingSessionPanelMixin:ToggleFilterBar()
+    if self.filterBar:IsShown() then
+        self.filterBar:Hide()
+        self.listContainer:SetPoint("TOPLEFT", 8, -66)
+    else
+        self.filterBar:Show()
+        self.listContainer:SetPoint("TOPLEFT", 8, -154)
+    end
+end
+
 --- Create item list
 function LoothingSessionPanelMixin:CreateItemList()
     local L = LOOTHING_LOCALE
@@ -95,13 +133,13 @@ function LoothingSessionPanelMixin:CreateItemList()
     container:SetPoint("BOTTOMRIGHT", -8, 50)
     container:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true,
-        tileSize = 8,
-        edgeSize = 12,
-        insets = { left = 2, right = 2, top = 2, bottom = 2 },
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        tile = false,
+        edgeSize = 1,
+        insets = { left = 1, right = 1, top = 1, bottom = 1 },
     })
     container:SetBackdropColor(0.05, 0.05, 0.05, 0.9)
+    container:SetBackdropBorderColor(0.2, 0.2, 0.2, 1)
 
     -- Column headers
     local headerFrame = CreateFrame("Frame", nil, container)
@@ -132,8 +170,13 @@ function LoothingSessionPanelMixin:CreateItemList()
     scrollFrame:SetPoint("BOTTOMRIGHT", -24, 4)
 
     local content = CreateFrame("Frame", nil, scrollFrame)
-    content:SetSize(scrollFrame:GetWidth(), 800)
+    content:SetSize(1, 800) -- width managed by OnSizeChanged below
     scrollFrame:SetScrollChild(content)
+
+    -- Keep scroll child width in sync with scroll frame
+    scrollFrame:SetScript("OnSizeChanged", function(sf, w, h)
+        content:SetWidth(w)
+    end)
 
     self.listContainer = container
     self.listContent = content
@@ -174,6 +217,49 @@ function LoothingSessionPanelMixin:CreateFooter()
     end)
     self.startAllButton:Hide()
 
+    -- Add Item button (ML only)
+    self.addItemBtn = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
+    self.addItemBtn:SetSize(80, 26)
+    self.addItemBtn:SetPoint("LEFT", self.startAllButton, "RIGHT", 8, 0)
+    self.addItemBtn:SetText(L["ADD_ITEM"] or "Add Item")
+    self.addItemBtn:SetScript("OnClick", function()
+        if Loothing.AddItemFrame then
+            Loothing.AddItemFrame:Show()
+        end
+    end)
+    self.addItemBtn:Hide()
+
+    -- Global "Award Later" checkbox
+    self.awardLaterCheck = CreateFrame("CheckButton", nil, footer, "UICheckButtonTemplate")
+    self.awardLaterCheck:SetSize(24, 24)
+    self.awardLaterCheck:SetPoint("LEFT", self.addItemBtn, "RIGHT", 8, 0)
+    self.awardLaterCheck.text = self.awardLaterCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    self.awardLaterCheck.text:SetPoint("LEFT", self.awardLaterCheck, "RIGHT", 2, 0)
+    self.awardLaterCheck.text:SetText(L["AWARD_LATER_ALL"] or "Award Later (All)")
+    self.awardLaterCheck.text:SetTextColor(0.7, 0.7, 0.7)
+    self.awardLaterCheck:SetScript("OnClick", function(btn)
+        local checked = btn:GetChecked()
+        if Loothing.Session then
+            local items = Loothing.Session:GetItems()
+            if items then
+                for _, item in items:Enumerate() do
+                    item.awardLater = checked
+                end
+            end
+        end
+        self:RefreshItems()
+    end)
+    self.awardLaterCheck:SetScript("OnEnter", function(btn)
+        GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
+        GameTooltip:SetText(L["AWARD_LATER_ALL"] or "Award Later (All)", 1, 0.82, 0)
+        GameTooltip:AddLine("Set all items to be awarded after the session", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    self.awardLaterCheck:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+    self.awardLaterCheck:Hide()
+
     -- Refresh button
     self.refreshButton = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
     self.refreshButton:SetSize(80, 26)
@@ -202,7 +288,7 @@ function LoothingSessionPanelMixin:RegisterEvents()
         self:Refresh()
     end, self)
 
-    Loothing.Session:RegisterCallback("OnItemAdded", function(item)
+    Loothing.Session:RegisterCallback("OnItemAdded", function(_, item)
         self:Refresh()
     end, self)
 
@@ -217,6 +303,27 @@ function LoothingSessionPanelMixin:RegisterEvents()
     Loothing.Session:RegisterCallback("OnVoteReceived", function()
         self:RefreshItems()
     end, self)
+
+    -- Cinematic auto-hide: hide session panel during cinematics
+    if not self.cinematicFrame then
+        local cinematicFrame = CreateFrame("Frame")
+        cinematicFrame:RegisterEvent("CINEMATIC_START")
+        cinematicFrame:RegisterEvent("CINEMATIC_STOP")
+        cinematicFrame:SetScript("OnEvent", function(_, event)
+            if event == "CINEMATIC_START" then
+                if self.frame and self.frame:IsShown() then
+                    self.wasShowingBeforeCinematic = true
+                    self.frame:Hide()
+                end
+            elseif event == "CINEMATIC_STOP" then
+                if self.wasShowingBeforeCinematic then
+                    self.wasShowingBeforeCinematic = false
+                    self.frame:Show()
+                end
+            end
+        end)
+        self.cinematicFrame = cinematicFrame
+    end
 end
 
 --[[--------------------------------------------------------------------
@@ -310,6 +417,8 @@ function LoothingSessionPanelMixin:UpdateFooter()
     if not Loothing.Session then
         self.sessionButton:Hide()
         self.startAllButton:Hide()
+        self.addItemBtn:Hide()
+        self.awardLaterCheck:Hide()
         return
     end
 
@@ -322,9 +431,15 @@ function LoothingSessionPanelMixin:UpdateFooter()
             self.sessionButton:SetText(L["START_SESSION"])
             self.sessionButton:Enable()
             self.startAllButton:Hide()
+            self.addItemBtn:Hide()
+            self.awardLaterCheck:Hide()
         elseif state == LOOTHING_SESSION_STATE.ACTIVE then
             self.sessionButton:SetText(L["END_SESSION"])
             self.sessionButton:Enable()
+
+            -- Show ML-only controls during active session
+            self.addItemBtn:Show()
+            self.awardLaterCheck:Show()
 
             -- Show start all if there are pending items
             local items = Loothing.Session:GetItems()
@@ -347,22 +462,64 @@ function LoothingSessionPanelMixin:UpdateFooter()
             self.sessionButton:SetText(L["START_SESSION"])
             self.sessionButton:Enable()
             self.startAllButton:Hide()
+            self.addItemBtn:Hide()
+            self.awardLaterCheck:Hide()
         end
     else
         self.sessionButton:Hide()
         self.startAllButton:Hide()
+        self.addItemBtn:Hide()
+        self.awardLaterCheck:Hide()
     end
+end
+
+--- Sort items by typeCode then ilvl descending
+-- @param items table - Array of items
+-- @return table - Sorted copy
+function LoothingSessionPanelMixin:SortItems(items)
+    local sorted = {}
+    for _, item in ipairs(items) do
+        sorted[#sorted + 1] = item
+    end
+
+    table.sort(sorted, function(a, b)
+        -- Sort by typeCode first (group similar items)
+        local typeA = a.typeCode or "default"
+        local typeB = b.typeCode or "default"
+        if typeA ~= typeB then
+            return typeA < typeB
+        end
+        -- Then by ilvl descending
+        local ilvlA = a.itemLevel or a.ilvl or 0
+        local ilvlB = b.itemLevel or b.ilvl or 0
+        return ilvlA > ilvlB
+    end)
+
+    return sorted
+end
+
+--- Acquire a row from the pool or create a new one
+function LoothingSessionPanelMixin:AcquireItemRow()
+    local row = table.remove(self.itemRowPool)
+    if not row then
+        row = CreateLoothingItemRow(self.listContent)
+    end
+    return row
+end
+
+--- Release all active rows back to the pool
+function LoothingSessionPanelMixin:ReleaseAllItemRows()
+    for _, row in ipairs(self.itemRows) do
+        LoothingItemRow_Reset(nil, row)
+        self.itemRowPool[#self.itemRowPool + 1] = row
+    end
+    wipe(self.itemRows)
 end
 
 --- Refresh item list
 function LoothingSessionPanelMixin:RefreshItems()
-    -- Clear existing rows
-    for _, row in ipairs(self.itemRows) do
-        if row.frame then
-            row.frame:Hide()
-        end
-    end
-    wipe(self.itemRows)
+    -- Return active rows to pool
+    self:ReleaseAllItemRows()
 
     if not Loothing.Session then
         self.emptyText:Show()
@@ -377,18 +534,30 @@ function LoothingSessionPanelMixin:RefreshItems()
 
     self.emptyText:Hide()
 
+    -- Collect and sort items
+    local itemArray = {}
+    for _, item in items:Enumerate() do
+        itemArray[#itemArray + 1] = item
+    end
+    itemArray = self:SortItems(itemArray)
+
+    local isML = LoothingUtils.IsRaidLeaderOrAssistant()
     local yOffset = 0
     local rowHeight = 44
     local spacing = 2
 
-    for _, item in items:Enumerate() do
-        local row = CreateLoothingItemRow(self.listContent)
+    for _, item in ipairs(itemArray) do
+        local row = self:AcquireItemRow()
         row:SetItem(item)
-        row:SetWidth(self.listContent:GetWidth())
 
         row:GetFrame():SetPoint("TOPLEFT", 0, yOffset)
         row:GetFrame():SetPoint("TOPRIGHT", 0, yOffset)
         row:GetFrame():Show()
+
+        -- ML-only: Add delete button and "Award Later" checkbox per item
+        if isML then
+            self:AddMLControls(row, item)
+        end
 
         -- Setup callbacks
         row:SetCallback("onSelect", function(r, i)
@@ -434,6 +603,93 @@ function LoothingSessionPanelMixin:RefreshItems()
 
     -- Update content height
     self.listContent:SetHeight(math.abs(yOffset) + 20)
+end
+
+--- Add ML-specific controls to an item row (delete button, award later checkbox)
+-- @param row table - Item row
+-- @param item table - Item data
+function LoothingSessionPanelMixin:AddMLControls(row, item)
+    local frame = row:GetFrame()
+    if not frame then return end
+
+    -- Only add controls for PENDING items
+    if item.state ~= LOOTHING_ITEM_STATE.PENDING then return end
+
+    -- Delete button (remove item from session)
+    if not frame._deleteButton then
+        local deleteBtn = CreateFrame("Button", nil, frame)
+        deleteBtn:SetSize(16, 16)
+        deleteBtn:SetPoint("RIGHT", -4, 0)
+        deleteBtn:SetNormalTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
+        deleteBtn:SetHighlightTexture("Interface\\Buttons\\UI-GROUPLOOT-PASS-HIGHLIGHT")
+        deleteBtn:SetScript("OnEnter", function(btn)
+            GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
+            GameTooltip:SetText("Remove from session", nil, nil, nil, nil, true)
+            GameTooltip:Show()
+        end)
+        deleteBtn:SetScript("OnLeave", function()
+            GameTooltip:Hide()
+        end)
+        frame._deleteButton = deleteBtn
+    end
+
+    frame._deleteButton:SetScript("OnClick", function()
+        if Loothing.Session then
+            Loothing.Session:RemoveItem(item.guid)
+            self:RefreshItems()
+        end
+    end)
+    frame._deleteButton:Show()
+
+    -- Award Later checkbox
+    if not frame._awardLaterCB then
+        local cb = CreateFrame("CheckButton", nil, frame, "UICheckButtonTemplate")
+        cb:SetSize(18, 18)
+        cb:SetPoint("RIGHT", frame._deleteButton, "LEFT", -4, 0)
+
+        local label = cb:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        label:SetPoint("RIGHT", cb, "LEFT", -2, 0)
+        label:SetText("Later")
+        label:SetTextColor(0.6, 0.6, 0.6)
+        cb._label = label
+
+        cb:SetScript("OnEnter", function(btn)
+            GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
+            GameTooltip:SetText("Award Later", 1, 0.82, 0)
+            GameTooltip:AddLine("Mark this item to be awarded after the session", 1, 1, 1, true)
+            GameTooltip:Show()
+        end)
+        cb:SetScript("OnLeave", function()
+            GameTooltip:Hide()
+        end)
+        frame._awardLaterCB = cb
+    end
+
+    frame._awardLaterCB:SetChecked(item.awardLater or false)
+    frame._awardLaterCB:SetScript("OnClick", function(cb)
+        item.awardLater = cb:GetChecked()
+    end)
+    frame._awardLaterCB:Show()
+
+    -- Reposition elements left to make room for ML controls
+    -- Layout (right to left): [deleteBtn 16px] [CB 18px] ["Later" ~28px] [actionButton 70px] [statusText] [nameText]
+    local actionButton = row.actionButton
+    if actionButton then
+        actionButton:ClearAllPoints()
+        actionButton:SetPoint("RIGHT", frame._awardLaterCB._label, "LEFT", -4, 0)
+    end
+    local statusText = row.statusText
+    if statusText then
+        statusText:ClearAllPoints()
+        statusText:SetPoint("RIGHT", actionButton, "LEFT", -8, 0)
+        statusText:SetJustifyH("RIGHT")
+    end
+    local nameText = row.nameText
+    if nameText then
+        nameText:ClearAllPoints()
+        nameText:SetPoint("TOPLEFT", row.icon, "TOPRIGHT", 6, -2)
+        nameText:SetPoint("RIGHT", statusText, "LEFT", -8, 0)
+    end
 end
 
 --[[--------------------------------------------------------------------
@@ -503,12 +759,7 @@ end
 function LoothingSessionPanelMixin:OnRevote(item)
     if not Loothing.Session then return end
 
-    -- Reset item state and start voting again
-    if item.StartVoting then
-        item.votes:Flush()
-        item:SetState(LOOTHING_ITEM_STATE.PENDING)
-        Loothing.Session:StartVoting(item.guid)
-    end
+    Loothing.Session:RevoteItem(item.guid)
 
     self:RefreshItems()
 end

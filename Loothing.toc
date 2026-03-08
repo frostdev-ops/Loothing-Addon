@@ -2,45 +2,138 @@
 ## Title: Loothing
 ## Notes: Loot Council addon for WoW 12.0+ with ranked choice voting
 ## Author: James Kueller
-## Version: 1.0.0
+## Version: 1.0.1
 ## SavedVariables: LoothingDB
 ## Dependencies: Loolib
+## IconTexture: Interface\AddOns\Loothing\Media\logo
+## AddonCompartmentFunc: Loothing_OnAddonCompartmentClick
+## AddonCompartmentFuncOnEnter: Loothing_OnAddonCompartmentEnter
+## AddonCompartmentFuncOnLeave: Loothing_OnAddonCompartmentLeave
 ## X-Category: Raid
 ## X-Website: https://github.com/jkueller/loothing
 ## X-License: MIT
 
 # Locale
 Locale\enUS.lua
+Locale\deDE.lua
+Locale\esES.lua
+Locale\ptBR.lua
+Locale\ruRU.lua
+Locale\frFR.lua
+Locale\itIT.lua
+Locale\koKR.lua
+Locale\zhCN.lua
+Locale\zhTW.lua
+Locale\brainrot.lua
 
-# Core
+# Core (early - no UI dependencies)
 Core\Constants.lua
 Core\Utils.lua
-Debug\TestMode.lua
-Core\Init.lua
+Core\TestModeState.lua
+Core\Migration.lua
 Core\Settings.lua
+Core\SettingsVoting.lua
+Core\Options\SessionSettings.lua
+Core\Options\LocalPreferences.lua
+Core\OptionsTable.lua
+# Legacy options files (kept for reference, replaced by SessionSettings + LocalPreferences)
+# Core\Options\Voting.lua
+# Core\Options\Council.lua
+# Core\Options\Announcements.lua
+# Core\Options\Advanced.lua
+# Core\Options\AwardReasons.lua
+Core\ItemFilter.lua
+Core\ResponseManager.lua
+Core\AutoAward.lua
+Core\Announcer.lua
+
+# Utilities
+Utils\AutoPass.lua
+
+# Modules
+Modules\VersionCheck.lua
 
 # Data Layer
 Data\ItemData.lua
 Data\VoteData.lua
 Data\Session.lua
 Data\History.lua
+Data\HistoryImport.lua
+Data\TradeQueue.lua
+Data\ItemStorage.lua
+Data\RollTracker.lua
+Data\CandidateData.lua
+Data\CandidateManager.lua
+Data\TokenData.lua
+Data\TrinketData.lua
+Data\EncounterData.lua
+Data\PlayerCache.lua
+Data\MLDB.lua
+
+# Loot Handling
+Loot\GroupLoot.lua
+Loot\GroupLootState.lua
+Loot\GroupLootEvents.lua
+Loot\GroupLootDisplay.lua
 
 # Council Logic
 Council\CouncilManager.lua
+Council\CouncilMembers.lua
+Council\CouncilSettings.lua
 Council\VotingEngine.lua
 Council\VotingSession.lua
 
 # Communication
 Comm\Protocol.lua
 Comm\MessageHandler.lua
+Comm\Handlers\Core.lua
+Comm\Restrictions.lua
 Comm\Sync.lua
+Comm\AckTracker.lua
+Comm\WhisperHandler.lua
 
 # UI Implementation
+UI\Skinning.lua
 UI\Minimap.lua
+UI\Filters.lua
+UI\Popups.lua
 UI\ItemRow.lua
-UI\VotePanel.lua
+# UI\VotePanel.lua
+UI\Components\ResponseRow.lua
 UI\ResultsPanel.lua
 UI\SessionPanel.lua
+UI\AddItemFrame.lua
 UI\HistoryPanel.lua
+UI\TradePanel.lua
+UI\RollFrame.lua
+UI\RollFrame\UI.lua
+UI\RollFrame\Events.lua
+UI\CouncilTable\Columns.lua
+UI\CouncilTable\Rows.lua
+UI\CouncilTable\Events.lua
+UI\CouncilTable.lua
+UI\SyncPanel.lua
+UI\VersionCheckPanel.lua
 UI\SettingsPanel.lua
 UI\MainFrame.lua
+
+# Core Init (must be after UI so it can create UI components)
+Core\Init.lua
+Debug\TestMode.lua
+Debug\ErrorHandler.lua
+
+# Debug & Testing Infrastructure
+Debug\Tests\TestRunner.lua
+Debug\Tests\TestHelpers.lua
+Debug\Tests\TestData.lua
+Debug\Tests\SessionTests.lua
+Debug\Tests\VotingTests.lua
+Debug\Tests\ItemTests.lua
+Debug\Tests\CommunicationTests.lua
+Debug\Tests\ReconnectTests.lua
+Debug\Tests\RestrictionTests.lua
+Debug\Tests\TradeTimerTests.lua
+Debug\Tests\AutoPassTests.lua
+Debug\Tests\MLDBTests.lua
+Debug\Tests\IntegrationTests.lua
+Debug\Tests\StressTests.lua

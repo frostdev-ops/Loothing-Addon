@@ -43,7 +43,7 @@ function LoothingVotingSessionMixin:Init(item)
     self.state = LOOTHING_VOTING_STATE.PENDING
 
     -- Voting configuration
-    self.timeout = LOOTHING_TIMING.VOTING_DEFAULT
+    self.timeout = LOOTHING_TIMING.DEFAULT_VOTE_TIMEOUT
     self.votingMode = LOOTHING_VOTING_MODE.SIMPLE
     self.allowRevote = true
     self.maxRevotes = 2
@@ -128,17 +128,23 @@ function LoothingVotingSessionMixin:Start(timeout)
     end
 
     -- Set timeout
-    self.timeout = timeout or Loothing.Settings:GetVotingTimeout() or LOOTHING_TIMING.VOTING_DEFAULT
+    self.timeout = timeout or Loothing.Settings:GetVotingTimeout() or LOOTHING_TIMING.DEFAULT_VOTE_TIMEOUT
     self.startTime = GetTime()
-    self.endTime = self.startTime + self.timeout
+    if self.timeout == LOOTHING_TIMING.NO_TIMEOUT then
+        self.endTime = math.huge
+    else
+        self.endTime = self.startTime + self.timeout
+    end
 
     -- Start the item's voting state
     if self.item and self.item.StartVoting then
         self.item:StartVoting(self.timeout)
     end
 
-    -- Start timer
-    self:StartTimer()
+    -- Start timer (skipped when no-timeout)
+    if self.timeout ~= LOOTHING_TIMING.NO_TIMEOUT then
+        self:StartTimer()
+    end
 
     self:SetState(LOOTHING_VOTING_STATE.VOTING)
     return true
@@ -266,19 +272,27 @@ function LoothingVotingSessionMixin:OnTimerExpired()
 end
 
 --- Get time remaining
--- @return number - Seconds remaining
+-- @return number - Seconds remaining, or math.huge if no-timeout mode
 function LoothingVotingSessionMixin:GetTimeRemaining()
     if self.state ~= LOOTHING_VOTING_STATE.VOTING or not self.endTime then
         return 0
+    end
+
+    if self.endTime == math.huge then
+        return math.huge
     end
 
     return math.max(0, self.endTime - GetTime())
 end
 
 --- Get progress percentage
--- @return number - 0-100
+-- @return number - 0-100 (returns 0 in no-timeout mode)
 function LoothingVotingSessionMixin:GetProgress()
     if self.state ~= LOOTHING_VOTING_STATE.VOTING or not self.startTime then
+        return 0
+    end
+
+    if self.timeout == LOOTHING_TIMING.NO_TIMEOUT then
         return 0
     end
 

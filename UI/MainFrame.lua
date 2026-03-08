@@ -49,14 +49,11 @@ function LoothingMainFrameMixin:CreateFrame()
     frame:SetResizeBounds(500, 400, 900, 700)
     frame:Hide()
 
-    -- Backdrop
-    frame:SetBackdrop({
-        bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
-        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-        tile = true,
-        tileSize = 32,
-        edgeSize = 32,
-        insets = { left = 11, right = 12, top = 12, bottom = 11 },
+    -- Apply skin via LoothingSkinningMixin
+    LoothingSkinningMixin:SetupFrame(frame, "MainFrame", "LoothingMainFrame", {
+        combatMinimize = true,
+        ctrlScroll = true,
+        escapeClose = true,
     })
 
     -- Title
@@ -76,6 +73,24 @@ function LoothingMainFrameMixin:CreateFrame()
     self.closeButton:SetPoint("TOPRIGHT", -5, -5)
     self.closeButton:SetScript("OnClick", function()
         self:Hide()
+    end)
+
+    -- Settings button (gear icon)
+    self.settingsButton = CreateFrame("Button", nil, frame)
+    self.settingsButton:SetSize(24, 24)
+    self.settingsButton:SetPoint("RIGHT", self.closeButton, "LEFT", -4, 0)
+    self.settingsButton:SetNormalTexture("Interface\\Buttons\\UI-OptionsButton")
+    self.settingsButton:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
+    self.settingsButton:SetScript("OnClick", function()
+        self:OpenSettings()
+    end)
+    self.settingsButton:SetScript("OnEnter", function(btn)
+        GameTooltip:SetOwner(btn, "ANCHOR_TOP")
+        GameTooltip:SetText(LOOTHING_LOCALE["TAB_SETTINGS"])
+        GameTooltip:Show()
+    end)
+    self.settingsButton:SetScript("OnLeave", function()
+        GameTooltip:Hide()
     end)
 
     -- Title bar for dragging
@@ -120,11 +135,6 @@ function LoothingMainFrameMixin:CreateFrame()
     self.contentContainer:SetPoint("TOPLEFT", 16, -40 - TAB_HEIGHT)
     self.contentContainer:SetPoint("BOTTOMRIGHT", -16, 16)
 
-    -- Register for ESC to close
-    if UISpecialFrames then
-        tinsert(UISpecialFrames, "LoothingMainFrame")
-    end
-
     self.frame = frame
 end
 
@@ -134,8 +144,8 @@ function LoothingMainFrameMixin:CreateTabs()
 
     local tabDefs = {
         { id = "session", name = L["TAB_SESSION"] },
+        { id = "trade", name = L["TAB_TRADE"] },
         { id = "history", name = L["TAB_HISTORY"] },
-        { id = "settings", name = L["TAB_SETTINGS"] },
     }
 
     local tabWidth = 100
@@ -155,40 +165,72 @@ end
 -- @param xOffset number
 -- @return Frame
 function LoothingMainFrameMixin:CreateTab(id, name, xOffset)
-    local tab = CreateFrame("Button", nil, self.tabContainer)
+    local tab = CreateFrame("Button", nil, self.tabContainer, "BackdropTemplate")
     tab:SetSize(100, TAB_HEIGHT - 4)
     tab:SetPoint("BOTTOMLEFT", xOffset, 0)
 
-    -- Background
-    local bg = tab:CreateTexture(nil, "BACKGROUND")
-    bg:SetAllPoints()
-    bg:SetColorTexture(0.2, 0.2, 0.2, 0.8)
-    tab.bg = bg
+    -- Enhanced backdrop with thicker border
+    tab:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        tile = false,
+        edgeSize = 2,
+        insets = { left = 2, right = 2, top = 2, bottom = 2 },
+    })
+    tab:SetBackdropColor(0.12, 0.12, 0.12, 0.95)
+    tab:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
+
+    -- Background (managed by backdrop now)
+    tab.bg = tab
 
     -- Highlight
     local highlight = tab:CreateTexture(nil, "HIGHLIGHT")
     highlight:SetAllPoints()
-    highlight:SetColorTexture(0.4, 0.4, 0.4, 0.5)
+    highlight:SetColorTexture(1, 1, 1, 0.1)
 
-    -- Selected indicator
-    local selected = tab:CreateTexture(nil, "BORDER")
-    selected:SetPoint("BOTTOMLEFT")
-    selected:SetPoint("BOTTOMRIGHT")
-    selected:SetHeight(3)
-    selected:SetColorTexture(1, 0.82, 0, 1)
-    selected:Hide()
-    tab.selected = selected
+    -- Selection indicator (bottom highlight bar)
+    local selectBar = tab:CreateTexture(nil, "OVERLAY", nil, 7)
+    selectBar:SetHeight(3)
+    selectBar:SetPoint("BOTTOMLEFT", 2, 2)
+    selectBar:SetPoint("BOTTOMRIGHT", -2, 2)
+    selectBar:SetColorTexture(1, 0.82, 0, 1)
+    selectBar:Hide()
+    tab.selectBar = selectBar
+
+    -- Selection glow background - hidden by default
+    local selectGlow = tab:CreateTexture(nil, "BACKGROUND", nil, -1)
+    selectGlow:SetAllPoints()
+    selectGlow:SetColorTexture(0.3, 0.3, 0.5, 0.4)
+    selectGlow:Hide()
+    tab.selectGlow = selectGlow
 
     -- Text
     local text = tab:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     text:SetPoint("CENTER")
     text:SetText(name)
+    text:SetTextColor(0.6, 0.6, 0.6) -- Default dim color
     tab.text = text
 
     tab.id = id
 
     tab:SetScript("OnClick", function()
         self:SelectTab(id)
+    end)
+
+    -- Hover effects
+    tab:SetScript("OnEnter", function(btn)
+        if self.currentTab ~= id then
+            btn:SetBackdropColor(0.2, 0.2, 0.25, 0.95)
+            btn:SetBackdropBorderColor(0.4, 0.4, 0.5, 1)
+            btn.text:SetTextColor(1, 1, 1)
+        end
+    end)
+    tab:SetScript("OnLeave", function(btn)
+        if self.currentTab ~= id then
+            btn:SetBackdropColor(0.12, 0.12, 0.12, 0.95)
+            btn:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
+            btn.text:SetTextColor(0.6, 0.6, 0.6)
+        end
     end)
 
     return tab
@@ -205,6 +247,15 @@ function LoothingMainFrameMixin:CreatePanels()
         panel = CreateLoothingSessionPanel(sessionFrame),
     }
 
+    -- Trade panel
+    local tradeFrame = CreateFrame("Frame", nil, self.contentContainer)
+    tradeFrame:SetAllPoints()
+    tradeFrame:Hide()
+    self.panels.trade = {
+        frame = tradeFrame,
+        panel = CreateLoothingTradePanel(tradeFrame),
+    }
+
     -- History panel
     local historyFrame = CreateFrame("Frame", nil, self.contentContainer)
     historyFrame:SetAllPoints()
@@ -212,15 +263,6 @@ function LoothingMainFrameMixin:CreatePanels()
     self.panels.history = {
         frame = historyFrame,
         panel = CreateLoothingHistoryPanel(historyFrame),
-    }
-
-    -- Settings panel
-    local settingsFrame = CreateFrame("Frame", nil, self.contentContainer)
-    settingsFrame:SetAllPoints()
-    settingsFrame:Hide()
-    self.panels.settings = {
-        frame = settingsFrame,
-        panel = CreateLoothingSettingsPanel(settingsFrame),
     }
 
     -- Select default tab
@@ -242,9 +284,11 @@ function LoothingMainFrameMixin:SelectTab(tabId)
     if self.currentTab then
         local prevTab = self.tabs[self.currentTab]
         if prevTab then
-            prevTab.selected:Hide()
-            prevTab.bg:SetColorTexture(0.2, 0.2, 0.2, 0.8)
-            prevTab.text:SetTextColor(1, 1, 1)
+            prevTab:SetBackdropColor(0.12, 0.12, 0.12, 0.95)
+            prevTab:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
+            if prevTab.selectBar then prevTab.selectBar:Hide() end
+            if prevTab.selectGlow then prevTab.selectGlow:Hide() end
+            prevTab.text:SetTextColor(0.6, 0.6, 0.6)
         end
 
         local prevPanel = self.panels[self.currentTab]
@@ -258,8 +302,10 @@ function LoothingMainFrameMixin:SelectTab(tabId)
 
     local tab = self.tabs[tabId]
     if tab then
-        tab.selected:Show()
-        tab.bg:SetColorTexture(0.3, 0.3, 0.3, 0.9)
+        tab:SetBackdropColor(0.2, 0.2, 0.3, 1)
+        tab:SetBackdropBorderColor(1, 0.82, 0, 1)
+        if tab.selectBar then tab.selectBar:Show() end
+        if tab.selectGlow then tab.selectGlow:Show() end
         tab.text:SetTextColor(1, 0.82, 0)
     end
 
@@ -318,6 +364,27 @@ function LoothingMainFrameMixin:IsShown()
     return self.frame:IsShown()
 end
 
+--- Refresh the currently active panel
+-- Delegates to the current panel's Refresh method if available
+function LoothingMainFrameMixin:Refresh()
+    local currentTab = self.currentTab
+    if not currentTab then return end
+
+    local panelWrapper = self.panels[currentTab]
+    if panelWrapper and panelWrapper.panel and type(panelWrapper.panel.Refresh) == "function" then
+        panelWrapper.panel:Refresh()
+    end
+end
+
+--- Refresh all panels
+function LoothingMainFrameMixin:RefreshAll()
+    for _, panelWrapper in pairs(self.panels) do
+        if panelWrapper and panelWrapper.panel and type(panelWrapper.panel.Refresh) == "function" then
+            panelWrapper.panel:Refresh()
+        end
+    end
+end
+
 --[[--------------------------------------------------------------------
     Position & Size
 ----------------------------------------------------------------------]]
@@ -326,7 +393,7 @@ end
 function LoothingMainFrameMixin:LoadPosition()
     if not Loothing.Settings then return end
 
-    local pos = Loothing.Settings:Get("ui.mainFramePosition")
+    local pos = Loothing.Settings:Get("settings.mainFramePosition")
     if pos then
         self.frame:ClearAllPoints()
         self.frame:SetPoint(pos.point or "CENTER", UIParent, pos.relativePoint or "CENTER", pos.x or 0, pos.y or 0)
@@ -346,7 +413,7 @@ function LoothingMainFrameMixin:SavePosition()
     local point, _, relativePoint, x, y = self.frame:GetPoint()
     local width, height = self.frame:GetSize()
 
-    Loothing.Settings:Set("ui.mainFramePosition", {
+    Loothing.Settings:Set("settings.mainFramePosition", {
         point = point,
         relativePoint = relativePoint,
         x = x,
@@ -360,7 +427,7 @@ end
 function LoothingMainFrameMixin:UpdateScale()
     if not Loothing.Settings then return end
 
-    local scale = Loothing.Settings:Get("ui.scale") or 1.0
+    local scale = Loothing.Settings:Get("settings.uiScale") or 1.0
     self.frame:SetScale(scale)
 end
 
@@ -384,16 +451,23 @@ function LoothingMainFrameMixin:GetSessionPanel()
     return self.panels.session and self.panels.session.panel
 end
 
+--- Get trade panel
+-- @return table
+function LoothingMainFrameMixin:GetTradePanel()
+    return self.panels.trade and self.panels.trade.panel
+end
+
 --- Get history panel
 -- @return table
 function LoothingMainFrameMixin:GetHistoryPanel()
     return self.panels.history and self.panels.history.panel
 end
 
---- Get settings panel
--- @return table
-function LoothingMainFrameMixin:GetSettingsPanel()
-    return self.panels.settings and self.panels.settings.panel
+--- Open the standalone settings dialog
+function LoothingMainFrameMixin:OpenSettings()
+    if LoolibConfig then
+        LoolibConfig:Open("Loothing")
+    end
 end
 
 --[[--------------------------------------------------------------------

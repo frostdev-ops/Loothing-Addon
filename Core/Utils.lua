@@ -7,17 +7,47 @@ local Loolib = LibStub("Loolib")
 
 LoothingUtils = {}
 
+local function IsTestModeEnabled()
+    return (Loothing and Loothing.TestMode and Loothing.TestMode:IsActive())
+        or (LoothingTestMode and LoothingTestMode:IsEnabled())
+end
+
+--[[--------------------------------------------------------------------
+    Version Comparison
+----------------------------------------------------------------------]]
+
+--- Compare two semantic version strings ("major.minor.patch")
+-- @param v1 string
+-- @param v2 string
+-- @return number - -1 if v1 < v2, 0 if equal, 1 if v1 > v2
+function LoothingUtils.CompareVersions(v1, v2)
+    if not v1 or not v2 then return 0 end
+
+    local major1, minor1, patch1 = v1:match("^(%d+)%.(%d+)%.(%d+)")
+    local major2, minor2, patch2 = v2:match("^(%d+)%.(%d+)%.(%d+)")
+
+    major1, minor1, patch1 = tonumber(major1) or 0, tonumber(minor1) or 0, tonumber(patch1) or 0
+    major2, minor2, patch2 = tonumber(major2) or 0, tonumber(minor2) or 0, tonumber(patch2) or 0
+
+    if major1 ~= major2 then return major1 < major2 and -1 or 1 end
+    if minor1 ~= minor2 then return minor1 < minor2 and -1 or 1 end
+    if patch1 ~= patch2 then return patch1 < patch2 and -1 or 1 end
+
+    return 0
+end
+
 --[[--------------------------------------------------------------------
     GUID Generation
 ----------------------------------------------------------------------]]
 
 local guidCounter = 0
+local guidSalt = math.random(0, 0xFFFF)  -- Random per-session salt to prevent cross-reload collisions
 
 --- Generate a unique identifier
--- @return string - Unique ID in format "timestamp-counter"
+-- @return string - Unique ID in format "timestamp-salt-counter"
 function LoothingUtils.GenerateGUID()
     guidCounter = guidCounter + 1
-    return string.format("%d-%d", time(), guidCounter)
+    return string.format("%d-%04x-%d", time(), guidSalt, guidCounter)
 end
 
 --[[--------------------------------------------------------------------
@@ -189,20 +219,40 @@ end
 -- @return boolean
 function LoothingUtils.IsRaidLeaderOrAssistant()
     -- Test mode bypasses raid requirements
-    if LoothingTestMode and LoothingTestMode:IsEnabled() then
+    if IsTestModeEnabled() then
         return true
     end
 
-    if not IsInRaid() then return false end
+    -- In party (non-raid), party leader counts as ML equivalent
+    if not IsInRaid() then
+        return IsInGroup() and UnitIsGroupLeader("player")
+    end
     return UnitIsGroupLeader("player") or UnitIsGroupAssistant("player")
 end
 
+--- Check if player is raid/party leader
+-- @return boolean
+function LoothingUtils.IsRaidLeader()
+    -- Test mode bypasses raid requirements
+    if IsTestModeEnabled() then
+        return true
+    end
+
+    return UnitIsGroupLeader("player")
+end
+
 --- Check if player is the master looter
+-- In WoW 12.0+ Master Loot is removed; falls back to group leader check
 -- @return boolean
 function LoothingUtils.IsMasterLooter()
     -- Test mode bypasses raid requirements
-    if LoothingTestMode and LoothingTestMode:IsEnabled() then
+    if IsTestModeEnabled() then
         return true
+    end
+
+    -- WoW 12.0+ removed GetLootMethod; treat group leader as ML equivalent
+    if not GetLootMethod then
+        return UnitIsGroupLeader("player")
     end
 
     local lootMethod, masterLooterPartyID = GetLootMethod()
@@ -215,40 +265,156 @@ function LoothingUtils.IsMasterLooter()
     return false
 end
 
+--[[--------------------------------------------------------------------
+    Instance Type Utilities
+----------------------------------------------------------------------]]
+
+--- Get current instance type info
+-- @return string instanceType - "none", "party", "raid", "pvp", "arena", "scenario"
+-- @return string difficultyName - e.g. "Normal", "Heroic", "Mythic"
+-- @return number difficultyID
+function LoothingUtils.GetInstanceInfo()
+    local name, instanceType, difficultyID, difficultyName = GetInstanceInfo()
+    return instanceType or "none", difficultyName or "", difficultyID or 0
+end
+
+--- Check if current instance is a PvP, arena, or scenario zone
+-- These instance types should never trigger ML detection
+-- @return boolean
+function LoothingUtils.IsInPvPOrScenario()
+    local instanceType = LoothingUtils.GetInstanceInfo()
+    return instanceType == "pvp" or instanceType == "arena" or instanceType == "scenario"
+end
+
+--- Check if currently in a raid instance
+-- @return boolean
+function LoothingUtils.IsInRaidInstance()
+    local instanceType = LoothingUtils.GetInstanceInfo()
+    return instanceType == "raid"
+end
+
+--- Check if currently in a dungeon instance
+-- @return boolean
+function LoothingUtils.IsInDungeonInstance()
+    local instanceType = LoothingUtils.GetInstanceInfo()
+    return instanceType == "party"
+end
+
+--- Check if the group is a guild group (leader is in our guild)
+-- @return boolean
+function LoothingUtils.IsGuildGroup()
+    if not IsInGuild() then
+        return false
+    end
+
+    -- Check if group/raid leader is in our guild
+    if IsInRaid() then
+        for i = 1, GetNumGroupMembers() do
+            local name, rank = GetRaidRosterInfo(i)
+            if rank == 2 then
+                -- Raid leader found, check if in guild
+                return LoothingUtils.IsPlayerInGuild(name)
+            end
+        end
+    elseif IsInGroup() then
+        -- Party leader
+        if UnitIsGroupLeader("player") then
+            return true  -- We're leader and in a guild
+        end
+        for i = 1, 4 do
+            local unit = "party" .. i
+            if UnitExists(unit) and UnitIsGroupLeader(unit) then
+                return UnitIsInMyGuild(unit)
+            end
+        end
+    end
+
+    return false
+end
+
+--- Check if a player is in our guild
+-- @param name string - Player name
+-- @return boolean
+function LoothingUtils.IsPlayerInGuild(name)
+    if not name or not IsInGuild() then
+        return false
+    end
+
+    local numMembers = GetNumGuildMembers()
+    for i = 1, numMembers do
+        local guildName = GetGuildRosterInfo(i)
+        if guildName then
+            -- Guild names include realm: "Name-Realm"
+            local shortGuild = guildName:match("^([^-]+)") or guildName
+            local shortName = name:match("^([^-]+)") or name
+            if shortGuild == shortName then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
 --- Get raid roster as a table
 -- @return table - Array of { name, rank, class, online, role }
 function LoothingUtils.GetRaidRoster()
     -- Test mode returns fake roster
-    if LoothingTestMode and LoothingTestMode:IsEnabled() then
+    if IsTestModeEnabled() and LoothingTestMode then
         return LoothingTestMode:GetFakeRaidRoster()
     end
 
     local roster = {}
 
-    if not IsInRaid() then
-        return roster
-    end
+    if IsInRaid() then
+        local numMembers = GetNumGroupMembers()
+        for i = 1, numMembers do
+            local name, rank, subgroup, level, class, fileName, zone,
+                  online, isDead, role, isML, assignedRole = GetRaidRosterInfo(i)
 
-    local numMembers = GetNumGroupMembers()
-    for i = 1, numMembers do
-        local name, rank, subgroup, level, class, fileName, zone,
-              online, isDead, role, isML, assignedRole = GetRaidRosterInfo(i)
-
-        if name then
-            roster[#roster + 1] = {
-                name = LoothingUtils.NormalizeName(name),
-                shortName = name,
-                rank = rank,
-                subgroup = subgroup,
-                level = level,
-                class = class,
-                classFile = fileName,
-                online = online,
-                isDead = isDead,
-                role = assignedRole or role,
-                isMasterLooter = isML,
-            }
+            if name then
+                roster[#roster + 1] = {
+                    name = LoothingUtils.NormalizeName(name),
+                    shortName = name,
+                    rank = rank,
+                    subgroup = subgroup,
+                    level = level,
+                    class = class,
+                    classFile = fileName,
+                    online = online,
+                    isDead = isDead,
+                    role = assignedRole or role,
+                    isMasterLooter = isML,
+                }
+            end
         end
+    elseif IsInGroup() then
+        -- Party group fallback (up to 4 party members + self)
+        local units = { "player" }
+        for i = 1, GetNumSubgroupMembers() do
+            units[#units + 1] = "party" .. i
+        end
+        for _, unit in ipairs(units) do
+            local name = UnitName(unit)
+            if name then
+                local localizedClass, classFile = UnitClass(unit)
+                local isLeader = UnitIsGroupLeader(unit)
+                local isAssistant = UnitIsGroupAssistant(unit)
+                roster[#roster + 1] = {
+                    name = LoothingUtils.NormalizeName(name),
+                    shortName = name,
+                    rank = isLeader and 2 or (isAssistant and 1 or 0),
+                    class = localizedClass,
+                    classFile = classFile,
+                    online = UnitIsConnected(unit),
+                    isDead = UnitIsDead(unit),
+                    role = UnitGroupRolesAssigned(unit),
+                    isMasterLooter = false,
+                }
+            end
+        end
+    else
+        Loothing:Debug("GetRaidRoster: not in any group, returning empty roster")
     end
 
     return roster

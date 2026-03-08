@@ -24,6 +24,13 @@ local TRADE_QUEUE_EVENTS = {
 -- Trade window is 2 hours
 local TRADE_WINDOW_SECONDS = 2 * 60 * 60
 
+-- Warning thresholds (seconds remaining)
+local TRADE_WARNING_20MIN = 20 * 60
+local TRADE_WARNING_5MIN = 5 * 60
+
+-- How often to check trade timers (seconds)
+local TRADE_TIMER_CHECK_INTERVAL = 60
+
 --- Initialize the trade queue
 function LoothingTradeQueueMixin:Init()
     LoolibCallbackRegistryMixin.OnLoad(self)
@@ -38,8 +45,14 @@ function LoothingTradeQueueMixin:Init()
     self.isTrading = false
     self.itemsInTradeWindow = {}
 
+    -- Tracks which warnings have already been shown (itemGUID -> { warned20 = bool, warned5 = bool })
+    self.warningsSent = {}
+
     -- Register for WoW trade events
     self:RegisterEvents()
+
+    -- Start periodic trade timer check
+    self:StartTimerCheck()
 end
 
 --[[--------------------------------------------------------------------
@@ -227,9 +240,9 @@ function LoothingTradeQueueMixin:OnTradeShow()
         target = UnitName("NPC") or "Unknown"
     end
 
-    -- Remove "(*)" for cross-realm
-    if target:find("(*)") then
-        target = string.sub(target, 1, -4)
+    -- Remove "(*)" for cross-realm (use plain find to avoid pattern errors)
+    if target:find("(*)", 1, true) then
+        target = target:gsub(" ?%(%*%)", "")
     end
 
     self.tradeTarget = LoothingUtils.NormalizeName(target)
@@ -271,7 +284,7 @@ end
 -- @param playerAccepted boolean - Has player accepted
 -- @param targetAccepted boolean - Has target accepted
 function LoothingTradeQueueMixin:OnTradeAcceptUpdate(playerAccepted, targetAccepted)
-    if playerAccepted == 1 or targetAccepted == 1 then
+    if playerAccepted or targetAccepted then
         -- Record what we're trading
         wipe(self.itemsInTradeWindow)
 
@@ -289,7 +302,10 @@ end
 -- @param messageType number - Message type
 -- @param message string - Message text
 function LoothingTradeQueueMixin:OnUIInfoMessage(messageType, message)
-    if messageType == LE_GAME_ERR_TRADE_COMPLETE then
+    -- Handle both legacy LE_ and modern Enum.GameError constants
+    local TRADE_COMPLETE = LE_GAME_ERR_TRADE_COMPLETE
+        or (Enum.GameError and Enum.GameError.TradeComplete)
+    if TRADE_COMPLETE and messageType == TRADE_COMPLETE then
         Loothing:Debug("Trade completed with:", self.tradeTarget)
 
         -- Mark traded items as complete
@@ -428,18 +444,288 @@ function LoothingTradeQueueMixin:MarkItemTraded(itemLink, tradedTo)
 end
 
 --[[--------------------------------------------------------------------
-    Persistence (SavedVariables)
+    Tooltip-Based Trade Timer Parsing
 ----------------------------------------------------------------------]]
 
---- Load queue from SavedVariables
+--- Get trade time remaining for a bag slot by parsing the tooltip
+-- Handles multiple locale time formats and returns precise seconds.
+-- @param container number - Bag index
+-- @param slot number - Slot index
+-- @return number - Seconds remaining: math.huge for unbound, 0 for soulbound, >0 for tradeable
+function LoothingTradeQueueMixin:GetContainerItemTradeTimeRemaining(container, slot)
+    if not container or not slot then
+        return 0
+    end
+
+    -- Check basic item info first
+    local info = C_Container.GetContainerItemInfo(container, slot)
+    if not info then
+        return 0
+    end
+
+    -- Create a scanning tooltip
+    local tooltipName = "LoothingTradeQueueScanTooltip"
+    local tooltip = _G[tooltipName]
+    if not tooltip then
+        tooltip = CreateFrame("GameTooltip", tooltipName, nil, "GameTooltipTemplate")
+    end
+
+    tooltip:SetOwner(UIParent, "ANCHOR_NONE")
+    tooltip:SetBagItem(container, slot)
+
+    local result = 0
+
+    -- Use Blizzard's BIND_TRADE_TIME_REMAINING global constant for locale-independent
+    -- tooltip parsing. The constant contains a format string like "You may trade this
+    -- item with players that were also eligible to loot this item for %s."
+    -- We search for its presence and extract the time string from the tooltip text.
+    local tradePattern = BIND_TRADE_TIME_REMAINING
+    local boeText = ITEM_BIND_ON_EQUIP
+    local soulboundText = ITEM_SOULBOUND
+
+    for i = 1, tooltip:NumLines() do
+        local line = _G[tooltipName .. "TextLeft" .. i]
+        if line then
+            local text = line:GetText()
+            if text then
+                -- Check for trade time remaining using Blizzard's localized constant
+                if tradePattern then
+                    -- Build a plain-text anchor from the constant (text before the %s placeholder)
+                    local anchor = tradePattern:match("^(.-)%%s")
+                    if anchor and anchor ~= "" then
+                        local anchorStart, anchorEnd = text:find(anchor, 1, true)
+                        if anchorStart then
+                            -- Extract the time portion after the anchor
+                            local timeStr = text:sub(anchorEnd + 1)
+                            -- Parse hours and minutes from the time string
+                            local hours = timeStr:match("(%d+)%s*%a") and tonumber(timeStr:match("(%d+)")) or 0
+                            local minutes = 0
+                            -- Try to extract a second number for minutes
+                            local h, m = timeStr:match("(%d+).-(%d+)")
+                            if h then
+                                hours = tonumber(h) or 0
+                                minutes = tonumber(m) or 0
+                            end
+                            result = hours * 3600 + minutes * 60
+                            if result == 0 then result = 60 end -- At least 1 minute if pattern matched
+                            break
+                        end
+                    end
+                end
+
+                -- Fallback: try direct time patterns for any edge cases
+                local hours = text:match("(%d+)%s*hour") or text:match("(%d+)%s*hr")
+                local minutes = text:match("(%d+)%s*min")
+                if hours or minutes then
+                    result = (tonumber(hours) or 0) * 3600 + (tonumber(minutes) or 0) * 60
+                    break
+                end
+
+                -- Check for BoE items using localized constant
+                if boeText and text:find(boeText, 1, true) then
+                    result = math.huge
+                    break
+                end
+
+                -- Check for soulbound using localized constant
+                if soulboundText and text:find(soulboundText, 1, true) then
+                    result = 0
+                    break
+                end
+            end
+        end
+    end
+
+    tooltip:Hide()
+    return result
+end
+
+--[[--------------------------------------------------------------------
+    Item Bag Watching
+----------------------------------------------------------------------]]
+
+--- Watch for a specific item to appear in bags (e.g., after looting)
+-- Polls bags periodically and calls onFound or onFail.
+-- @param itemLink string - Item link to watch for
+-- @param onFound function(bag, slot, timeRemaining) - Called when found
+-- @param onFail function() - Called when max attempts exceeded
+-- @param maxAttempts number|nil - Max attempts (default: 20, at 0.5s intervals)
+function LoothingTradeQueueMixin:WatchForItemInBags(itemLink, onFound, onFail, maxAttempts)
+    maxAttempts = maxAttempts or 20
+    local attempt = 0
+    local delay = 0.5
+
+    local function check()
+        attempt = attempt + 1
+
+        -- Scan bags for the item
+        for bag = 0, NUM_BAG_SLOTS do
+            local numSlots = C_Container.GetContainerNumSlots(bag)
+            for slot = 1, numSlots do
+                local bagItemLink = C_Container.GetContainerItemLink(bag, slot)
+                if bagItemLink then
+                    local targetID = LoothingUtils.GetItemID(itemLink)
+                    local foundID = LoothingUtils.GetItemID(bagItemLink)
+
+                    if targetID and foundID and targetID == foundID then
+                        local timeRemaining = self:GetContainerItemTradeTimeRemaining(bag, slot)
+
+                        Loothing:Debug("WatchForItemInBags: found", itemLink, "at", bag, slot)
+                        if onFound then
+                            onFound(bag, slot, timeRemaining)
+                        end
+                        return
+                    end
+                end
+            end
+        end
+
+        -- Not found yet
+        if attempt < maxAttempts then
+            C_Timer.After(delay, check)
+        else
+            Loothing:Debug("WatchForItemInBags: failed after", maxAttempts, "attempts for", itemLink)
+            if onFail then
+                onFail()
+            end
+        end
+    end
+
+    C_Timer.After(delay, check)
+end
+
+--[[--------------------------------------------------------------------
+    Tradable/Non-Tradable Comms
+----------------------------------------------------------------------]]
+
+--- Send tradable item notification to group
+-- Called when the player loots an item that has a trade window
+-- @param itemLink string - Item link
+-- @param timeRemaining number - Seconds remaining in trade window
+function LoothingTradeQueueMixin:SendTradableComm(itemLink, timeRemaining)
+    if not Loothing.Comm or not Loothing.Comm.Send then return end
+
+    Loothing.Comm:Send(LOOTHING_MSG_TYPE.TRADABLE, {
+        itemLink = itemLink,
+        timeRemaining = timeRemaining,
+    }, "group")
+
+    Loothing:Debug("Sent TRADABLE comm for", itemLink)
+end
+
+--- Send non-tradable item notification to group
+-- Called when the player loots an item that is soulbound
+-- @param itemLink string - Item link
+function LoothingTradeQueueMixin:SendNonTradableComm(itemLink)
+    if not Loothing.Comm or not Loothing.Comm.Send then return end
+
+    Loothing.Comm:Send(LOOTHING_MSG_TYPE.NON_TRADABLE, {
+        itemLink = itemLink,
+    }, "group")
+
+    Loothing:Debug("Sent NON_TRADABLE comm for", itemLink)
+end
+
+--- Handle a recently looted item - determine if tradable and broadcast
+-- @param itemLink string - Item link that was just looted
+function LoothingTradeQueueMixin:UpdateAndSendRecentTradableItem(itemLink)
+    self:WatchForItemInBags(itemLink,
+        function(bag, slot, timeRemaining)
+            if timeRemaining and timeRemaining > 0 then
+                self:SendTradableComm(itemLink, timeRemaining)
+            else
+                self:SendNonTradableComm(itemLink)
+            end
+        end,
+        function()
+            -- Item not found in bags - might have been auto-looted elsewhere
+            Loothing:Debug("UpdateAndSendRecentTradableItem: could not find", itemLink)
+        end
+    )
+end
+
+--[[--------------------------------------------------------------------
+    Periodic Trade Timer Check
+----------------------------------------------------------------------]]
+
+--- Start periodic trade timer checking
+-- Checks all queued items for approaching trade window expiry
+function LoothingTradeQueueMixin:StartTimerCheck()
+    C_Timer.NewTicker(TRADE_TIMER_CHECK_INTERVAL, function()
+        self:CheckTradeTimers()
+    end)
+end
+
+--- Check all pending items and warn if trade window is expiring
+function LoothingTradeQueueMixin:CheckTradeTimers()
+    for _, entry in self.queue:Enumerate() do
+        if not entry.traded then
+            local remaining = self:GetTimeRemaining(entry)
+
+            if remaining <= 0 then
+                -- Already expired, skip
+            else
+                local warnings = self.warningsSent[entry.itemGUID]
+                if not warnings then
+                    warnings = {}
+                    self.warningsSent[entry.itemGUID] = warnings
+                end
+
+                -- 20-minute warning
+                if remaining <= TRADE_WARNING_20MIN and not warnings.warned20 then
+                    warnings.warned20 = true
+                    local minutesLeft = math.floor(remaining / 60)
+                    Loothing:Print(string.format(
+                        "|cffff9900Warning:|r Trade window for %s (awarded to %s) expires in %d minutes!",
+                        entry.itemLink,
+                        LoothingUtils.GetShortName(entry.winner),
+                        minutesLeft
+                    ))
+                end
+
+                -- 5-minute warning
+                if remaining <= TRADE_WARNING_5MIN and not warnings.warned5 then
+                    warnings.warned5 = true
+                    local minutesLeft = math.floor(remaining / 60)
+                    Loothing:Print(string.format(
+                        "|cffff0000URGENT:|r Trade window for %s (awarded to %s) expires in %d minutes!",
+                        entry.itemLink,
+                        LoothingUtils.GetShortName(entry.winner),
+                        minutesLeft
+                    ))
+                end
+            end
+        end
+    end
+
+    -- Clean up warnings for removed/traded items
+    for itemGUID in pairs(self.warningsSent) do
+        if not self:GetQueuedItem(itemGUID) then
+            self.warningsSent[itemGUID] = nil
+        end
+    end
+end
+
+--[[--------------------------------------------------------------------
+    Persistence (SavedVariables - Global Scope)
+----------------------------------------------------------------------]]
+
+--- Load queue from SavedVariables (uses global scope for cross-profile persistence)
 function LoothingTradeQueueMixin:LoadFromDatabase()
-    if not LoothingDB or not LoothingDB.tradeQueue then
+    local stored
+    if Loothing.Settings and Loothing.Settings.GetGlobalValue then
+        stored = Loothing.Settings:GetGlobalValue("tradeQueue", {})
+    elseif LoothingDB and LoothingDB.tradeQueue then
+        stored = LoothingDB.tradeQueue
+    end
+
+    if not stored or type(stored) ~= "table" then
         return
     end
 
     self.queue:Flush()
 
-    for _, entry in ipairs(LoothingDB.tradeQueue) do
+    for _, entry in ipairs(stored) do
         -- Only load entries still within trade window
         if self:IsWithinTradeWindow(entry) then
             self.queue:Insert(entry)
@@ -449,18 +735,14 @@ function LoothingTradeQueueMixin:LoadFromDatabase()
     Loothing:Debug("Loaded", self.queue:GetSize(), "items from trade queue")
 end
 
---- Save queue to SavedVariables
+--- Save queue to SavedVariables (uses global scope)
 function LoothingTradeQueueMixin:SaveToDatabase()
-    if not LoothingDB then
-        LoothingDB = {}
-    end
-
-    LoothingDB.tradeQueue = {}
+    local entries = {}
 
     for _, entry in self.queue:Enumerate() do
         -- Only save entries still within trade window
         if self:IsWithinTradeWindow(entry) then
-            LoothingDB.tradeQueue[#LoothingDB.tradeQueue + 1] = {
+            entries[#entries + 1] = {
                 itemGUID = entry.itemGUID,
                 itemLink = entry.itemLink,
                 winner = entry.winner,
@@ -471,7 +753,13 @@ function LoothingTradeQueueMixin:SaveToDatabase()
         end
     end
 
-    Loothing:Debug("Saved", #LoothingDB.tradeQueue, "items to trade queue")
+    if Loothing.Settings and Loothing.Settings.SetGlobalValue then
+        Loothing.Settings:SetGlobalValue("tradeQueue", entries)
+    elseif LoothingDB then
+        LoothingDB.tradeQueue = entries
+    end
+
+    Loothing:Debug("Saved", #entries, "items to trade queue")
 end
 
 --[[--------------------------------------------------------------------

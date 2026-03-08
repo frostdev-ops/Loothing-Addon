@@ -34,30 +34,47 @@ end
 --- Create UI elements
 function LoothingItemRowMixin:CreateElements()
     -- Main frame
-    self.frame = CreateFrame("Button", nil, self.parent)
+    self.frame = CreateFrame("Button", nil, self.parent, "BackdropTemplate")
     self.frame:SetHeight(ROW_HEIGHT)
     self.frame.mixin = self
 
-    -- Background
-    self.bg = self.frame:CreateTexture(nil, "BACKGROUND")
-    self.bg:SetAllPoints()
-    self.bg:SetColorTexture(0.1, 0.1, 0.1, 0.5)
+    -- Enhanced backdrop
+    self.frame:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        tile = false,
+        edgeSize = 1,
+        insets = { left = 0, right = 0, top = 0, bottom = 0 },
+    })
+    self.frame:SetBackdropColor(0.12, 0.12, 0.12, 0.8)
+    self.frame:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
+
+    -- Background (alias to frame for color updates)
+    self.bg = self.frame
 
     -- Highlight
     self.highlight = self.frame:CreateTexture(nil, "HIGHLIGHT")
     self.highlight:SetAllPoints()
-    self.highlight:SetColorTexture(1, 1, 1, 0.1)
+    self.highlight:SetColorTexture(1, 1, 1, 0.05)
 
-    -- Selection indicator
-    self.selection = self.frame:CreateTexture(nil, "BORDER")
+    -- Selection indicator (glow)
+    self.selection = self.frame:CreateTexture(nil, "BACKGROUND", nil, -1)
     self.selection:SetAllPoints()
-    self.selection:SetColorTexture(0.3, 0.5, 0.8, 0.3)
+    self.selection:SetColorTexture(0.3, 0.3, 0.5, 0.3)
     self.selection:Hide()
+
+    -- Selection border (overlay)
+    self.selectionBorder = self.frame:CreateTexture(nil, "OVERLAY", nil, 7)
+    self.selectionBorder:SetPoint("TOPLEFT")
+    self.selectionBorder:SetPoint("BOTTOMLEFT")
+    self.selectionBorder:SetWidth(3)
+    self.selectionBorder:SetColorTexture(1, 0.82, 0, 1)
+    self.selectionBorder:Hide()
 
     -- Item icon
     self.icon = self.frame:CreateTexture(nil, "ARTWORK")
     self.icon:SetSize(ICON_SIZE, ICON_SIZE)
-    self.icon:SetPoint("LEFT", PADDING, 0)
+    self.icon:SetPoint("LEFT", PADDING + 4, 0)
 
     -- Icon border (quality color)
     self.iconBorder = self.frame:CreateTexture(nil, "OVERLAY")
@@ -67,8 +84,7 @@ function LoothingItemRowMixin:CreateElements()
 
     -- Item name
     self.nameText = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    self.nameText:SetPoint("TOPLEFT", self.icon, "TOPRIGHT", PADDING, -2)
-    self.nameText:SetPoint("RIGHT", -150, 0)
+    self.nameText:SetPoint("TOPLEFT", self.icon, "TOPRIGHT", PADDING + 2, -2)
     self.nameText:SetJustifyH("LEFT")
     self.nameText:SetWordWrap(false)
 
@@ -84,21 +100,25 @@ function LoothingItemRowMixin:CreateElements()
     self.slotText:SetJustifyH("LEFT")
     self.slotText:SetTextColor(0.7, 0.7, 0.7)
 
-    -- Status text
+    -- Action button (rightmost element in chain)
+    self.actionButton = CreateFrame("Button", nil, self.frame, "UIPanelButtonTemplate")
+    self.actionButton:SetSize(70, 22)
+    self.actionButton:SetPoint("RIGHT", -PADDING, 0)
+
+    -- Status text (left of action button)
     self.statusText = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    self.statusText:SetPoint("RIGHT", -100, 0)
+    self.statusText:SetPoint("RIGHT", self.actionButton, "LEFT", -8, 0)
     self.statusText:SetJustifyH("RIGHT")
 
-    -- Vote count / Timer
+    -- Vote count / Timer (left of status text)
     self.infoText = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     self.infoText:SetPoint("RIGHT", self.statusText, "LEFT", -8, 0)
     self.infoText:SetJustifyH("RIGHT")
     self.infoText:SetTextColor(1, 1, 1)
 
-    -- Action button
-    self.actionButton = CreateFrame("Button", nil, self.frame, "UIPanelButtonTemplate")
-    self.actionButton:SetSize(70, 22)
-    self.actionButton:SetPoint("RIGHT", -PADDING, 0)
+    -- Anchor name text to flow up to the info/status chain
+    self.nameText:SetPoint("RIGHT", self.infoText, "LEFT", -8, 0)
+
     self.actionButton:SetScript("OnClick", function()
         self:OnActionClick()
     end)
@@ -211,7 +231,10 @@ function LoothingItemRowMixin:UpdateStatus()
         local voteCount = self.item:GetVoteCount()
         local timeRemaining = self.item:GetTimeRemaining()
 
-        if timeRemaining > 0 then
+        if timeRemaining == math.huge then
+            self.infoText:SetText(L["NO_LIMIT"] or "No Limit")
+            self.infoText:SetTextColor(0.2, 0.8, 0.2)
+        elseif timeRemaining > 0 then
             self.infoText:SetText(string.format("%ds", math.ceil(timeRemaining)))
             self.infoText:SetTextColor(1, 1, 0)
         else
@@ -262,7 +285,7 @@ function LoothingItemRowMixin:UpdateActionButton()
 
     elseif state == LOOTHING_ITEM_STATE.VOTING then
         if isCouncil then
-            local hasVoted = self.item:HasVoted(LoothingUtils.GetPlayerName())
+            local hasVoted = self.item:HasVoted(LoothingUtils.GetPlayerFullName())
             if hasVoted then
                 self.actionButton:SetText(L["CHANGE_VOTE"])
             else
@@ -305,7 +328,7 @@ function LoothingItemRowMixin:UpdateWinner()
         local winnerName = LoothingUtils.GetShortName(self.item.winner)
         -- Try to get class color
         local coloredName = winnerName
-        if IsInRaid() then
+        if IsInGroup() then
             local roster = LoothingUtils.GetRaidRoster()
             for _, entry in ipairs(roster) do
                 if LoothingUtils.IsSamePlayer(self.item.winner, entry.name) then
@@ -348,8 +371,14 @@ function LoothingItemRowMixin:SetSelected(selected)
 
     if selected then
         self.selection:Show()
+        self.selectionBorder:Show()
+        self.frame:SetBackdropColor(0.2, 0.2, 0.3, 0.9)
+        self.frame:SetBackdropBorderColor(0.5, 0.5, 0.6, 1)
     else
         self.selection:Hide()
+        self.selectionBorder:Hide()
+        self.frame:SetBackdropColor(0.12, 0.12, 0.12, 0.8)
+        self.frame:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
     end
 end
 
@@ -453,76 +482,48 @@ function LoothingItemRowMixin:ShowContextMenu()
     local L = LOOTHING_LOCALE
     local isML = LoothingUtils.IsRaidLeaderOrAssistant()
 
-    local menu = {
-        { text = self.item.name or "Item", isTitle = true, notCheckable = true },
-    }
+    MenuUtil.CreateContextMenu(self.frame, function(ownerRegion, rootDescription)
+        rootDescription:CreateTitle(self.item.name or "Item")
 
-    if isML then
-        if self.item.state == LOOTHING_ITEM_STATE.PENDING then
-            table.insert(menu, {
-                text = L["START_VOTE"],
-                notCheckable = true,
-                func = function()
+        if isML then
+            if self.item.state == LOOTHING_ITEM_STATE.PENDING then
+                rootDescription:CreateButton(L["START_VOTE"], function()
                     if self.callbacks.onStartVote then
                         self.callbacks.onStartVote(self, self.item)
                     end
-                end
-            })
-            table.insert(menu, {
-                text = L["SKIP_ITEM"],
-                notCheckable = true,
-                func = function()
+                end)
+                rootDescription:CreateButton(L["SKIP_ITEM"], function()
                     if self.callbacks.onSkip then
                         self.callbacks.onSkip(self, self.item)
                     end
-                end
-            })
-        elseif self.item.state == LOOTHING_ITEM_STATE.VOTING then
-            table.insert(menu, {
-                text = L["END_VOTE"],
-                notCheckable = true,
-                func = function()
+                end)
+            elseif self.item.state == LOOTHING_ITEM_STATE.VOTING then
+                rootDescription:CreateButton(L["END_VOTE"], function()
                     if self.callbacks.onEndVote then
                         self.callbacks.onEndVote(self, self.item)
                     end
-                end
-            })
-        elseif self.item.state == LOOTHING_ITEM_STATE.TALLIED then
-            table.insert(menu, {
-                text = L["AWARD"],
-                notCheckable = true,
-                func = function()
+                end)
+            elseif self.item.state == LOOTHING_ITEM_STATE.TALLIED then
+                rootDescription:CreateButton(L["AWARD"], function()
                     if self.callbacks.onAward then
                         self.callbacks.onAward(self, self.item)
                     end
-                end
-            })
-            table.insert(menu, {
-                text = L["RE_VOTE"],
-                notCheckable = true,
-                func = function()
+                end)
+                rootDescription:CreateButton(L["RE_VOTE"], function()
                     if self.callbacks.onRevote then
                         self.callbacks.onRevote(self, self.item)
                     end
-                end
-            })
-        end
-    end
-
-    -- Link in chat
-    if self.item.itemLink then
-        table.insert(menu, {
-            text = L["LINK_IN_CHAT"],
-            notCheckable = true,
-            func = function()
-                ChatEdit_InsertLink(self.item.itemLink)
+                end)
             end
-        })
-    end
+        end
 
-    if EasyMenu and #menu > 1 then
-        EasyMenu(menu, CreateFrame("Frame", "LoothingItemRowMenu", UIParent, "UIDropDownMenuTemplate"), "cursor", 0, 0, "MENU")
-    end
+        -- Link in chat
+        if self.item.itemLink then
+            rootDescription:CreateButton(L["LINK_IN_CHAT"], function()
+                ChatEdit_InsertLink(self.item.itemLink)
+            end)
+        end
+    end)
 end
 
 --[[--------------------------------------------------------------------

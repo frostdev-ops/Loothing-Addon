@@ -20,7 +20,7 @@ function LoothingRollTrackerMixin:Init()
     -- Register for CHAT_MSG_SYSTEM
     local Events = Loothing.Loolib.Events
     if Events and Events.Registry then
-        Events.Registry:RegisterEventCallback("CHAT_MSG_SYSTEM", function(text)
+        Events.Registry:RegisterEventCallback("CHAT_MSG_SYSTEM", function(_, text)
             self:OnChatMessage(text)
         end, self)
     end
@@ -73,6 +73,11 @@ function LoothingRollTrackerMixin:RecordRoll(playerName, roll, minRoll, maxRoll)
 
     -- Clean up old rolls (older than 5 minutes)
     self:CleanupOldRolls()
+
+    -- Bridge to Session for auto-add rolls
+    if Loothing.Session and Loothing.Session.HandleRollTracked then
+        Loothing.Session:HandleRollTracked(playerName, roll, minRoll, maxRoll)
+    end
 end
 
 --- Get roll for a player

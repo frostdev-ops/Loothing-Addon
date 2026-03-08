@@ -27,6 +27,7 @@ function LoothingTradePanelMixin:Init(parent)
 
     self.parent = parent
     self.rows = {}
+    self.rowPool = {} -- hidden rows available for reuse
     self.updateTimer = nil
 
     self:CreateFrame()
@@ -98,13 +99,13 @@ function LoothingTradePanelMixin:CreateList()
     container:SetPoint("BOTTOMRIGHT", -8, 50)
     container:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true,
-        tileSize = 8,
-        edgeSize = 12,
-        insets = { left = 2, right = 2, top = 2, bottom = 2 },
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        tile = false,
+        edgeSize = 1,
+        insets = { left = 1, right = 1, top = 1, bottom = 1 },
     })
     container:SetBackdropColor(0.05, 0.05, 0.05, 0.9)
+    container:SetBackdropBorderColor(0.2, 0.2, 0.2, 1)
 
     -- Column headers
     local headerFrame = CreateFrame("Frame", nil, container)
@@ -140,8 +141,12 @@ function LoothingTradePanelMixin:CreateList()
     scrollFrame:SetPoint("BOTTOMRIGHT", -24, 4)
 
     local content = CreateFrame("Frame", nil, scrollFrame)
-    content:SetSize(scrollFrame:GetWidth(), 800)
+    content:SetSize(1, 800)
     scrollFrame:SetScrollChild(content)
+
+    scrollFrame:SetScript("OnSizeChanged", function(sf, w, h)
+        content:SetWidth(w)
+    end)
 
     self.listContainer = container
     self.listContent = content
@@ -263,9 +268,14 @@ end
 
 --- Refresh the list
 function LoothingTradePanelMixin:RefreshList()
-    -- Clear existing rows
+    -- Return active rows to the pool
     for _, row in ipairs(self.rows) do
+        if row.flashTicker then
+            row.flashTicker:Cancel()
+            row.flashTicker = nil
+        end
         row:Hide()
+        self.rowPool[#self.rowPool + 1] = row
     end
     wipe(self.rows)
 
@@ -291,7 +301,6 @@ function LoothingTradePanelMixin:RefreshList()
         if not entry.traded then
             local row = self:GetOrCreateRow()
             row:SetEntry(entry)
-            row:SetWidth(self.listContent:GetWidth())
 
             row:SetPoint("TOPLEFT", 0, yOffset)
             row:SetPoint("TOPRIGHT", 0, yOffset)
@@ -305,21 +314,83 @@ function LoothingTradePanelMixin:RefreshList()
     -- Update content height
     self.listContent:SetHeight(math.abs(yOffset) + 20)
 
-    -- Start update timer if not already running
-    if not self.updateTimer then
+    -- Cancel existing timer before potentially recreating
+    if self.updateTimer then
+        self.updateTimer:Cancel()
+        self.updateTimer = nil
+    end
+
+    -- Only start ticker if there are visible rows to update
+    if #self.rows > 0 then
         self.updateTimer = C_Timer.NewTicker(1, function()
             self:UpdateTimers()
         end)
     end
 end
 
---- Update time remaining on rows
+--- Update time remaining on rows (with flash warnings at 20min and 5min)
 function LoothingTradePanelMixin:UpdateTimers()
     for _, row in ipairs(self.rows) do
         if row:IsShown() then
             row:UpdateTimeRemaining()
+
+            -- Flash warnings at critical thresholds
+            if row.entry and Loothing.TradeQueue then
+                local remaining = Loothing.TradeQueue:GetTimeRemaining(row.entry)
+                local entryKey = row.entry.itemGUID or ""
+
+                if not self.warningsSent then self.warningsSent = {} end
+
+                -- 20-minute warning
+                if remaining <= 1200 and remaining > 1195 and not self.warningsSent[entryKey .. "_20m"] then
+                    self.warningsSent[entryKey .. "_20m"] = true
+                    local name = LoothingUtils.GetItemName(row.entry.itemLink) or "Item"
+                    local winner = LoothingUtils.GetShortName(row.entry.winner)
+                    Loothing:Warn(string.format("Trade window for %s -> %s expires in 20 minutes!", name, winner))
+                    self:FlashRow(row)
+                end
+
+                -- 5-minute warning
+                if remaining <= 300 and remaining > 295 and not self.warningsSent[entryKey .. "_5m"] then
+                    self.warningsSent[entryKey .. "_5m"] = true
+                    local name = LoothingUtils.GetItemName(row.entry.itemLink) or "Item"
+                    local winner = LoothingUtils.GetShortName(row.entry.winner)
+                    Loothing:Warn(string.format("URGENT: Trade window for %s -> %s expires in 5 minutes!", name, winner))
+                    self:FlashRow(row)
+                end
+            end
         end
     end
+end
+
+--- Flash a row to draw attention
+-- @param row Frame
+function LoothingTradePanelMixin:FlashRow(row)
+    if not row or not row.bg then return end
+
+    -- Cancel any in-progress flash for this row
+    if row.flashTicker then
+        row.flashTicker:Cancel()
+        row.flashTicker = nil
+    end
+
+    -- Flash the background red briefly
+    local flashCount = 0
+    row.flashTicker = C_Timer.NewTicker(0.3, function()
+        flashCount = flashCount + 1
+        if flashCount % 2 == 1 then
+            row.bg:SetColorTexture(0.6, 0.1, 0.1, 0.7)
+            row.bg:Show()
+        else
+            row.bg:SetColorTexture(0.1, 0.1, 0.1, 0.5)
+            row.bg:Hide()
+        end
+        if flashCount >= 6 then
+            row.bg:SetColorTexture(0.1, 0.1, 0.1, 0.5)
+            row.bg:Hide()
+            row.flashTicker = nil
+        end
+    end, 6)
 end
 
 --[[--------------------------------------------------------------------
@@ -329,11 +400,9 @@ end
 --- Get or create a row frame
 -- @return Frame - Trade row
 function LoothingTradePanelMixin:GetOrCreateRow()
-    -- Reuse hidden row
-    for _, row in ipairs(self.rows) do
-        if not row:IsShown() then
-            return row
-        end
+    -- Reuse a pooled row
+    if #self.rowPool > 0 then
+        return table.remove(self.rowPool)
     end
 
     -- Create new row
@@ -374,6 +443,18 @@ function LoothingTradePanelMixin:CreateRow()
     -- Time remaining text
     row.timeText = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     row.timeText:SetPoint("RIGHT", -70, 0)
+
+    -- Trade button
+    row.tradeButton = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+    row.tradeButton:SetSize(50, 20)
+    row.tradeButton:SetPoint("RIGHT", -32, 0)
+    row.tradeButton:SetText("Trade")
+
+    -- Arrow indicator (shows direction: you -> winner)
+    row.arrowText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    row.arrowText:SetPoint("RIGHT", row.winnerButton, "LEFT", -4, 0)
+    row.arrowText:SetText("->")
+    row.arrowText:SetTextColor(0.5, 0.8, 0.5)
 
     -- Remove button
     row.removeButton = CreateFrame("Button", nil, row)
@@ -431,15 +512,42 @@ function LoothingTradePanelMixin:CreateRow()
             end
         end)
 
+        -- Helper: find UnitId for a player name
+        local function FindUnitIdForPlayer(playerName)
+            local shortName = Ambiguate(playerName, "short")
+            for i = 1, GetNumGroupMembers() do
+                local unit = IsInRaid() and ("raid" .. i) or ("party" .. i)
+                if UnitExists(unit) and UnitName(unit) == shortName then
+                    return unit
+                end
+            end
+            if UnitExists("target") and UnitName("target") == shortName then
+                return "target"
+            end
+            return nil
+        end
+
         -- Winner button click
         self.winnerButton:SetScript("OnClick", function()
             if Loothing.TradeQueue then
-                local shortName = LoothingUtils.GetShortName(entry.winner)
-                if CheckInteractDistance(shortName, 2) then
-                    InitiateTrade(shortName)
+                local unitId = FindUnitIdForPlayer(entry.winner)
+                if unitId and CheckInteractDistance(unitId, 2) then
+                    InitiateTrade(unitId)
                 else
+                    local shortName = LoothingUtils.GetShortName(entry.winner)
                     Loothing:Print(string.format("%s is not in range to trade", shortName))
                 end
+            end
+        end)
+
+        -- Trade button click
+        self.tradeButton:SetScript("OnClick", function()
+            local unitId = FindUnitIdForPlayer(entry.winner)
+            if unitId and CheckInteractDistance(unitId, 2) then
+                InitiateTrade(unitId)
+            else
+                local shortName = LoothingUtils.GetShortName(entry.winner)
+                Loothing:Print(string.format("%s is not in range to trade", shortName))
             end
         end)
 

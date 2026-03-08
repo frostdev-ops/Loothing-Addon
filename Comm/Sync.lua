@@ -1,6 +1,9 @@
 --[[--------------------------------------------------------------------
     Loothing - Loot Council Addon for WoW 12.0+
-    Sync - State synchronization for late joiners
+    Sync - State synchronization for late joiners, settings, and history
+
+    Uses Loothing.Comm convenience methods for all communication.
+    The Protocol layer handles serialization/compression automatically.
 ----------------------------------------------------------------------]]
 
 local Loolib = LibStub("Loolib")
@@ -26,6 +29,7 @@ function LoothingSyncMixin:Init()
     self.syncTarget = nil
     self.syncTimeout = nil
     self.pendingItems = {}
+    self.pendingSyncCheckTimer = nil
 
     -- Listen for sync messages
     self:RegisterCommEvents()
@@ -35,11 +39,11 @@ end
 function LoothingSyncMixin:RegisterCommEvents()
     if not Loothing.Comm then return end
 
-    Loothing.Comm:RegisterCallback("OnSyncRequest", function(data)
+    Loothing.Comm:RegisterCallback("OnSyncRequest", function(_, data)
         self:HandleSyncRequest(data)
     end, self)
 
-    Loothing.Comm:RegisterCallback("OnSyncData", function(data)
+    Loothing.Comm:RegisterCallback("OnSyncData", function(_, data)
         self:HandleSyncData(data)
     end, self)
 end
@@ -48,10 +52,23 @@ end
     Sync Requesting (Client Side)
 ----------------------------------------------------------------------]]
 
---- Request sync from the master looter
+--- Request sync from the master looter, with up to 3 automatic retries on timeout
 -- @param masterLooter string - Name of the ML to sync from
-function LoothingSyncMixin:RequestSync(masterLooter)
-    if self.syncInProgress then
+-- @param retryCount number - Internal: current retry attempt (0-indexed)
+function LoothingSyncMixin:RequestSync(masterLooter, retryCount)
+    retryCount = retryCount or 0
+    local MAX_RETRIES = 3
+
+    if retryCount >= MAX_RETRIES then
+        self.syncInProgress = false
+        self.syncTarget     = nil
+        Loothing:Debug("Sync failed: max retries exceeded for", masterLooter)
+        self:TriggerEvent("OnSyncFailed", "Max retries exceeded")
+        return
+    end
+
+    -- On initial call only: block if already syncing
+    if retryCount == 0 and self.syncInProgress then
         Loothing:Debug("Sync already in progress")
         return
     end
@@ -63,21 +80,36 @@ function LoothingSyncMixin:RequestSync(masterLooter)
     end
 
     self.syncInProgress = true
-    self.syncTarget = masterLooter
-    self.pendingItems = {}
+    self.syncTarget     = masterLooter
+    self.pendingItems   = {}
+
+    -- Cancel any pending timeout from a previous attempt
+    if self.syncTimeout then
+        self.syncTimeout:Cancel()
+        self.syncTimeout = nil
+    end
 
     -- Send sync request
     Loothing.Comm:RequestSync(masterLooter)
 
-    -- Set timeout
+    -- Set timeout with retry on expiry
     self.syncTimeout = C_Timer.NewTimer(LOOTHING_TIMING.SYNC_TIMEOUT, function()
         if self.syncInProgress then
-            self:CancelSync("Timeout")
+            Loothing:Debug("Sync timeout, retry", retryCount + 1, "of", MAX_RETRIES,
+                "from", masterLooter)
+            self.syncInProgress = false
+            self:RequestSync(masterLooter, retryCount + 1)
         end
     end)
 
-    self:TriggerEvent("OnSyncProgress", "Requesting sync...")
-    Loothing:Debug("Requesting sync from", masterLooter)
+    if retryCount == 0 then
+        self:TriggerEvent("OnSyncProgress", "Requesting sync...")
+    else
+        self:TriggerEvent("OnSyncProgress", "Retrying sync (attempt " .. (retryCount + 1) .. ")...")
+    end
+
+    Loothing:Debug("Requesting sync from", masterLooter,
+        "(attempt " .. (retryCount + 1) .. "/" .. MAX_RETRIES .. ")")
 end
 
 --- Cancel an in-progress sync
@@ -129,11 +161,20 @@ end
 --- Apply sync data to current session
 -- @param data table
 function LoothingSyncMixin:ApplySyncData(data)
+    -- Restore MLDB from sync packet (before session, so candidates see correct config)
+    if data.mldb and Loothing.MLDB then
+        Loothing.MLDB:ApplyFromML(data.mldb, data.masterLooter or "")
+    end
+
+    -- Restore council roster from sync packet
+    if data.councilRoster and Loothing.Council then
+        Loothing.Council:SetRemoteRoster(data.councilRoster)
+    end
+
     if not Loothing.Session then return end
 
     -- Check if there's an active session
     if data.state == LOOTHING_SESSION_STATE.INACTIVE then
-        -- No active session, nothing to sync
         return
     end
 
@@ -144,6 +185,7 @@ function LoothingSyncMixin:ApplySyncData(data)
         encounterName = data.encounterName,
         state = data.state,
         masterLooter = data.masterLooter,
+        items = data.items,
     })
 end
 
@@ -155,7 +197,7 @@ end
 -- @param data table - Request data
 function LoothingSyncMixin:HandleSyncRequest(data)
     -- Only ML should respond to sync requests
-    if not LoothingUtils.IsRaidLeaderOrAssistant() then
+    if not Loothing.Session or not Loothing.Session:IsMasterLooter() then
         return
     end
 
@@ -166,16 +208,12 @@ function LoothingSyncMixin:HandleSyncRequest(data)
     -- Gather current state
     local syncData = self:GatherSyncData()
 
-    -- Send response
+    -- Send response (items/candidates/votes are already embedded in syncData.items)
     Loothing.Comm:SendSyncData(syncData, requester)
-
-    -- Also send items if session is active
-    if syncData.state ~= LOOTHING_SESSION_STATE.INACTIVE then
-        self:SendItemSync(requester)
-    end
 end
 
---- Gather current session state for sync
+--- Gather current session state for sync (full reconnect packet)
+-- Includes session, items with candidates/votes, MLDB, and council roster
 -- @return table
 function LoothingSyncMixin:GatherSyncData()
     local session = Loothing.Session
@@ -186,33 +224,85 @@ function LoothingSyncMixin:GatherSyncData()
             encounterID = 0,
             encounterName = "",
             state = LOOTHING_SESSION_STATE.INACTIVE,
+            items = {},
         }
     end
 
-    return {
+    -- Gather items with candidate and vote data
+    local items = {}
+    if session.items then
+        for _, item in session.items:Enumerate() do
+            local itemData = {
+                guid = item.guid,
+                itemLink = item.itemLink,
+                looter = item.looter,
+                state = item:GetState(),
+            }
+
+            -- Include candidate data for each item
+            if item.candidateManager then
+                local candidates = item.candidateManager:GetAllCandidates()
+                if candidates and #candidates > 0 then
+                    itemData.candidates = {}
+                    for _, candidate in ipairs(candidates) do
+                        local cData = {
+                            name = candidate.playerName,
+                            class = candidate.playerClass,
+                            response = candidate.response,
+                            roll = candidate.roll,
+                            note = candidate.note,
+                            gear1 = candidate.gear1Link,
+                            gear2 = candidate.gear2Link,
+                            ilvl1 = candidate.gear1ilvl,
+                            ilvl2 = candidate.gear2ilvl,
+                            itemsWon = candidate.itemsWonThisSession,
+                        }
+
+                        -- Include voter data
+                        if candidate.voters and #candidate.voters > 0 then
+                            cData.voters = candidate.voters
+                        end
+
+                        itemData.candidates[#itemData.candidates + 1] = cData
+                    end
+                end
+            end
+
+            items[#items + 1] = itemData
+        end
+    end
+
+    local syncData = {
         sessionID = session:GetSessionID(),
         encounterID = session:GetEncounterID(),
         encounterName = session:GetEncounterName(),
         state = session:GetState(),
+        masterLooter = session:GetMasterLooter(),
+        items = items,
     }
+
+    -- Include MLDB
+    if Loothing.MLDB and Loothing.MLDB:Get() then
+        syncData.mldb = Loothing.MLDB:Get()
+    end
+
+    -- Include council roster
+    if Loothing.Council then
+        local members = Loothing.Council:GetAllMembers()
+        if members and #members > 0 then
+            syncData.councilRoster = members
+        end
+    end
+
+    return syncData
 end
 
 --- Send item data to sync target
 -- @param target string - Player to send to
-function LoothingSyncMixin:SendItemSync(target)
-    if not Loothing.Session then return end
-
-    local items = Loothing.Session:GetItems()
-    if not items then return end
-
-    -- Send each item
-    for _, item in items:Enumerate() do
-        Loothing.Comm:Send(
-            LoothingProtocol:ItemAdd(item.itemLink, item.guid, item.looter),
-            target
-        )
-    end
-end
+-- NOTE: SendItemSync is intentionally removed. GatherSyncData() already embeds
+-- all item + candidate + vote data into the SYNC_DATA payload, and SyncFromData()
+-- on the receiver restores all of it. Sending individual ITEM_ADD/CANDIDATE_UPDATE/
+-- VOTE_UPDATE messages per item was redundant and caused O(N*M) message overhead.
 
 --[[--------------------------------------------------------------------
     Auto-Sync on Join
@@ -220,22 +310,27 @@ end
 
 --- Check if we need to sync (called on roster update)
 function LoothingSyncMixin:CheckNeedSync()
-    if not IsInRaid() then return end
+    if not IsInGroup() then return end
 
-    -- Don't sync if we're the leader
-    if LoothingUtils.IsRaidLeaderOrAssistant() then return end
+    -- Don't sync if we're the ML (we own the session)
+    if Loothing.handleLoot then return end
 
     -- Don't sync if already have a session
     if Loothing.Session and Loothing.Session:GetState() ~= LOOTHING_SESSION_STATE.INACTIVE then
         return
     end
 
-    -- Find the raid leader to sync from
-    local leader = LoothingUtils.GetRaidLeader()
-    if leader then
+    -- Prefer known ML, fall back to raid leader
+    local syncTarget = Loothing.masterLooter or LoothingUtils.GetRaidLeader()
+    if syncTarget then
+        -- Cancel any pending sync-check timer to avoid unbounded timer spawns
+        if self.pendingSyncCheckTimer then
+            self.pendingSyncCheckTimer:Cancel()
+        end
         -- Delay sync slightly to allow other addons to initialize
-        C_Timer.After(2, function()
-            self:RequestSync(leader)
+        self.pendingSyncCheckTimer = C_Timer.NewTimer(2, function()
+            self.pendingSyncCheckTimer = nil
+            self:RequestSync(syncTarget)
         end)
     end
 end
@@ -284,13 +379,11 @@ function LoothingSyncMixin:RequestSettingsSync(target)
     self.settingsSyncInProgress = true
     self.settingsSyncResponses = {}
 
-    local msg = LoothingProtocol:Encode(LOOTHING_MSG_TYPE.SYNC_SETTINGS_REQUEST, {})
+    Loothing.Comm:SendSettingsSyncRequest(target)
 
     if target == "guild" then
-        Loothing.Comm:SendGuild(msg)
         Loothing:Print("Requesting settings sync to guild...")
     else
-        Loothing.Comm:SendToPlayer(msg, target)
         Loothing:Print("Requesting settings sync to " .. target)
     end
 
@@ -316,12 +409,10 @@ end
 function LoothingSyncMixin:GatherSettings()
     local settings = {}
 
-    -- Responses
     if Loothing.ResponseManager then
         settings.responses = Loothing.ResponseManager:Serialize()
     end
 
-    -- Voting settings
     if Loothing.Settings then
         settings.voting = {
             mode = Loothing.Settings:GetVotingMode(),
@@ -335,9 +426,9 @@ end
 --- Handle incoming settings sync request
 -- @param sender string
 function LoothingSyncMixin:HandleSettingsSyncRequest(sender)
-    -- Show confirmation dialog
-    StaticPopup_Show("LOOTHING_ACCEPT_SETTINGS_SYNC", sender, nil, {
-        sender = sender,
+    LoothingPopups:Show("LOOTHING_SYNC_REQUEST", {
+        player = sender,
+        type = "settings",
         onAccept = function()
             self:AcceptSettingsSync(sender)
         end
@@ -347,8 +438,7 @@ end
 --- Accept settings sync from sender
 -- @param sender string
 function LoothingSyncMixin:AcceptSettingsSync(sender)
-    local msg = LoothingProtocol:Encode(LOOTHING_MSG_TYPE.SYNC_SETTINGS_ACK, {})
-    Loothing.Comm:SendToPlayer(msg, sender)
+    Loothing.Comm:SendSettingsSyncAck(sender)
 
     self.awaitingSettingsFrom = sender
     Loothing:Print("Accepted settings sync from " .. sender)
@@ -365,22 +455,15 @@ function LoothingSyncMixin:HandleSettingsSyncAck(sender)
     self.settingsSyncResponses = self.settingsSyncResponses or {}
     self.settingsSyncResponses[sender] = true
 
-    -- Serialize and compress settings
-    local Serializer = Loolib:GetModule("Serializer")
-    local Compressor = Loolib:GetModule("Compressor")
-
-    local serialized = Serializer:Serialize(self.pendingSettingsSync)
-    local compressed = Compressor and Compressor:Compress(serialized) or serialized
-
-    -- Send settings data
-    local msg = LoothingProtocol:Encode(LOOTHING_MSG_TYPE.SYNC_SETTINGS_DATA, { compressed })
-    Loothing.Comm:SendToPlayer(msg, sender)
+    -- Send settings data (Protocol handles serialization+compression)
+    Loothing.Comm:SendSettingsData(self.pendingSettingsSync, sender)
 
     Loothing:Print("Sent settings to " .. sender)
 end
 
 --- Handle received settings data
--- @param data string - Compressed/serialized settings
+-- Settings data is already deserialized by the Protocol layer.
+-- @param data table - Settings table
 -- @param sender string
 function LoothingSyncMixin:HandleSettingsData(data, sender)
     if self.awaitingSettingsFrom ~= sender then
@@ -395,20 +478,8 @@ function LoothingSyncMixin:HandleSettingsData(data, sender)
 
     self.awaitingSettingsFrom = nil
 
-    -- Decompress and deserialize
-    local Serializer = Loolib:GetModule("Serializer")
-    local Compressor = Loolib:GetModule("Compressor")
-
-    local decompressed = Compressor and Compressor:Decompress(data) or data
-    local settings = Serializer:Deserialize(decompressed)
-
-    if not settings then
-        Loothing:Print("Failed to parse settings from " .. sender)
-        return
-    end
-
-    -- Apply settings
-    self:ApplySettings(settings)
+    -- Apply settings directly (no need to deserialize, Protocol already did)
+    self:ApplySettings(data)
 
     Loothing:Print("Applied settings from " .. sender)
 end
@@ -416,12 +487,10 @@ end
 --- Apply received settings
 -- @param settings table
 function LoothingSyncMixin:ApplySettings(settings)
-    -- Apply responses
     if settings.responses and Loothing.ResponseManager then
         Loothing.ResponseManager:Deserialize(settings.responses)
     end
 
-    -- Apply voting settings
     if settings.voting and Loothing.Settings then
         if settings.voting.mode then
             Loothing.Settings:SetVotingMode(settings.voting.mode)
@@ -452,13 +521,11 @@ function LoothingSyncMixin:RequestHistorySync(target, days)
     self.historySyncInProgress = true
     self.historySyncResponses = {}
 
-    local msg = LoothingProtocol:Encode(LOOTHING_MSG_TYPE.SYNC_HISTORY_REQUEST, { days })
+    Loothing.Comm:SendHistorySyncRequest(target, days)
 
     if target == "guild" then
-        Loothing.Comm:SendGuild(msg)
         Loothing:Print(string.format("Requesting history sync (%d days) to guild...", days))
     else
-        Loothing.Comm:SendToPlayer(msg, target)
         Loothing:Print(string.format("Requesting history sync (%d days) to %s", days, target))
     end
 
@@ -490,17 +557,13 @@ function LoothingSyncMixin:GatherHistory(days)
 
     for _, entry in Loothing.History:GetEntries():Enumerate() do
         if entry.timestamp and entry.timestamp >= cutoff then
-            entries[#entries + 1] = {
-                guid = entry.guid,
-                itemLink = entry.itemLink,
-                itemID = entry.itemID,
-                itemName = entry.itemName,
-                winner = entry.winner,
-                winnerResponse = entry.winnerResponse,
-                encounterID = entry.encounterID,
-                encounterName = entry.encounterName,
-                timestamp = entry.timestamp,
-            }
+            local syncEntry = {}
+            for k, v in pairs(entry) do
+                if k ~= "candidates" and k ~= "councilVotes" then
+                    syncEntry[k] = v
+                end
+            end
+            entries[#entries + 1] = syncEntry
         end
     end
 
@@ -511,8 +574,9 @@ end
 -- @param sender string
 -- @param days number
 function LoothingSyncMixin:HandleHistorySyncRequest(sender, days)
-    StaticPopup_Show("LOOTHING_ACCEPT_HISTORY_SYNC", sender, tostring(days), {
-        sender = sender,
+    LoothingPopups:Show("LOOTHING_SYNC_REQUEST", {
+        player = sender,
+        type = "history",
         days = days,
         onAccept = function()
             self:AcceptHistorySync(sender)
@@ -523,8 +587,7 @@ end
 --- Accept history sync
 -- @param sender string
 function LoothingSyncMixin:AcceptHistorySync(sender)
-    local msg = LoothingProtocol:Encode(LOOTHING_MSG_TYPE.SYNC_HISTORY_ACK, {})
-    Loothing.Comm:SendToPlayer(msg, sender)
+    Loothing.Comm:SendHistorySyncAck(sender)
 
     self.awaitingHistoryFrom = sender
     Loothing:Print("Accepted history sync from " .. sender)
@@ -541,27 +604,20 @@ function LoothingSyncMixin:HandleHistorySyncAck(sender)
     self.historySyncResponses = self.historySyncResponses or {}
     self.historySyncResponses[sender] = true
 
-    -- Serialize and compress history
-    local Serializer = Loolib:GetModule("Serializer")
-    local Compressor = Loolib:GetModule("Compressor")
-
-    local serialized = Serializer:Serialize(self.pendingHistorySync)
-    local compressed = Compressor and Compressor:Compress(serialized) or serialized
-
-    -- Send history data
-    local msg = LoothingProtocol:Encode(LOOTHING_MSG_TYPE.SYNC_HISTORY_DATA, { compressed })
-    Loothing.Comm:SendToPlayer(msg, sender)
+    -- Send history data (Protocol handles serialization+compression)
+    Loothing.Comm:SendHistoryData(self.pendingHistorySync, sender)
 
     Loothing:Print(string.format("Sent %d history entries to %s", #self.pendingHistorySync, sender))
 end
 
 --- Handle history data
--- @param data string
+-- History data is already deserialized by the Protocol layer.
+-- @param data table - History entries
 -- @param sender string
 function LoothingSyncMixin:HandleHistoryData(data, sender)
     if self.awaitingHistoryFrom ~= sender then return end
 
-    if not data then
+    if not data or type(data) ~= "table" then
         Loothing:Debug("Empty history data from " .. sender)
         self.awaitingHistoryFrom = nil
         return
@@ -569,20 +625,9 @@ function LoothingSyncMixin:HandleHistoryData(data, sender)
 
     self.awaitingHistoryFrom = nil
 
-    local Serializer = Loolib:GetModule("Serializer")
-    local Compressor = Loolib:GetModule("Compressor")
-
-    local decompressed = Compressor and Compressor:Decompress(data) or data
-    local entries = Serializer:Deserialize(decompressed)
-
-    if not entries or type(entries) ~= "table" then
-        Loothing:Print("Failed to parse history from " .. sender)
-        return
-    end
-
     -- Import history entries (avoid duplicates)
     local imported = 0
-    for _, entry in ipairs(entries) do
+    for _, entry in ipairs(data) do
         local existing = Loothing.History:GetEntryByGUID(entry.guid)
         if not existing then
             Loothing.History:AddEntry(entry)

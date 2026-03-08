@@ -15,6 +15,7 @@ local HISTORY_EVENTS = {
     "OnEntryAdded",
     "OnEntryRemoved",
     "OnHistoryCleared",
+    "OnBulkEntriesRemoved",
     "OnFilterChanged",
 }
 
@@ -48,7 +49,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Add a history entry
--- @param entry table - { itemLink, winner, winnerResponse, encounterID, encounterName, votes, timestamp }
+-- @param entry table - History entry table (see complete schema in Loothing docs)
 function LoothingHistoryMixin:AddEntry(entry)
     -- Ensure required fields
     entry.timestamp = entry.timestamp or time()
@@ -145,6 +146,196 @@ function LoothingHistoryMixin:ClearHistory()
     end
 
     self:TriggerEvent("OnHistoryCleared")
+end
+
+--[[--------------------------------------------------------------------
+    Bulk Deletion Methods
+----------------------------------------------------------------------]]
+
+--- Delete all entries for a specific player
+-- @param playerName string - Player name to delete entries for
+-- @return number - Number of entries deleted
+function LoothingHistoryMixin:DeleteByPlayer(playerName)
+    if not playerName or playerName == "" then
+        return 0
+    end
+
+    playerName = LoothingUtils.NormalizeName(playerName)
+    if not playerName then
+        return 0
+    end
+
+    local toRemove = {}
+
+    -- Collect entries to remove
+    for _, entry in self.entries:Enumerate() do
+        if entry.winner == playerName then
+            toRemove[#toRemove + 1] = entry
+        end
+    end
+
+    -- Remove entries
+    for _, entry in ipairs(toRemove) do
+        self.entries:Remove(entry)
+        self:RemoveSavedEntry(entry.guid)
+    end
+
+    -- Refresh filtered view
+    if #toRemove > 0 then
+        self:ApplyFilter()
+        self:TriggerEvent("OnBulkEntriesRemoved", #toRemove, "player", playerName)
+    end
+
+    return #toRemove
+end
+
+--- Delete entries older than a specified number of days
+-- @param days number - Delete entries older than this many days
+-- @return number - Number of entries deleted
+function LoothingHistoryMixin:DeleteByAge(days)
+    if not days or days <= 0 then
+        return 0
+    end
+
+    local cutoffTime = time() - (days * 24 * 60 * 60)
+    local toRemove = {}
+
+    -- Collect entries to remove
+    for _, entry in self.entries:Enumerate() do
+        if (entry.timestamp or 0) < cutoffTime then
+            toRemove[#toRemove + 1] = entry
+        end
+    end
+
+    -- Remove entries
+    for _, entry in ipairs(toRemove) do
+        self.entries:Remove(entry)
+        self:RemoveSavedEntry(entry.guid)
+    end
+
+    -- Refresh filtered view
+    if #toRemove > 0 then
+        self:ApplyFilter()
+        self:TriggerEvent("OnBulkEntriesRemoved", #toRemove, "age", days)
+    end
+
+    return #toRemove
+end
+
+--- Delete entries for a specific encounter/raid
+-- @param encounterName string - Encounter name to delete entries for
+-- @return number - Number of entries deleted
+function LoothingHistoryMixin:DeleteByEncounter(encounterName)
+    if not encounterName or encounterName == "" then
+        return 0
+    end
+
+    local toRemove = {}
+
+    -- Collect entries to remove
+    for _, entry in self.entries:Enumerate() do
+        if entry.encounterName == encounterName then
+            toRemove[#toRemove + 1] = entry
+        end
+    end
+
+    -- Remove entries
+    for _, entry in ipairs(toRemove) do
+        self.entries:Remove(entry)
+        self:RemoveSavedEntry(entry.guid)
+    end
+
+    -- Refresh filtered view
+    if #toRemove > 0 then
+        self:ApplyFilter()
+        self:TriggerEvent("OnBulkEntriesRemoved", #toRemove, "encounter", encounterName)
+    end
+
+    return #toRemove
+end
+
+--- Delete entries by item quality
+-- @param minQuality number - Minimum quality to delete (inclusive)
+-- @param maxQuality number - Maximum quality to delete (inclusive, optional)
+-- @return number - Number of entries deleted
+function LoothingHistoryMixin:DeleteByQuality(minQuality, maxQuality)
+    if not minQuality then
+        return 0
+    end
+
+    maxQuality = maxQuality or minQuality
+    local toRemove = {}
+
+    -- Collect entries to remove
+    for _, entry in self.entries:Enumerate() do
+        local quality = entry.quality or 0
+        if quality >= minQuality and quality <= maxQuality then
+            toRemove[#toRemove + 1] = entry
+        end
+    end
+
+    -- Remove entries
+    for _, entry in ipairs(toRemove) do
+        self.entries:Remove(entry)
+        self:RemoveSavedEntry(entry.guid)
+    end
+
+    -- Refresh filtered view
+    if #toRemove > 0 then
+        self:ApplyFilter()
+        self:TriggerEvent("OnBulkEntriesRemoved", #toRemove, "quality", minQuality)
+    end
+
+    return #toRemove
+end
+
+--- Delete entries within a date range
+-- @param startTime number - Start timestamp (inclusive)
+-- @param endTime number - End timestamp (inclusive)
+-- @return number - Number of entries deleted
+function LoothingHistoryMixin:DeleteByDateRange(startTime, endTime)
+    if not startTime or not endTime then
+        return 0
+    end
+
+    local toRemove = {}
+
+    -- Collect entries to remove
+    for _, entry in self.entries:Enumerate() do
+        local timestamp = entry.timestamp or 0
+        if timestamp >= startTime and timestamp <= endTime then
+            toRemove[#toRemove + 1] = entry
+        end
+    end
+
+    -- Remove entries
+    for _, entry in ipairs(toRemove) do
+        self.entries:Remove(entry)
+        self:RemoveSavedEntry(entry.guid)
+    end
+
+    -- Refresh filtered view
+    if #toRemove > 0 then
+        self:ApplyFilter()
+        self:TriggerEvent("OnBulkEntriesRemoved", #toRemove, "dateRange", startTime)
+    end
+
+    return #toRemove
+end
+
+--- Get age presets for UI dropdown
+-- @return table - Array of { days, label } presets
+function LoothingHistoryMixin:GetAgePresets()
+    return {
+        { days = 7, label = "7 days" },
+        { days = 14, label = "14 days" },
+        { days = 30, label = "30 days" },
+        { days = 60, label = "60 days" },
+        { days = 90, label = "90 days" },
+        { days = 120, label = "120 days" },
+        { days = 180, label = "180 days" },
+        { days = 365, label = "1 year" },
+    }
 end
 
 --[[--------------------------------------------------------------------
@@ -322,22 +513,11 @@ function LoothingHistoryMixin:LoadFromSaved()
     end
 
     for _, entryData in ipairs(saved) do
-        -- Create entry from saved data
-        local entry = {
-            guid = entryData.guid or LoothingUtils.GenerateGUID(),
-            itemLink = entryData.itemLink,
-            itemID = entryData.itemID,
-            itemName = entryData.itemName,
-            itemLevel = entryData.itemLevel,
-            quality = entryData.quality,
-            winner = entryData.winner,
-            winnerResponse = entryData.winnerResponse,
-            encounterID = entryData.encounterID,
-            encounterName = entryData.encounterName,
-            votes = entryData.votes,
-            timestamp = entryData.timestamp,
-        }
-
+        local entry = {}
+        for k, v in pairs(entryData) do
+            entry[k] = v
+        end
+        entry.guid = entry.guid or LoothingUtils.GenerateGUID()
         self.entries:Insert(entry)
     end
 
@@ -352,20 +532,11 @@ function LoothingHistoryMixin:SaveEntry(entry)
         return
     end
 
-    Loothing.Settings:AddHistoryEntry({
-        guid = entry.guid,
-        itemLink = entry.itemLink,
-        itemID = entry.itemID,
-        itemName = entry.itemName,
-        itemLevel = entry.itemLevel,
-        quality = entry.quality,
-        winner = entry.winner,
-        winnerResponse = entry.winnerResponse,
-        encounterID = entry.encounterID,
-        encounterName = entry.encounterName,
-        votes = entry.votes,
-        timestamp = entry.timestamp,
-    })
+    local persistable = {}
+    for k, v in pairs(entry) do
+        persistable[k] = v
+    end
+    Loothing.Settings:AddHistoryEntry(persistable)
 end
 
 --- Remove a saved entry
@@ -384,36 +555,139 @@ function LoothingHistoryMixin:RemoveSavedEntry(guid)
     end
 end
 
+--- Remove multiple saved entries efficiently (O(n) single pass)
+-- @param guids table - Set of GUIDs to remove: { [guid] = true }
+function LoothingHistoryMixin:RemoveSavedEntries(guids)
+    if not Loothing.Settings or not guids then
+        return
+    end
+
+    local history = Loothing.Settings:GetHistory()
+
+    -- Collect indices to remove (reverse order for safe removal)
+    local toRemove = {}
+    for i, entry in ipairs(history) do
+        if guids[entry.guid] then
+            toRemove[#toRemove + 1] = i
+        end
+    end
+
+    -- Remove from end to preserve indices
+    for j = #toRemove, 1, -1 do
+        table.remove(history, toRemove[j])
+    end
+end
+
 --[[--------------------------------------------------------------------
     Export
 ----------------------------------------------------------------------]]
 
---- Export history to CSV format
+--- Export history to CSV format (23 columns, RCLootCouncil-compatible)
 -- @return string
 function LoothingHistoryMixin:ExportCSV()
     local lines = {}
 
-    -- Header
-    lines[1] = "Date,Item,Winner,Response,Encounter,Votes"
+    -- Header (23 columns)
+    lines[1] = "player,date,time,id,item,itemID,itemString,response,votes,class,instance,boss,difficultyID,mapID,groupSize,gear1,gear2,responseID,isAwardReason,subType,equipLoc,note,owner"
+
+    -- Escape a value for CSV (quoted, internal quotes doubled)
+    local function csv(s)
+        if not s then return '""' end
+        s = tostring(s):gsub('"', '""')
+        return '"' .. s .. '"'
+    end
 
     -- Data rows
     for _, entry in self.filteredEntries:Enumerate() do
-        local date = entry.timestamp and LoothingUtils.FormatDate(entry.timestamp) or ""
-        local item = entry.itemName or "Unknown"
-        local winner = LoothingUtils.GetShortName(entry.winner) or ""
-        local response = ""
-        if entry.winnerResponse and LOOTHING_RESPONSE_INFO[entry.winnerResponse] then
-            response = LOOTHING_RESPONSE_INFO[entry.winnerResponse].name
+        local ts = entry.timestamp or 0
+        local dateStr = ts > 0 and date("%Y-%m-%d", ts) or ""
+        local timeStr = ts > 0 and date("%H:%M:%S", ts) or ""
+        local responseName = ""
+        if entry.winnerResponse and LOOTHING_RESPONSE_INFO and LOOTHING_RESPONSE_INFO[entry.winnerResponse] then
+            responseName = LOOTHING_RESPONSE_INFO[entry.winnerResponse].name
         end
-        local encounter = entry.encounterName or ""
-        local votes = entry.votes or 0
+        local isAwardReason = (entry.awardReasonId and entry.awardReasonId ~= 0) and 1 or 0
 
-        -- Escape commas in fields
-        item = item:gsub(",", ";")
-        encounter = encounter:gsub(",", ";")
+        lines[#lines + 1] = table.concat({
+            csv(LoothingUtils.GetShortName(entry.winner) or ""),
+            csv(dateStr),
+            csv(timeStr),
+            csv(entry.guid or ""),
+            csv(entry.itemName or ""),
+            tostring(entry.itemID or 0),
+            csv(entry.itemLink or ""),
+            csv(responseName),
+            tostring(entry.votes or 0),
+            csv(entry.winnerClass or ""),
+            csv(entry.instance or ""),
+            csv(entry.encounterName or ""),
+            tostring(entry.difficultyID or 0),
+            tostring(entry.mapID or 0),
+            tostring(entry.groupSize or 0),
+            csv(entry.winnerGear1 or ""),
+            csv(entry.winnerGear2 or ""),
+            tostring(entry.winnerResponse or 0),
+            tostring(isAwardReason),
+            csv(entry.subType or ""),
+            csv(entry.equipSlot or ""),
+            csv(entry.winnerNote or ""),
+            csv(entry.owner or ""),
+        }, ",")
+    end
 
-        lines[#lines + 1] = string.format('"%s","%s","%s","%s","%s",%d',
-            date, item, winner, response, encounter, votes)
+    return table.concat(lines, "\n")
+end
+
+--- Export history to TSV format (tab-separated, same columns as CSV)
+-- @return string
+function LoothingHistoryMixin:ExportTSV()
+    local lines = {}
+
+    -- Header (23 columns, tab-separated)
+    lines[1] = "player\tdate\ttime\tid\titem\titemID\titemString\tresponse\tvotes\tclass\tinstance\tboss\tdifficultyID\tmapID\tgroupSize\tgear1\tgear2\tresponseID\tisAwardReason\tsubType\tequipLoc\tnote\towner"
+
+    -- Escape a value for TSV (strip tabs/newlines)
+    local function tsv(s)
+        if not s then return "" end
+        return tostring(s):gsub("\t", " "):gsub("\n", " ")
+    end
+
+    -- Data rows
+    for _, entry in self.filteredEntries:Enumerate() do
+        local ts = entry.timestamp or 0
+        local dateStr = ts > 0 and date("%Y-%m-%d", ts) or ""
+        local timeStr = ts > 0 and date("%H:%M:%S", ts) or ""
+        local responseName = ""
+        if entry.winnerResponse and LOOTHING_RESPONSE_INFO and LOOTHING_RESPONSE_INFO[entry.winnerResponse] then
+            responseName = LOOTHING_RESPONSE_INFO[entry.winnerResponse].name
+        end
+        local isAwardReason = (entry.awardReasonId and entry.awardReasonId ~= 0) and 1 or 0
+
+        lines[#lines + 1] = table.concat({
+            tsv(LoothingUtils.GetShortName(entry.winner) or ""),
+            tsv(dateStr),
+            tsv(timeStr),
+            tsv(entry.guid or ""),
+            tsv(entry.itemName or ""),
+            tostring(entry.itemID or 0),
+            tsv(entry.itemLink or ""),
+            tsv(responseName),
+            tostring(entry.votes or 0),
+            tsv(entry.winnerClass or ""),
+            tsv(entry.instance or ""),
+            tsv(entry.encounterName or ""),
+            tostring(entry.difficultyID or 0),
+            tostring(entry.mapID or 0),
+            tostring(entry.groupSize or 0),
+            tsv(entry.winnerGear1 or ""),
+            tsv(entry.winnerGear2 or ""),
+            tostring(entry.winnerResponse or 0),
+            tostring(isAwardReason),
+            tsv(entry.subType or ""),
+            tsv(entry.equipSlot or ""),
+            tsv(entry.winnerNote or ""),
+            tsv(entry.owner or ""),
+        }, "\t")
     end
 
     return table.concat(lines, "\n")
@@ -422,34 +696,37 @@ end
 --- Export history to Lua table format
 -- @return string
 function LoothingHistoryMixin:ExportLua()
-    local entries = {}
-
-    for _, entry in self.filteredEntries:Enumerate() do
-        entries[#entries + 1] = {
-            date = entry.timestamp and LoothingUtils.FormatDate(entry.timestamp),
-            itemLink = entry.itemLink,
-            itemName = entry.itemName,
-            itemLevel = entry.itemLevel,
-            winner = entry.winner,
-            response = entry.winnerResponse and LOOTHING_RESPONSE_INFO[entry.winnerResponse] and
-                       LOOTHING_RESPONSE_INFO[entry.winnerResponse].name,
-            encounter = entry.encounterName,
-            votes = entry.votes,
-        }
-    end
-
-    -- Simple serialization
     local parts = { "return {" }
 
-    for _, e in ipairs(entries) do
+    local function esc(s)
+        if not s then return "" end
+        return tostring(s):gsub('"', '\\"')
+    end
+
+    for _, entry in self.filteredEntries:Enumerate() do
+        local responseName = ""
+        if entry.winnerResponse and LOOTHING_RESPONSE_INFO and LOOTHING_RESPONSE_INFO[entry.winnerResponse] then
+            responseName = LOOTHING_RESPONSE_INFO[entry.winnerResponse].name
+        end
+        local ts = entry.timestamp or 0
+        local dateStr = ts > 0 and date("%Y-%m-%d %H:%M:%S", ts) or ""
+
         parts[#parts + 1] = string.format(
-            '    {date="%s", item="%s", winner="%s", response="%s", encounter="%s", votes=%d},',
-            e.date or "", e.itemName or "", e.winner or "", e.response or "", e.encounter or "", e.votes or 0
+            '    {date="%s", item="%s", itemID=%d, itemLevel=%d, quality=%d, winner="%s", winnerClass="%s",' ..
+            ' response="%s", responseID=%d, votes=%d, encounter="%s", instance="%s", difficultyID=%d,' ..
+            ' groupSize=%d, gear1="%s", gear2="%s", note="%s", typeCode="%s", subType="%s", owner="%s"},',
+            dateStr,
+            esc(entry.itemName), entry.itemID or 0, entry.itemLevel or 0, entry.quality or 0,
+            esc(entry.winner), esc(entry.winnerClass),
+            esc(responseName), entry.winnerResponse or 0, entry.votes or 0,
+            esc(entry.encounterName), esc(entry.instance), entry.difficultyID or 0,
+            entry.groupSize or 0,
+            esc(entry.winnerGear1), esc(entry.winnerGear2),
+            esc(entry.winnerNote), esc(entry.typeCode), esc(entry.subType), esc(entry.owner)
         )
     end
 
     parts[#parts + 1] = "}"
-
     return table.concat(parts, "\n")
 end
 
@@ -478,17 +755,28 @@ function LoothingHistoryMixin:ExportBBCode()
     -- Format output
     for _, winner in ipairs(sortedWinners) do
         local shortName = LoothingUtils.GetShortName(winner)
-        lines[#lines + 1] = string.format("[b]%s:[/b]", shortName)
+        local winnerEntries = winners[winner]
+        local winnerClass = winnerEntries[1].winnerClass or ""
+        local classTag = winnerClass ~= "" and string.format(" [%s]", winnerClass) or ""
+
+        lines[#lines + 1] = string.format("[b]%s%s:[/b]", shortName, classTag)
         lines[#lines + 1] = "[list]"
 
-        for _, entry in ipairs(winners[winner]) do
+        for _, entry in ipairs(winnerEntries) do
             local itemName = entry.itemName or "Unknown"
             local responseName = ""
-            if entry.winnerResponse and LOOTHING_RESPONSE_INFO[entry.winnerResponse] then
+            if entry.winnerResponse and LOOTHING_RESPONSE_INFO and LOOTHING_RESPONSE_INFO[entry.winnerResponse] then
                 responseName = LOOTHING_RESPONSE_INFO[entry.winnerResponse].name
             end
+            local ilvl = entry.itemLevel and string.format(" (ilvl %d)", entry.itemLevel) or ""
+            local instance = entry.instance or entry.encounterName or ""
+            local diff = entry.difficultyName or ""
+            local context = ""
+            if instance ~= "" then
+                context = diff ~= "" and string.format(" - %s %s", diff, instance) or string.format(" - %s", instance)
+            end
 
-            lines[#lines + 1] = string.format("[*]%s - Response: %s", itemName, responseName)
+            lines[#lines + 1] = string.format("[*]%s%s - %s%s", itemName, ilvl, responseName, context)
         end
 
         lines[#lines + 1] = "[/list]"
@@ -523,16 +811,27 @@ function LoothingHistoryMixin:ExportDiscord()
     -- Format output
     for _, winner in ipairs(sortedWinners) do
         local shortName = LoothingUtils.GetShortName(winner)
-        lines[#lines + 1] = string.format("**__%s:__**", shortName)
+        local winnerEntries = winners[winner]
+        local winnerClass = winnerEntries[1].winnerClass or ""
+        local classTag = winnerClass ~= "" and string.format(" (%s)", winnerClass) or ""
 
-        for _, entry in ipairs(winners[winner]) do
+        lines[#lines + 1] = string.format("**__%s%s:__**", shortName, classTag)
+
+        for _, entry in ipairs(winnerEntries) do
             local itemName = entry.itemName or "Unknown"
             local responseName = ""
-            if entry.winnerResponse and LOOTHING_RESPONSE_INFO[entry.winnerResponse] then
+            if entry.winnerResponse and LOOTHING_RESPONSE_INFO and LOOTHING_RESPONSE_INFO[entry.winnerResponse] then
                 responseName = LOOTHING_RESPONSE_INFO[entry.winnerResponse].name
             end
+            local ilvl = entry.itemLevel and string.format(" `ilvl %d`", entry.itemLevel) or ""
+            local instance = entry.instance or entry.encounterName or ""
+            local diff = entry.difficultyName or ""
+            local context = ""
+            if instance ~= "" then
+                context = diff ~= "" and string.format(" (%s %s)", diff, instance) or string.format(" (%s)", instance)
+            end
 
-            lines[#lines + 1] = string.format("- **%s** - Response: *%s*", itemName, responseName)
+            lines[#lines + 1] = string.format("- **%s**%s - *%s*%s", itemName, ilvl, responseName, context)
         end
 
         lines[#lines + 1] = ""
@@ -541,56 +840,101 @@ function LoothingHistoryMixin:ExportDiscord()
     return table.concat(lines, "\n")
 end
 
---- Export history to JSON format
+--- Export history to JSON format (all fields, including candidates and councilVotes arrays)
 -- @return string
 function LoothingHistoryMixin:ExportJSON()
+    -- Recursive JSON serializer
+    local function toJSON(value, indent)
+        indent = indent or ""
+        local t = type(value)
+        if t == "nil" then
+            return "null"
+        elseif t == "boolean" then
+            return tostring(value)
+        elseif t == "number" then
+            return tostring(value)
+        elseif t == "string" then
+            local s = value:gsub("\\", "\\\\"):gsub('"', '\\"'):gsub("\n", "\\n"):gsub("\r", "\\r"):gsub("\t", "\\t")
+            return '"' .. s .. '"'
+        elseif t == "table" then
+            local innerIndent = indent .. "  "
+            -- Array if it has an integer key 1 or is empty
+            local isArray = (#value > 0) or (next(value) == nil)
+            local parts = {}
+            if isArray then
+                for _, v in ipairs(value) do
+                    parts[#parts + 1] = innerIndent .. toJSON(v, innerIndent)
+                end
+                if #parts == 0 then return "[]" end
+                return "[\n" .. table.concat(parts, ",\n") .. "\n" .. indent .. "]"
+            else
+                local keys = {}
+                for k in pairs(value) do keys[#keys + 1] = k end
+                table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+                for _, k in ipairs(keys) do
+                    parts[#parts + 1] = innerIndent .. '"' .. tostring(k) .. '": ' .. toJSON(value[k], innerIndent)
+                end
+                if #parts == 0 then return "{}" end
+                return "{\n" .. table.concat(parts, ",\n") .. "\n" .. indent .. "}"
+            end
+        end
+        return "null"
+    end
+
     local entries = {}
 
     for _, entry in self.filteredEntries:Enumerate() do
         local responseName = ""
-        if entry.winnerResponse and LOOTHING_RESPONSE_INFO[entry.winnerResponse] then
+        if entry.winnerResponse and LOOTHING_RESPONSE_INFO and LOOTHING_RESPONSE_INFO[entry.winnerResponse] then
             responseName = LOOTHING_RESPONSE_INFO[entry.winnerResponse].name
         end
+        local ts = entry.timestamp or 0
 
         entries[#entries + 1] = {
-            date = entry.timestamp and LoothingUtils.FormatDate(entry.timestamp) or "",
-            timestamp = entry.timestamp or 0,
-            itemID = entry.itemID or 0,
-            itemName = entry.itemName or "",
-            itemLevel = entry.itemLevel or 0,
-            quality = entry.quality or 1,
-            winner = entry.winner or "",
-            response = responseName,
-            encounterID = entry.encounterID or 0,
-            encounterName = entry.encounterName or "",
-            votes = entry.votes or 0,
+            guid            = entry.guid or "",
+            date            = ts > 0 and date("%Y-%m-%d %H:%M:%S", ts) or "",
+            timestamp       = ts,
+            itemID          = entry.itemID or 0,
+            itemName        = entry.itemName or "",
+            itemLevel       = entry.itemLevel or 0,
+            quality         = entry.quality or 0,
+            equipSlot       = entry.equipSlot or "",
+            typeCode        = entry.typeCode or "",
+            subType         = entry.subType or "",
+            bindType        = entry.bindType or 0,
+            isBoe           = entry.isBoe or false,
+            winner          = entry.winner or "",
+            winnerClass     = entry.winnerClass or "",
+            response        = responseName,
+            responseID      = entry.winnerResponse or 0,
+            winnerNote      = entry.winnerNote or "",
+            winnerRoll      = entry.winnerRoll or 0,
+            winnerGear1     = entry.winnerGear1 or "",
+            winnerGear2     = entry.winnerGear2 or "",
+            winnerGear1ilvl = entry.winnerGear1ilvl or 0,
+            winnerGear2ilvl = entry.winnerGear2ilvl or 0,
+            winnerIlvlDiff  = entry.winnerIlvlDiff or 0,
+            encounterID     = entry.encounterID or 0,
+            encounterName   = entry.encounterName or "",
+            instance        = entry.instance or "",
+            difficultyID    = entry.difficultyID or 0,
+            difficultyName  = entry.difficultyName or "",
+            groupSize       = entry.groupSize or 0,
+            mapID           = entry.mapID or 0,
+            votes           = entry.votes or 0,
+            awardReasonId   = entry.awardReasonId or 0,
+            awardReason     = entry.awardReason or "",
+            owner           = entry.owner or "",
+            candidates      = entry.candidates or {},
+            councilVotes    = entry.councilVotes or {},
         }
     end
 
-    -- Simple JSON serialization
     local parts = { "[" }
-
     for i, e in ipairs(entries) do
-        local isLast = i == #entries
-        local comma = isLast and "" or ","
-
-        -- Escape strings for JSON
-        local function escape(s)
-            s = s:gsub("\\", "\\\\")
-            s = s:gsub('"', '\\"')
-            s = s:gsub("\n", "\\n")
-            s = s:gsub("\r", "\\r")
-            s = s:gsub("\t", "\\t")
-            return s
-        end
-
-        parts[#parts + 1] = string.format(
-            '  {"date":"%s","timestamp":%d,"itemID":%d,"itemName":"%s","itemLevel":%d,"quality":%d,"winner":"%s","response":"%s","encounterID":%d,"encounterName":"%s","votes":%d}%s',
-            escape(e.date), e.timestamp, e.itemID, escape(e.itemName), e.itemLevel, e.quality,
-            escape(e.winner), escape(e.response), e.encounterID, escape(e.encounterName), e.votes, comma
-        )
+        local comma = i < #entries and "," or ""
+        parts[#parts + 1] = "  " .. toJSON(e, "  ") .. comma
     end
-
     parts[#parts + 1] = "]"
 
     return table.concat(parts, "\n")
@@ -610,7 +954,7 @@ function LoothingHistoryMixin:ExportEQdkp()
     local memberSet = {}
 
     for _, entry in self.filteredEntries:Enumerate() do
-        local zone = entry.encounterName or "Unknown"
+        local zone = entry.instance or entry.encounterName or "Unknown"
         if not zoneIndex[zone] then
             zones[#zones + 1] = zone
             zoneIndex[zone] = #zones
@@ -636,7 +980,7 @@ function LoothingHistoryMixin:ExportEQdkp()
 
     -- Get player info
     local playerName = UnitName("player")
-    local realmName = GetRealmName()
+    local realmName = GetNormalizedRealmName()
 
     -- XML Header
     lines[#lines + 1] = '<?xml version="1.0" encoding="UTF-8"?>'
@@ -695,11 +1039,11 @@ function LoothingHistoryMixin:ExportEQdkp()
         local timestamp = entry.timestamp or 0
         local votes = entry.votes or 0
         local boss = entry.encounterName or "Unknown"
-        local zone = entry.encounterName or "Unknown"
+        local zone = entry.instance or entry.encounterName or "Unknown"
 
         -- Get response name
         local responseName = ""
-        if entry.winnerResponse and LOOTHING_RESPONSE_INFO[entry.winnerResponse] then
+        if entry.winnerResponse and LOOTHING_RESPONSE_INFO and LOOTHING_RESPONSE_INFO[entry.winnerResponse] then
             responseName = LOOTHING_RESPONSE_INFO[entry.winnerResponse].name
         end
 
