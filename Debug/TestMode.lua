@@ -133,6 +133,8 @@ function LoothingTestMode:OnResponseSubmitted(item, response, note)
     C_Timer.After(0.5, function()
         local results = self:TallyActualVotes(item)
         if results and Loothing.UI and Loothing.UI.ResultsPanel then
+            -- Ensure candidateManager is populated from vote data so ResultsPanel can display candidates
+            self:PopulateCandidateManagerFromVotes(item)
             Loothing.UI.ResultsPanel:SetItem(item, results)
             Loothing.UI.ResultsPanel:Show()
         end
@@ -178,7 +180,7 @@ end
 --- Tally actual votes from an item
 function LoothingTestMode:TallyActualVotes(item)
     local results = {
-        tallies = {},
+        counts = {},
         winner = nil,
         winnerResponse = nil,
         totalVotes = 0,
@@ -193,8 +195,8 @@ function LoothingTestMode:TallyActualVotes(item)
         local responses = voteData.responses or voteData
         local firstResponse = responses[1] or responses
 
-        if not results.tallies[firstResponse] then
-            results.tallies[firstResponse] = {
+        if not results.counts[firstResponse] then
+            results.counts[firstResponse] = {
                 count = 0,
                 voters = {},
                 response = firstResponse,
@@ -202,22 +204,20 @@ function LoothingTestMode:TallyActualVotes(item)
             }
         end
 
-        results.tallies[firstResponse].count = results.tallies[firstResponse].count + 1
-        table.insert(results.tallies[firstResponse].voters, {
-            name = voterName,
-            class = voteData.class or "WARRIOR",
-        })
+        results.counts[firstResponse].count = results.counts[firstResponse].count + 1
+        -- Store voter names as plain strings (GetShortName expects strings)
+        table.insert(results.counts[firstResponse].voters, voterName)
         results.totalVotes = results.totalVotes + 1
     end
 
     -- Find winner
     local maxCount = 0
     local tieCount = 0
-    for response, tally in pairs(results.tallies) do
+    for response, tally in pairs(results.counts) do
         if tally.count > maxCount then
             maxCount = tally.count
             results.winnerResponse = response
-            results.winner = tally.voters[1] and tally.voters[1].name
+            results.winner = tally.voters[1]
             tieCount = 1
         elseif tally.count == maxCount and maxCount > 0 then
             tieCount = tieCount + 1
@@ -227,6 +227,23 @@ function LoothingTestMode:TallyActualVotes(item)
     results.isTie = tieCount > 1
 
     return results
+end
+
+--- Populate an item's candidateManager from its legacy vote data
+-- Used in the quick-test flow so the new candidate-centric ResultsPanel has data to display
+function LoothingTestMode:PopulateCandidateManagerFromVotes(item)
+    if not item then return end
+
+    local cm = item:GetCandidateManager()
+    local votes = item.votes or (item.GetVotes and item:GetVotes()) or {}
+
+    for voterName, voteData in pairs(votes) do
+        local voterClass = voteData.class or "WARRIOR"
+        local candidate = cm:GetOrCreateCandidate(voterName, voterClass)
+        local responses = voteData.responses or voteData
+        local firstResponse = responses[1] or responses
+        candidate:SetResponse(firstResponse, nil)
+    end
 end
 
 --- Enable test mode
@@ -405,7 +422,7 @@ end
 -- @return table - Fake results data
 function LoothingTestMode:CreateFakeResults(item)
     local results = {
-        tallies = {},
+        counts = {},
         winner = nil,
         winnerResponse = nil,
         totalVotes = 0,
@@ -427,14 +444,12 @@ function LoothingTestMode:CreateFakeResults(item)
         for i = 1, count do
             local member = self.fakeCouncilMembers[math.random(2, #self.fakeCouncilMembers)]
             if member then
-                voters[#voters + 1] = {
-                    name = member.name,
-                    class = member.class,
-                }
+                -- Store voter names as plain strings (GetShortName expects strings)
+                voters[#voters + 1] = member.name
             end
         end
 
-        results.tallies[response] = {
+        results.counts[response] = {
             count = #voters,
             voters = voters,
         }
@@ -444,15 +459,15 @@ function LoothingTestMode:CreateFakeResults(item)
     -- Pick a winner (highest count)
     local maxCount = 0
     local winnerResponse = nil
-    for response, tally in pairs(results.tallies) do
+    for response, tally in pairs(results.counts) do
         if tally.count > maxCount then
             maxCount = tally.count
             winnerResponse = response
         end
     end
 
-    if winnerResponse and results.tallies[winnerResponse].voters[1] then
-        results.winner = results.tallies[winnerResponse].voters[1].name
+    if winnerResponse and results.counts[winnerResponse].voters[1] then
+        results.winner = results.counts[winnerResponse].voters[1]
         results.winnerResponse = winnerResponse
     end
 
@@ -709,13 +724,24 @@ function LoothingTestMode:ShowResultsPanel()
         return
     end
 
-    -- Create fake item and results
+    -- Create fake item and populate candidateManager
     local fakeItem = self:CreateFakeItem()
     if not fakeItem then
         return
     end
 
     fakeItem:SetState(LOOTHING_ITEM_STATE.TALLIED)
+
+    -- Populate candidateManager with fake candidates and council votes
+    self:AddFakeCandidatesToItem(fakeItem)
+    local cm = fakeItem:GetCandidateManager()
+    for _, c in ipairs(cm:GetAllCandidates()) do
+        for _ = 1, math.random(0, 5) do
+            c:AddCouncilVote()
+        end
+    end
+
+    -- Also create legacy results for backward compat
     local fakeResults = self:CreateFakeResults(fakeItem)
 
     Loothing.UI.ResultsPanel:SetItem(fakeItem, fakeResults)
@@ -814,8 +840,10 @@ function LoothingTestMode:AddFakeCandidatesToItem(item)
             -- Response time
             candidate.responseTime = GetTime() - math.random(5, 30)
 
-            -- Items won this session (renderer looks for itemsWonThisSession)
+            -- Items won counters (renderer looks for these)
             candidate.itemsWonThisSession = math.random(0, 2)
+            candidate.itemsWonInstance = math.random(0, 5)
+            candidate.itemsWonWeekly = math.random(0, 8)
 
             -- Enrichment fields expected by CouncilTable renderer
             candidate.role = roles[i]

@@ -714,7 +714,16 @@ local function Test_ResultsPanelFortyVoters()
     local item = LoothingTestMode:CreateFakeItem()
     item:SetState(LOOTHING_ITEM_STATE.VOTING)
 
-    -- Add 40 votes
+    -- Populate candidateManager so ResultsPanel can display candidates
+    LoothingTestMode:AddFakeCandidatesToItem(item)
+    local cm = item:GetCandidateManager()
+    for _, c in ipairs(cm:GetAllCandidates()) do
+        for _ = 1, math.random(0, 8) do
+            c:AddCouncilVote()
+        end
+    end
+
+    -- Add 40 votes (legacy vote system)
     local councilMembers = LoothingTestMode:GetFakeCouncilMembers()
     for i = 2, #councilMembers do
         local member = councilMembers[i]
@@ -728,8 +737,7 @@ local function Test_ResultsPanelFortyVoters()
     -- Measure refresh time
     local resultsPanel = Loothing.UI.ResultsPanel
     local duration = Measure(function()
-        resultsPanel:SetItem(item)
-        resultsPanel:SetResults(results)
+        resultsPanel:SetItem(item, results)
     end)
     RecordOp(refreshMetrics, duration)
 

@@ -1,6 +1,6 @@
 --[[--------------------------------------------------------------------
     Loothing - Loot Council Addon for WoW 12.0+
-    ResultsPanel - Vote results display
+    ResultsPanel - Vote results display (candidate-centric)
 ----------------------------------------------------------------------]]
 
 local Loolib = LibStub("Loolib")
@@ -27,6 +27,7 @@ function LoothingResultsPanelMixin:Init()
 
     self.item = nil
     self.results = nil
+    self.tiedCandidates = nil
 
     self:CreateFrame()
     self:CreateElements()
@@ -132,8 +133,6 @@ end
 
 --- Create results display area
 function LoothingResultsPanelMixin:CreateResultsArea()
-    local L = LOOTHING_LOCALE
-
     local container = CreateFrame("Frame", nil, self.frame, "BackdropTemplate")
     container:SetPoint("TOPLEFT", 20, -110)
     container:SetPoint("BOTTOMRIGHT", -20, 60)
@@ -159,6 +158,18 @@ function LoothingResultsPanelMixin:CreateResultsArea()
     scrollFrame:SetScript("OnSizeChanged", function(sf, w, h)
         content:SetWidth(w)
     end)
+
+    -- Winner header text
+    self.winnerText = content:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    self.winnerText:SetPoint("TOPLEFT", 0, 0)
+    self.winnerText:SetPoint("TOPRIGHT", 0, 0)
+    self.winnerText:SetJustifyH("LEFT")
+
+    -- Response summary text (compact line below winner)
+    self.responseSummaryText = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    self.responseSummaryText:SetPoint("TOPLEFT", self.winnerText, "BOTTOMLEFT", 0, -4)
+    self.responseSummaryText:SetJustifyH("LEFT")
+    self.responseSummaryText:SetTextColor(0.7, 0.7, 0.7)
 
     self.resultsContainer = container
     self.resultsContent = content
@@ -204,7 +215,7 @@ end
 
 --- Set item and results to display
 -- @param item table - LoothingItem
--- @param results table - Tally results (optional)
+-- @param results table - Tally results (optional, kept for backward compat)
 function LoothingResultsPanelMixin:SetItem(item, results)
     self.item = item
     self.results = results
@@ -230,18 +241,17 @@ function LoothingResultsPanelMixin:SetItem(item, results)
         self.itemLevel:SetText("")
     end
 
-    -- Vote summary
-    local voteCount = item:GetVoteCount()
-    self.voteSummary:SetText(string.format(LOOTHING_LOCALE["TOTAL_VOTES"], voteCount))
-
-    -- Display results
-    if not results then
-        -- Generate results if not provided
-        local votes = item:GetVotes()
-        results = LoothingVotingEngine:TallySimple(votes)
-        self.results = results
+    -- Vote summary from candidateManager
+    local cm = item.candidateManager
+    if cm then
+        local totalVotes = cm:GetTotalVotes()
+        self.voteSummary:SetText(string.format(LOOTHING_LOCALE["TOTAL_VOTES"], totalVotes))
+    else
+        local voteCount = item:GetVoteCount()
+        self.voteSummary:SetText(string.format(LOOTHING_LOCALE["TOTAL_VOTES"], voteCount))
     end
 
+    -- Display candidate-centric results
     self:DisplayResults(results)
 
     -- Update button visibility
@@ -250,8 +260,8 @@ function LoothingResultsPanelMixin:SetItem(item, results)
     self:Show()
 end
 
---- Display vote results
--- @param results table
+--- Display vote results (candidate-centric)
+-- @param results table - Legacy results (ignored; data comes from candidateManager)
 function LoothingResultsPanelMixin:DisplayResults(results)
     -- Clear existing rows
     for _, row in ipairs(self.responseRows) do
@@ -259,44 +269,115 @@ function LoothingResultsPanelMixin:DisplayResults(results)
     end
     wipe(self.responseRows)
 
-    if not results or not results.counts then
+    local cm = self.item and self.item.candidateManager
+    if not cm or cm:GetCandidateCount() == 0 then
+        self.winnerText:SetText("")
+        self.responseSummaryText:SetText("")
         return
     end
 
-    local yOffset = 0
+    local totalVotes = cm:GetTotalVotes()
+    local winner = cm:GetMostVoted()
+
+    -- Sort candidates: by votes if any votes cast, else by response priority
+    local candidates
+    if totalVotes > 0 then
+        candidates = cm:GetCandidatesSortedBy("votes", false)
+    else
+        candidates = cm:GetAllCandidates()
+        table.sort(candidates, LoothingCandidateSorting.ByResponsePriority)
+    end
+
+    -- Update winner header
+    self:UpdateWinnerSection(winner, totalVotes, candidates)
+
+    -- Update response summary
+    local summaryOffset = self:UpdateResponseSummary(cm)
+
+    -- Create candidate rows (start below header + summary)
+    local yOffset = summaryOffset - 8
     local rowHeight = 60
     local padding = 8
 
-    -- Sort responses by vote count
-    local sortedResponses = {}
-    for response, data in pairs(results.counts) do
-        if LOOTHING_RESPONSE_INFO[response] then
-            sortedResponses[#sortedResponses + 1] = {
-                response = response,
-                count = data.count,
-                voters = data.voters,
-                info = LOOTHING_RESPONSE_INFO[response],
-            }
-        end
-    end
-
-    table.sort(sortedResponses, function(a, b)
-        if a.count ~= b.count then
-            return a.count > b.count
-        end
-        return a.response < b.response
-    end)
-
-    -- Create rows
-    for _, data in ipairs(sortedResponses) do
-        local isWinner = self.results and self.results.winningResponse == data.response and not self.results.isTie
-        local row = LoothingUI_CreateResponseRow(self.resultsContent, data, yOffset, self.results and self.results.totalVotes, isWinner)
+    for _, candidate in ipairs(candidates) do
+        local isWinner = (winner and candidate == winner and totalVotes > 0)
+        local row = LoothingUI_CreateCandidateResultRow(
+            self.resultsContent, candidate, yOffset, totalVotes, isWinner
+        )
         self.responseRows[#self.responseRows + 1] = row
         yOffset = yOffset - rowHeight - padding
     end
 
     -- Update content height
     self.resultsContent:SetHeight(math.abs(yOffset) + padding)
+end
+
+--- Update the winner/recommendation section at top of results
+-- @param winner table|nil - Winning candidate
+-- @param totalVotes number - Total council votes
+-- @param candidates table - All candidates sorted
+function LoothingResultsPanelMixin:UpdateWinnerSection(winner, totalVotes, candidates)
+    if totalVotes == 0 then
+        self.winnerText:SetText("|cff888888No council votes cast|r")
+        return
+    end
+
+    -- Detect ties
+    local maxVotes = winner and winner.councilVotes or 0
+    local tied = {}
+    for _, c in ipairs(candidates) do
+        if c.councilVotes == maxVotes and maxVotes > 0 then
+            tied[#tied + 1] = c
+        end
+    end
+
+    if #tied > 1 then
+        -- Tie
+        local names = {}
+        for _, c in ipairs(tied) do
+            names[#names + 1] = c:GetColoredName()
+        end
+        self.winnerText:SetText("|cffffcc00Tie:|r " .. table.concat(names, ", "))
+    elseif winner then
+        local coloredName = winner:GetColoredName()
+        self.winnerText:SetText(string.format("Recommended: %s (%d votes)", coloredName, maxVotes))
+    end
+end
+
+--- Update compact response summary line
+-- @param cm table - CandidateManager
+-- @return number - yOffset after the summary
+function LoothingResultsPanelMixin:UpdateResponseSummary(cm)
+    local counts = cm:GetResponseCounts()
+    local parts = {}
+
+    for _, response in ipairs(LOOTHING_RESPONSE_PRIORITY) do
+        local count = counts[response]
+        if count and count > 0 then
+            local info = LOOTHING_RESPONSE_INFO[response]
+            if info then
+                local rawColor = info.color
+                local cr, cg, cb
+                if rawColor.r then
+                    cr, cg, cb = rawColor.r, rawColor.g, rawColor.b
+                else
+                    cr, cg, cb = rawColor[1] or 0.5, rawColor[2] or 0.5, rawColor[3] or 0.5
+                end
+                local hex = string.format("%02x%02x%02x", cr * 255, cg * 255, cb * 255)
+                parts[#parts + 1] = string.format("|cff%s%s: %d|r", hex, info.name, count)
+            end
+        end
+    end
+
+    if #parts > 0 then
+        self.responseSummaryText:SetText(table.concat(parts, "  |  "))
+    else
+        self.responseSummaryText:SetText("")
+    end
+
+    -- Return yOffset for the first candidate row (after winnerText + summary)
+    -- winnerText is at y=0, summary is below it; estimate total header height
+    return -40
 end
 
 --[[--------------------------------------------------------------------
@@ -321,38 +402,51 @@ end
 
 --- Handle award button click
 function LoothingResultsPanelMixin:OnAwardClick()
-    if not self.item or not self.results then
+    if not self.item then
         return
+    end
+
+    -- Detect ties from candidateManager
+    self.tiedCandidates = nil
+    local cm = self.item.candidateManager
+    if cm then
+        local allCandidates = cm:GetAllCandidates()
+        local maxVotes = 0
+        for _, c in ipairs(allCandidates) do
+            if (c.councilVotes or 0) > maxVotes then
+                maxVotes = c.councilVotes
+            end
+        end
+
+        if maxVotes > 0 then
+            local tied = {}
+            for _, c in ipairs(allCandidates) do
+                if c.councilVotes == maxVotes then
+                    tied[#tied + 1] = c
+                end
+            end
+            if #tied > 1 then
+                self.tiedCandidates = tied
+            end
+        end
     end
 
     -- If award reasons are enabled, show the award reason dropdown
     if Loothing.Settings and Loothing.Settings:GetAwardReasonsEnabled() then
         self:ShowAwardReasonDropdown()
     else
-        -- Original behavior - no award reasons
-        local winnerResponse = self.results.winningResponse
-        local isTie = self.results.isTie
-
-        if isTie then
-            -- Show tie resolution dialog
-            self:ShowTieDialog()
+        if self.tiedCandidates then
+            self:ShowTieDialog(self.tiedCandidates)
         else
-            -- Show award confirmation
-            self:ShowAwardDialog(winnerResponse, nil, nil)
+            self:ShowAwardDialog(nil, nil, nil)
         end
     end
 end
 
 --- Show tie resolution dialog
--- Presents tied candidates in a context menu for the ML to break the tie
-function LoothingResultsPanelMixin:ShowTieDialog()
-    if not self.results or not self.results.tiedCandidates then
-        self:TriggerEvent("OnAwardClicked", self.item, nil, true)
-        return
-    end
-
-    local tiedCandidates = self.results.tiedCandidates
-    if #tiedCandidates < 2 then
+-- @param tiedCandidates table - Array of candidates sharing max votes
+function LoothingResultsPanelMixin:ShowTieDialog(tiedCandidates)
+    if not tiedCandidates or #tiedCandidates < 2 then
         self:TriggerEvent("OnAwardClicked", self.item, nil, true)
         return
     end
@@ -364,11 +458,11 @@ function LoothingResultsPanelMixin:ShowTieDialog()
     MenuUtil.CreateContextMenu(self.awardButton, function(ownerRegion, rootDescription)
         rootDescription:CreateTitle("Tie Breaker - Select Winner")
         for _, candidate in ipairs(tiedCandidates) do
-            local name = candidate.name or "Unknown"
+            local name = candidate.name or candidate.playerName or "Unknown"
             local votes = candidate.councilVotes or 0
             rootDescription:CreateButton(string.format("%s (%d votes)", name, votes), function()
                 if Loothing.Session and itemGUID then
-                    Loothing.Session:AwardItem(itemGUID, candidate.name, nil, reasonId)
+                    Loothing.Session:AwardItem(itemGUID, candidate.playerName or candidate.name, nil, reasonId)
                 end
                 self.selectedAwardReasonId = nil
                 self.selectedAwardReasonName = nil
@@ -385,27 +479,16 @@ function LoothingResultsPanelMixin:ShowTieDialog()
 end
 
 --- Show award confirmation dialog
--- @param winnerResponse number - The winning response type
+-- @param winnerResponse number|nil - Legacy (unused, kept for compat)
 -- @param awardReasonId number|nil - Award reason ID
 -- @param awardReasonName string|nil - Award reason name
 function LoothingResultsPanelMixin:ShowAwardDialog(winnerResponse, awardReasonId, awardReasonName)
-    if not self.item or not self.results then return end
+    if not self.item then return end
 
-    -- Find the top candidate for the winning response
+    -- Find the winning candidate from candidateManager
     local winner = nil
-    if self.results.counts and self.results.counts[winnerResponse] then
-        local voters = self.results.counts[winnerResponse].voters
-        if voters and #voters > 0 then
-            winner = voters[1]
-        end
-    end
-
-    -- Fallback: use most voted candidate from the candidate manager
-    if not winner and self.item.candidateManager then
-        local mostVoted = self.item.candidateManager:GetMostVoted()
-        if mostVoted then
-            winner = mostVoted
-        end
+    if self.item.candidateManager then
+        winner = self.item.candidateManager:GetMostVoted()
     end
 
     if not winner then
@@ -416,7 +499,7 @@ function LoothingResultsPanelMixin:ShowAwardDialog(winnerResponse, awardReasonId
 
     local itemGUID = self.item.guid
     local itemLink = self.item.itemLink or self.item.name or "Unknown Item"
-    local playerName = winner.name or "Unknown"
+    local playerName = winner.playerName or "Unknown"
 
     LoothingPopups:Show("LOOTHING_CONFIRM_AWARD", {
         item = itemLink,
@@ -433,15 +516,12 @@ end
 --- Show award reason dropdown
 -- Presents award reasons in a context menu, then routes to tie or award dialog
 function LoothingResultsPanelMixin:ShowAwardReasonDropdown()
-    local L = LOOTHING_LOCALE
-
     if not Loothing.Settings then
         return
     end
 
     local reasons = Loothing.Settings:GetAwardReasons()
-    local winnerResponse = self.results and self.results.winningResponse
-    local isTie = self.results and self.results.isTie
+    local isTie = self.tiedCandidates ~= nil
 
     MenuUtil.CreateContextMenu(self.awardButton, function(ownerRegion, rootDescription)
         rootDescription:CreateTitle("Select Award Reason")
@@ -452,9 +532,9 @@ function LoothingResultsPanelMixin:ShowAwardReasonDropdown()
                 if isTie then
                     self.selectedAwardReasonId = nil
                     self.selectedAwardReasonName = nil
-                    self:ShowTieDialog()
+                    self:ShowTieDialog(self.tiedCandidates)
                 else
-                    self:ShowAwardDialog(winnerResponse, nil, nil)
+                    self:ShowAwardDialog(nil, nil, nil)
                 end
             end)
             rootDescription:CreateDivider()
@@ -462,18 +542,18 @@ function LoothingResultsPanelMixin:ShowAwardReasonDropdown()
 
         -- Add each award reason
         for _, reason in ipairs(reasons) do
-            local r, g, b = 1, 1, 1
+            local cr, cg, cb = 1, 1, 1
             if reason.color then
-                r, g, b = reason.color[1] or 1, reason.color[2] or 1, reason.color[3] or 1
+                cr, cg, cb = reason.color[1] or 1, reason.color[2] or 1, reason.color[3] or 1
             end
-            local coloredName = string.format("|cff%02x%02x%02x%s|r", r * 255, g * 255, b * 255, reason.name)
+            local coloredName = string.format("|cff%02x%02x%02x%s|r", cr * 255, cg * 255, cb * 255, reason.name)
             rootDescription:CreateButton(coloredName, function()
                 if isTie then
                     self.selectedAwardReasonId = reason.id
                     self.selectedAwardReasonName = reason.name
-                    self:ShowTieDialog()
+                    self:ShowTieDialog(self.tiedCandidates)
                 else
-                    self:ShowAwardDialog(winnerResponse, reason.id, reason.name)
+                    self:ShowAwardDialog(nil, reason.id, reason.name)
                 end
             end)
         end
