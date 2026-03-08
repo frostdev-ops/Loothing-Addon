@@ -583,8 +583,18 @@ function LoothingCouncilTableMixin:OnVoteClick(candidate)
         local ok = Loothing.Session:RetractVote(self.currentItem.guid, candidate.name)
         Loothing:Debug("OnVoteClick: RetractVote returned", tostring(ok))
     else
+        -- Check self-vote setting
+        local selfVote = Loothing.Settings and Loothing.Settings:GetSelfVote()
+        if not selfVote then
+            local playerName = LoothingUtils.GetPlayerFullName()
+            if LoothingUtils.IsSamePlayer(candidate.name, playerName) then
+                Loothing:Print("Self-voting is disabled for this session.")
+                return
+            end
+        end
+
         -- Check multi-vote setting
-        local multiVote = Loothing.Settings and Loothing.Settings:Get("voting.multiVote", true)
+        local multiVote = Loothing.Settings and Loothing.Settings:GetMultiVote()
         if not multiVote then
             Loothing.Session:RetractAllVotes(self.currentItem.guid)
         end

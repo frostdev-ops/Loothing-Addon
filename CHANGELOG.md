@@ -2,6 +2,27 @@
 
 All notable changes to Loothing will be documented in this file.
 
+## [1.1.4-r2] - 2026-03-08
+
+### Fixed
+
+#### Multi-Vote Bypass with `multiVote` Disabled
+- **Wrong default fallback allowed multi-voting**: `Rows.lua` used `Settings:Get("voting.multiVote", true)` — the `true` fallback meant multi-vote was always allowed when the setting was absent. Replaced with the typed getter `Settings:GetMultiVote()` which defaults to `false`, matching `Constants.lua`
+
+#### Self-Vote Never Enforced
+- **`selfVote` setting had no effect**: The setting was defined, synced via MLDB, and configurable in the options UI, but never checked when casting votes. Added client-side guard in `OnVoteClick` that blocks self-votes with a user message, and visual feedback in `Columns.lua` that dims/disables the vote button for the player's own candidate row when `selfVote` is disabled
+
+#### No Server-Side Vote Validation
+- **ML accepted any vote payload**: `HandleRemoteVoteCommit` in `Session.lua` accepted multi-candidate responses even when `multiVote` was disabled, and never checked `selfVote`. Added ML-side enforcement: multi-vote payloads are truncated to the last vote when `multiVote` is off, and self-vote candidates are filtered from responses when `selfVote` is off
+
+### Changed
+
+#### MLDB Now Propagates All Session-Relevant Settings
+- **Previously only voting + observer settings were synced**: MLDB broadcast only covered 8 voting flags, timeout, sort order, observer config, and responseSets. Council members used their own local values for everything else, causing inconsistent behavior across raid members
+- **Now propagates**: `votingMode`, `autoPass` (full table), `autoAward` (full table), `awardReasons` (full table with reason definitions), `winnerDetermination` (mode, tieBreaker, autoAwardOnUnanimous, requireConfirmation), `announcements` (full table), `ignoreItems` (full table)
+- **Key compression extended**: Added ~40 new compression codes to keep bandwidth impact minimal
+- **Full table overrides on apply**: New settings categories use full table replacement in `ApplyFromML()` rather than per-field nil checks, ensuring no stale local values persist
+
 ## [1.1.4-r1] - 2026-03-08
 
 ### Fixed

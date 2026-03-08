@@ -1626,6 +1626,29 @@ function LoothingSessionMixin:HandleRemoteVoteCommit(data)
         return
     end
 
+    -- Enforce multiVote on ML side
+    local multiVote = Loothing.Settings and Loothing.Settings:GetMultiVote()
+    if not multiVote and #data.responses > 1 then
+        Loothing:Debug("Rejected multi-vote from", tostring(data.voter), "- multiVote is disabled")
+        data.responses = { data.responses[#data.responses] }
+    end
+
+    -- Enforce selfVote on ML side
+    local selfVote = Loothing.Settings and Loothing.Settings:GetSelfVote()
+    if not selfVote and data.voter then
+        local filtered = {}
+        for _, candidateName in ipairs(data.responses) do
+            if not LoothingUtils.IsSamePlayer(candidateName, data.voter) then
+                filtered[#filtered + 1] = candidateName
+            end
+        end
+        if #filtered == 0 then
+            Loothing:Debug("Rejected self-vote from", tostring(data.voter))
+            return
+        end
+        data.responses = filtered
+    end
+
     -- Get voter's class from raid roster
     local roster = LoothingUtils.GetRaidRoster()
     local voterClass = "UNKNOWN"

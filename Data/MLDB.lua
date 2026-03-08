@@ -44,13 +44,16 @@ local COMPRESSION_KEYS = {
     ["whisperKeys"] = "wk",
     ["buttons"] = "btns",
 
-    -- Per-button fields
+    -- Per-button / shared fields
     ["name"] = "n",
     ["color"] = "c",
     ["icon"] = "i",
     ["sort"] = "s",
     ["text"] = "t",
     ["id"] = "id",
+    ["enabled"] = "en",
+    ["channel"] = "ch",
+    ["reason"] = "r",
 
     -- Observer settings
     ["mlIsObserver"] = "mio",
@@ -60,6 +63,68 @@ local COMPRESSION_KEYS = {
     ["seeVoterIdentities"] = "svi",
     ["seeResponses"] = "sr",
     ["seeNotes"] = "sn",
+
+    -- Session settings
+    ["votingMode"] = "vm",
+
+    -- AutoPass settings
+    ["autoPass"] = "ap",
+    ["weapons"] = "wp",
+    ["boe"] = "bo",
+    ["transmog"] = "tm",
+    ["trinkets"] = "trk",
+    ["transmogSource"] = "tms",
+    ["silent"] = "sl",
+
+    -- AutoAward settings
+    ["autoAward"] = "aa",
+    ["lowerThreshold"] = "lt",
+    ["upperThreshold"] = "ut",
+    ["awardTo"] = "at",
+    ["includeBoE"] = "ib",
+
+    -- Award reasons
+    ["awardReasons"] = "ar",
+    ["requireReason"] = "rr",
+    ["numReasons"] = "nr",
+    ["reasons"] = "rsn",
+    ["log"] = "lg",
+    ["disenchant"] = "de",
+
+    -- Winner determination
+    ["winnerDetermination"] = "wd",
+    ["mode"] = "m",
+    ["tieBreaker"] = "tb",
+    ["autoAwardOnUnanimous"] = "aau",
+    ["requireConfirmation"] = "rc",
+
+    -- Announcements
+    ["announcements"] = "an",
+    ["announceAwards"] = "anaw",
+    ["announceItems"] = "ani",
+    ["announceBossKill"] = "anbk",
+    ["announceConsiderations"] = "anc",
+    ["awardLines"] = "awl",
+    ["itemLines"] = "itl",
+    ["considerationsChannel"] = "cc",
+    ["considerationsText"] = "cxt",
+    ["sessionStartChannel"] = "ssc",
+    ["sessionStartText"] = "sst",
+    ["sessionEndChannel"] = "sec",
+    ["sessionEndText"] = "set2",
+    ["awardChannel"] = "ach",
+    ["awardChannelSecondary"] = "acs",
+    ["awardText"] = "atx",
+    ["itemChannel"] = "ich",
+    ["itemText"] = "itx",
+
+    -- Ignore items
+    ["ignoreItems"] = "ii",
+    ["items"] = "its",
+    ["ignoreEnchantingMaterials"] = "iem",
+    ["ignoreCraftingReagents"] = "icr",
+    ["ignoreConsumables"] = "ico",
+    ["ignorePermanentEnhancements"] = "ipe",
 }
 
 -- Reverse mapping (code -> key)
@@ -115,6 +180,8 @@ end
 ----------------------------------------------------------------------]]
 
 --- Gather current ML settings for transmission
+-- Includes all session-relevant settings so every raid member operates
+-- under the same rules as the Master Looter.
 -- @return table - Settings to sync
 function LoothingMLDBMixin:GatherSettings()
     if not Loothing.Settings then
@@ -139,14 +206,60 @@ function LoothingMLDBMixin:GatherSettings()
     settings.openObservation = Loothing.Settings:Get("observers.openObservation", false)
     settings.observerPermissions = Loothing.Settings:GetObserverPermissions()
 
-    -- Voting timeout
+    -- Session settings
     settings.votingTimeout = Loothing.Settings:Get("settings.votingTimeout", 30)
+    settings.votingMode = Loothing.Settings:Get("settings.votingMode", "SIMPLE")
 
     -- Sort order
     settings.sortOrder = Loothing.Settings:Get("councilTable.sortColumn", "response")
 
     -- Unified responseSets (full structure)
     settings.responseSets = Loothing.Settings:GetResponseSets()
+
+    -- AutoPass settings
+    settings.autoPass = {
+        enabled       = Loothing.Settings:Get("autoPass.enabled") ~= false,
+        weapons       = Loothing.Settings:Get("autoPass.weapons") ~= false,
+        boe           = Loothing.Settings:Get("autoPass.boe") == true,
+        transmog      = Loothing.Settings:Get("autoPass.transmog") == true,
+        trinkets      = Loothing.Settings:Get("autoPass.trinkets") == true,
+        transmogSource = Loothing.Settings:Get("autoPass.transmogSource") == true,
+        silent        = Loothing.Settings:Get("autoPass.silent") == true,
+    }
+
+    -- AutoAward settings
+    settings.autoAward = {
+        enabled        = Loothing.Settings:Get("autoAward.enabled") == true,
+        lowerThreshold = Loothing.Settings:Get("autoAward.lowerThreshold", 2),
+        upperThreshold = Loothing.Settings:Get("autoAward.upperThreshold", 4),
+        awardTo        = Loothing.Settings:Get("autoAward.awardTo", ""),
+        reason         = Loothing.Settings:Get("autoAward.reason", "Auto Award"),
+        includeBoE     = Loothing.Settings:Get("autoAward.includeBoE") == true,
+    }
+
+    -- Award reasons
+    settings.awardReasons = {
+        enabled       = Loothing.Settings:Get("awardReasons.enabled") ~= false,
+        requireReason = Loothing.Settings:Get("awardReasons.requireReason") == true,
+        numReasons    = Loothing.Settings:Get("awardReasons.numReasons", 6),
+        reasons       = Loothing.Settings:GetAwardReasons(),
+    }
+
+    -- Winner determination
+    settings.winnerDetermination = {
+        mode                 = Loothing.Settings:Get("winnerDetermination.mode", "ML_CONFIRM"),
+        tieBreaker           = Loothing.Settings:Get("winnerDetermination.tieBreaker", "ROLL"),
+        autoAwardOnUnanimous = Loothing.Settings:Get("winnerDetermination.autoAwardOnUnanimous") == true,
+        requireConfirmation  = Loothing.Settings:Get("winnerDetermination.requireConfirmation") ~= false,
+    }
+
+    -- Announcements (full structure)
+    settings.announcements = Loothing.Settings:Get("announcements",
+        LOOTHING_DEFAULT_SETTINGS and LOOTHING_DEFAULT_SETTINGS.announcements or {})
+
+    -- Ignore items
+    settings.ignoreItems = Loothing.Settings:Get("ignoreItems",
+        LOOTHING_DEFAULT_SETTINGS and LOOTHING_DEFAULT_SETTINGS.ignoreItems or {})
 
     return settings
 end
@@ -309,8 +422,8 @@ function LoothingMLDBMixin:ApplyFromML(settings, sender)
 
     Loothing:Debug("Applying MLDB from", sender)
 
-    -- Apply voting settings
     if Loothing.Settings then
+        -- Apply voting settings
         local votingSettings = Loothing.Settings:Get("voting", {})
 
         if settings.selfVote ~= nil then
@@ -340,9 +453,12 @@ function LoothingMLDBMixin:ApplyFromML(settings, sender)
 
         Loothing.Settings:Set("voting", votingSettings)
 
-        -- Apply voting timeout
+        -- Apply session settings
         if settings.votingTimeout then
             Loothing.Settings:Set("settings.votingTimeout", settings.votingTimeout)
+        end
+        if settings.votingMode then
+            Loothing.Settings:Set("settings.votingMode", settings.votingMode)
         end
 
         -- Apply sort order
@@ -360,6 +476,36 @@ function LoothingMLDBMixin:ApplyFromML(settings, sender)
         end
         if settings.observerPermissions then
             Loothing.Settings:Set("observers.permissions", settings.observerPermissions)
+        end
+
+        -- Apply autoPass settings (full table override)
+        if settings.autoPass then
+            Loothing.Settings:Set("autoPass", settings.autoPass)
+        end
+
+        -- Apply autoAward settings (full table override)
+        if settings.autoAward then
+            Loothing.Settings:Set("autoAward", settings.autoAward)
+        end
+
+        -- Apply award reasons (full table override)
+        if settings.awardReasons then
+            Loothing.Settings:Set("awardReasons", settings.awardReasons)
+        end
+
+        -- Apply winner determination (full table override)
+        if settings.winnerDetermination then
+            Loothing.Settings:Set("winnerDetermination", settings.winnerDetermination)
+        end
+
+        -- Apply announcements (full table override)
+        if settings.announcements then
+            Loothing.Settings:Set("announcements", settings.announcements)
+        end
+
+        -- Apply ignore items (full table override)
+        if settings.ignoreItems then
+            Loothing.Settings:Set("ignoreItems", settings.ignoreItems)
         end
     end
 

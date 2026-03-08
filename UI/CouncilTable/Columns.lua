@@ -586,13 +586,20 @@ LoothingCouncilTableMixin.CellUpdaters.vote = function(self, cell, candidate)
         local hasVoted = candidate.hasMyVote
 
         if canVote then
-            cell.voteButton:Show()
-            cell.voteButton:SetAlpha(1)
-            cell.voteButton:Enable()
-            if hasVoted then
-                cell.voteButton:SetText("|cff33ee33Voted|r")
-            else
+            -- Check if this is a self-vote and selfVote is disabled
+            local candidateName = candidate.playerName or candidate.name
+            local isSelf = candidateName and LoothingUtils.IsSamePlayer(candidateName, LoothingUtils.GetPlayerFullName())
+            local selfVoteAllowed = not Loothing.Settings or Loothing.Settings:GetSelfVote()
+            if isSelf and not selfVoteAllowed then
+                cell.voteButton:Show()
+                cell.voteButton:SetAlpha(0.4)
+                cell.voteButton:Disable()
                 cell.voteButton:SetText("Vote")
+            else
+                cell.voteButton:Show()
+                cell.voteButton:SetAlpha(1)
+                cell.voteButton:Enable()
+                cell.voteButton:SetText(hasVoted and "|cff33ee33Voted|r" or "Vote")
             end
         else
             local isObserver = Loothing.Observer and (Loothing.Observer:IsPlayerObserver() or Loothing.Observer:IsMLObserver())
