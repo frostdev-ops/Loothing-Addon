@@ -2,6 +2,24 @@
 
 All notable changes to Loothing will be documented in this file.
 
+## [1.1.5] - 2026-03-08
+
+### Added
+
+#### Bulk Actions for SessionPanel Items
+- **Multi-select support**: Ctrl+click to toggle individual items, Shift+click for range selection, plain click for single-select (backward compatible)
+- **Bulk action bar**: Gold-tinted toolbar appears when 2+ items are selected, showing state-aware action buttons with counts: Start Vote (N), End Vote (N), Skip (N), Remove (N), Re-Vote (N), plus Select All / Deselect buttons and a right-aligned selection count label
+- **Bulk action handlers**: Each button filters selected items by applicable state and calls existing Session methods. Destructive actions (Skip, Remove, Re-Vote) show `LoothingPopups:Confirm()` dialogs before executing
+- **Bulk context menu**: Right-clicking a multi-selected row shows a context menu with state-filtered bulk actions via `MenuUtil.CreateContextMenu()`. Right-clicking an unselected row falls through to the normal single-item context menu
+- **Selection pruning**: When items are removed/awarded during a session, stale GUIDs are automatically pruned from the selection set on the next `RefreshItems()` call
+- **ItemRow `onContextMenu` callback**: New callback hook in `LoothingItemRowMixin:OnClick()` allows parent panels to intercept right-click before the default context menu fires (returns `true` to suppress default)
+- **12 new locale strings** in `enUS.lua`: `BULK_START_VOTE`, `BULK_END_VOTE`, `BULK_SKIP`, `BULK_REMOVE`, `BULK_REVOTE`, `BULK_AWARD_LATER`, `DESELECT_ALL`, `N_SELECTED`, `REMOVE_ITEMS`, `CONFIRM_BULK_SKIP`, `CONFIRM_BULK_REMOVE`, `CONFIRM_BULK_REVOTE`
+
+### Changed
+- **SessionPanel selection model**: Replaced single `selectedItem` tracking with `selectedItems` (guid -> item map) plus `lastClickedGuid` for range selection. `selectedItem` is still set for backward compatibility when exactly 1 item is selected
+- **Bulk bar visibility**: ML-only action buttons are hidden (not just disabled) for non-ML users. Select All / Deselect buttons remain visible for all users
+- **Scroll frame anchor adjustment**: Scroll frame top anchor shifts down by 28px when the bulk bar is visible, matching the existing `ToggleFilterBar()` pattern
+
 ## [1.1.4-r2] - 2026-03-08
 
 ### Added

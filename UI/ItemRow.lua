@@ -480,6 +480,10 @@ function LoothingItemRowMixin:OnClick(button)
             self.callbacks.onSelect(self, self.item)
         end
     elseif button == "RightButton" then
+        -- Allow parent to intercept right-click (e.g. bulk context menu)
+        if self.callbacks.onContextMenu and self.callbacks.onContextMenu(self, self.item) then
+            return
+        end
         -- Show context menu
         self:ShowContextMenu()
     end

@@ -916,6 +916,20 @@ L["OBSERVER_SEE_NOTES_DESC"] = "Observers can see candidate notes"
 L["CONFIG_OBSERVER_REMOVE_ALL"] = "Remove All Observers"
 L["CONFIG_OBSERVER_REMOVE_ALL_DESC"] = "Remove all observers from the list"
 
+-- Bulk Actions
+L["BULK_START_VOTE"] = "Start Vote (%d)"
+L["BULK_END_VOTE"] = "End Vote (%d)"
+L["BULK_SKIP"] = "Skip (%d)"
+L["BULK_REMOVE"] = "Remove (%d)"
+L["BULK_REVOTE"] = "Re-Vote (%d)"
+L["BULK_AWARD_LATER"] = "Award Later"
+L["DESELECT_ALL"] = "Deselect"
+L["N_SELECTED"] = "%d selected"
+L["REMOVE_ITEMS"] = "Remove Items"
+L["CONFIRM_BULK_SKIP"] = "Skip %d selected items?"
+L["CONFIRM_BULK_REMOVE"] = "Remove %d selected items from the session?"
+L["CONFIRM_BULK_REVOTE"] = "Re-vote on %d selected items?"
+
 -- Make locale available globally
 LOOTHING_LOCALE = L
 
