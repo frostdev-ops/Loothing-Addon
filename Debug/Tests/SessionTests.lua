@@ -104,6 +104,27 @@ local function CreateMockItem(itemLink, looter)
     return CreateLoothingItem(itemLink, looter, 12345)
 end
 
+-- Mock addon-owned guards that StartSession checks: Loothing.handleLoot and TestMode
+-- TestMode bypasses the IsInGroup() check without tainting Blizzard secure globals
+local function MockSessionPermissions(canHandleLoot)
+    local saved = {
+        handleLoot = Loothing.handleLoot,
+        testModeEnabled = LoothingTestMode and LoothingTestMode.enabled,
+    }
+    Loothing.handleLoot = (canHandleLoot == true)
+    if LoothingTestMode then
+        LoothingTestMode.enabled = true
+    end
+    return saved
+end
+
+local function RestoreSessionPermissions(saved)
+    Loothing.handleLoot = saved.handleLoot
+    if LoothingTestMode then
+        LoothingTestMode.enabled = saved.testModeEnabled
+    end
+end
+
 --[[--------------------------------------------------------------------
     1. Session Creation Tests
 ----------------------------------------------------------------------]]
@@ -112,9 +133,7 @@ Describe("Session Creation", function()
     It("StartSession creates valid session", function()
         local session = CreateMockSession()
 
-        -- Mock raid leader check
-        local oldIsRaidLeader = LoothingUtils.IsRaidLeaderOrAssistant
-        LoothingUtils.IsRaidLeaderOrAssistant = function() return true end
+        local saved = MockSessionPermissions(true)
 
         local success = session:StartSession(12345, "Test Boss")
 
@@ -123,8 +142,7 @@ Describe("Session Creation", function()
         AssertEquals(session:GetEncounterID(), 12345, "Encounter ID should match")
         AssertEquals(session:GetEncounterName(), "Test Boss", "Encounter name should match")
 
-        -- Cleanup
-        LoothingUtils.IsRaidLeaderOrAssistant = oldIsRaidLeader
+        RestoreSessionPermissions(saved)
         session:EndSession()
     end)
 
@@ -142,15 +160,14 @@ Describe("Session Creation", function()
         local session1 = CreateMockSession()
         local session2 = CreateMockSession()
 
-        local oldIsRaidLeader = LoothingUtils.IsRaidLeaderOrAssistant
-        LoothingUtils.IsRaidLeaderOrAssistant = function() return true end
+        local saved = MockSessionPermissions(true)
 
         session1:StartSession(1, "Boss 1")
         session2:StartSession(2, "Boss 2")
 
         AssertNotEquals(session1:GetSessionID(), session2:GetSessionID(), "Session IDs should be unique")
 
-        LoothingUtils.IsRaidLeaderOrAssistant = oldIsRaidLeader
+        RestoreSessionPermissions(saved)
         session1:EndSession()
         session2:EndSession()
     end)
@@ -158,23 +175,21 @@ Describe("Session Creation", function()
     It("Encounter info is stored correctly", function()
         local session = CreateMockSession()
 
-        local oldIsRaidLeader = LoothingUtils.IsRaidLeaderOrAssistant
-        LoothingUtils.IsRaidLeaderOrAssistant = function() return true end
+        local saved = MockSessionPermissions(true)
 
         session:StartSession(999, "Mythic Test Boss")
 
         AssertEquals(session:GetEncounterID(), 999, "Encounter ID stored")
         AssertEquals(session:GetEncounterName(), "Mythic Test Boss", "Encounter name stored")
 
-        LoothingUtils.IsRaidLeaderOrAssistant = oldIsRaidLeader
+        RestoreSessionPermissions(saved)
         session:EndSession()
     end)
 
     It("Cannot start session twice", function()
         local session = CreateMockSession()
 
-        local oldIsRaidLeader = LoothingUtils.IsRaidLeaderOrAssistant
-        LoothingUtils.IsRaidLeaderOrAssistant = function() return true end
+        local saved = MockSessionPermissions(true)
 
         local first = session:StartSession(1, "Boss")
         local second = session:StartSession(2, "Another Boss")
@@ -183,22 +198,21 @@ Describe("Session Creation", function()
         AssertFalse(second, "Second start should fail")
         AssertEquals(session:GetEncounterID(), 1, "Should keep first encounter")
 
-        LoothingUtils.IsRaidLeaderOrAssistant = oldIsRaidLeader
+        RestoreSessionPermissions(saved)
         session:EndSession()
     end)
 
     It("Cannot start session without permissions", function()
         local session = CreateMockSession()
 
-        local oldIsRaidLeader = LoothingUtils.IsRaidLeaderOrAssistant
-        LoothingUtils.IsRaidLeaderOrAssistant = function() return false end
+        local saved = MockSessionPermissions(false)
 
         local success = session:StartSession(1, "Boss")
 
         AssertFalse(success, "Should not start without permissions")
         AssertEquals(session:GetState(), LOOTHING_SESSION_STATE.INACTIVE, "State should remain INACTIVE")
 
-        LoothingUtils.IsRaidLeaderOrAssistant = oldIsRaidLeader
+        RestoreSessionPermissions(saved)
     end)
 end)
 
@@ -210,8 +224,7 @@ Describe("Item Management", function()
     It("AddItem creates LoothingItemMixin", function()
         local session = CreateMockSession()
 
-        local oldIsRaidLeader = LoothingUtils.IsRaidLeaderOrAssistant
-        LoothingUtils.IsRaidLeaderOrAssistant = function() return true end
+        local saved = MockSessionPermissions(true)
 
         session:StartSession(1, "Boss")
 
@@ -221,15 +234,14 @@ Describe("Item Management", function()
         AssertNotNil(item.guid, "Item should have GUID")
         AssertEquals(item.state, LOOTHING_ITEM_STATE.PENDING, "Item should be PENDING")
 
-        LoothingUtils.IsRaidLeaderOrAssistant = oldIsRaidLeader
+        RestoreSessionPermissions(saved)
         session:EndSession()
     end)
 
     It("RemoveItem removes from DataProvider", function()
         local session = CreateMockSession()
 
-        local oldIsRaidLeader = LoothingUtils.IsRaidLeaderOrAssistant
-        LoothingUtils.IsRaidLeaderOrAssistant = function() return true end
+        local saved = MockSessionPermissions(true)
 
         session:StartSession(1, "Boss")
 
@@ -243,15 +255,14 @@ Describe("Item Management", function()
         AssertTrue(removed, "RemoveItem should succeed")
         AssertEquals(session:GetItemCount(), 0, "Should have 0 items after removal")
 
-        LoothingUtils.IsRaidLeaderOrAssistant = oldIsRaidLeader
+        RestoreSessionPermissions(saved)
         session:EndSession()
     end)
 
     It("Items have unique GUIDs", function()
         local session = CreateMockSession()
 
-        local oldIsRaidLeader = LoothingUtils.IsRaidLeaderOrAssistant
-        LoothingUtils.IsRaidLeaderOrAssistant = function() return true end
+        local saved = MockSessionPermissions(true)
 
         session:StartSession(1, "Boss")
 
@@ -260,7 +271,7 @@ Describe("Item Management", function()
 
         AssertNotEquals(item1.guid, item2.guid, "Items should have unique GUIDs")
 
-        LoothingUtils.IsRaidLeaderOrAssistant = oldIsRaidLeader
+        RestoreSessionPermissions(saved)
         session:EndSession()
     end)
 
@@ -276,8 +287,7 @@ Describe("Item Management", function()
     It("GetItemByGUID returns correct item", function()
         local session = CreateMockSession()
 
-        local oldIsRaidLeader = LoothingUtils.IsRaidLeaderOrAssistant
-        LoothingUtils.IsRaidLeaderOrAssistant = function() return true end
+        local saved = MockSessionPermissions(true)
 
         session:StartSession(1, "Boss")
 
@@ -288,15 +298,14 @@ Describe("Item Management", function()
 
         AssertEquals(found, item2, "Should find correct item by GUID")
 
-        LoothingUtils.IsRaidLeaderOrAssistant = oldIsRaidLeader
+        RestoreSessionPermissions(saved)
         session:EndSession()
     end)
 
     It("GetPendingItems returns only pending items", function()
         local session = CreateMockSession()
 
-        local oldIsRaidLeader = LoothingUtils.IsRaidLeaderOrAssistant
-        LoothingUtils.IsRaidLeaderOrAssistant = function() return true end
+        local saved = MockSessionPermissions(true)
 
         session:StartSession(1, "Boss")
 
@@ -310,7 +319,7 @@ Describe("Item Management", function()
         AssertEquals(#pending, 1, "Should have 1 pending item")
         AssertEquals(pending[1], item1, "Should return only pending item")
 
-        LoothingUtils.IsRaidLeaderOrAssistant = oldIsRaidLeader
+        RestoreSessionPermissions(saved)
         session:EndSession()
     end)
 end)
@@ -323,8 +332,7 @@ Describe("State Transitions", function()
     It("StartVoting changes item state to VOTING", function()
         local session = CreateMockSession()
 
-        local oldIsRaidLeader = LoothingUtils.IsRaidLeaderOrAssistant
-        LoothingUtils.IsRaidLeaderOrAssistant = function() return true end
+        local saved = MockSessionPermissions(true)
 
         session:StartSession(1, "Boss")
         local item = session:AddItem("|cffa335ee|Hitem:212398::::::::80::::::::::|h[Epic Sword]|h|r", "Player1")
@@ -335,15 +343,14 @@ Describe("State Transitions", function()
         AssertEquals(item:GetState(), LOOTHING_ITEM_STATE.VOTING, "Item should be in VOTING state")
         AssertEquals(session:GetCurrentVotingItem(), item, "Session should track voting item")
 
-        LoothingUtils.IsRaidLeaderOrAssistant = oldIsRaidLeader
+        RestoreSessionPermissions(saved)
         session:EndSession()
     end)
 
     It("EndVoting changes state to TALLIED", function()
         local session = CreateMockSession()
 
-        local oldIsRaidLeader = LoothingUtils.IsRaidLeaderOrAssistant
-        LoothingUtils.IsRaidLeaderOrAssistant = function() return true end
+        local saved = MockSessionPermissions(true)
 
         session:StartSession(1, "Boss")
         local item = session:AddItem("|cffa335ee|Hitem:212398::::::::80::::::::::|h[Epic Sword]|h|r", "Player1")
@@ -354,15 +361,14 @@ Describe("State Transitions", function()
         AssertEquals(item:GetState(), LOOTHING_ITEM_STATE.TALLIED, "Item should be TALLIED")
         AssertNil(session:GetCurrentVotingItem(), "Current voting item should be cleared")
 
-        LoothingUtils.IsRaidLeaderOrAssistant = oldIsRaidLeader
+        RestoreSessionPermissions(saved)
         session:EndSession()
     end)
 
     It("AwardItem marks as AWARDED", function()
         local session = CreateMockSession()
 
-        local oldIsRaidLeader = LoothingUtils.IsRaidLeaderOrAssistant
-        LoothingUtils.IsRaidLeaderOrAssistant = function() return true end
+        local saved = MockSessionPermissions(true)
 
         session:StartSession(1, "Boss")
         local item = session:AddItem("|cffa335ee|Hitem:212398::::::::80::::::::::|h[Epic Sword]|h|r", "Player1")
@@ -372,15 +378,14 @@ Describe("State Transitions", function()
         AssertEquals(item:GetState(), LOOTHING_ITEM_STATE.AWARDED, "Item should be AWARDED")
         AssertEquals(item:GetWinner(), LoothingUtils.NormalizeName("Winner"), "Winner should be set")
 
-        LoothingUtils.IsRaidLeaderOrAssistant = oldIsRaidLeader
+        RestoreSessionPermissions(saved)
         session:EndSession()
     end)
 
     It("SkipItem marks as SKIPPED", function()
         local session = CreateMockSession()
 
-        local oldIsRaidLeader = LoothingUtils.IsRaidLeaderOrAssistant
-        LoothingUtils.IsRaidLeaderOrAssistant = function() return true end
+        local saved = MockSessionPermissions(true)
 
         session:StartSession(1, "Boss")
         local item = session:AddItem("|cffa335ee|Hitem:212398::::::::80::::::::::|h[Epic Sword]|h|r", "Player1")
@@ -389,15 +394,14 @@ Describe("State Transitions", function()
 
         AssertEquals(item:GetState(), LOOTHING_ITEM_STATE.SKIPPED, "Item should be SKIPPED")
 
-        LoothingUtils.IsRaidLeaderOrAssistant = oldIsRaidLeader
+        RestoreSessionPermissions(saved)
         session:EndSession()
     end)
 
     It("Cannot start voting on already voting item", function()
         local session = CreateMockSession()
 
-        local oldIsRaidLeader = LoothingUtils.IsRaidLeaderOrAssistant
-        LoothingUtils.IsRaidLeaderOrAssistant = function() return true end
+        local saved = MockSessionPermissions(true)
 
         session:StartSession(1, "Boss")
         local item1 = session:AddItem("|cffa335ee|Hitem:212398::::::::80::::::::::|h[Item 1]|h|r", "Player1")
@@ -409,15 +413,14 @@ Describe("State Transitions", function()
         AssertFalse(second, "Should not start voting on second item")
         AssertEquals(session:GetCurrentVotingItem(), item1, "Should keep first item voting")
 
-        LoothingUtils.IsRaidLeaderOrAssistant = oldIsRaidLeader
+        RestoreSessionPermissions(saved)
         session:EndSession()
     end)
 
     It("Cannot start voting on non-pending item", function()
         local session = CreateMockSession()
 
-        local oldIsRaidLeader = LoothingUtils.IsRaidLeaderOrAssistant
-        LoothingUtils.IsRaidLeaderOrAssistant = function() return true end
+        local saved = MockSessionPermissions(true)
 
         session:StartSession(1, "Boss")
         local item = session:AddItem("|cffa335ee|Hitem:212398::::::::80::::::::::|h[Epic Sword]|h|r", "Player1")
@@ -428,7 +431,7 @@ Describe("State Transitions", function()
 
         AssertFalse(success, "Should not start voting on awarded item")
 
-        LoothingUtils.IsRaidLeaderOrAssistant = oldIsRaidLeader
+        RestoreSessionPermissions(saved)
         session:EndSession()
     end)
 end)
@@ -441,8 +444,7 @@ Describe("Session End", function()
     It("EndSession clears items", function()
         local session = CreateMockSession()
 
-        local oldIsRaidLeader = LoothingUtils.IsRaidLeaderOrAssistant
-        LoothingUtils.IsRaidLeaderOrAssistant = function() return true end
+        local saved = MockSessionPermissions(true)
 
         session:StartSession(1, "Boss")
         session:AddItem("|cffa335ee|Hitem:212398::::::::80::::::::::|h[Item 1]|h|r", "Player1")
@@ -454,14 +456,13 @@ Describe("Session End", function()
 
         AssertEquals(session:GetItemCount(), 0, "Items should be cleared")
 
-        LoothingUtils.IsRaidLeaderOrAssistant = oldIsRaidLeader
+        RestoreSessionPermissions(saved)
     end)
 
     It("EndSession moves to INACTIVE state", function()
         local session = CreateMockSession()
 
-        local oldIsRaidLeader = LoothingUtils.IsRaidLeaderOrAssistant
-        LoothingUtils.IsRaidLeaderOrAssistant = function() return true end
+        local saved = MockSessionPermissions(true)
 
         session:StartSession(1, "Boss")
         AssertEquals(session:GetState(), LOOTHING_SESSION_STATE.ACTIVE, "Should be ACTIVE")
@@ -471,14 +472,13 @@ Describe("Session End", function()
         AssertEquals(session:GetState(), LOOTHING_SESSION_STATE.INACTIVE, "Should be INACTIVE")
         AssertFalse(session:IsActive(), "IsActive should be false")
 
-        LoothingUtils.IsRaidLeaderOrAssistant = oldIsRaidLeader
+        RestoreSessionPermissions(saved)
     end)
 
     It("EndSession cancels active voting", function()
         local session = CreateMockSession()
 
-        local oldIsRaidLeader = LoothingUtils.IsRaidLeaderOrAssistant
-        LoothingUtils.IsRaidLeaderOrAssistant = function() return true end
+        local saved = MockSessionPermissions(true)
 
         session:StartSession(1, "Boss")
         local item = session:AddItem("|cffa335ee|Hitem:212398::::::::80::::::::::|h[Epic Sword]|h|r", "Player1")
@@ -490,21 +490,20 @@ Describe("Session End", function()
 
         AssertNil(session:GetCurrentVotingItem(), "Voting item should be cleared")
 
-        LoothingUtils.IsRaidLeaderOrAssistant = oldIsRaidLeader
+        RestoreSessionPermissions(saved)
     end)
 
     It("CloseSession changes state to CLOSED", function()
         local session = CreateMockSession()
 
-        local oldIsRaidLeader = LoothingUtils.IsRaidLeaderOrAssistant
-        LoothingUtils.IsRaidLeaderOrAssistant = function() return true end
+        local saved = MockSessionPermissions(true)
 
         session:StartSession(1, "Boss")
         session:CloseSession()
 
         AssertEquals(session:GetState(), LOOTHING_SESSION_STATE.CLOSED, "Should be CLOSED")
 
-        LoothingUtils.IsRaidLeaderOrAssistant = oldIsRaidLeader
+        RestoreSessionPermissions(saved)
         session:EndSession()
     end)
 
@@ -539,8 +538,7 @@ Describe("Edge Cases", function()
     It("Invalid item GUID handling", function()
         local session = CreateMockSession()
 
-        local oldIsRaidLeader = LoothingUtils.IsRaidLeaderOrAssistant
-        LoothingUtils.IsRaidLeaderOrAssistant = function() return true end
+        local saved = MockSessionPermissions(true)
 
         session:StartSession(1, "Boss")
 
@@ -553,15 +551,14 @@ Describe("Edge Cases", function()
         local voted = session:StartVoting("invalid-guid-12345", 30)
         AssertFalse(voted, "Should fail to start voting on invalid GUID")
 
-        LoothingUtils.IsRaidLeaderOrAssistant = oldIsRaidLeader
+        RestoreSessionPermissions(saved)
         session:EndSession()
     end)
 
     It("Multiple items same looter", function()
         local session = CreateMockSession()
 
-        local oldIsRaidLeader = LoothingUtils.IsRaidLeaderOrAssistant
-        LoothingUtils.IsRaidLeaderOrAssistant = function() return true end
+        local saved = MockSessionPermissions(true)
 
         session:StartSession(1, "Boss")
 
@@ -572,15 +569,14 @@ Describe("Edge Cases", function()
         AssertEquals(item1.looter, item2.looter, "Looter should be same")
         AssertNotEquals(item1.guid, item2.guid, "GUIDs should be different")
 
-        LoothingUtils.IsRaidLeaderOrAssistant = oldIsRaidLeader
+        RestoreSessionPermissions(saved)
         session:EndSession()
     end)
 
     It("GetItemsWonByPlayer counts correctly", function()
         local session = CreateMockSession()
 
-        local oldIsRaidLeader = LoothingUtils.IsRaidLeaderOrAssistant
-        LoothingUtils.IsRaidLeaderOrAssistant = function() return true end
+        local saved = MockSessionPermissions(true)
 
         session:StartSession(1, "Boss")
 
@@ -596,7 +592,7 @@ Describe("Edge Cases", function()
         AssertEquals(session:GetItemsWonByPlayer("Winner2"), 1, "Winner2 should have 1 item")
         AssertEquals(session:GetItemsWonByPlayer("NoWins"), 0, "NoWins should have 0 items")
 
-        LoothingUtils.IsRaidLeaderOrAssistant = oldIsRaidLeader
+        RestoreSessionPermissions(saved)
         session:EndSession()
     end)
 
@@ -612,8 +608,7 @@ Describe("Edge Cases", function()
             oldState = old
         end)
 
-        local oldIsRaidLeader = LoothingUtils.IsRaidLeaderOrAssistant
-        LoothingUtils.IsRaidLeaderOrAssistant = function() return true end
+        local saved = MockSessionPermissions(true)
 
         session:StartSession(1, "Boss")
 
@@ -621,7 +616,7 @@ Describe("Edge Cases", function()
         AssertEquals(newState, LOOTHING_SESSION_STATE.ACTIVE, "New state should be ACTIVE")
         AssertEquals(oldState, LOOTHING_SESSION_STATE.INACTIVE, "Old state should be INACTIVE")
 
-        LoothingUtils.IsRaidLeaderOrAssistant = oldIsRaidLeader
+        RestoreSessionPermissions(saved)
         session:EndSession()
     end)
 
@@ -636,8 +631,7 @@ Describe("Edge Cases", function()
             addedItem = item
         end)
 
-        local oldIsRaidLeader = LoothingUtils.IsRaidLeaderOrAssistant
-        LoothingUtils.IsRaidLeaderOrAssistant = function() return true end
+        local saved = MockSessionPermissions(true)
 
         session:StartSession(1, "Boss")
         local item = session:AddItem("|cffa335ee|Hitem:212398::::::::80::::::::::|h[Epic Sword]|h|r", "Player1")
@@ -645,7 +639,7 @@ Describe("Edge Cases", function()
         AssertTrue(itemAddFired, "Item add event should fire")
         AssertEquals(addedItem, item, "Event should pass correct item")
 
-        LoothingUtils.IsRaidLeaderOrAssistant = oldIsRaidLeader
+        RestoreSessionPermissions(saved)
         session:EndSession()
     end)
 
@@ -661,8 +655,7 @@ Describe("Edge Cases", function()
             timeout = time
         end)
 
-        local oldIsRaidLeader = LoothingUtils.IsRaidLeaderOrAssistant
-        LoothingUtils.IsRaidLeaderOrAssistant = function() return true end
+        local saved = MockSessionPermissions(true)
 
         session:StartSession(1, "Boss")
         local item = session:AddItem("|cffa335ee|Hitem:212398::::::::80::::::::::|h[Epic Sword]|h|r", "Player1")
@@ -672,7 +665,7 @@ Describe("Edge Cases", function()
         AssertEquals(votingItem, item, "Event should pass correct item")
         AssertEquals(timeout, 45, "Event should pass correct timeout")
 
-        LoothingUtils.IsRaidLeaderOrAssistant = oldIsRaidLeader
+        RestoreSessionPermissions(saved)
         session:EndSession()
     end)
 end)

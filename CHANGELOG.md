@@ -2,6 +2,18 @@
 
 All notable changes to Loothing will be documented in this file.
 
+## [1.1.4-r1] - 2026-03-08
+
+### Fixed
+
+#### ML Cannot See Session Controls (Production Bug)
+- **`IsMasterLooter()` chicken-and-egg deadlock**: `Session:IsMasterLooter()` compared `self.masterLooter == playerName`, but `self.masterLooter` is only set inside `StartSession()`. Before any session starts it was always `nil`, so the method returned `false` even for the actual ML — the SessionPanel never showed the "Start Session" button, creating a deadlock where the ML couldn't start sessions
+- **Fix**: Falls back to `Loothing.handleLoot == true` when `self.masterLooter` is `nil` (pre-session). During active sessions, behavior is unchanged since `self.masterLooter` is set. Verified safe across all 30+ callers
+
+#### Taint Errors from Test Mock (10 Errors)
+- **`IsInGroup` mock tainting Blizzard secure globals**: `MockSessionPermissions()` in SessionTests.lua replaced `IsInGroup` — a Blizzard secure global — with an addon function. Since tests execute at TOC load time and `It()` wraps in `pcall`, any test error before `RestoreSessionPermissions()` left the mock in place permanently, tainting all Blizzard unit frame code (health bars, nameplates, heal prediction showing "secret number value tainted by 'Loothing'" errors)
+- **Fix**: Removed the `IsInGroup` mock entirely. Tests now enable `LoothingTestMode` (addon-owned state) to bypass the `IsInGroup()` guard in `StartSession()`, eliminating all taint risk while maintaining test coverage
+
 ## [1.1.4] - 2026-03-08
 
 ### Fixed

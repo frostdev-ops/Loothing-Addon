@@ -494,7 +494,10 @@ end
 --- Check if local player is the master looter
 -- @return boolean
 function LoothingSessionMixin:IsMasterLooter()
-    return self.masterLooter == LoothingUtils.GetPlayerFullName()
+    if self.masterLooter then
+        return self.masterLooter == LoothingUtils.GetPlayerFullName()
+    end
+    return Loothing.handleLoot == true
 end
 
 --[[--------------------------------------------------------------------
