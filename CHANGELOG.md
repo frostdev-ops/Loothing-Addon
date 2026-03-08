@@ -2,7 +2,7 @@
 
 All notable changes to Loothing will be documented in this file.
 
-## [1.1.4-r3] - 2026-03-08
+## [1.1.4-r2] - 2026-03-08
 
 ### Added
 
@@ -17,6 +17,15 @@ All notable changes to Loothing will be documented in this file.
 
 ### Fixed
 
+#### Multi-Vote Bypass with `multiVote` Disabled
+- **Wrong default fallback allowed multi-voting**: `Rows.lua` used `Settings:Get("voting.multiVote", true)` — the `true` fallback meant multi-vote was always allowed when the setting was absent. Replaced with the typed getter `Settings:GetMultiVote()` which defaults to `false`, matching `Constants.lua`
+
+#### Self-Vote Never Enforced
+- **`selfVote` setting had no effect**: The setting was defined, synced via MLDB, and configurable in the options UI, but never checked when casting votes. Added client-side guard in `OnVoteClick` that blocks self-votes with a user message, and visual feedback in `Columns.lua` that dims/disables the vote button for the player's own candidate row when `selfVote` is disabled
+
+#### No Server-Side Vote Validation
+- **ML accepted any vote payload**: `HandleRemoteVoteCommit` in `Session.lua` accepted multi-candidate responses even when `multiVote` was disabled, and never checked `selfVote`. Added ML-side enforcement: multi-vote payloads are truncated to the last vote when `multiVote` is off, and self-vote candidates are filtered from responses when `selfVote` is off
+
 #### "Hide Vote Counts" Session Setting Not Working
 - **Vote counts displayed regardless of `hideVotes` setting**: The `GetHideVotes()` check was only applied in `CouncilTable/Columns.lua`. Three other UI locations displayed vote counts unconditionally:
   - **ItemRow.lua** (VOTING state): Showed `"X Votes"` when timer expired, ignoring hideVotes
@@ -28,19 +37,6 @@ All notable changes to Loothing will be documented in this file.
 #### AddItemFrame Queue Desync on Filter Toggle
 - **Tab 3 "Equipment Only" checkbox caused stale queue**: Toggling the checkbox called `RefreshBagList()` directly (not via `SelectTab`), which rebuilt all rows but left `itemQueue` populated with entries from destroyed rows. New rows started unselected while queue still held old data
 - **Fix**: Both `RefreshBagList()` and `RefreshRecentDrops()` now wipe `itemQueue` and update the Add button when rebuilding rows
-
-## [1.1.4-r2] - 2026-03-08
-
-### Fixed
-
-#### Multi-Vote Bypass with `multiVote` Disabled
-- **Wrong default fallback allowed multi-voting**: `Rows.lua` used `Settings:Get("voting.multiVote", true)` — the `true` fallback meant multi-vote was always allowed when the setting was absent. Replaced with the typed getter `Settings:GetMultiVote()` which defaults to `false`, matching `Constants.lua`
-
-#### Self-Vote Never Enforced
-- **`selfVote` setting had no effect**: The setting was defined, synced via MLDB, and configurable in the options UI, but never checked when casting votes. Added client-side guard in `OnVoteClick` that blocks self-votes with a user message, and visual feedback in `Columns.lua` that dims/disables the vote button for the player's own candidate row when `selfVote` is disabled
-
-#### No Server-Side Vote Validation
-- **ML accepted any vote payload**: `HandleRemoteVoteCommit` in `Session.lua` accepted multi-candidate responses even when `multiVote` was disabled, and never checked `selfVote`. Added ML-side enforcement: multi-vote payloads are truncated to the last vote when `multiVote` is off, and self-vote candidates are filtered from responses when `selfVote` is off
 
 ### Changed
 
