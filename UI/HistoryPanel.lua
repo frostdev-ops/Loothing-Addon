@@ -40,9 +40,9 @@ end
 function LoothingHistoryPanelMixin:CreateElements()
     local L = LOOTHING_LOCALE
 
-    -- Three-pane container
+    -- Three-pane container (starts below filter bar)
     local container = CreateFrame("Frame", nil, self.frame)
-    container:SetPoint("TOPLEFT", 8, -8)
+    container:SetPoint("TOPLEFT", 8, -40)
     container:SetPoint("BOTTOMRIGHT", -8, 50)
     self.paneContainer = container
 
@@ -50,7 +50,7 @@ function LoothingHistoryPanelMixin:CreateElements()
     local datePane = CreateFrame("Frame", nil, container, "BackdropTemplate")
     datePane:SetPoint("TOPLEFT")
     datePane:SetPoint("BOTTOMLEFT")
-    datePane:SetWidth(120)
+    datePane:SetWidth(100)
     datePane:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background" })
     datePane:SetBackdropColor(0, 0, 0, 0.3)
     self.datePane = datePane
@@ -59,7 +59,7 @@ function LoothingHistoryPanelMixin:CreateElements()
     local playerPane = CreateFrame("Frame", nil, container, "BackdropTemplate")
     playerPane:SetPoint("TOPLEFT", datePane, "TOPRIGHT", 2, 0)
     playerPane:SetPoint("BOTTOMLEFT", datePane, "BOTTOMRIGHT", 2, 0)
-    playerPane:SetWidth(140)
+    playerPane:SetWidth(120)
     playerPane:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background" })
     playerPane:SetBackdropColor(0, 0, 0, 0.3)
     self.playerPane = playerPane
@@ -82,28 +82,38 @@ end
 function LoothingHistoryPanelMixin:CreateFilterBar()
     local L = LOOTHING_LOCALE
 
-    local filterBar = CreateFrame("Frame", nil, self.historyPane)
-    filterBar:SetPoint("TOPLEFT", 0, 0)
-    filterBar:SetPoint("TOPRIGHT", 0, 0)
-    filterBar:SetHeight(30)
+    local filterBar = CreateFrame("Frame", nil, self.frame)
+    filterBar:SetPoint("TOPLEFT", 8, -8)
+    filterBar:SetPoint("TOPRIGHT", -8, -8)
+    filterBar:SetHeight(28)
 
-    -- Search box
+    -- Search box (placeholder text via focus scripts)
     local searchBox = CreateFrame("EditBox", nil, filterBar, "InputBoxTemplate")
     searchBox:SetSize(120, 20)
     searchBox:SetPoint("LEFT")
     searchBox:SetAutoFocus(false)
+    searchBox:SetText(L["SEARCH"])
+    searchBox:SetTextColor(0.5, 0.5, 0.5)
+    searchBox:SetScript("OnEditFocusGained", function(self)
+        if self:GetText() == L["SEARCH"] then
+            self:SetText("")
+            self:SetTextColor(1, 1, 1)
+        end
+    end)
+    searchBox:SetScript("OnEditFocusLost", function(self)
+        if self:GetText() == "" then
+            self:SetText(L["SEARCH"])
+            self:SetTextColor(0.5, 0.5, 0.5)
+        end
+    end)
     searchBox:SetScript("OnTextChanged", function(self)
         local text = self:GetText()
+        if text == L["SEARCH"] then return end
         self:GetParent().mixin:OnSearchChanged(text)
     end)
     searchBox:SetScript("OnEscapePressed", function(self)
         self:ClearFocus()
     end)
-
-    local searchLabel = filterBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    searchLabel:SetPoint("BOTTOMLEFT", searchBox, "TOPLEFT", 0, 2)
-    searchLabel:SetText(L["SEARCH"])
-    searchLabel:SetTextColor(0.7, 0.7, 0.7)
 
     self.searchBox = searchBox
 
@@ -221,7 +231,7 @@ end
 --- Create history list
 function LoothingHistoryPanelMixin:CreateHistoryList()
     local container = CreateFrame("Frame", nil, self.historyPane, "BackdropTemplate")
-    container:SetPoint("TOPLEFT", 0, -38)
+    container:SetPoint("TOPLEFT", 0, 0)
     container:SetPoint("BOTTOMRIGHT", 0, 0)
     container:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
@@ -887,7 +897,8 @@ function LoothingHistoryPanelMixin:ClearFilters()
 
     local L = LOOTHING_LOCALE
 
-    self.searchBox:SetText("")
+    self.searchBox:SetText(LOOTHING_LOCALE["SEARCH"])
+    self.searchBox:SetTextColor(0.5, 0.5, 0.5)
     self.winnerButton:SetText(L["ALL_WINNERS"])
     if self.responseFilterButton then
         self.responseFilterButton:SetText("Response")

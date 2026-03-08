@@ -384,7 +384,7 @@ function LoothingSyncMixin:HandleObserverRoster(data)
     if not data.masterLooter then return end
 
     -- Non-ML players mirror the ML's observer roster
-    if not LoothingUtils.IsRaidLeaderOrAssistant() then
+    if not (Loothing.Session and Loothing.Session:IsMasterLooter()) then
         Loothing.Observer:SetRemoteObserverList(data)
     end
 end
@@ -395,7 +395,7 @@ end
 
 --- Sync council roster to raid
 function LoothingSyncMixin:BroadcastCouncilRoster()
-    if not LoothingUtils.IsRaidLeaderOrAssistant() then return end
+    if not (Loothing.Session and Loothing.Session:IsMasterLooter()) then return end
     if not Loothing.Council then return end
 
     local members = Loothing.Council:GetAllMembers()
@@ -411,7 +411,7 @@ function LoothingSyncMixin:HandleCouncilRoster(data)
     if not data.masterLooter then return end
 
     -- Update local council roster (non-ML players mirror the ML's roster)
-    if not LoothingUtils.IsRaidLeaderOrAssistant() then
+    if not (Loothing.Session and Loothing.Session:IsMasterLooter()) then
         Loothing.Council:SetRemoteRoster(data.members)
     end
 end

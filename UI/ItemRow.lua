@@ -311,7 +311,7 @@ function LoothingItemRowMixin:UpdateActionButton()
 
     local L = LOOTHING_LOCALE
     local state = self.item.state or LOOTHING_ITEM_STATE.PENDING
-    local isML = LoothingUtils.IsRaidLeaderOrAssistant()
+    local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
     local isCouncil = Loothing.Council and Loothing.Council:IsPlayerCouncilMember()
 
     if state == LOOTHING_ITEM_STATE.PENDING then
@@ -488,7 +488,7 @@ function LoothingItemRowMixin:OnActionClick()
         end
 
     elseif state == LOOTHING_ITEM_STATE.VOTING then
-        local isML = LoothingUtils.IsRaidLeaderOrAssistant()
+        local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
         if isML then
             -- End voting
             if self.callbacks.onEndVote then
@@ -502,7 +502,7 @@ function LoothingItemRowMixin:OnActionClick()
         end
 
     elseif state == LOOTHING_ITEM_STATE.TALLIED then
-        local isML = LoothingUtils.IsRaidLeaderOrAssistant()
+        local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
         if isML then
             -- Open award dialog
             if self.callbacks.onAward then
@@ -522,7 +522,7 @@ function LoothingItemRowMixin:ShowContextMenu()
     if not self.item then return end
 
     local L = LOOTHING_LOCALE
-    local isML = LoothingUtils.IsRaidLeaderOrAssistant()
+    local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
 
     MenuUtil.CreateContextMenu(self.frame, function(ownerRegion, rootDescription)
         rootDescription:CreateTitle(self.item.name or "Item")

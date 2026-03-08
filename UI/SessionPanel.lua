@@ -394,7 +394,7 @@ function LoothingSessionPanelMixin:UpdateHeader()
     end
 
     -- ML indicator
-    local isML = LoothingUtils.IsRaidLeaderOrAssistant()
+    local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
     if isML then
         self.mlIndicator:SetText(L["YOU_ARE_ML"])
         self.mlIndicator:SetTextColor(1, 0.82, 0)
@@ -412,7 +412,7 @@ end
 --- Update footer buttons
 function LoothingSessionPanelMixin:UpdateFooter()
     local L = LOOTHING_LOCALE
-    local isML = LoothingUtils.IsRaidLeaderOrAssistant()
+    local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
 
     if not Loothing.Session then
         self.sessionButton:Hide()
@@ -541,7 +541,7 @@ function LoothingSessionPanelMixin:RefreshItems()
     end
     itemArray = self:SortItems(itemArray)
 
-    local isML = LoothingUtils.IsRaidLeaderOrAssistant()
+    local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
     local yOffset = 0
     local rowHeight = 44
     local spacing = 2

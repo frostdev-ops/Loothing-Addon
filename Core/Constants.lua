@@ -4,7 +4,7 @@
 ----------------------------------------------------------------------]]
 
 -- Addon info
-LOOTHING_VERSION = "1.1.3"
+LOOTHING_VERSION = "1.1.4"
 LOOTHING_PROTOCOL_VERSION = 3
 LOOTHING_ADDON_PREFIX = "LOOTHING"
 

@@ -2,6 +2,24 @@
 
 All notable changes to Loothing will be documented in this file.
 
+## [1.1.4] - 2026-03-08
+
+### Fixed
+
+#### Council Members Seeing ML Controls
+- **Raid assistants incorrectly identified as Master Looter**: Council members who were raid assistants saw the full ML view — "You are Master Looter" text, End Vote/End Session/Add Item/Award buttons, per-item ML controls, and ML-only context menu options. Root cause: UI checked `LoothingUtils.IsRaidLeaderOrAssistant()` (returns `true` for any assistant) instead of `Loothing.Session:IsMasterLooter()`
+- **Affected files**: SessionPanel (`UpdateHeader`, `UpdateFooter`, `RefreshItems`), ItemRow (`UpdateActionButton`, `OnActionClick` ×2, `ShowContextMenu`), ResultsPanel (`UpdateActionButtons`)
+- **Sync guard hardened**: `BroadcastCouncilRoster`, `HandleObserverRoster`, and `HandleCouncilRoster` in Sync.lua now use `Session:IsMasterLooter()` instead of the assistant check, preventing non-ML assistants from broadcasting rosters or bypassing roster mirroring
+
+#### Award Popup Z-Order
+- **Award confirmation popup hidden behind ResultsPanel**: Both ResultsPanel and the Loolib Dialog used `SetFrameStrata("DIALOG")`. Modal dialogs (award confirmation) now elevate to `FULLSCREEN_DIALOG` strata in `LoolibDialogMixin:Show()`, guaranteeing they render above all `DIALOG`-strata frames
+- **Modal overlay strata mismatch**: The darkened overlay behind modal dialogs stayed at `DIALOG` strata while the dialog itself was elevated. `UpdateModalOverlay()` now sets the overlay to `FULLSCREEN_DIALOG` when active and resets to `DIALOG` when hidden
+
+#### History Panel UI
+- **Filter bar overlapped history list**: Filter bar relocated from inside `historyPane` to top of the panel frame, with three-pane container starting below it (`-40` offset)
+- **Search box missing placeholder**: Search input now shows gray "Search" placeholder text that clears on focus and restores on blur when empty, replacing the separate label above the box
+- **Pane widths too wide**: Date pane narrowed from 120px → 100px, player pane from 140px → 120px, giving more space to the history detail pane
+
 ## [1.1.3] - 2026-03-08
 
 ### Fixed

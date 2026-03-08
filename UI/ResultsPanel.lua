@@ -443,7 +443,7 @@ end
 --- Update action buttons based on user permissions
 -- Only ML can award, re-vote, or skip. Observers and non-council see no actions.
 function LoothingResultsPanelMixin:UpdateActionButtons()
-    local isML = LoothingUtils.IsRaidLeaderOrAssistant()
+    local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
 
     if isML then
         self.awardButton:Show()
