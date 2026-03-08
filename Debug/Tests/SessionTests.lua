@@ -104,25 +104,19 @@ local function CreateMockItem(itemLink, looter)
     return CreateLoothingItem(itemLink, looter, 12345)
 end
 
--- Mock addon-owned guards that StartSession checks: Loothing.handleLoot and TestMode
--- TestMode bypasses the IsInGroup() check without tainting Blizzard secure globals
+-- Mock only addon-owned Loothing.handleLoot (not Blizzard globals or TestMode).
+-- StartSession also checks IsInGroup() — tests pass in-group, fail gracefully
+-- solo via pcall without tainting any globals or leaking TestMode state.
 local function MockSessionPermissions(canHandleLoot)
     local saved = {
         handleLoot = Loothing.handleLoot,
-        testModeEnabled = LoothingTestMode and LoothingTestMode.enabled,
     }
     Loothing.handleLoot = (canHandleLoot == true)
-    if LoothingTestMode then
-        LoothingTestMode.enabled = true
-    end
     return saved
 end
 
 local function RestoreSessionPermissions(saved)
     Loothing.handleLoot = saved.handleLoot
-    if LoothingTestMode then
-        LoothingTestMode.enabled = saved.testModeEnabled
-    end
 end
 
 --[[--------------------------------------------------------------------
