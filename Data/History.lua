@@ -419,6 +419,55 @@ function LoothingHistoryMixin:MatchesFilter(entry)
 end
 
 --[[--------------------------------------------------------------------
+    Loot Count Queries (for CouncilTable columns)
+----------------------------------------------------------------------]]
+
+--- Get the timestamp of the last weekly reset
+-- @return number - Unix timestamp of the most recent weekly reset
+function LoothingHistoryMixin:GetLastWeeklyResetTime()
+    local secondsUntil = C_DateAndTime.GetSecondsUntilWeeklyReset()
+    return time() + secondsUntil - (7 * 86400)
+end
+
+--- Build a per-player count cache for instance+difficulty and weekly scopes
+-- Single O(H) pass over all history entries.
+-- @param instanceName string|nil - Instance name to match
+-- @param difficultyID number|nil - Difficulty ID to match
+-- @param weeklyResetTime number - Timestamp of the last weekly reset
+-- @return table - { [normalizedPlayerName] = { instance = N, weekly = N } }
+function LoothingHistoryMixin:BuildPlayerCountCache(instanceName, difficultyID, weeklyResetTime)
+    local cache = {}
+
+    for _, entry in self.entries:Enumerate() do
+        local winner = entry.winner
+        if winner then
+            local normalized = LoothingUtils.NormalizeName(winner)
+            if normalized then
+                if not cache[normalized] then
+                    cache[normalized] = { instance = 0, weekly = 0 }
+                end
+
+                local ts = entry.timestamp or 0
+
+                -- Instance + difficulty match
+                if instanceName and difficultyID
+                    and entry.instance == instanceName
+                    and entry.difficultyID == difficultyID then
+                    cache[normalized].instance = cache[normalized].instance + 1
+                end
+
+                -- Weekly match
+                if ts >= weeklyResetTime then
+                    cache[normalized].weekly = cache[normalized].weekly + 1
+                end
+            end
+        end
+    end
+
+    return cache
+end
+
+--[[--------------------------------------------------------------------
     Statistics
 ----------------------------------------------------------------------]]
 
@@ -520,6 +569,9 @@ function LoothingHistoryMixin:LoadFromSaved()
         entry.guid = entry.guid or LoothingUtils.GenerateGUID()
         self.entries:Insert(entry)
     end
+
+    -- Auto-prune entries older than 180 days on load
+    self:DeleteByAge(180)
 
     -- Apply initial filter (shows all)
     self:ApplyFilter()
