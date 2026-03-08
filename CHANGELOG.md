@@ -16,9 +16,14 @@ All notable changes to Loothing will be documented in this file.
 - **Modal overlay strata mismatch**: The darkened overlay behind modal dialogs stayed at `DIALOG` strata while the dialog itself was elevated. `UpdateModalOverlay()` now sets the overlay to `FULLSCREEN_DIALOG` when active and resets to `DIALOG` when hidden
 
 #### History Panel UI
-- **Filter bar overlapped history list**: Filter bar relocated from inside `historyPane` to top of the panel frame, with three-pane container starting below it (`-40` offset)
-- **Search box missing placeholder**: Search input now shows gray "Search" placeholder text that clears on focus and restores on blur when empty, replacing the separate label above the box
-- **Pane widths too wide**: Date pane narrowed from 120px → 100px, player pane from 140px → 120px, giving more space to the history detail pane
+- **Filter bar overflow at default width**: Filter bar relocated from inside `historyPane` to top of the panel frame (`TOPLEFT (8,-8)` / `TOPRIGHT (-8,-8)` of main frame, height 28). Three-pane container now starts at `-40` offset, giving the filter bar ~580px instead of ~288px — eliminates button overflow at all supported frame sizes
+- **Floating "Search..." label**: Removed the `FontString` label anchored above the search box (which extended outside the pane container boundary). Replaced with an inline placeholder pattern: EditBox shows grayed-out placeholder text when empty/unfocused, clears on `OnEditFocusGained`, restores on `OnEditFocusLost`
+- **Visual disconnection between panes**: `listContainer` now anchors `TOPLEFT (0,0)` instead of `(0,-38)`, filling the entire right pane. All three panes now have consistent full-height visual treatment
+- **Date/player pane button overflow**: `allDatesBtn` and date pool buttons reduced from 110px → 72px (fits 100px pane with 4px inset + 22px scrollbar). `allPlayersBtn` and player pool buttons reduced from 130px → 92px (fits 120px pane with 4px inset + 22px scrollbar). Prevents horizontal overflow clipping in both panes
+- **Pane content width stale on resize**: Added `OnSizeChanged` handlers to `dateScroll` and `playerScroll` so `dateContent` and `playerContent` frame widths update correctly when the user resizes the MainFrame (matching the existing handler on `listContent`)
+- **Placeholder suppression edge case**: Replaced string-equality guard (`if text == L["SEARCH"] then return end`) with a `_placeholderActive` boolean flag on the filter bar frame, eliminating the edge case where typing the exact placeholder string would silently prevent the search filter from firing
+- **Nil-safe placeholder**: `L["SEARCH"]` now stored as `filterBar._placeholder` with `or "Search..."` fallback; all placeholder references in scripts and `ClearFilters` use this stored value, preventing a Lua error if a locale file is missing the key
+- **`GetItemIcon` deprecated API**: Replaced `GetItemIcon(itemID)` with `C_Item.GetItemIconByID(itemID)` in `SetupHistoryRow`
 
 ## [1.1.3] - 2026-03-08
 

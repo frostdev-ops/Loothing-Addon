@@ -87,29 +87,38 @@ function LoothingHistoryPanelMixin:CreateFilterBar()
     filterBar:SetPoint("TOPRIGHT", -8, -8)
     filterBar:SetHeight(28)
 
-    -- Search box (placeholder text via focus scripts)
+    -- Nil-safe placeholder string (guards against missing locale key)
+    local placeholder = L["SEARCH"] or "Search..."
+    filterBar._placeholder = placeholder
+    filterBar._placeholderActive = true
+
+    -- Search box (placeholder via boolean flag, not string equality)
     local searchBox = CreateFrame("EditBox", nil, filterBar, "InputBoxTemplate")
     searchBox:SetSize(120, 20)
     searchBox:SetPoint("LEFT")
     searchBox:SetAutoFocus(false)
-    searchBox:SetText(L["SEARCH"])
+    searchBox:SetText(placeholder)
     searchBox:SetTextColor(0.5, 0.5, 0.5)
     searchBox:SetScript("OnEditFocusGained", function(self)
-        if self:GetText() == L["SEARCH"] then
+        local fb = self:GetParent()
+        if fb._placeholderActive then
+            fb._placeholderActive = false
             self:SetText("")
             self:SetTextColor(1, 1, 1)
         end
     end)
     searchBox:SetScript("OnEditFocusLost", function(self)
         if self:GetText() == "" then
-            self:SetText(L["SEARCH"])
+            local fb = self:GetParent()
+            fb._placeholderActive = true
+            self:SetText(fb._placeholder)
             self:SetTextColor(0.5, 0.5, 0.5)
         end
     end)
     searchBox:SetScript("OnTextChanged", function(self)
-        local text = self:GetText()
-        if text == L["SEARCH"] then return end
-        self:GetParent().mixin:OnSearchChanged(text)
+        local fb = self:GetParent()
+        if fb._placeholderActive then return end
+        fb.mixin:OnSearchChanged(self:GetText())
     end)
     searchBox:SetScript("OnEscapePressed", function(self)
         self:ClearFocus()
@@ -356,13 +365,17 @@ function LoothingHistoryPanelMixin:CreateDateList()
     content:SetWidth(scroll:GetWidth())
     scroll:SetScrollChild(content)
 
+    scroll:SetScript("OnSizeChanged", function(sf, w)
+        content:SetWidth(w)
+    end)
+
     self.dateScroll = scroll
     self.dateContent = content
     self.dateButtonPool = CreateFramePool("Button", content)
 
     -- "All Dates" button at top
     local allBtn = CreateFrame("Button", nil, content)
-    allBtn:SetSize(110, 20)
+    allBtn:SetSize(72, 20)
     allBtn:SetPoint("TOPLEFT", 2, -2)
     allBtn.text = allBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     allBtn.text:SetAllPoints()
@@ -391,13 +404,17 @@ function LoothingHistoryPanelMixin:CreatePlayerList()
     content:SetWidth(scroll:GetWidth())
     scroll:SetScrollChild(content)
 
+    scroll:SetScript("OnSizeChanged", function(sf, w)
+        content:SetWidth(w)
+    end)
+
     self.playerScroll = scroll
     self.playerContent = content
     self.playerButtonPool = CreateFramePool("Button", content)
 
     -- "All Players" button at top
     local allBtn = CreateFrame("Button", nil, content)
-    allBtn:SetSize(130, 20)
+    allBtn:SetSize(92, 20)
     allBtn:SetPoint("TOPLEFT", 2, -2)
     allBtn.text = allBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     allBtn.text:SetAllPoints()
@@ -454,7 +471,7 @@ function LoothingHistoryPanelMixin:RefreshDateList()
     local yOffset = -24  -- Below "All Dates" button
     for _, d in ipairs(dates) do
         local btn = self.dateButtonPool:Acquire()
-        btn:SetSize(110, 18)
+        btn:SetSize(72, 18)
         btn:SetPoint("TOPLEFT", self.dateContent, "TOPLEFT", 2, yOffset)
 
         if not btn.text then
@@ -521,7 +538,7 @@ function LoothingHistoryPanelMixin:RefreshPlayerList()
     local yOffset = -24  -- Below "All Players" button
     for _, player in ipairs(players) do
         local btn = self.playerButtonPool:Acquire()
-        btn:SetSize(130, 18)
+        btn:SetSize(92, 18)
         btn:SetPoint("TOPLEFT", self.playerContent, "TOPLEFT", 2, yOffset)
 
         if not btn.text then
@@ -693,7 +710,7 @@ function LoothingHistoryPanelMixin:SetupHistoryRow(row, entry, yOffset)
     row.dateText:SetTextColor(0.7, 0.7, 0.7)
 
     -- Icon
-    local texture = entry.itemID and GetItemIcon(entry.itemID) or "Interface\\Icons\\INV_Misc_QuestionMark"
+    local texture = entry.itemID and C_Item.GetItemIconByID(entry.itemID) or "Interface\\Icons\\INV_Misc_QuestionMark"
     row.icon:SetTexture(texture)
 
     -- Quality color
@@ -897,7 +914,9 @@ function LoothingHistoryPanelMixin:ClearFilters()
 
     local L = LOOTHING_LOCALE
 
-    self.searchBox:SetText(LOOTHING_LOCALE["SEARCH"])
+    -- Restore placeholder state on the search box
+    self.filterBar._placeholderActive = true
+    self.searchBox:SetText(self.filterBar._placeholder)
     self.searchBox:SetTextColor(0.5, 0.5, 0.5)
     self.winnerButton:SetText(L["ALL_WINNERS"])
     if self.responseFilterButton then
