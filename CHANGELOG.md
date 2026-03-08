@@ -2,6 +2,21 @@
 
 All notable changes to Loothing will be documented in this file.
 
+## [1.1.2] - 2026-03-07
+
+### Changed
+- **ResultsPanel ML candidate selection**: The ML can now click any candidate row to select them as the award recipient, replacing the old flow where Award always targeted the most-voted candidate (or forced a tie-breaker context menu for ties)
+  - Winner is auto-selected (gold border) when the panel opens; clicking any other row transfers selection
+  - Award button text updates dynamically to "Award to {name}" with auto-sizing width
+  - Ties are now informational only (header shows "Tie: A, B") — no longer block the award flow
+  - `ShowTieDialog()` removed; `ShowAwardReasonDropdown()` routes directly to the confirm dialog for the selected candidate
+- **CandidateResultRow interactivity**: Rows are now `Button` frames with hover highlight (lightened backdrop), hand cursor on hover, and gold border when selected
+
+### Fixed
+
+#### UI
+- **CouncilTable right-click hit area**: Right-clicking a candidate row only triggered the context menu in the narrow gap after the last cell. Cell frames now use `SetMouseClickEnabled(false)` + `SetMouseMotionEnabled(true)`, letting click events pass through to the row while preserving tooltip hover scripts. Row registers `RightButtonUp` via `RegisterForClicks` and handles both buttons in a single `OnClick` handler
+
 ## [1.1.1] - 2026-03-07
 
 ### Fixed

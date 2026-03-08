@@ -10,8 +10,9 @@
 -- @param yOffset number - Vertical offset
 -- @param totalVotes number - Total council votes for percentage
 -- @param isWinner boolean - Whether this candidate is the winner
-function LoothingUI_CreateCandidateResultRow(parent, candidate, yOffset, totalVotes, isWinner)
-    local row = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+-- @param onClick function|nil - Called with (candidate, row) on click
+function LoothingUI_CreateCandidateResultRow(parent, candidate, yOffset, totalVotes, isWinner, onClick)
+    local row = CreateFrame("Button", nil, parent, "BackdropTemplate")
     row:SetPoint("TOPLEFT", 0, yOffset)
     row:SetPoint("TOPRIGHT", 0, yOffset)
     row:SetHeight(60)
@@ -39,6 +40,11 @@ function LoothingUI_CreateCandidateResultRow(parent, candidate, yOffset, totalVo
     else
         r, g, b = rawColor[1] or 0.5, rawColor[2] or 0.5, rawColor[3] or 0.5
     end
+
+    -- Store base colors for hover/select restore
+    row._bgR, row._bgG, row._bgB = r, g, b
+    row._isSelected = false
+
     row:SetBackdropColor(r * 0.2, g * 0.2, b * 0.2, 0.8)
     row:SetBackdropBorderColor(r * 0.5, g * 0.5, b * 0.5, 1)
 
@@ -117,6 +123,51 @@ function LoothingUI_CreateCandidateResultRow(parent, candidate, yOffset, totalVo
         winnerBadge:SetText(LOOTHING_LOCALE["WINNER"])
         winnerBadge:SetTextColor(1, 0.82, 0)
     end
+
+    -- Selection state API
+    function row:SetSelected(selected)
+        self._isSelected = selected
+        local br, bg, bb = self._bgR, self._bgG, self._bgB
+        if selected then
+            self:SetBackdropColor(br * 0.25, bg * 0.25, bb * 0.25, 0.9)
+            self:SetBackdropBorderColor(1, 0.82, 0, 1)
+        else
+            self:SetBackdropColor(br * 0.2, bg * 0.2, bb * 0.2, 0.8)
+            self:SetBackdropBorderColor(br * 0.5, bg * 0.5, bb * 0.5, 1)
+        end
+    end
+
+    -- Hover highlight
+    row:SetScript("OnEnter", function(self)
+        SetCursor("CAST_CURSOR")
+        local br, bg, bb = self._bgR, self._bgG, self._bgB
+        if self._isSelected then
+            self:SetBackdropColor(br * 0.35, bg * 0.35, bb * 0.35, 0.95)
+            self:SetBackdropBorderColor(1, 0.82, 0, 1)
+        else
+            self:SetBackdropColor(br * 0.3, bg * 0.3, bb * 0.3, 0.9)
+            self:SetBackdropBorderColor(br * 0.6, bg * 0.6, bb * 0.6, 1)
+        end
+    end)
+
+    row:SetScript("OnLeave", function(self)
+        SetCursor(nil)
+        local br, bg, bb = self._bgR, self._bgG, self._bgB
+        if self._isSelected then
+            self:SetBackdropColor(br * 0.25, bg * 0.25, bb * 0.25, 0.9)
+            self:SetBackdropBorderColor(1, 0.82, 0, 1)
+        else
+            self:SetBackdropColor(br * 0.2, bg * 0.2, bb * 0.2, 0.8)
+            self:SetBackdropBorderColor(br * 0.5, bg * 0.5, bb * 0.5, 1)
+        end
+    end)
+
+    -- Click handler
+    row:SetScript("OnClick", function(self)
+        if onClick then
+            onClick(candidate, self)
+        end
+    end)
 
     return row
 end

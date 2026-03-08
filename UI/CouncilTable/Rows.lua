@@ -19,7 +19,8 @@ local CELL_PADDING = 2
 function LoothingCouncilTableMixin:CreateCell(parent, col)
     local cell = CreateFrame("Button", nil, parent)
     cell:SetSize(col.width, ROW_HEIGHT)
-    cell:EnableMouse(true)
+    cell:SetMouseClickEnabled(false)
+    cell:SetMouseMotionEnabled(true)
 
     -- Text (used by most columns)
     local text = cell:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -130,16 +131,13 @@ function LoothingCouncilTableMixin:CreateCandidateRow(parent)
         end
     end
 
-    -- Right-click context menu
-    row:SetScript("OnMouseDown", function(r, button)
-        if button == "RightButton" and r.candidate then
-            self:ShowCandidateContextMenu(r, r.candidate)
-        end
-    end)
+    row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 
-    -- Click to select (Alt+Click opens context menu for quick award)
     row:SetScript("OnClick", function(r, button)
-        if button == "LeftButton" and r.candidate then
+        if not r.candidate then return end
+        if button == "RightButton" then
+            self:ShowCandidateContextMenu(r, r.candidate)
+        elseif button == "LeftButton" then
             if IsAltKeyDown() and Loothing.Session and Loothing.Session:IsMasterLooter() then
                 self:ShowCandidateContextMenu(r, r.candidate)
                 return
