@@ -2,7 +2,7 @@
     Loothing - Loot Council Addon for WoW 12.0+
     AutoPassTests - Test suite for automatic pass logic
 
-    Tests LoothingAutoPass tables and ShouldAutoPass logic:
+    Tests AutoPass tables and ShouldAutoPass logic:
     - Armor type mismatches (Plate on Cloth, Mail on Leather, etc.)
     - Weapon type restrictions (Warglaives, Bows, etc.)
     - Weapon stat mismatches (STR weapon on INT class)
@@ -53,8 +53,8 @@ local function RunAutoPassTests()
 
     print("|cff00ccff========== AutoPass Tests ==========|r")
 
-    if not LoothingAutoPass then
-        print("|cffff0000[SKIP]|r LoothingAutoPass not available")
+    if not AutoPass then
+        print("|cffff0000[SKIP]|r AutoPass not available")
         return passed, failed
     end
 
@@ -63,14 +63,14 @@ local function RunAutoPassTests()
     ----------------------------------------------------------------------]]
     printGroup("Armor AutoPass Tables")
 
-    assertNotNil(LoothingAutoPass.armorAutoPass, "armorAutoPass table exists")
+    assertNotNil(AutoPass.armorAutoPass, "armorAutoPass table exists")
 
     -- Verify Enum references are valid (WoW API dependency)
     if Enum and Enum.ItemArmorSubclass then
-        assertNotNil(LoothingAutoPass.armorAutoPass[Enum.ItemArmorSubclass.Cloth], "Cloth autopass list exists")
-        assertNotNil(LoothingAutoPass.armorAutoPass[Enum.ItemArmorSubclass.Leather], "Leather autopass list exists")
-        assertNotNil(LoothingAutoPass.armorAutoPass[Enum.ItemArmorSubclass.Mail], "Mail autopass list exists")
-        assertNotNil(LoothingAutoPass.armorAutoPass[Enum.ItemArmorSubclass.Plate], "Plate autopass list exists")
+        assertNotNil(AutoPass.armorAutoPass[Enum.ItemArmorSubclass.Cloth], "Cloth autopass list exists")
+        assertNotNil(AutoPass.armorAutoPass[Enum.ItemArmorSubclass.Leather], "Leather autopass list exists")
+        assertNotNil(AutoPass.armorAutoPass[Enum.ItemArmorSubclass.Mail], "Mail autopass list exists")
+        assertNotNil(AutoPass.armorAutoPass[Enum.ItemArmorSubclass.Plate], "Plate autopass list exists")
     else
         print("|cffffcc00[SKIP]|r Enum.ItemArmorSubclass not available")
     end
@@ -81,7 +81,7 @@ local function RunAutoPassTests()
     printGroup("Plate on Non-Plate Classes")
 
     if Enum and Enum.ItemArmorSubclass then
-        local platePassList = LoothingAutoPass.armorAutoPass[Enum.ItemArmorSubclass.Plate]
+        local platePassList = AutoPass.armorAutoPass[Enum.ItemArmorSubclass.Plate]
         if platePassList then
             -- Helper to check if class is in the list
             local function classInList(list, className)
@@ -116,7 +116,7 @@ local function RunAutoPassTests()
     printGroup("Cloth on Non-Cloth Classes")
 
     if Enum and Enum.ItemArmorSubclass then
-        local clothPassList = LoothingAutoPass.armorAutoPass[Enum.ItemArmorSubclass.Cloth]
+        local clothPassList = AutoPass.armorAutoPass[Enum.ItemArmorSubclass.Cloth]
         if clothPassList then
             local function classInList(list, className)
                 for _, c in ipairs(list) do
@@ -142,11 +142,11 @@ local function RunAutoPassTests()
     ----------------------------------------------------------------------]]
     printGroup("Weapon AutoPass Tables")
 
-    assertNotNil(LoothingAutoPass.weaponAutoPass, "weaponAutoPass table exists")
+    assertNotNil(AutoPass.weaponAutoPass, "weaponAutoPass table exists")
 
     if Enum and Enum.ItemWeaponSubclass then
         -- Warglaives - only DH can use
-        local glaivePassList = LoothingAutoPass.weaponAutoPass[Enum.ItemWeaponSubclass.Warglaive]
+        local glaivePassList = AutoPass.weaponAutoPass[Enum.ItemWeaponSubclass.Warglaive]
         if glaivePassList then
             local function classInList(list, className)
                 for _, c in ipairs(list) do
@@ -161,7 +161,7 @@ local function RunAutoPassTests()
         end
 
         -- Bows - limited to Hunter (and formerly Warrior/Rogue)
-        local bowPassList = LoothingAutoPass.weaponAutoPass[Enum.ItemWeaponSubclass.Bows]
+        local bowPassList = AutoPass.weaponAutoPass[Enum.ItemWeaponSubclass.Bows]
         if bowPassList then
             local function classInList(list, className)
                 for _, c in ipairs(list) do
@@ -183,17 +183,17 @@ local function RunAutoPassTests()
     ----------------------------------------------------------------------]]
     printGroup("ShouldAutoPass Integration")
 
-    if LoothingAutoPass.ShouldAutoPass then
+    if AutoPass.ShouldAutoPass then
         -- This function requires live item data, so we test with mock data
         -- if available from TestHelpers
         print("  |cff808080(ShouldAutoPass requires live C_Item data - testing structure only)|r")
 
         -- Verify the function exists and is callable
-        local funcType = type(LoothingAutoPass.ShouldAutoPass)
+        local funcType = type(AutoPass.ShouldAutoPass)
         assertEqual(funcType, "function", "ShouldAutoPass is a function")
-    elseif LoothingAutoPass.CheckArmorType then
+    elseif AutoPass.CheckArmorType then
         -- Test the armor type check directly
-        local funcType = type(LoothingAutoPass.CheckArmorType)
+        local funcType = type(AutoPass.CheckArmorType)
         assertEqual(funcType, "function", "CheckArmorType is a function")
     else
         print("  |cff808080(ShouldAutoPass/CheckArmorType not found - testing tables only)|r")
@@ -204,8 +204,8 @@ local function RunAutoPassTests()
     ----------------------------------------------------------------------]]
     printGroup("TestData AutoPass Fixtures")
 
-    if LoothingTestData and LoothingTestData.AutoPass then
-        local td = LoothingTestData.AutoPass
+    if TestData and TestData.AutoPass then
+        local td = TestData.AutoPass
 
         -- Armor mismatch fixtures
         assertNotNil(td.ArmorMismatches, "ArmorMismatches fixture exists")
@@ -234,7 +234,7 @@ local function RunAutoPassTests()
         assertEqual(tokenCase1.playerClass, "MAGE", "Token case 1: Mage")
         assertEqual(tokenCase1.shouldAutoPass, true, "Token case 1: should auto-pass (Plate token on Mage)")
     else
-        print("|cffffcc00[SKIP]|r LoothingTestData.AutoPass not available")
+        print("|cffffcc00[SKIP]|r TestData.AutoPass not available")
     end
 
     --[[--------------------------------------------------------------------
@@ -278,6 +278,6 @@ local function RunAutoPassTests()
 end
 
 -- Register test
-if LoothingTestRunner then
-    LoothingTestRunner:RegisterTest("autopass", RunAutoPassTests)
+if TestRunner then
+    TestRunner:RegisterTest("autopass", RunAutoPassTests)
 end

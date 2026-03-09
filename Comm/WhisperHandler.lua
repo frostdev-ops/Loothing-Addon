@@ -7,13 +7,19 @@
     addon UI. The ML auto-responds with confirmation.
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
+local Loothing = ns.Addon
 local Loolib = LibStub("Loolib")
+local CreateFromMixins = Loolib.CreateFromMixins
+local Utils = ns.Utils
+
+ns.WhisperHandlerMixin = ns.WhisperHandlerMixin or {}
 
 --[[--------------------------------------------------------------------
-    LoothingWhisperHandlerMixin
+    WhisperHandlerMixin
 ----------------------------------------------------------------------]]
 
-LoothingWhisperHandlerMixin = {}
+local WhisperHandlerMixin = ns.WhisperHandlerMixin
 
 local L = Loothing.Locale
 
@@ -24,13 +30,13 @@ local whisperFrame = nil
 local outgoingWhispers = {}
 
 --- Initialize the whisper handler
-function LoothingWhisperHandlerMixin:Init()
+function WhisperHandlerMixin:Init()
     self.enabled = false
     self.chatFilterRegistered = false
 end
 
 --- Enable whisper command processing (called when ML starts handling loot)
-function LoothingWhisperHandlerMixin:Enable()
+function WhisperHandlerMixin:Enable()
     if self.enabled then return end
 
     self.enabled = true
@@ -41,7 +47,7 @@ function LoothingWhisperHandlerMixin:Enable()
     end
 
     whisperFrame:RegisterEvent("CHAT_MSG_WHISPER")
-    whisperFrame:SetScript("OnEvent", function(_, event, message, sender, ...)
+    whisperFrame:SetScript("OnEvent", function(_, event, message, sender)
         if event == "CHAT_MSG_WHISPER" then
             self:OnWhisperReceived(message, sender)
         end
@@ -49,7 +55,7 @@ function LoothingWhisperHandlerMixin:Enable()
 
     -- Register chat filter to suppress outgoing confirmation whispers
     if not self.chatFilterRegistered then
-        ChatFrame_AddMessageEventFilter("CHAT_MSG_WHISPER_INFORM", function(_, _, message, ...)
+        ChatFrame_AddMessageEventFilter("CHAT_MSG_WHISPER_INFORM", function(_, _, message)
             return self:FilterOutgoingWhisper(message)
         end)
         self.chatFilterRegistered = true
@@ -59,7 +65,7 @@ function LoothingWhisperHandlerMixin:Enable()
 end
 
 --- Disable whisper command processing (called when ML stops handling loot)
-function LoothingWhisperHandlerMixin:Disable()
+function WhisperHandlerMixin:Disable()
     if not self.enabled then return end
 
     self.enabled = false
@@ -80,7 +86,7 @@ end
 --- Handle an incoming whisper message
 -- @param message string - Whisper text
 -- @param sender string - Sender name (may include realm)
-function LoothingWhisperHandlerMixin:OnWhisperReceived(message, sender)
+function WhisperHandlerMixin:OnWhisperReceived(message, sender)
     if not self.enabled then return end
 
     -- Only process if we're the ML and handling loot
@@ -100,14 +106,14 @@ function LoothingWhisperHandlerMixin:OnWhisperReceived(message, sender)
         return
     end
 
-    local normalizedSender = LoothingUtils.NormalizeName(sender)
+    local normalizedSender = Utils.NormalizeName(sender)
 
     -- Validate sender is in our group/raid before processing
-    local roster = LoothingUtils.GetRaidRoster and LoothingUtils.GetRaidRoster()
+    local roster = Utils.GetRaidRoster and Utils.GetRaidRoster()
     if roster then
         local found = false
         for _, member in ipairs(roster) do
-            if LoothingUtils.IsSamePlayer(member.name, normalizedSender) then
+            if Utils.IsSamePlayer(member.name, normalizedSender) then
                 found = true
                 break
             end
@@ -157,7 +163,6 @@ function LoothingWhisperHandlerMixin:OnWhisperReceived(message, sender)
     self:SubmitWhisperResponse(targetItem, normalizedSender, responseID, itemIndex)
 
     -- Send confirmation
-    local itemName = LoothingUtils.GetItemName(targetItem.itemLink) or "item"
     if itemNum then
         self:SendWhisper(normalizedSender, string.format(L["WHISPER_ITEM_SPECIFIED"], responseName, targetItem.itemLink, itemIndex))
     else
@@ -170,7 +175,7 @@ end
 -- @param message string - Full whisper message starting with !
 -- @return string|nil command - Lowercased command name
 -- @return number|nil itemNum - Optional item number
-function LoothingWhisperHandlerMixin:ParseCommand(message)
+function WhisperHandlerMixin:ParseCommand(message)
     -- Remove the ! prefix
     local text = message:sub(2)
     if text == "" then return nil end
@@ -196,7 +201,7 @@ end
 -- @param command string - Lowercased command
 -- @return number|nil responseID - Loothing.Response value or button ID
 -- @return string|nil responseName - Display name
-function LoothingWhisperHandlerMixin:MatchCommand(command)
+function WhisperHandlerMixin:MatchCommand(command)
     -- Get the active button set
     local buttons = self:GetActiveButtons()
     if not buttons then return nil end
@@ -248,7 +253,7 @@ end
 
 --- Get the active response set's buttons
 -- @return table|nil - Array of button definitions
-function LoothingWhisperHandlerMixin:GetActiveButtons()
+function WhisperHandlerMixin:GetActiveButtons()
     if not Loothing.Settings then return nil end
     local buttons = Loothing.Settings:GetResponseButtons()
     return #buttons > 0 and buttons or nil
@@ -258,7 +263,7 @@ end
 -- @param itemNum number|nil - Optional item number (1-based)
 -- @return table|nil item - Session item data
 -- @return number|nil index - 1-based item index among voting items
-function LoothingWhisperHandlerMixin:FindTargetItem(itemNum)
+function WhisperHandlerMixin:FindTargetItem(itemNum)
     if not Loothing.Session then return nil end
 
     local items = Loothing.Session:GetItems()
@@ -287,7 +292,7 @@ end
 
 --- Get count of items currently in voting state
 -- @return number
-function LoothingWhisperHandlerMixin:GetVotingItemCount()
+function WhisperHandlerMixin:GetVotingItemCount()
     if not Loothing.Session then return 0 end
 
     local items = Loothing.Session:GetItems()
@@ -308,7 +313,7 @@ end
 -- @param playerName string - Normalized player name
 -- @param responseID number - Response/button ID
 -- @param itemIndex number - Index among voting items
-function LoothingWhisperHandlerMixin:SubmitWhisperResponse(item, playerName, responseID, itemIndex)
+function WhisperHandlerMixin:SubmitWhisperResponse(item, playerName, responseID, _itemIndex)
     if not Loothing.Session then return end
 
     -- Generate a silent roll for the whisper response
@@ -344,7 +349,7 @@ end
 --- Send a whisper to a player and mark it for chat filtering
 -- @param target string - Player name
 -- @param message string - Message text
-function LoothingWhisperHandlerMixin:SendWhisper(target, message)
+function WhisperHandlerMixin:SendWhisper(target, message)
     if not target or not message then return end
 
     -- Mark for filtering before sending
@@ -355,12 +360,12 @@ function LoothingWhisperHandlerMixin:SendWhisper(target, message)
         outgoingWhispers[message] = nil
     end)
 
-    SendChatMessage(message, "WHISPER", nil, target)
+    C_ChatInfo.SendChatMessage(message, "WHISPER", nil, target)
 end
 
 --- Send help listing available commands
 -- @param target string - Player name
-function LoothingWhisperHandlerMixin:SendHelp(target)
+function WhisperHandlerMixin:SendHelp(target)
     self:SendWhisper(target, L["WHISPER_HELP_HEADER"])
 
     local buttons = self:GetActiveButtons()
@@ -381,7 +386,7 @@ end
 --- Filter outgoing Loothing confirmation whispers from the chat frame
 -- @param message string - Outgoing whisper text
 -- @return boolean - True to suppress the message
-function LoothingWhisperHandlerMixin:FilterOutgoingWhisper(message)
+function WhisperHandlerMixin:FilterOutgoingWhisper(message)
     if not message then return false end
 
     -- Check if this is one of our outgoing whispers
@@ -396,8 +401,10 @@ end
     Factory
 ----------------------------------------------------------------------]]
 
-function CreateLoothingWhisperHandler()
-    local handler = Loolib.CreateFromMixins(LoothingWhisperHandlerMixin)
+function ns.CreateWhisperHandler()
+    local handler = CreateFromMixins(WhisperHandlerMixin)
     handler:Init()
     return handler
 end
+
+-- ns.WhisperHandlerMixin and ns.CreateWhisperHandler exported above

@@ -12,10 +12,12 @@
     - Circular buffer log (max 4000 entries)
     - /loothing errors  and  /loothing log  commands
 
-    Factory: CreateLoothingErrorHandler()
+    Factory: CreateErrorHandler()
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
 
 --[[--------------------------------------------------------------------
     Constants
@@ -48,13 +50,13 @@ local LOG_LEVEL_COLOR = {
 }
 
 --[[--------------------------------------------------------------------
-    LoothingErrorHandlerMixin
+    ErrorHandlerMixin
 ----------------------------------------------------------------------]]
 
-LoothingErrorHandlerMixin = {}
+ErrorHandlerMixin = {}
 
 --- Initialize the error handler
-function LoothingErrorHandlerMixin:Init()
+function ErrorHandlerMixin:Init()
     self.errors = {}           -- hash -> error entry
     self.errorOrder = {}       -- array of hashes in insertion order
     self.logBuffer = {}        -- circular buffer of log entries
@@ -72,7 +74,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Install our error handler, chaining the original
-function LoothingErrorHandlerMixin:InstallHandler()
+function ErrorHandlerMixin:InstallHandler()
     self.originalHandler = geterrorhandler()
 
     local self_ref = self
@@ -85,6 +87,7 @@ function LoothingErrorHandlerMixin:InstallHandler()
     end)
 
     -- Also hook BugGrabber if available
+    local BugGrabber = _G["BugGrabber"]
     if BugGrabber and BugGrabber.RegisterCallback then
         BugGrabber:RegisterCallback("BugGrabber_BugGrabbed", function(_, errObj)
             if errObj and errObj.message then
@@ -116,7 +119,7 @@ end
 --- Capture an error, deduplicating by message hash
 -- @param msg string - Error message
 -- @param stack string|nil - Optional pre-captured stack trace
-function LoothingErrorHandlerMixin:CaptureError(msg, stack)
+function ErrorHandlerMixin:CaptureError(msg, stack)
     if not msg then return end
     if Loolib.SecretUtil and Loolib.SecretUtil.IsSecretValue and Loolib.SecretUtil.IsSecretValue(msg) then
         msg = "<secret error>"
@@ -169,7 +172,7 @@ end
 
 --- Get all captured errors (newest first)
 -- @return table - Array of { message, stack, count, firstSeen, lastSeen }
-function LoothingErrorHandlerMixin:GetErrors()
+function ErrorHandlerMixin:GetErrors()
     local result = {}
     for i = #self.errorOrder, 1, -1 do
         local entry = self.errors[self.errorOrder[i]]
@@ -182,12 +185,12 @@ end
 
 --- Get error count
 -- @return number
-function LoothingErrorHandlerMixin:GetErrorCount()
+function ErrorHandlerMixin:GetErrorCount()
     return #self.errorOrder
 end
 
 --- Clear errors older than ERROR_EXPIRY_SECONDS
-function LoothingErrorHandlerMixin:PurgeOldErrors()
+function ErrorHandlerMixin:PurgeOldErrors()
     local cutoff = time() - ERROR_EXPIRY_SECONDS
     local newOrder = {}
     for _, hash in ipairs(self.errorOrder) do
@@ -202,7 +205,7 @@ function LoothingErrorHandlerMixin:PurgeOldErrors()
 end
 
 --- Clear all captured errors
-function LoothingErrorHandlerMixin:ClearErrors()
+function ErrorHandlerMixin:ClearErrors()
     self.errors = {}
     self.errorOrder = {}
 end
@@ -215,7 +218,7 @@ end
 -- @param level number - LOG_LEVEL value
 -- @param module string - Module name prefix
 -- @param msg string - Log message
-function LoothingErrorHandlerMixin:Log(level, module, msg)
+function ErrorHandlerMixin:Log(level, module, msg)
     level = level or LOG_LEVEL.INFO
     module = module or "Loothing"
 
@@ -242,22 +245,22 @@ function LoothingErrorHandlerMixin:Log(level, module, msg)
 end
 
 --- Convenience: Log at DEBUG level
-function LoothingErrorHandlerMixin:LogDebug(module, msg)
+function ErrorHandlerMixin:LogDebug(module, msg)
     self:Log(LOG_LEVEL.DEBUG, module, msg)
 end
 
 --- Convenience: Log at INFO level
-function LoothingErrorHandlerMixin:LogInfo(module, msg)
+function ErrorHandlerMixin:LogInfo(module, msg)
     self:Log(LOG_LEVEL.INFO, module, msg)
 end
 
 --- Convenience: Log at WARN level
-function LoothingErrorHandlerMixin:LogWarn(module, msg)
+function ErrorHandlerMixin:LogWarn(module, msg)
     self:Log(LOG_LEVEL.WARN, module, msg)
 end
 
 --- Convenience: Log at ERROR level
-function LoothingErrorHandlerMixin:LogError(module, msg)
+function ErrorHandlerMixin:LogError(module, msg)
     self:Log(LOG_LEVEL.ERROR, module, msg)
 end
 
@@ -266,7 +269,7 @@ end
 -- @param filterLevel number|nil - Only return entries at this level or above
 -- @param filterModule string|nil - Only return entries from this module
 -- @return table - Array of log entries
-function LoothingErrorHandlerMixin:GetRecentLogs(count, filterLevel, filterModule)
+function ErrorHandlerMixin:GetRecentLogs(count, filterLevel, filterModule)
     count = count or 50
     filterLevel = filterLevel or LOG_LEVEL.DEBUG
 
@@ -296,12 +299,12 @@ end
 
 --- Get total log entry count
 -- @return number
-function LoothingErrorHandlerMixin:GetLogCount()
+function ErrorHandlerMixin:GetLogCount()
     return self.logCount
 end
 
 --- Clear the log buffer
-function LoothingErrorHandlerMixin:ClearLogs()
+function ErrorHandlerMixin:ClearLogs()
     self.logBuffer = {}
     self.logHead = 0
     self.logCount = 0
@@ -313,7 +316,7 @@ end
 
 --- Toggle debug mode (verbose log output)
 -- @param enabled boolean|nil - true/false or nil to toggle
-function LoothingErrorHandlerMixin:SetDebugMode(enabled)
+function ErrorHandlerMixin:SetDebugMode(enabled)
     if enabled == nil then
         self.debugMode = not self.debugMode
     else
@@ -323,13 +326,13 @@ end
 
 --- Check if debug mode is on
 -- @return boolean
-function LoothingErrorHandlerMixin:IsDebugMode()
+function ErrorHandlerMixin:IsDebugMode()
     return self.debugMode
 end
 
 --- Set minimum log level for chat output
 -- @param level number - LOG_LEVEL value
-function LoothingErrorHandlerMixin:SetMinLogLevel(level)
+function ErrorHandlerMixin:SetMinLogLevel(level)
     if level >= LOG_LEVEL.DEBUG and level <= LOG_LEVEL.ERROR then
         self.minLogLevel = level
     end
@@ -340,7 +343,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Save errors to SavedVariables
-function LoothingErrorHandlerMixin:SaveToDatabase()
+function ErrorHandlerMixin:SaveToDatabase()
     if not Loothing.Settings then return end
 
     -- Purge old errors before saving
@@ -365,7 +368,7 @@ function LoothingErrorHandlerMixin:SaveToDatabase()
 end
 
 --- Load errors from SavedVariables
-function LoothingErrorHandlerMixin:LoadFromDatabase()
+function ErrorHandlerMixin:LoadFromDatabase()
     if not Loothing.Settings then return end
 
     local saved = Loothing.Settings:GetGlobalValue("errorLog")
@@ -397,7 +400,7 @@ end
 
 --- Handle /loothing errors command
 -- @param args string - Subcommand arguments ("", "clear", "count")
-function LoothingErrorHandlerMixin:HandleErrorsCommand(args)
+function ErrorHandlerMixin:HandleErrorsCommand(args)
     args = (args or ""):lower()
 
     if args == "clear" then
@@ -447,7 +450,7 @@ end
 
 --- Handle /loothing log command
 -- @param args string - Subcommand arguments ("", "clear", "debug", "info", "warn", "error", "N")
-function LoothingErrorHandlerMixin:HandleLogCommand(args)
+function ErrorHandlerMixin:HandleLogCommand(args)
     args = (args or ""):lower()
 
     if args == "clear" then
@@ -498,9 +501,9 @@ end
 ----------------------------------------------------------------------]]
 
 --- Create a new error handler instance
--- @return LoothingErrorHandlerMixin
-function CreateLoothingErrorHandler()
-    local handler = Loolib.CreateFromMixins(LoothingErrorHandlerMixin)
+-- @return ErrorHandlerMixin
+function CreateErrorHandler()
+    local handler = Loolib.CreateFromMixins(ErrorHandlerMixin)
     handler:Init()
     return handler
 end

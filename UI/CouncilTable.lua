@@ -4,9 +4,14 @@
     "More Info" panel, and skinning integration.
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local Utils = ns.Utils
+local SkinningMixin = ns.SkinningMixin
 
-LoothingCouncilTableMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin, LoothingCouncilTableMixin)
+local CouncilTableMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin, ns.CouncilTableMixin or {})
+ns.CouncilTableMixin = CouncilTableMixin
 
 local COUNCIL_TABLE_EVENTS = {
     "OnCandidateSelected",
@@ -53,7 +58,7 @@ local function IsObserverOnly()
     return false
 end
 
-function LoothingCouncilTableMixin:Init(parent)
+function CouncilTableMixin:Init(parent)
     Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(COUNCIL_TABLE_EVENTS)
 
@@ -77,8 +82,8 @@ function LoothingCouncilTableMixin:Init(parent)
     self:RegisterEvents()
 end
 
-function LoothingCouncilTableMixin:CreateFrame()
-    local frame = CreateFrame("Frame", "LoothingCouncilTable", self.parent or UIParent, "BackdropTemplate")
+function CouncilTableMixin:CreateFrame()
+    local frame = CreateFrame("Frame", nil, self.parent or UIParent, "BackdropTemplate")
     frame:SetSize(TABLE_WIDTH, TABLE_HEIGHT)
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("DIALOG")
@@ -89,12 +94,13 @@ function LoothingCouncilTableMixin:CreateFrame()
     frame:SetResizeBounds(MIN_WIDTH, MIN_HEIGHT, MAX_WIDTH, MAX_HEIGHT)
     frame:Hide()
 
-    -- Apply skin via LoothingSkinningMixin
-    LoothingSkinningMixin:SetupFrame(frame, "CouncilTable", "LoothingCouncilTable", {
+    -- Apply skin via SkinningMixin
+    SkinningMixin:SetupFrame(frame, "CouncilTable", "LoothingCouncilTable", {
         combatMinimize = true,
         ctrlScroll = true,
         escapeClose = true,
     })
+    ns.CouncilTableFrame = frame
 
     -- Title bar for dragging
     local titleBar = CreateFrame("Frame", nil, frame)
@@ -133,7 +139,7 @@ function LoothingCouncilTableMixin:CreateFrame()
     self.frame = frame
 end
 
-function LoothingCouncilTableMixin:CreateElements()
+function CouncilTableMixin:CreateElements()
     -- Close button
     local closeButton = CreateFrame("Button", nil, self.frame, "UIPanelCloseButton")
     closeButton:SetPoint("TOPRIGHT", -5, -5)
@@ -185,7 +191,7 @@ end
     Item Tab Bar (session switching)
 ----------------------------------------------------------------------]]
 
-function LoothingCouncilTableMixin:CreateItemTabBar()
+function CouncilTableMixin:CreateItemTabBar()
     local bar = CreateFrame("Frame", nil, self.frame)
     bar:SetPoint("TOPLEFT", 16, -40)
     bar:SetPoint("TOPRIGHT", -16, -40)
@@ -244,7 +250,7 @@ function LoothingCouncilTableMixin:CreateItemTabBar()
     end)
 end
 
-function LoothingCouncilTableMixin:RefreshItemTabs()
+function CouncilTableMixin:RefreshItemTabs()
     -- Clear existing tabs
     for _, tab in ipairs(self.itemTabs) do
         tab:Hide()
@@ -287,7 +293,7 @@ function LoothingCouncilTableMixin:RefreshItemTabs()
     self:UpdateItemTabVotedIndicators()
 end
 
-function LoothingCouncilTableMixin:CreateItemTab(index, item)
+function CouncilTableMixin:CreateItemTab(index, item)
     local tab = CreateFrame("Button", nil, self.itemTabContent, "BackdropTemplate")
     tab:SetSize(ITEM_TAB_WIDTH, ITEM_TAB_HEIGHT)
     tab:SetPoint("LEFT", (index - 1) * SCROLL_STEP, 0)
@@ -325,7 +331,7 @@ function LoothingCouncilTableMixin:CreateItemTab(index, item)
     local icon = tab:CreateTexture(nil, "ARTWORK")
     icon:SetSize(ITEM_TAB_ICON_SIZE, ITEM_TAB_ICON_SIZE)
     icon:SetPoint("LEFT", 4, 0)
-    local texture = item.texture or GetItemIcon(item.itemID or 0)
+    local texture = item.texture or C_Item.GetItemIconByID(item.itemID or 0)
     icon:SetTexture(texture or "Interface\\Icons\\INV_Misc_QuestionMark")
     tab.icon = icon
 
@@ -449,7 +455,7 @@ function LoothingCouncilTableMixin:CreateItemTab(index, item)
     return tab
 end
 
-function LoothingCouncilTableMixin:SelectItemTab(itemGUID)
+function CouncilTableMixin:SelectItemTab(itemGUID)
     -- Find item and its index
     local targetItem = nil
     local targetIndex = nil
@@ -552,7 +558,7 @@ function LoothingCouncilTableMixin:SelectItemTab(itemGUID)
     self:TriggerEvent("OnItemTabChanged", targetItem)
 end
 
-function LoothingCouncilTableMixin:SelectFirstItem()
+function CouncilTableMixin:SelectFirstItem()
     if #self.items > 0 then
         self:SelectItemTab(self.items[1].guid)
     end
@@ -562,14 +568,14 @@ end
     Scroll Helpers
 ----------------------------------------------------------------------]]
 
-function LoothingCouncilTableMixin:GetMaxScrollOffset()
+function CouncilTableMixin:GetMaxScrollOffset()
     if not self.itemTabClip or not self.itemTabContent then return 0 end
     local contentWidth = self.itemTabContent:GetWidth()
     local clipWidth = self.itemTabClip:GetWidth()
     return math.max(0, contentWidth - clipWidth)
 end
 
-function LoothingCouncilTableMixin:ScrollTo(targetOffset)
+function CouncilTableMixin:ScrollTo(targetOffset)
     local maxOffset = self:GetMaxScrollOffset()
     targetOffset = math.max(0, math.min(targetOffset, maxOffset))
     self.scrollOffset = targetOffset
@@ -578,7 +584,7 @@ function LoothingCouncilTableMixin:ScrollTo(targetOffset)
     self:UpdateScrollArrows()
 end
 
-function LoothingCouncilTableMixin:UpdateScrollArrows()
+function CouncilTableMixin:UpdateScrollArrows()
     if not self.itemTabClip then return end
 
     local maxOffset = self:GetMaxScrollOffset()
@@ -609,7 +615,7 @@ end
     Candidate List (Scrollable)
 ----------------------------------------------------------------------]]
 
-function LoothingCouncilTableMixin:CreateCandidateList()
+function CouncilTableMixin:CreateCandidateList()
     local container = CreateFrame("Frame", nil, self.frame, "BackdropTemplate")
     container:SetPoint("TOPLEFT", 16, -121)
     container:SetPoint("BOTTOMRIGHT", -16, MORE_INFO_HEIGHT + 50)
@@ -631,7 +637,7 @@ function LoothingCouncilTableMixin:CreateCandidateList()
     scrollFrame:SetScrollChild(content)
 
     -- Keep scroll child width in sync with scroll frame
-    scrollFrame:SetScript("OnSizeChanged", function(sf, w, h)
+    scrollFrame:SetScript("OnSizeChanged", function(_, w)
         content:SetWidth(w)
     end)
 
@@ -644,7 +650,7 @@ end
     "More Info" Panel
 ----------------------------------------------------------------------]]
 
-function LoothingCouncilTableMixin:CreateMoreInfoPanel()
+function CouncilTableMixin:CreateMoreInfoPanel()
     local panel = CreateFrame("Frame", nil, self.frame, "BackdropTemplate")
     panel:SetPoint("BOTTOMLEFT", 16, 44)
     panel:SetPoint("BOTTOMRIGHT", -16, 44)
@@ -722,7 +728,7 @@ end
     Action Buttons (ML controls)
 ----------------------------------------------------------------------]]
 
-function LoothingCouncilTableMixin:CreateActionButtons()
+function CouncilTableMixin:CreateActionButtons()
     local footer = CreateFrame("Frame", nil, self.frame)
     footer:SetPoint("BOTTOMLEFT", 16, 12)
     footer:SetPoint("BOTTOMRIGHT", -16, 12)
@@ -777,7 +783,7 @@ function LoothingCouncilTableMixin:CreateActionButtons()
     self.actionFooter = footer
 end
 
-function LoothingCouncilTableMixin:UpdateActionButtons()
+function CouncilTableMixin:UpdateActionButtons()
     local isML = Loothing.Session and Loothing.Session:IsMasterLooter()
 
     -- Observer indicator
@@ -848,7 +854,7 @@ end
     Enchanter Button & Dropdown
 ----------------------------------------------------------------------]]
 
-function LoothingCouncilTableMixin:CreateEnchanterButton()
+function CouncilTableMixin:CreateEnchanterButton()
     local btn = CreateFrame("Button", nil, self.actionFooter)
     btn:SetSize(24, 24)
     btn:SetPoint("LEFT", self.skipButton, "RIGHT", 12, 0)
@@ -859,7 +865,7 @@ function LoothingCouncilTableMixin:CreateEnchanterButton()
     end)
     btn:SetScript("OnEnter", function(b)
         GameTooltip:SetOwner(b, "ANCHOR_RIGHT")
-        GameTooltip:SetText("Disenchant Target")
+        GameTooltip:SetText("Disenchant Target", 1, 1, 1)
         GameTooltip:AddLine("Click to select an enchanter", 1, 1, 1)
         if self.disenchantTarget then
             GameTooltip:AddLine("Current: " .. self.disenchantTarget, 0.5, 1, 0.5)
@@ -871,14 +877,14 @@ function LoothingCouncilTableMixin:CreateEnchanterButton()
     self.enchanterBtn = btn
 end
 
-function LoothingCouncilTableMixin:ShowEnchanterDropdown(anchor)
+function CouncilTableMixin:ShowEnchanterDropdown(anchor)
     local enchanters = Loothing.PlayerCache and Loothing.PlayerCache:GetEnchanters() or {}
     if #enchanters == 0 then
         Loothing:Print("No enchanters detected in the group")
         return
     end
 
-    MenuUtil.CreateContextMenu(anchor, function(ownerRegion, rootDescription)
+    MenuUtil.CreateContextMenu(anchor, function(_, rootDescription)
         rootDescription:CreateTitle("Select Enchanter")
         for _, enc in ipairs(enchanters) do
             local classColor = RAID_CLASS_COLORS and RAID_CLASS_COLORS[enc.class] or { r = 1, g = 1, b = 1 }
@@ -901,7 +907,7 @@ end
     Voter Progress Indicator
 ----------------------------------------------------------------------]]
 
-function LoothingCouncilTableMixin:CreateVoterProgressUI()
+function CouncilTableMixin:CreateVoterProgressUI()
     local progressText = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     progressText:SetPoint("TOPRIGHT", self.itemTabBar, "TOPRIGHT", -4, -2)
     progressText:SetJustifyH("RIGHT")
@@ -920,7 +926,7 @@ function LoothingCouncilTableMixin:CreateVoterProgressUI()
     self.voterProgressBtn = hoverBtn
 end
 
-function LoothingCouncilTableMixin:UpdateVoterProgress()
+function CouncilTableMixin:UpdateVoterProgress()
     if not self.voterProgressText then return end
     if not self.currentItem then
         self.voterProgressText:SetText("")
@@ -962,7 +968,7 @@ function LoothingCouncilTableMixin:UpdateVoterProgress()
     end
 end
 
-function LoothingCouncilTableMixin:ShowVoterProgressTooltip(anchor)
+function CouncilTableMixin:ShowVoterProgressTooltip(anchor)
     if not self.currentItem then return end
 
     local expectedVoters = Loothing.Council and Loothing.Council:GetVotingEligibleMembers() or {}
@@ -1005,10 +1011,10 @@ end
     Item Tab Voted Indicators
 ----------------------------------------------------------------------]]
 
-function LoothingCouncilTableMixin:UpdateItemTabVotedIndicators()
+function CouncilTableMixin:UpdateItemTabVotedIndicators()
     if not self.items or not self.itemTabs then return end
 
-    local myName = LoothingUtils.GetPlayerFullName()
+    local myName = Utils.GetPlayerFullName()
 
     for i, tab in ipairs(self.itemTabs) do
         local item = self.items[i]
@@ -1023,8 +1029,8 @@ function LoothingCouncilTableMixin:UpdateItemTabVotedIndicators()
     end
 end
 
-function LoothingCouncilTableMixin:CreateFramePools()
-    self.rowPool = CreateFramePool("Button", self.listContent, "BackdropTemplate", function(pool, frame)
+function CouncilTableMixin:CreateFramePools()
+    self.rowPool = CreateFramePool("Button", self.listContent, "BackdropTemplate", function(_, frame)
         frame:Hide()
         frame:ClearAllPoints()
         frame.candidate = nil
@@ -1036,7 +1042,7 @@ end
     Throttled Refresh
 ----------------------------------------------------------------------]]
 
-function LoothingCouncilTableMixin:ThrottledRefresh()
+function CouncilTableMixin:ThrottledRefresh()
     local now = GetTime()
     if now - self.lastRefreshTime >= REFRESH_THROTTLE then
         self.lastRefreshTime = now
@@ -1058,7 +1064,7 @@ end
     Clear
 ----------------------------------------------------------------------]]
 
-function LoothingCouncilTableMixin:Clear()
+function CouncilTableMixin:Clear()
     self.items = {}
     self.currentItem = nil
     self.selectedCandidate = nil
@@ -1086,7 +1092,7 @@ end
     Resize
 ----------------------------------------------------------------------]]
 
-function LoothingCouncilTableMixin:OnResize()
+function CouncilTableMixin:OnResize()
     self:RebuildColumnHeaders()
     self:RefreshCandidates()
     self:UpdateScrollArrows()
@@ -1096,16 +1102,16 @@ end
     Position Persistence
 ----------------------------------------------------------------------]]
 
-function LoothingCouncilTableMixin:SavePosition()
-    LoothingSkinningMixin:SaveFrameState(self.frame, "CouncilTable")
+function CouncilTableMixin:SavePosition()
+    SkinningMixin:SaveFrameState(self.frame, "CouncilTable")
 end
 
-function LoothingCouncilTableMixin:LoadPosition()
-    LoothingSkinningMixin:LoadFrameState(self.frame, "CouncilTable")
+function CouncilTableMixin:LoadPosition()
+    SkinningMixin:LoadFrameState(self.frame, "CouncilTable")
 end
 
 -- Show/Hide/Toggle
-function LoothingCouncilTableMixin:Show()
+function CouncilTableMixin:Show()
     self:LoadPosition()
     self.frame:Show()
     self:RebuildColumnHeaders()
@@ -1114,16 +1120,18 @@ function LoothingCouncilTableMixin:Show()
     self:UpdateActionButtons()
 end
 
-function LoothingCouncilTableMixin:Hide()
+function CouncilTableMixin:Hide()
     self.frame:Hide()
 end
 
-function LoothingCouncilTableMixin:Toggle()
+function CouncilTableMixin:Toggle()
     if self.frame:IsShown() then self:Hide() else self:Show() end
 end
 
-function CreateLoothingCouncilTable(parent)
-    local tbl = Loolib.CreateFromMixins(LoothingCouncilTableMixin)
+local function CreateCouncilTable(parent)
+    local tbl = Loolib.CreateFromMixins(CouncilTableMixin)
     tbl:Init(parent)
     return tbl
 end
+
+ns.CreateCouncilTable = CreateCouncilTable

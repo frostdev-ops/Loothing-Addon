@@ -4,9 +4,13 @@
     Master Looter. They control the session for everyone.
 ----------------------------------------------------------------------]]
 
+local ADDON_NAME, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local Options = ns.Options or {}
+ns.Options = Options
 
-local L = Loothing.Locale
+local L = ns.Locale
 local unpack = unpack
 
 
@@ -551,5 +555,4 @@ local function GetSessionSettingsOptions()
     return opts
 end
 
-Loothing.Options = Loothing.Options or {}
-Loothing.Options.GetSessionSettingsOptions = GetSessionSettingsOptions
+Options.GetSessionSettingsOptions = GetSessionSettingsOptions

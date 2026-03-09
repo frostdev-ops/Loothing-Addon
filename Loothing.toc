@@ -3,13 +3,13 @@
 ## Title: Loothing
 ## Notes: Loot Council addon for WoW 12.0+ with ranked choice voting
 ## Author: James Kueller
-## Version: 1.1.8
-## SavedVariables: LoothingDB
+## Version: 1.2.0
+## SavedVariables: LoolibDB, LoothingDB
 ## Dependencies: Loolib
 ## IconTexture: Interface\AddOns\Loothing\Media\logo
-## AddonCompartmentFunc: Loothing_OnAddonCompartmentClick
-## AddonCompartmentFuncOnEnter: Loothing_OnAddonCompartmentEnter
-## AddonCompartmentFuncOnLeave: Loothing_OnAddonCompartmentLeave
+## AddonCompartmentFunc: Loolib_GlobalBridge_Loothing_OnAddonCompartmentClick
+## AddonCompartmentFuncOnEnter: Loolib_GlobalBridge_Loothing_OnAddonCompartmentEnter
+## AddonCompartmentFuncOnLeave: Loolib_GlobalBridge_Loothing_OnAddonCompartmentLeave
 ## X-Category: Raid
 ## X-Website: https://github.com/jkueller/loothing
 ## X-License: MIT

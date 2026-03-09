@@ -3,16 +3,22 @@
     Extracted member lifecycle, auto-include logic, and raid helpers.
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
+local Loothing = ns.Addon
 local Loolib = LibStub("Loolib")
+local Utils = ns.Utils
+local time = time
 
-LoothingCouncilMixin = LoothingCouncilMixin or {}
+ns.CouncilMixin = ns.CouncilMixin or {}
+
+local CouncilMixin = ns.CouncilMixin
 
 --[[--------------------------------------------------------------------
     Member Management
 ----------------------------------------------------------------------]]
 
-function LoothingCouncilMixin:AddMember(name)
-    name = LoothingUtils.NormalizeName(name)
+function CouncilMixin:AddMember(name)
+    name = Utils.NormalizeName(name)
 
     if self.members[name] then
         return false, "Player is already a council member"
@@ -32,8 +38,8 @@ function LoothingCouncilMixin:AddMember(name)
     return true, nil
 end
 
-function LoothingCouncilMixin:RemoveMember(name)
-    name = LoothingUtils.NormalizeName(name)
+function CouncilMixin:RemoveMember(name)
+    name = Utils.NormalizeName(name)
 
     if not self.members[name] then
         return false
@@ -48,8 +54,8 @@ function LoothingCouncilMixin:RemoveMember(name)
     return true
 end
 
-function LoothingCouncilMixin:IsMember(name)
-    name = LoothingUtils.NormalizeName(name)
+function CouncilMixin:IsMember(name)
+    name = Utils.NormalizeName(name)
 
     if self.members[name] then
         return true
@@ -66,20 +72,20 @@ function LoothingCouncilMixin:IsMember(name)
     return false
 end
 
-function LoothingCouncilMixin:IsAutoIncluded(name)
-    name = LoothingUtils.NormalizeName(name)
+function CouncilMixin:IsAutoIncluded(name)
+    name = Utils.NormalizeName(name)
 
     if self.autoIncludeRaidLeader then
-        local leader = LoothingUtils.GetRaidLeader()
-        if leader and LoothingUtils.IsSamePlayer(name, leader) then
+        local leader = Utils.GetRaidLeader()
+        if leader and Utils.IsSamePlayer(name, leader) then
             return true
         end
     end
 
     if self.autoIncludeOfficers then
-        local officers = LoothingUtils.GetRaidOfficers()
+        local officers = Utils.GetRaidOfficers()
         for _, officer in ipairs(officers) do
-            if LoothingUtils.IsSamePlayer(name, officer) then
+            if Utils.IsSamePlayer(name, officer) then
                 return true
             end
         end
@@ -88,7 +94,7 @@ function LoothingCouncilMixin:IsAutoIncluded(name)
     return false
 end
 
-function LoothingCouncilMixin:GetMembers()
+function CouncilMixin:GetMembers()
     local result = {}
     for name in pairs(self.members) do
         result[#result + 1] = name
@@ -97,7 +103,7 @@ function LoothingCouncilMixin:GetMembers()
     return result
 end
 
-function LoothingCouncilMixin:GetAllMembers()
+function CouncilMixin:GetAllMembers()
     local result = {}
     local seen = {}
 
@@ -118,7 +124,7 @@ function LoothingCouncilMixin:GetAllMembers()
     end
 
     if self.autoIncludeRaidLeader then
-        local leader = LoothingUtils.GetRaidLeader()
+        local leader = Utils.GetRaidLeader()
         if leader and not seen[leader] then
             seen[leader] = true
             result[#result + 1] = leader
@@ -126,7 +132,7 @@ function LoothingCouncilMixin:GetAllMembers()
     end
 
     if self.autoIncludeOfficers then
-        local officers = LoothingUtils.GetRaidOfficers()
+        local officers = Utils.GetRaidOfficers()
         for _, officer in ipairs(officers) do
             if not seen[officer] then
                 seen[officer] = true
@@ -139,11 +145,11 @@ function LoothingCouncilMixin:GetAllMembers()
     return result
 end
 
-function LoothingCouncilMixin:GetMemberCount()
+function CouncilMixin:GetMemberCount()
     return #self:GetAllMembers()
 end
 
-function LoothingCouncilMixin:ClearMembers()
+function CouncilMixin:ClearMembers()
     wipe(self.members)
     self:SaveToSettings()
     self:TriggerEvent("OnRosterChanged")
@@ -153,7 +159,7 @@ end
     Guild Integration
 ----------------------------------------------------------------------]]
 
-function LoothingCouncilMixin:GetGuildRanks()
+function CouncilMixin:GetGuildRanks()
     local ranks = {}
 
     if not IsInGuild() then
@@ -174,7 +180,7 @@ function LoothingCouncilMixin:GetGuildRanks()
     return ranks
 end
 
-function LoothingCouncilMixin:AddMembersByRank(rankIndex)
+function CouncilMixin:AddMembersByRank(rankIndex)
     if not IsInGuild() then
         return 0
     end
@@ -185,7 +191,7 @@ function LoothingCouncilMixin:AddMembersByRank(rankIndex)
     for i = 1, totalMembers do
         local name, _, rankIndexMember = Loothing.GetGuildRosterInfo(i)
         if (rankIndexMember + 1) == rankIndex and name then
-            name = LoothingUtils.NormalizeName(name)
+            name = Utils.NormalizeName(name)
             if self:AddMember(name) then
                 count = count + 1
             end
@@ -199,11 +205,11 @@ end
     Group/Raid Helpers
 ----------------------------------------------------------------------]]
 
-function LoothingCouncilMixin:GetCurrentGroupMembers()
+function CouncilMixin:GetCurrentGroupMembers()
     local members = {}
 
     if IsInRaid() then
-        local roster = LoothingUtils.GetRaidRoster()
+        local roster = Utils.GetRaidRoster()
         for _, entry in ipairs(roster) do
             members[#members + 1] = {
                 name = entry.name,
@@ -220,7 +226,7 @@ function LoothingCouncilMixin:GetCurrentGroupMembers()
                 local role = UnitGroupRolesAssigned(unit)
 
                 if name then
-                    name = LoothingUtils.NormalizeName(name)
+                    name = Utils.NormalizeName(name)
                     members[#members + 1] = {
                         name = name,
                         class = class,
@@ -230,7 +236,7 @@ function LoothingCouncilMixin:GetCurrentGroupMembers()
             end
         end
 
-        local playerName = LoothingUtils.GetPlayerFullName()
+        local playerName = Utils.GetPlayerFullName()
         -- FIX(Area4-4): Use SafeUnitClass to avoid secret value tainting
         local _, playerClass = Loolib.SecretUtil.SafeUnitClass("player")
         local playerRole = UnitGroupRolesAssigned("player")
@@ -245,7 +251,7 @@ function LoothingCouncilMixin:GetCurrentGroupMembers()
     return members
 end
 
-function LoothingCouncilMixin:AddMembersFromGroup(names)
+function CouncilMixin:AddMembersFromGroup(names)
     if not names or type(names) ~= "table" then
         return 0
     end
@@ -254,13 +260,13 @@ function LoothingCouncilMixin:AddMembersFromGroup(names)
     local groupMemberSet = {}
 
     for _, member in ipairs(groupMembers) do
-        local normalized = LoothingUtils.NormalizeName(member.name)
+        local normalized = Utils.NormalizeName(member.name)
         groupMemberSet[normalized] = true
     end
 
     local count = 0
     for _, name in ipairs(names) do
-        name = LoothingUtils.NormalizeName(name)
+        name = Utils.NormalizeName(name)
         if groupMemberSet[name] then
             if self:AddMember(name) then
                 count = count + 1
@@ -271,7 +277,7 @@ function LoothingCouncilMixin:AddMembersFromGroup(names)
     return count
 end
 
-function LoothingCouncilMixin:RemoveAllMembers()
+function CouncilMixin:RemoveAllMembers()
     local count = 0
 
     for _ in pairs(self.members) do
@@ -285,12 +291,12 @@ function LoothingCouncilMixin:RemoveAllMembers()
     return count
 end
 
-function LoothingCouncilMixin:GetCouncilMemberCount()
+function CouncilMixin:GetCouncilMemberCount()
     return self:GetMemberCount()
 end
 
 --- Called when GROUP_ROSTER_UPDATE fires so subscribers can refresh
 -- Auto-include logic (leader/officers) is dynamic, so notify listeners.
-function LoothingCouncilMixin:OnRosterUpdate()
+function CouncilMixin:OnRosterUpdate()
     self:TriggerEvent("OnRosterChanged")
 end

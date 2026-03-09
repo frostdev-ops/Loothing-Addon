@@ -3,13 +3,23 @@
     Event registration and roll handling entry point.
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
+local Loothing = ns.Addon
+local CreateFrame = CreateFrame
+local GetLootRollItemLink = GetLootRollItemLink
+local IsInGroup = IsInGroup
+local RollOnLoot = RollOnLoot
 local time = time
 
-LoothingGroupLootMixin = LoothingGroupLootMixin or {}
+ns.GroupLootMixin = ns.GroupLootMixin or {}
+ns.GroupLootRoll = ns.GroupLootRoll or {}
+
+local GroupLootMixin = ns.GroupLootMixin
+local GroupLootRoll = ns.GroupLootRoll
 
 --- Enable the group loot handler.
 -- Registers for START_LOOT_ROLL event (setting controls actual behavior)
-function LoothingGroupLootMixin:Enable()
+function GroupLootMixin:Enable()
     if not self.eventFrame then
         self.eventFrame = CreateFrame("Frame")
         self.eventFrame:SetScript("OnEvent", function(_, event, ...)
@@ -23,7 +33,7 @@ function LoothingGroupLootMixin:Enable()
 end
 
 --- Disable the group loot handler.
-function LoothingGroupLootMixin:Disable()
+function GroupLootMixin:Disable()
     if self.eventFrame then
         self.eventFrame:UnregisterEvent("START_LOOT_ROLL")
     end
@@ -32,8 +42,8 @@ end
 --- Handle START_LOOT_ROLL event.
 -- @param event string - Event name
 -- @param rollID number - The roll ID for this loot item
-function LoothingGroupLootMixin:OnStartLootRoll(event, rollID)
-    local rolls = LoothingGroupLootRoll
+function GroupLootMixin:OnStartLootRoll(_, rollID)
+    local rolls = GroupLootRoll
 
     if not Loothing.Settings:Get("groupLoot.enabled") then
         return

@@ -30,12 +30,12 @@
     Global Namespace
 ----------------------------------------------------------------------]]
 
-LoothingTestRunner = {}
-LoothingAssert = {}
+TestRunner = {}
+Assert = {}
 
 -- Local references for cleaner code
-local TestRunner = LoothingTestRunner
-local Assert = LoothingAssert
+local TestRunner = TestRunner
+local Assert = Assert
 
 --[[--------------------------------------------------------------------
     Color Codes

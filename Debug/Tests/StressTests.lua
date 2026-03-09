@@ -3,11 +3,19 @@
     StressTests - Performance and stress tests
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
+local Loothing = ns.Addon
+local Utils = ns.Utils
+
 local Loolib = LibStub("Loolib")
 
 --[[--------------------------------------------------------------------
     Test Infrastructure
 ----------------------------------------------------------------------]]
+
+local _, ns = ...
+local Loothing = ns.Addon
+local Utils = ns.Utils
 
 local StressTests = {
     name = "Stress Tests",
@@ -108,8 +116,8 @@ end
 --- Setup test environment
 local function SetupTest()
     -- Enable test mode
-    if LoothingTestMode and not LoothingTestMode:IsEnabled() then
-        LoothingTestMode:SetEnabled(true)
+    if TestMode and not TestMode:IsEnabled() then
+        TestMode:SetEnabled(true)
     end
 
     -- Clear any existing session
@@ -151,7 +159,7 @@ local function GenerateLargeItemSet(count)
 
     for i = 1, count do
         local itemID = testItemIDs[((i - 1) % #testItemIDs) + 1]
-        local itemLink = LoothingTestMode:GenerateFakeItemLink(itemID)
+        local itemLink = TestMode:GenerateFakeItemLink(itemID)
         table.insert(items, itemLink)
     end
 
@@ -171,7 +179,7 @@ local function Test_FiftyItemSession()
     Loothing.Session:StartSession(0, "Stress Test")
 
     local itemLinks = GenerateLargeItemSet(50)
-    local looter = LoothingUtils.GetPlayerFullName()
+    local looter = Utils.GetPlayerFullName()
 
     -- Measure adding each item
     for _, itemLink in ipairs(itemLinks) do
@@ -204,7 +212,7 @@ local function Test_HundredItemSession()
     Loothing.Session:StartSession(0, "Stress Test")
 
     local itemLinks = GenerateLargeItemSet(100)
-    local looter = LoothingUtils.GetPlayerFullName()
+    local looter = Utils.GetPlayerFullName()
 
     for _, itemLink in ipairs(itemLinks) do
         local duration = Measure(function()
@@ -271,14 +279,14 @@ local function Test_FortyPlayerRaid()
     SetupTest()
 
     -- Generate 40 fake council members
-    LoothingTestMode:GenerateFakeCouncil(40)
+    TestMode:GenerateFakeCouncil(40)
 
-    local councilMembers = LoothingTestMode:GetFakeCouncilMembers()
+    local councilMembers = TestMode:GetFakeCouncilMembers()
     Assert(#councilMembers >= 40, "Should have 40 council members")
 
     Loothing.Session:StartSession(0, "40-Player Raid")
 
-    local item = LoothingTestMode:CreateFakeItem()
+    local item = TestMode:CreateFakeItem()
     item:SetState(Loothing.ItemState.VOTING)
 
     local voteMetrics = NewPerfMetrics("Vote Processing (40 voters)", StressTests.performanceThresholds.acceptable)
@@ -320,7 +328,7 @@ local function Test_RapidVotes()
     SetupTest()
 
     Loothing.Session:StartSession(0, "Rapid Test")
-    local item = LoothingTestMode:CreateFakeItem()
+    local item = TestMode:CreateFakeItem()
     item:SetState(Loothing.ItemState.VOTING)
 
     local metrics = NewPerfMetrics("Rapid Vote Processing", StressTests.performanceThresholds.critical)
@@ -350,7 +358,7 @@ local function Test_RapidItemAdds()
     Loothing.Session:StartSession(0, "Rapid Test")
 
     local itemLinks = GenerateLargeItemSet(50)
-    local looter = LoothingUtils.GetPlayerFullName()
+    local looter = Utils.GetPlayerFullName()
 
     local metrics = NewPerfMetrics("Rapid Item Addition", StressTests.performanceThresholds.critical)
 
@@ -377,7 +385,7 @@ local function Test_RapidStateChanges()
     local metrics = NewPerfMetrics("State Changes", StressTests.performanceThresholds.critical)
 
     for i = 1, 20 do
-        local item = LoothingTestMode:CreateFakeItem()
+        local item = TestMode:CreateFakeItem()
 
         local duration = Measure(function()
             item:SetState(Loothing.ItemState.PENDING)
@@ -411,7 +419,7 @@ local function Test_SessionCycles()
 
         -- Add a few items
         for j = 1, 5 do
-            LoothingTestMode:CreateFakeItem()
+            TestMode:CreateFakeItem()
         end
 
         Loothing.Session:EndSession()
@@ -446,7 +454,7 @@ local function Test_ItemCreationCycles()
 
     -- Create and destroy 100 items
     for i = 1, 100 do
-        local item = LoothingTestMode:CreateFakeItem()
+        local item = TestMode:CreateFakeItem()
         Loothing.Session:RemoveItem(item.guid)
 
         if i % 20 == 0 then
@@ -474,7 +482,7 @@ local function Test_VoteAccumulation()
 
     Loothing.Session:StartSession(0, "Vote Memory Test")
 
-    local item = LoothingTestMode:CreateFakeItem()
+    local item = TestMode:CreateFakeItem()
     item:SetState(Loothing.ItemState.VOTING)
 
     local startMemory = collectgarbage("count")
@@ -524,13 +532,13 @@ local function Test_MessageEncodeDecode()
         -- Encode (Serialize → Compress → EncodeForAddonChannel)
         local encoded
         local encodeDuration = Measure(function()
-            encoded = LoothingProtocol:Encode(Loothing.MsgType.VOTE_COMMIT, data)
+            encoded = Protocol:Encode(Loothing.MsgType.VOTE_COMMIT, data)
         end)
         RecordOp(encodeMetrics, encodeDuration)
 
         -- Decode (DecodeForAddonChannel → Decompress → Deserialize)
         local decodeDuration = Measure(function()
-            local version, command, decodedData = LoothingProtocol:Decode(encoded)
+            local version, command, decodedData = Protocol:Decode(encoded)
         end)
         RecordOp(decodeMetrics, decodeDuration)
     end
@@ -574,7 +582,7 @@ local function Test_LargePayload()
     local metrics = NewPerfMetrics("Large Payload Encoding", StressTests.performanceThresholds.acceptable)
 
     local duration = Measure(function()
-        local encoded = LoothingProtocol:Encode(Loothing.MsgType.SYNC_DATA, largeData)
+        local encoded = Protocol:Encode(Loothing.MsgType.SYNC_DATA, largeData)
     end)
     RecordOp(metrics, duration)
 
@@ -676,7 +684,7 @@ local function Test_MainFrameWithFiftyItems()
 
     -- Add 50 items
     local itemLinks = GenerateLargeItemSet(50)
-    local looter = LoothingUtils.GetPlayerFullName()
+    local looter = Utils.GetPlayerFullName()
     for _, itemLink in ipairs(itemLinks) do
         Loothing.Session:AddItem(itemLink, looter)
     end
@@ -709,14 +717,14 @@ local function Test_ResultsPanelFortyVoters()
 
     SetupTest()
 
-    LoothingTestMode:GenerateFakeCouncil(40)
+    TestMode:GenerateFakeCouncil(40)
 
     Loothing.Session:StartSession(0, "Results Stress Test")
-    local item = LoothingTestMode:CreateFakeItem()
+    local item = TestMode:CreateFakeItem()
     item:SetState(Loothing.ItemState.VOTING)
 
     -- Populate candidateManager so ResultsPanel can display candidates
-    LoothingTestMode:AddFakeCandidatesToItem(item)
+    TestMode:AddFakeCandidatesToItem(item)
     local cm = item:GetCandidateManager()
     for _, c in ipairs(cm:GetAllCandidates()) do
         for _ = 1, math.random(0, 8) do
@@ -725,7 +733,7 @@ local function Test_ResultsPanelFortyVoters()
     end
 
     -- Add 40 votes (legacy vote system)
-    local councilMembers = LoothingTestMode:GetFakeCouncilMembers()
+    local councilMembers = TestMode:GetFakeCouncilMembers()
     for i = 2, #councilMembers do
         local member = councilMembers[i]
         item:AddVote(member.name, member.class, { Loothing.Response.NEED })
@@ -889,5 +897,5 @@ end
     Global Access
 ----------------------------------------------------------------------]]
 
-_G.LoothingStressTests = StressTests
+_G.StressTests = StressTests
 

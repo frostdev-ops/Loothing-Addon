@@ -15,12 +15,18 @@
     - Logged: Each execution is logged via Loothing:Debug()
 
     Usage:
-        LoothingMigration:Init()              -- Register all migrations
-        LoothingMigration:RunOnLoad()         -- Execute pending migrations
-        LoothingMigration:HasRun("1.0.0")     -- Check if migration ran
+        Migration:Init()              -- Register all migrations
+        Migration:RunOnLoad()         -- Execute pending migrations
+        Migration:HasRun("1.0.0")     -- Check if migration ran
 ----------------------------------------------------------------------]]
 
-LoothingMigration = {}
+local ADDON_NAME, ns = ...
+
+local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local Utils = ns.Utils
+ns.Migration = ns.Migration or {}
+local Migration = ns.Migration
 
 -- Private state
 local migrations = {}
@@ -30,7 +36,7 @@ local migrations = {}
 ----------------------------------------------------------------------]]
 
 --- Initialize the migration system
-function LoothingMigration:Init()
+function Migration:Init()
     -- Clear any stale migrations from previous sessions
     migrations = {}
 
@@ -44,7 +50,7 @@ end
 -- @param version string - Semantic version (e.g., "1.0.0")
 -- @param description string - Human-readable description
 -- @param func function - Migration handler: function(profileDB, globalDB)
-function LoothingMigration:Register(version, description, func)
+function Migration:Register(version, description, func)
     if not version or not func then
         Loothing:Error("Migration:Register - version and func are required")
         return
@@ -67,7 +73,7 @@ end
 
 --- Register all migration functions
 -- Each migration is registered with a version, description, and handler
-function LoothingMigration:RegisterMigrations()
+function Migration:RegisterMigrations()
     -- Migration 1.0.0: Initial schema validation
     self:Register("1.0.0", "Initial schema setup", function(profileDB, globalDB)
         -- Ensure migration tracking exists in global scope
@@ -278,7 +284,7 @@ function LoothingMigration:RegisterMigrations()
             end
         else
             -- No old data: use defaults
-            rs = LoothingUtils.DeepCopy(defaults)
+            rs = Utils.DeepCopy(defaults)
         end
 
         profileDB.responseSets = rs
@@ -293,7 +299,7 @@ end
 --- Run all pending migrations on addon load
 -- Called from Init.lua after ADDON_LOADED event.
 -- Uses the global scope for migration tracking so it persists across profiles.
-function LoothingMigration:RunOnLoad()
+function Migration:RunOnLoad()
     -- Get data scopes
     local profileDB, globalDB = self:GetDataScopes()
     if not profileDB and not globalDB then
@@ -366,7 +372,7 @@ function LoothingMigration:RunOnLoad()
 end
 
 --- Alias for RunOnLoad (public API name)
-function LoothingMigration:RunPending()
+function Migration:RunPending()
     self:RunOnLoad()
 end
 
@@ -376,7 +382,7 @@ end
 
 --- Get profile and global data scopes
 -- @return table, table - profileDB, globalDB
-function LoothingMigration:GetDataScopes()
+function Migration:GetDataScopes()
     local profileDB, globalDB
 
     -- Try Loolib SavedVariables first
@@ -388,24 +394,14 @@ function LoothingMigration:GetDataScopes()
         end
     end
 
-    -- Fallback to direct LoothingDB access (pre-migration or first load)
     if not profileDB then
-        if LoothingDB then
-            profileDB = LoothingDB
-        else
-            profileDB = {}
-        end
+        local store = Loolib.Data.SavedVariables.GetAddonData("Loothing", false)
+        profileDB = store and store.profiles and store.profileKeys and store.profiles[(store.profileKeys[(UnitName("player") or "") .. " - " .. (GetRealmName() or "")] or "Default")] or {}
     end
 
     if not globalDB then
-        -- On first load, global data may still be in the flat LoothingDB
-        if LoothingDB and LoothingDB.global then
-            globalDB = LoothingDB.global
-        elseif LoothingDB then
-            globalDB = LoothingDB
-        else
-            globalDB = {}
-        end
+        local store = Loolib.Data.SavedVariables.GetAddonData("Loothing", false)
+        globalDB = (store and store.global) or {}
     end
 
     return profileDB, globalDB
@@ -417,7 +413,7 @@ end
 
 --- Get all completed migration versions
 -- @return table - Set of version strings that have been completed (version -> true)
-function LoothingMigration:GetCompletedVersions()
+function Migration:GetCompletedVersions()
     local _, globalDB = self:GetDataScopes()
     local completed = {}
 
@@ -436,14 +432,14 @@ end
 --- Check if a specific migration has been executed
 -- @param version string - Migration version to check
 -- @return boolean - True if migration has been executed
-function LoothingMigration:HasRun(version)
+function Migration:HasRun(version)
     local completed = self:GetCompletedVersions()
     return completed[version] == true
 end
 
 --- Get the current stored migration version
 -- @return string - Version string
-function LoothingMigration:GetCurrentVersion()
+function Migration:GetCurrentVersion()
     local _, globalDB = self:GetDataScopes()
 
     if globalDB and globalDB.migrations then
@@ -455,7 +451,7 @@ end
 
 --- Get migration history (array of completed migration records)
 -- @return table - Array of { version, description, timestamp }
-function LoothingMigration:GetHistory()
+function Migration:GetHistory()
     local _, globalDB = self:GetDataScopes()
 
     if globalDB and globalDB.migrations and globalDB.migrations.history then
@@ -468,7 +464,7 @@ end
 --- Check if a specific migration has been executed (alias)
 -- @param version string - Migration version to check
 -- @return boolean
-function LoothingMigration:HasMigrationRun(version)
+function Migration:HasMigrationRun(version)
     return self:HasRun(version)
 end
 
@@ -481,8 +477,8 @@ end
 -- @param v1 string - First version (e.g., "1.2.3")
 -- @param v2 string - Second version (e.g., "1.2.4")
 -- @return number
-function LoothingMigration:CompareVersions(v1, v2)
-    return LoothingUtils.CompareVersions(v1, v2)
+function Migration:CompareVersions(v1, v2)
+    return Utils.CompareVersions(v1, v2)
 end
 
 --[[--------------------------------------------------------------------
@@ -490,7 +486,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Force re-run all migrations (DANGEROUS - for debugging only)
-function LoothingMigration:ForceRerunAll()
+function Migration:ForceRerunAll()
     Loothing:Debug("WARNING: Force re-running all migrations")
 
     local _, globalDB = self:GetDataScopes()

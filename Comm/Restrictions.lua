@@ -11,13 +11,19 @@
     - Fires callbacks so UI can show restriction indicator
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
+local Loothing = ns.Addon
 local Loolib = LibStub("Loolib")
+local CreateFromMixins = Loolib.CreateFromMixins
+local GetTime = GetTime
+
+ns.RestrictionsMixin = CreateFromMixins(Loolib.CallbackRegistryMixin, ns.RestrictionsMixin or {})
 
 --[[--------------------------------------------------------------------
-    LoothingRestrictionsMixin
+    RestrictionsMixin
 ----------------------------------------------------------------------]]
 
-LoothingRestrictionsMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+local RestrictionsMixin = ns.RestrictionsMixin
 
 -- Bitmask positions
 local RESTRICTION_ENCOUNTER = 0x2       -- bit 1: encounter active
@@ -30,7 +36,7 @@ local RESTRICTION_EVENTS = {
 }
 
 --- Initialize restriction handler
-function LoothingRestrictionsMixin:Init()
+function RestrictionsMixin:Init()
     Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(RESTRICTION_EVENTS)
 
@@ -46,7 +52,7 @@ end
     Event Registration
 ----------------------------------------------------------------------]]
 
-function LoothingRestrictionsMixin:RegisterEvents()
+function RestrictionsMixin:RegisterEvents()
     local Events = Loolib.Events
     if not Events or not Events.Registry then return end
 
@@ -80,7 +86,7 @@ end
 
 --- Handle ADDON_RESTRICTION_STATE_CHANGED
 -- @param state number - Enum.AddOnRestrictionState value
-function LoothingRestrictionsMixin:OnRestrictionStateChanged(state)
+function RestrictionsMixin:OnRestrictionStateChanged(state)
     -- Active or Activating = restricted
     local isActive = (state == Enum.AddOnRestrictionState.Active
                    or state == Enum.AddOnRestrictionState.Activating)
@@ -88,13 +94,13 @@ function LoothingRestrictionsMixin:OnRestrictionStateChanged(state)
     self:SetRestrictionBit(RESTRICTION_ENCOUNTER, isActive)
 end
 
-function LoothingRestrictionsMixin:OnEncounterStart()
+function RestrictionsMixin:OnEncounterStart()
     -- Encounter bit is set primarily by ADDON_RESTRICTION_STATE_CHANGED,
     -- but we set it here as a safety net
     self:SetRestrictionBit(RESTRICTION_ENCOUNTER, true)
 end
 
-function LoothingRestrictionsMixin:OnEncounterEnd()
+function RestrictionsMixin:OnEncounterEnd()
     -- Don't clear immediately - wait for ADDON_RESTRICTION_STATE_CHANGED to fire Inactive.
     -- ENCOUNTER_END can fire before restrictions actually lift (e.g., during wipe recovery).
     -- Use a short delay to avoid premature queue replay.
@@ -109,7 +115,7 @@ end
 --- Set or clear a restriction bit and update state
 -- @param bitFlag number - The bit to set/clear
 -- @param active boolean - Whether the restriction is active
-function LoothingRestrictionsMixin:SetRestrictionBit(bitFlag, active)
+function RestrictionsMixin:SetRestrictionBit(bitFlag, active)
     local oldEnabled = self.restrictionsEnabled
 
     if active then
@@ -139,19 +145,19 @@ end
 
 --- Check if comm restrictions are currently active
 -- @return boolean
-function LoothingRestrictionsMixin:IsRestricted()
+function RestrictionsMixin:IsRestricted()
     return self.restrictionsEnabled
 end
 
 --- Get the raw restriction bitmask
 -- @return number
-function LoothingRestrictionsMixin:GetRestrictionState()
+function RestrictionsMixin:GetRestrictionState()
     return self.restrictions
 end
 
 --- Get count of queued guaranteed messages
 -- @return number
-function LoothingRestrictionsMixin:GetQueuedCount()
+function RestrictionsMixin:GetQueuedCount()
     return #self.guaranteedQueue
 end
 
@@ -160,12 +166,12 @@ end
 ----------------------------------------------------------------------]]
 
 --- Queue a critical message for guaranteed delivery
--- Called by LoothingCommMixin:SendGuaranteed() when restrictions are active
+-- Called by CommMixin:SendGuaranteed() when restrictions are active
 -- @param command string - Loothing.MsgType
 -- @param data table - Message payload
 -- @param target string|nil - Whisper target or nil for group
 -- @param priority string|nil - "ALERT", "NORMAL", or "BULK"
-function LoothingRestrictionsMixin:QueueGuaranteed(command, data, target, priority)
+function RestrictionsMixin:QueueGuaranteed(command, data, target, priority)
     self.guaranteedQueue[#self.guaranteedQueue + 1] = {
         command = command,
         data = data,
@@ -179,7 +185,7 @@ end
 
 --- Replay all queued guaranteed messages
 -- Called automatically when restrictions lift
-function LoothingRestrictionsMixin:ReplayQueue()
+function RestrictionsMixin:ReplayQueue()
     if #self.guaranteedQueue == 0 then return end
 
     Loothing:Debug("Replaying", #self.guaranteedQueue, "queued comms")
@@ -188,7 +194,7 @@ function LoothingRestrictionsMixin:ReplayQueue()
         -- Discard messages older than 5 minutes (stale)
         if GetTime() - msg.queueTime < 300 then
             if Loothing.Comm then
-                Loothing.Comm:Send(msg.command, msg.data, msg.target, msg.priority)
+                Loothing.Comm.Send(Loothing.Comm, msg.command, msg.data, msg.target, msg.priority)
             end
             self:TriggerEvent("OnQueuedMessageSent", msg.command)
         else
@@ -200,7 +206,7 @@ function LoothingRestrictionsMixin:ReplayQueue()
 end
 
 --- Clear the guaranteed queue without sending
-function LoothingRestrictionsMixin:ClearQueue()
+function RestrictionsMixin:ClearQueue()
     wipe(self.guaranteedQueue)
 end
 
@@ -208,8 +214,10 @@ end
     Factory
 ----------------------------------------------------------------------]]
 
-function CreateLoothingRestrictions()
-    local restrictions = Loolib.CreateFromMixins(LoothingRestrictionsMixin)
+function ns.CreateRestrictions()
+    local restrictions = CreateFromMixins(RestrictionsMixin)
     restrictions:Init()
     return restrictions
 end
+
+-- ns.RestrictionsMixin and ns.CreateRestrictions exported above

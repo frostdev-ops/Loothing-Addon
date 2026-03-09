@@ -6,12 +6,12 @@
 
 --- Create a candidate result row and return the frame
 -- @param parent Frame - Scroll content parent
--- @param candidate table - LoothingCandidateMixin
+-- @param candidate table - CandidateMixin
 -- @param yOffset number - Vertical offset
 -- @param totalVotes number - Total council votes for percentage
 -- @param isWinner boolean - Whether this candidate is the winner
 -- @param onClick function|nil - Called with (candidate, row) on click
-function LoothingUI_CreateCandidateResultRow(parent, candidate, yOffset, totalVotes, isWinner, onClick)
+function CreateCandidateResultRow(parent, candidate, yOffset, totalVotes, isWinner, onClick)
     local row = CreateFrame("Button", nil, parent, "BackdropTemplate")
     row:SetPoint("TOPLEFT", 0, yOffset)
     row:SetPoint("TOPRIGHT", 0, yOffset)

@@ -3,13 +3,19 @@
     ObserverManager - Observer list management and permission queries
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local CreateFromMixins = Loolib.CreateFromMixins
+local IsInGroup = IsInGroup
+local Loothing = ns.Addon
+local Utils = ns.Utils
+ns.ObserverMixin = CreateFromMixins(Loolib.CallbackRegistryMixin, ns.ObserverMixin or {})
+
+local ObserverMixin = ns.ObserverMixin
 
 --[[--------------------------------------------------------------------
-    LoothingObserverMixin
+    ObserverMixin
 ----------------------------------------------------------------------]]
-
-LoothingObserverMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
 
 local OBSERVER_EVENTS = {
     "OnObserverAdded",
@@ -19,7 +25,7 @@ local OBSERVER_EVENTS = {
 }
 
 --- Initialize observer manager
-function LoothingObserverMixin:Init()
+function ObserverMixin:Init()
     Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(OBSERVER_EVENTS)
 
@@ -41,14 +47,14 @@ end
 --- Add a player to the observer list
 -- @param name string - Player name
 -- @return boolean, string - success, error
-function LoothingObserverMixin:AddObserver(name)
+function ObserverMixin:AddObserver(name)
     if not name or name == "" then
         return false, "Invalid name"
     end
-    name = LoothingUtils.NormalizeName(name)
+    name = Utils.NormalizeName(name)
     -- Already on list?
     for _, n in ipairs(self.list) do
-        if LoothingUtils.IsSamePlayer(n, name) then
+        if Utils.IsSamePlayer(n, name) then
             return false, name .. " is already an observer"
         end
     end
@@ -63,11 +69,11 @@ end
 --- Remove a player from the observer list
 -- @param name string
 -- @return boolean
-function LoothingObserverMixin:RemoveObserver(name)
+function ObserverMixin:RemoveObserver(name)
     if not name or name == "" then return false end
-    name = LoothingUtils.NormalizeName(name)
+    name = Utils.NormalizeName(name)
     for i, n in ipairs(self.list) do
-        if LoothingUtils.IsSamePlayer(n, name) then
+        if Utils.IsSamePlayer(n, name) then
             table.remove(self.list, i)
             self:SaveToSettings()
             self:TriggerEvent("OnObserverRemoved", name)
@@ -80,7 +86,7 @@ function LoothingObserverMixin:RemoveObserver(name)
 end
 
 --- Clear all observers
-function LoothingObserverMixin:ClearObservers()
+function ObserverMixin:ClearObservers()
     wipe(self.list)
     self:SaveToSettings()
     self:TriggerEvent("OnObserverListChanged", self.list)
@@ -89,13 +95,13 @@ end
 
 --- Get explicit observer list
 -- @return table - Array of names
-function LoothingObserverMixin:GetObservers()
+function ObserverMixin:GetObservers()
     return self.list
 end
 
 --- Get all effective observers (explicit list + auto-included when openObservation is on)
 -- @return table - Array of names
-function LoothingObserverMixin:GetAllObservers()
+function ObserverMixin:GetAllObservers()
     if not Loothing.Settings or not Loothing.Settings:GetOpenObservation() then
         return self.list
     end
@@ -103,7 +109,7 @@ function LoothingObserverMixin:GetAllObservers()
     if not IsInGroup() then
         return self.list
     end
-    local roster = LoothingUtils.GetRaidRoster()
+    local roster = Utils.GetRaidRoster()
     local result = {}
     for _, entry in ipairs(roster) do
         result[#result + 1] = entry.name
@@ -118,21 +124,21 @@ end
 --- Check if a player is on the observer list (or auto-included via openObservation)
 -- @param name string
 -- @return boolean
-function LoothingObserverMixin:IsObserver(name)
+function ObserverMixin:IsObserver(name)
     if not name then return false end
 
     -- Check remote list if using remote primary
     if self.remotePrimary then
-        local normalized = LoothingUtils.NormalizeName(name)
+        local normalized = Utils.NormalizeName(name)
         if self.remoteList[normalized] then
             return true
         end
         -- Also check openObservation from remote
         if Loothing.Settings and Loothing.Settings:GetOpenObservation() then
             if IsInGroup() then
-                local roster = LoothingUtils.GetRaidRoster()
+                local roster = Utils.GetRaidRoster()
                 for _, entry in ipairs(roster) do
-                    if LoothingUtils.IsSamePlayer(entry.name, name) then
+                    if Utils.IsSamePlayer(entry.name, name) then
                         return true
                     end
                 end
@@ -144,7 +150,7 @@ function LoothingObserverMixin:IsObserver(name)
 
     -- Local list check
     for _, n in ipairs(self.list) do
-        if LoothingUtils.IsSamePlayer(n, name) then
+        if Utils.IsSamePlayer(n, name) then
             return true
         end
     end
@@ -152,9 +158,9 @@ function LoothingObserverMixin:IsObserver(name)
     -- Open observation: any group member qualifies
     if Loothing.Settings and Loothing.Settings:GetOpenObservation() then
         if IsInGroup() then
-            local roster = LoothingUtils.GetRaidRoster()
+            local roster = Utils.GetRaidRoster()
             for _, entry in ipairs(roster) do
-                if LoothingUtils.IsSamePlayer(entry.name, name) then
+                if Utils.IsSamePlayer(entry.name, name) then
                     return true
                 end
             end
@@ -166,15 +172,15 @@ end
 
 --- Check if the current player is an observer
 -- @return boolean
-function LoothingObserverMixin:IsPlayerObserver()
+function ObserverMixin:IsPlayerObserver()
     -- ML observer is handled separately by IsMLObserver()
-    local playerName = LoothingUtils.GetPlayerFullName()
+    local playerName = Utils.GetPlayerFullName()
     return self:IsObserver(playerName)
 end
 
 --- Check if the current player is the ML in observer mode
 -- @return boolean
-function LoothingObserverMixin:IsMLObserver()
+function ObserverMixin:IsMLObserver()
     if not Loothing.Session or not Loothing.Session:IsMasterLooter() then
         return false
     end
@@ -189,7 +195,7 @@ end
 
 --- Can the current player see vote counts?
 -- @return boolean
-function LoothingObserverMixin:CanPlayerSeeVoteCounts()
+function ObserverMixin:CanPlayerSeeVoteCounts()
     -- Council members and ML always see everything
     if Loothing.Council and Loothing.Council:IsPlayerCouncilMember() then return true end
     if Loothing.Session and Loothing.Session:IsMasterLooter() then return true end
@@ -201,7 +207,7 @@ end
 
 --- Can the current player see voter identities?
 -- @return boolean
-function LoothingObserverMixin:CanPlayerSeeVoterIdentities()
+function ObserverMixin:CanPlayerSeeVoterIdentities()
     if Loothing.Council and Loothing.Council:IsPlayerCouncilMember() then return true end
     if Loothing.Session and Loothing.Session:IsMasterLooter() then return true end
     if not Loothing.Settings then return false end
@@ -211,7 +217,7 @@ end
 
 --- Can the current player see candidate responses?
 -- @return boolean
-function LoothingObserverMixin:CanPlayerSeeResponses()
+function ObserverMixin:CanPlayerSeeResponses()
     if Loothing.Council and Loothing.Council:IsPlayerCouncilMember() then return true end
     if Loothing.Session and Loothing.Session:IsMasterLooter() then return true end
     if not Loothing.Settings then return false end
@@ -221,7 +227,7 @@ end
 
 --- Can the current player see candidate notes?
 -- @return boolean
-function LoothingObserverMixin:CanPlayerSeeNotes()
+function ObserverMixin:CanPlayerSeeNotes()
     if Loothing.Council and Loothing.Council:IsPlayerCouncilMember() then return true end
     if Loothing.Session and Loothing.Session:IsMasterLooter() then return true end
     if not Loothing.Settings then return false end
@@ -235,13 +241,13 @@ end
 
 --- Set remote observer data (received from ML)
 -- @param data table - { list, permissions, openObservation }
-function LoothingObserverMixin:SetRemoteObserverList(data)
+function ObserverMixin:SetRemoteObserverList(data)
     if not data then return end
 
     wipe(self.remoteList)
     if data.list then
         for _, name in ipairs(data.list) do
-            self.remoteList[LoothingUtils.NormalizeName(name)] = true
+            self.remoteList[Utils.NormalizeName(name)] = true
         end
     end
 
@@ -263,7 +269,7 @@ function LoothingObserverMixin:SetRemoteObserverList(data)
 end
 
 --- Clear remote roster (become primary)
-function LoothingObserverMixin:ClearRemoteObserverList()
+function ObserverMixin:ClearRemoteObserverList()
     wipe(self.remoteList)
     self.remotePrimary = false
 end
@@ -272,7 +278,7 @@ end
     Persistence
 ----------------------------------------------------------------------]]
 
-function LoothingObserverMixin:LoadFromSettings()
+function ObserverMixin:LoadFromSettings()
     if not Loothing.Settings then return end
     local saved = Loothing.Settings:GetObserverList()
     wipe(self.list)
@@ -283,7 +289,7 @@ function LoothingObserverMixin:LoadFromSettings()
     end
 end
 
-function LoothingObserverMixin:SaveToSettings()
+function ObserverMixin:SaveToSettings()
     if not Loothing.Settings then return end
     Loothing.Settings:SetObserverList(self.list)
 end
@@ -292,8 +298,10 @@ end
     Factory
 ----------------------------------------------------------------------]]
 
-function CreateLoothingObserver()
-    local observer = Loolib.CreateFromMixins(LoothingObserverMixin)
+function ns.CreateObserver()
+    local observer = CreateFromMixins(ObserverMixin)
     observer:Init()
     return observer
 end
+
+-- ns.ObserverMixin and ns.CreateObserver exported above

@@ -3,9 +3,13 @@
     These settings only affect you. They are not broadcast to the raid.
 ----------------------------------------------------------------------]]
 
+local ADDON_NAME, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local Options = ns.Options or {}
+ns.Options = Options
 
-local L = Loothing.Locale
+local L = ns.Locale
 
 local function GetQualityValues()
     return { [0]="Poor", [1]="Common", [2]="Uncommon", [3]="Rare", [4]="Epic", [5]="Legendary" }
@@ -748,5 +752,4 @@ local function GetLocalPreferencesOptions()
     }
 end
 
-Loothing.Options = Loothing.Options or {}
-Loothing.Options.GetLocalPreferencesOptions = GetLocalPreferencesOptions
+Options.GetLocalPreferencesOptions = GetLocalPreferencesOptions

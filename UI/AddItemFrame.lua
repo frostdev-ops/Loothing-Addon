@@ -3,7 +3,9 @@
     AddItemFrame - Dedicated frame for adding items to a session
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
 
 local L = Loothing.Locale
 
@@ -37,12 +39,13 @@ local function ResolveItem(input, callback, retries)
 end
 
 --[[--------------------------------------------------------------------
-    LoothingAddItemFrameMixin
+    AddItemFrameMixin
 ----------------------------------------------------------------------]]
 
-LoothingAddItemFrameMixin = {}
+local AddItemFrameMixin = ns.AddItemFrameMixin or {}
+ns.AddItemFrameMixin = AddItemFrameMixin
 
-function LoothingAddItemFrameMixin:Init()
+function AddItemFrameMixin:Init()
     self.activeTab = 1
     self.itemQueue = {}
     self.bagRows = {}
@@ -51,8 +54,8 @@ function LoothingAddItemFrameMixin:Init()
     self:BuildFrame()
 end
 
-function LoothingAddItemFrameMixin:BuildFrame()
-    local frame = CreateFrame("Frame", "LoothingAddItemFrame", UIParent, "BackdropTemplate")
+function AddItemFrameMixin:BuildFrame()
+    local frame = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
     frame:SetSize(380, 420)
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("DIALOG")
@@ -71,6 +74,7 @@ function LoothingAddItemFrameMixin:BuildFrame()
     frame:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
     frame:Hide()
     self.frame = frame
+    ns.AddItemFrame = frame
 
     -- Title
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -173,7 +177,7 @@ end
     Tab 1: Enter Item
 ----------------------------------------------------------------------]]
 
-function LoothingAddItemFrameMixin:BuildEnterItemPanel()
+function AddItemFrameMixin:BuildEnterItemPanel()
     local panel = CreateFrame("Frame", nil, self.content)
     panel:SetAllPoints()
     panel:Hide()
@@ -246,7 +250,7 @@ function LoothingAddItemFrameMixin:BuildEnterItemPanel()
     self:BuildQueueList(panel)
 end
 
-function LoothingAddItemFrameMixin:BuildQueueList(panel)
+function AddItemFrameMixin:BuildQueueList(panel)
     local scroll = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
     scroll:SetPoint("TOPLEFT", 0, -102)
     scroll:SetPoint("BOTTOMRIGHT", -20, 0)
@@ -266,7 +270,7 @@ function LoothingAddItemFrameMixin:BuildQueueList(panel)
     self.queueEmptyHint = emptyHint
 end
 
-function LoothingAddItemFrameMixin:RefreshQueueList()
+function AddItemFrameMixin:RefreshQueueList()
     for _, row in ipairs(self.queueRows) do row:Hide() end
     wipe(self.queueRows)
 
@@ -291,7 +295,7 @@ function LoothingAddItemFrameMixin:RefreshQueueList()
     self.queueContent:SetHeight(math.abs(yOffset) + 8)
 end
 
-function LoothingAddItemFrameMixin:CreateQueueRow(parent, itemData)
+function AddItemFrameMixin:CreateQueueRow(parent, itemData)
     local row = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     row:SetHeight(36)
     row:SetBackdrop({
@@ -374,7 +378,7 @@ function LoothingAddItemFrameMixin:CreateQueueRow(parent, itemData)
     return row
 end
 
-function LoothingAddItemFrameMixin:OnItemInputChanged(text)
+function AddItemFrameMixin:OnItemInputChanged(text)
     if not text or text == "" then return end
 
     -- Increment generation to invalidate stale resolve callbacks
@@ -404,7 +408,7 @@ function LoothingAddItemFrameMixin:OnItemInputChanged(text)
     end)
 end
 
-function LoothingAddItemFrameMixin:AcceptDraggedItem()
+function AddItemFrameMixin:AcceptDraggedItem()
     local infoType, itemID, itemLink = GetCursorInfo()
     if infoType == "item" then
         ClearCursor()
@@ -416,7 +420,7 @@ end
     Tab 2: Recent Drops
 ----------------------------------------------------------------------]]
 
-function LoothingAddItemFrameMixin:BuildRecentDropsPanel()
+function AddItemFrameMixin:BuildRecentDropsPanel()
     local panel = CreateFrame("Frame", nil, self.content)
     panel:SetAllPoints()
     panel:Hide()
@@ -440,7 +444,7 @@ function LoothingAddItemFrameMixin:BuildRecentDropsPanel()
     self.recentContent = sc
 end
 
-function LoothingAddItemFrameMixin:RefreshRecentDrops()
+function AddItemFrameMixin:RefreshRecentDrops()
     for _, row in ipairs(self.recentRows) do row:Hide() end
     wipe(self.recentRows)
     wipe(self.itemQueue)
@@ -501,7 +505,7 @@ end
     Tab 3: From Bags
 ----------------------------------------------------------------------]]
 
-function LoothingAddItemFrameMixin:BuildFromBagsPanel()
+function AddItemFrameMixin:BuildFromBagsPanel()
     local panel = CreateFrame("Frame", nil, self.content)
     panel:SetAllPoints()
     panel:Hide()
@@ -537,7 +541,7 @@ function LoothingAddItemFrameMixin:BuildFromBagsPanel()
     self.bagsContent = sc
 end
 
-function LoothingAddItemFrameMixin:RefreshBagList()
+function AddItemFrameMixin:RefreshBagList()
     for _, row in ipairs(self.bagRows) do row:Hide() end
     wipe(self.bagRows)
     wipe(self.itemQueue)
@@ -593,7 +597,7 @@ end
     Shared Item Row (Tabs 2 & 3 — toggle multi-select)
 ----------------------------------------------------------------------]]
 
-function LoothingAddItemFrameMixin:CreateItemRow(parent, itemData)
+function AddItemFrameMixin:CreateItemRow(parent, itemData)
     local row = CreateFrame("Button", nil, parent, "BackdropTemplate")
     row:SetHeight(36)
     row:SetBackdrop({
@@ -698,14 +702,14 @@ end
     Queue Helpers
 ----------------------------------------------------------------------]]
 
-function LoothingAddItemFrameMixin:IsInQueue(link)
+function AddItemFrameMixin:IsInQueue(link)
     for _, entry in ipairs(self.itemQueue) do
         if entry.link == link then return true end
     end
     return false
 end
 
-function LoothingAddItemFrameMixin:RemoveFromQueue(link)
+function AddItemFrameMixin:RemoveFromQueue(link)
     for i = #self.itemQueue, 1, -1 do
         if self.itemQueue[i].link == link then
             table.remove(self.itemQueue, i)
@@ -715,7 +719,7 @@ function LoothingAddItemFrameMixin:RemoveFromQueue(link)
     self:UpdateAddButton()
 end
 
-function LoothingAddItemFrameMixin:UpdateAddButton()
+function AddItemFrameMixin:UpdateAddButton()
     local count = #self.itemQueue
     if count == 0 then
         self.addBtn:SetEnabled(false)
@@ -730,7 +734,7 @@ end
     Tab Management
 ----------------------------------------------------------------------]]
 
-function LoothingAddItemFrameMixin:SelectTab(index)
+function AddItemFrameMixin:SelectTab(index)
     self.activeTab = index
     wipe(self.itemQueue)
     self:UpdateAddButton()
@@ -762,7 +766,7 @@ end
     Add Action
 ----------------------------------------------------------------------]]
 
-function LoothingAddItemFrameMixin:OnAddClick()
+function AddItemFrameMixin:OnAddClick()
     if #self.itemQueue == 0 then return end
 
     if not Loothing.Session then
@@ -791,21 +795,21 @@ end
     Show / Hide
 ----------------------------------------------------------------------]]
 
-function LoothingAddItemFrameMixin:Show()
+function AddItemFrameMixin:Show()
     wipe(self.itemQueue)
     self.frame:Show()
     self:SelectTab(1)
     self.editBox:SetFocus()
 end
 
-function LoothingAddItemFrameMixin:Hide()
+function AddItemFrameMixin:Hide()
     self.frame:Hide()
     self.editBox:SetText("")
     wipe(self.itemQueue)
     self.addBtn:SetEnabled(false)
 end
 
-function LoothingAddItemFrameMixin:IsShown()
+function AddItemFrameMixin:IsShown()
     return self.frame:IsShown()
 end
 
@@ -813,8 +817,10 @@ end
     Factory
 ----------------------------------------------------------------------]]
 
-function CreateLoothingAddItemFrame()
-    local obj = Loolib.CreateFromMixins(LoothingAddItemFrameMixin)
+local function CreateAddItemFrame()
+    local obj = Loolib.CreateFromMixins(AddItemFrameMixin)
     obj:Init()
     return obj
 end
+
+ns.CreateAddItemFrame = CreateAddItemFrame

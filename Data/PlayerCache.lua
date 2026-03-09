@@ -13,19 +13,23 @@
     - Handles GetPlayerInfoByGUID() null-byte bug
 
     Usage:
-        local cache = CreateLoothingPlayerCache()
+        local cache = CreatePlayerCache()
         local player = cache:Get("Player-1234-ABCDEF")
         local player = cache:GetOrCreate("PlayerName-RealmName")
         cache:Update("Player-1234-ABCDEF", { role = "TANK", ilvl = 600 })
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local Utils = ns.Utils
 
 --[[--------------------------------------------------------------------
-    LoothingPlayerCacheMixin
+    PlayerCacheMixin
 ----------------------------------------------------------------------]]
 
-LoothingPlayerCacheMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+local PlayerCacheMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+ns.PlayerCacheMixin = PlayerCacheMixin
 
 local PLAYER_CACHE_EVENTS = {
     "OnPlayerAdded",
@@ -41,7 +45,7 @@ local DEFAULT_TTL = 2 * 24 * 60 * 60
 local GUID_PATTERN = "^Player%-%d+%-%x+$"
 
 --- Initialize the player cache
-function LoothingPlayerCacheMixin:Init()
+function PlayerCacheMixin:Init()
     Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(PLAYER_CACHE_EVENTS)
 
@@ -66,7 +70,7 @@ end
 -- Checks cache first, then falls back to GetPlayerInfoByGUID() for GUIDs
 -- @param nameOrGUID string - GUID or "Name-Realm"
 -- @return table|nil - Player data table or nil
-function LoothingPlayerCacheMixin:Get(nameOrGUID)
+function PlayerCacheMixin:Get(nameOrGUID)
     if not nameOrGUID or nameOrGUID == "" then
         return nil
     end
@@ -99,7 +103,7 @@ end
 -- Creates an empty entry if not cached
 -- @param nameOrGUID string - GUID or "Name-Realm"
 -- @return table - Player data table (may be empty)
-function LoothingPlayerCacheMixin:GetOrCreate(nameOrGUID)
+function PlayerCacheMixin:GetOrCreate(nameOrGUID)
     local player = self:Get(nameOrGUID)
     if player then
         return player
@@ -126,7 +130,7 @@ end
 --- Update specific fields on a cached player
 -- @param guid string - Player GUID
 -- @param fields table - Fields to update (e.g., { role = "TANK", ilvl = 600 })
-function LoothingPlayerCacheMixin:Update(guid, fields)
+function PlayerCacheMixin:Update(guid, fields)
     if not guid or not fields then return end
 
     local player = self.byGUID[guid]
@@ -148,7 +152,7 @@ end
 --- Remove a player from the cache
 -- @param nameOrGUID string - GUID or "Name-Realm"
 -- @return boolean - True if removed
-function LoothingPlayerCacheMixin:Invalidate(nameOrGUID)
+function PlayerCacheMixin:Invalidate(nameOrGUID)
     if not nameOrGUID or nameOrGUID == "" then
         return false
     end
@@ -188,7 +192,7 @@ end
 
 --- Remove all expired entries from cache
 -- @return number - Number of entries removed
-function LoothingPlayerCacheMixin:CleanExpired()
+function PlayerCacheMixin:CleanExpired()
     local removed = 0
     local currentTime = time()
     local expiredGUIDs = {}
@@ -213,7 +217,7 @@ function LoothingPlayerCacheMixin:CleanExpired()
 end
 
 --- Clear the entire cache
-function LoothingPlayerCacheMixin:Clear()
+function PlayerCacheMixin:Clear()
     wipe(self.byGUID)
     wipe(self.byName)
     self:SaveToSavedVariables() -- Immediate save for destructive operations
@@ -223,7 +227,7 @@ end
 
 --- Get the number of cached players
 -- @return number
-function LoothingPlayerCacheMixin:GetSize()
+function PlayerCacheMixin:GetSize()
     local count = 0
     for _ in pairs(self.byGUID) do
         count = count + 1
@@ -241,7 +245,7 @@ end
 -- @param realm string|nil - Player realm
 -- @param class string|nil - Player class (uppercase file name)
 -- @return table - New player entry
-function LoothingPlayerCacheMixin:CreateEntry(guid, name, realm, class)
+function PlayerCacheMixin:CreateEntry(guid, name, realm, class)
     local player = {
         guid = guid,
         name = name,
@@ -284,7 +288,7 @@ end
 --- Fetch player data from GetPlayerInfoByGUID and cache it
 -- @param guid string - Player GUID
 -- @return table|nil - Player data or nil if not available
-function LoothingPlayerCacheMixin:FetchFromGUID(guid)
+function PlayerCacheMixin:FetchFromGUID(guid)
     if not guid or not GetPlayerInfoByGUID then
         return nil
     end
@@ -334,7 +338,7 @@ end
 --- Check if a cached player entry is still valid (not expired)
 -- @param player table - Player data
 -- @return boolean
-function LoothingPlayerCacheMixin:IsValid(player)
+function PlayerCacheMixin:IsValid(player)
     if not player or not player.cacheTime then
         return false
     end
@@ -351,7 +355,7 @@ end
 --- Strip null-byte padding from GetPlayerInfoByGUID results
 -- @param str string - Potentially padded string
 -- @return string - Clean string
-function LoothingPlayerCacheMixin:StripNullBytes(str)
+function PlayerCacheMixin:StripNullBytes(str)
     if not str then return str end
     local found = str:find("\000")
     if found then
@@ -363,7 +367,7 @@ end
 --- Split "Name-Realm" into components
 -- @param fullName string - "Name-Realm" or just "Name"
 -- @return string, string|nil - name, realm
-function LoothingPlayerCacheMixin:SplitNameRealm(fullName)
+function PlayerCacheMixin:SplitNameRealm(fullName)
     if not fullName or Loolib.SecretUtil.IsSecretValue(fullName) then
         return nil, nil
     end
@@ -381,7 +385,7 @@ end
 --- Get a player's class-colored name
 -- @param nameOrGUID string - GUID or "Name-Realm"
 -- @return string - Colored name or plain name
-function LoothingPlayerCacheMixin:GetClassColoredName(nameOrGUID)
+function PlayerCacheMixin:GetClassColoredName(nameOrGUID)
     local player = self:Get(nameOrGUID)
     if not player or not player.name then
         return nameOrGUID or "Unknown"
@@ -405,7 +409,7 @@ end
 --- Get all enchanters from the cache
 -- Scans the GUID-keyed cache for players with the enchanter flag set.
 -- @return table - Array of { name, class, guid } for each enchanter
-function LoothingPlayerCacheMixin:GetEnchanters()
+function PlayerCacheMixin:GetEnchanters()
     local enchanters = {}
     for guid, player in pairs(self.byGUID) do
         if player.enchanter and self:IsValid(player) then
@@ -422,7 +426,7 @@ end
 --- Get short name (without realm if same realm)
 -- @param nameOrGUID string - GUID or "Name-Realm"
 -- @return string - Short name
-function LoothingPlayerCacheMixin:GetShortName(nameOrGUID)
+function PlayerCacheMixin:GetShortName(nameOrGUID)
     local player = self:Get(nameOrGUID)
     if not player or not player.name then
         return nameOrGUID or "Unknown"
@@ -446,7 +450,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Load cache from SavedVariables global scope
-function LoothingPlayerCacheMixin:LoadFromSavedVariables()
+function PlayerCacheMixin:LoadFromSavedVariables()
     if not Loothing or not Loothing.Settings then
         return
     end
@@ -504,7 +508,7 @@ end
 
 --- Mark cache as dirty and schedule a batched save (2s delay)
 -- Prevents excessive SavedVariables writes during rapid updates.
-function LoothingPlayerCacheMixin:MarkDirty()
+function PlayerCacheMixin:MarkDirty()
     if self.savePending then return end
     self.savePending = true
     C_Timer.After(2, function()
@@ -516,7 +520,7 @@ end
 --- Save cache to SavedVariables global scope
 -- Note: Only entries with a GUID are persisted. Entries created with nil GUID
 -- (via name-only GetOrCreate) are session-only and will not survive reload.
-function LoothingPlayerCacheMixin:SaveToSavedVariables()
+function PlayerCacheMixin:SaveToSavedVariables()
     if not Loothing or not Loothing.Settings then
         return
     end
@@ -550,8 +554,10 @@ end
 
 --- Create a new player cache instance
 -- @return table - PlayerCache instance
-function CreateLoothingPlayerCache()
-    local cache = Loolib.CreateFromMixins(LoothingPlayerCacheMixin)
+local function CreatePlayerCache()
+    local cache = Loolib.CreateFromMixins(PlayerCacheMixin)
     cache:Init()
     return cache
 end
+
+ns.CreatePlayerCache = CreatePlayerCache

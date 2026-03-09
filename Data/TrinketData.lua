@@ -20,7 +20,9 @@
     Data sourced from RCLootCouncil2/Utils/EncounterJournalData.lua
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
 
 --[[--------------------------------------------------------------------
     Trinket Categories - Descriptive names for spec flags
@@ -89,10 +91,11 @@ Loothing.TrinketSpecs = {
 }
 
 --[[--------------------------------------------------------------------
-    LoothingTrinketData API
+    TrinketData API
 ----------------------------------------------------------------------]]
 
-LoothingTrinketData = {}
+local TrinketData = {}
+ns.TrinketData = TrinketData
 
 -- Number of classes in WoW (used for spec flag parsing)
 local NUM_CLASSES = 13
@@ -100,28 +103,28 @@ local NUM_CLASSES = 13
 --- Check if an item is in the trinket database
 -- @param itemID number - Item ID
 -- @return boolean - True if item is a known trinket
-function LoothingTrinketData:IsTrinket(itemID)
+function TrinketData:IsTrinket(itemID)
     return Loothing.TrinketSpecs[itemID] ~= nil
 end
 
 --- Get the spec flag for a trinket
 -- @param itemID number - Item ID
 -- @return string|nil - Spec flag or nil if not found
-function LoothingTrinketData:GetSpecFlag(itemID)
+function TrinketData:GetSpecFlag(itemID)
     return Loothing.TrinketSpecs[itemID]
 end
 
 --- Get the category description for a spec flag
 -- @param specFlag string - Spec flag
 -- @return string - Category description or empty string
-function LoothingTrinketData:GetCategory(specFlag)
+function TrinketData:GetCategory(specFlag)
     return Loothing.TrinketCategories[specFlag] or ""
 end
 
 --- Get the category description for a trinket
 -- @param itemID number - Item ID
 -- @return string - Category description or empty string
-function LoothingTrinketData:GetTrinketCategory(itemID)
+function TrinketData:GetTrinketCategory(itemID)
     local specFlag = self:GetSpecFlag(itemID)
     if specFlag then
         return self:GetCategory(specFlag)
@@ -133,7 +136,7 @@ end
 -- @param itemID number - Item ID
 -- @param classID number - Class ID (1-13)
 -- @return boolean - True if class can use the trinket
-function LoothingTrinketData:CanClassUse(itemID, classID)
+function TrinketData:CanClassUse(itemID, classID)
     local specFlag = self:GetSpecFlag(itemID)
     if not specFlag then
         return true -- Unknown trinket, don't restrict
@@ -152,7 +155,7 @@ end
 -- @param classID number - Class ID (1-13)
 -- @param specIndex number - Spec index (1-4)
 -- @return boolean - True if spec can use the trinket
-function LoothingTrinketData:CanSpecUse(itemID, classID, specIndex)
+function TrinketData:CanSpecUse(itemID, classID, specIndex)
     local specFlag = self:GetSpecFlag(itemID)
     if not specFlag then
         return true -- Unknown trinket, don't restrict
@@ -176,7 +179,7 @@ end
 --- Check if current player can use a trinket
 -- @param itemID number - Item ID
 -- @return boolean - True if player can use the trinket
-function LoothingTrinketData:CanPlayerUse(itemID)
+function TrinketData:CanPlayerUse(itemID)
     -- FIX(Area4-4): Use SafeUnitClass to avoid secret value tainting
     local _, _, classID = Loolib.SecretUtil.SafeUnitClass("player")
     local specIndex = GetSpecialization()
@@ -191,7 +194,7 @@ end
 --- Check if player should auto-pass a trinket
 -- @param itemID number - Item ID
 -- @return boolean, string - shouldAutoPass, reason
-function LoothingTrinketData:ShouldAutoPass(itemID)
+function TrinketData:ShouldAutoPass(itemID)
     if not self:IsTrinket(itemID) then
         return false, nil
     end
@@ -208,7 +211,7 @@ end
 --- Get all specs that can use a trinket
 -- @param itemID number - Item ID
 -- @return table - Array of { classID, specIndex, className, specName }
-function LoothingTrinketData:GetUsableSpecs(itemID)
+function TrinketData:GetUsableSpecs(itemID)
     local specFlag = self:GetSpecFlag(itemID)
     local result = {}
 
@@ -223,7 +226,7 @@ function LoothingTrinketData:GetUsableSpecs(itemID)
 
         if specBits and specBits > 0 then
             local classInfo = C_CreatureInfo.GetClassInfo(classID)
-            local numSpecs = GetNumSpecializationsForClassID(classID)
+            local numSpecs = C_SpecializationInfo.GetNumSpecializationsForClassID(classID)
 
             for specIndex = 1, numSpecs do
                 local specBit = 2 ^ (specIndex - 1)
@@ -251,7 +254,7 @@ local function InitClassCategories()
     for classID = 1, NUM_CLASSES do
         local classInfo = C_CreatureInfo.GetClassInfo(classID)
         if classInfo then
-            local numSpecs = GetNumSpecializationsForClassID(classID)
+            local numSpecs = C_SpecializationInfo.GetNumSpecializationsForClassID(classID)
             local digit = 0
             for specIndex = 1, numSpecs do
                 digit = digit + 2 ^ (specIndex - 1)

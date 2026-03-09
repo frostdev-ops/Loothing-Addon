@@ -3,9 +3,13 @@
     Session and item event handlers with throttled updates
 ----------------------------------------------------------------------]]
 
-LoothingCouncilTableMixin = LoothingCouncilTableMixin or {}
+local _, ns = ...
+local Loothing = ns.Addon
 
-function LoothingCouncilTableMixin:RegisterEvents()
+local CouncilTableMixin = ns.CouncilTableMixin or {}
+ns.CouncilTableMixin = CouncilTableMixin
+
+function CouncilTableMixin:RegisterEvents()
     if not Loothing.Session then return end
 
     Loothing.Session:RegisterCallback("OnSessionStarted", function() self:OnSessionStarted() end, self)
@@ -31,15 +35,15 @@ function LoothingCouncilTableMixin:RegisterEvents()
     end, self)
 end
 
-function LoothingCouncilTableMixin:OnSessionStarted()
+function CouncilTableMixin:OnSessionStarted()
     self:RefreshItemTabs()
 end
 
-function LoothingCouncilTableMixin:OnSessionEnded()
+function CouncilTableMixin:OnSessionEnded()
     self:Clear()
 end
 
-function LoothingCouncilTableMixin:OnItemAdded(item)
+function CouncilTableMixin:OnItemAdded(item)
     self:RefreshItemTabs()
     if item.candidateManager then
         item.candidateManager:RegisterCallback("OnCandidateAdded", function(_, candidate) self:OnCandidateAdded(item, candidate) end, self)
@@ -47,21 +51,21 @@ function LoothingCouncilTableMixin:OnItemAdded(item)
     end
 end
 
-function LoothingCouncilTableMixin:OnItemRemoved(item)
+function CouncilTableMixin:OnItemRemoved(item)
     self:RefreshItemTabs()
     if self.currentItem and self.currentItem.guid == item.guid then
         self:SelectFirstItem()
     end
 end
 
-function LoothingCouncilTableMixin:OnItemStateChanged(item)
+function CouncilTableMixin:OnItemStateChanged(item)
     self:RefreshItemTabs()
     if self.currentItem and self.currentItem.guid == item.guid then
         self:UpdateActionButtons()
     end
 end
 
-function LoothingCouncilTableMixin:OnVotingStarted(item)
+function CouncilTableMixin:OnVotingStarted(item)
     local isCouncil = Loothing.Council and Loothing.Council:IsPlayerCouncilMember()
     local isML = Loothing.Session and Loothing.Session:IsMasterLooter()
     local isObserver = Loothing.Observer and Loothing.Observer:IsPlayerObserver()
@@ -75,14 +79,14 @@ function LoothingCouncilTableMixin:OnVotingStarted(item)
     end
 end
 
-function LoothingCouncilTableMixin:OnVotingEnded(item)
+function CouncilTableMixin:OnVotingEnded(item)
     if self.currentItem and self.currentItem.guid == item.guid then
         self:ThrottledRefresh()
         self:UpdateActionButtons()
     end
 end
 
-function LoothingCouncilTableMixin:OnItemAwarded(item, winner)
+function CouncilTableMixin:OnItemAwarded(item, winner)
     self:RefreshItemTabs()
     if self.currentItem and self.currentItem.guid == item.guid then
         self:ThrottledRefresh()
@@ -90,13 +94,13 @@ function LoothingCouncilTableMixin:OnItemAwarded(item, winner)
     end
 end
 
-function LoothingCouncilTableMixin:OnCandidateAdded(item, candidate)
+function CouncilTableMixin:OnCandidateAdded(item, candidate)
     if self.currentItem and self.currentItem.guid == item.guid then
         self:ThrottledRefresh()
     end
 end
 
-function LoothingCouncilTableMixin:OnCandidateUpdated(item, candidate)
+function CouncilTableMixin:OnCandidateUpdated(item, candidate)
     if self.currentItem and self.currentItem.guid == item.guid then
         self:ThrottledRefresh()
         self:UpdateVoterProgress()
@@ -104,7 +108,7 @@ function LoothingCouncilTableMixin:OnCandidateUpdated(item, candidate)
     self:UpdateItemTabVotedIndicators()
 end
 
-function LoothingCouncilTableMixin:OnVoteReceived(item)
+function CouncilTableMixin:OnVoteReceived(item)
     if self.currentItem and self.currentItem.guid == item.guid then
         self:ThrottledRefresh()
         self:UpdateVoterProgress()

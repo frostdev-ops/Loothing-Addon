@@ -3,11 +3,19 @@
     Comprehensive test suite for voting mechanics and tallying
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
+local Loothing = ns.Addon
+local Utils = ns.Utils
+
 local Loolib = LibStub("Loolib")
 
 --[[--------------------------------------------------------------------
     Test Framework Setup
 ----------------------------------------------------------------------]]
+
+local _, ns = ...
+local Loothing = ns.Addon
+local Utils = ns.Utils
 
 local Tests = {
     passed = 0,
@@ -134,7 +142,7 @@ Describe("Simple Voting - Basic Operations", function()
             { "Player1", "WARRIOR", { Loothing.Response.NEED } }
         })
 
-        local results = LoothingVotingEngine:TallySimple(votes)
+        local results = VotingEngine:TallySimple(votes)
 
         AssertNotNil(results, "Results should not be nil")
         AssertEquals(results.winningResponse, Loothing.Response.NEED, "NEED should win")
@@ -149,7 +157,7 @@ Describe("Simple Voting - Basic Operations", function()
             { "Player3", "PRIEST", { Loothing.Response.GREED } }
         })
 
-        local results = LoothingVotingEngine:TallySimple(votes)
+        local results = VotingEngine:TallySimple(votes)
 
         AssertEquals(results.counts[Loothing.Response.NEED].count, 2, "NEED should have 2 votes")
         AssertEquals(results.counts[Loothing.Response.GREED].count, 1, "GREED should have 1 vote")
@@ -165,7 +173,7 @@ Describe("Simple Voting - Basic Operations", function()
             { "P5", "ROGUE", { Loothing.Response.PASS } }
         })
 
-        local results = LoothingVotingEngine:TallySimple(votes)
+        local results = VotingEngine:TallySimple(votes)
 
         AssertEquals(results.counts[Loothing.Response.NEED].count, 2, "NEED count")
         AssertEquals(results.counts[Loothing.Response.GREED].count, 1, "GREED count")
@@ -182,7 +190,7 @@ Describe("Simple Voting - Basic Operations", function()
             { "P4", "ROGUE", { Loothing.Response.NEED } }
         })
 
-        local results = LoothingVotingEngine:TallySimple(votes)
+        local results = VotingEngine:TallySimple(votes)
 
         AssertEquals(results.winningResponse, Loothing.Response.NEED, "NEED should win with 3 votes")
         AssertEquals(results.counts[Loothing.Response.NEED].count, 3, "NEED vote count")
@@ -194,7 +202,7 @@ Describe("Simple Voting - Basic Operations", function()
             { "Bob", "MAGE", { Loothing.Response.NEED } }
         })
 
-        local results = LoothingVotingEngine:TallySimple(votes)
+        local results = VotingEngine:TallySimple(votes)
 
         AssertEquals(#results.counts[Loothing.Response.NEED].voters, 2, "NEED should have 2 voters")
 
@@ -223,15 +231,15 @@ Describe("Ranked Choice Voting - Basic Mechanics", function()
         })
 
         local candidates = { "Alice", "Bob", "Charlie" }
-        local results = LoothingVotingEngine:TallyRankedChoice(votes, candidates)
+        local results = VotingEngine:TallyRankedChoice(votes, candidates)
 
         AssertNotNil(results, "Results should not be nil")
         AssertNotNil(results.rounds, "Should have rounds")
         AssertGreaterThan(#results.rounds, 0, "Should have at least one round")
 
         local round1 = results.rounds[1]
-        AssertEquals(round1.counts[LoothingUtils.NormalizeName("Alice")], 2, "Alice should have 2 first-choice votes")
-        AssertEquals(round1.counts[LoothingUtils.NormalizeName("Bob")], 1, "Bob should have 1 first-choice vote")
+        AssertEquals(round1.counts[Utils.NormalizeName("Alice")], 2, "Alice should have 2 first-choice votes")
+        AssertEquals(round1.counts[Utils.NormalizeName("Bob")], 1, "Bob should have 1 first-choice vote")
     end)
 
     It("Elimination of lowest candidate", function()
@@ -243,7 +251,7 @@ Describe("Ranked Choice Voting - Basic Mechanics", function()
         })
 
         local candidates = { "Alice", "Bob", "Charlie" }
-        local results = LoothingVotingEngine:TallyRankedChoice(votes, candidates)
+        local results = VotingEngine:TallyRankedChoice(votes, candidates)
 
         AssertNotNil(results.eliminated, "Should have elimination list")
         AssertGreaterThan(#results.eliminated, 0, "Should have eliminated candidates")
@@ -266,7 +274,7 @@ Describe("Ranked Choice Voting - Basic Mechanics", function()
         })
 
         local candidates = { "Alice", "Bob", "Charlie" }
-        local results = LoothingVotingEngine:TallyRankedChoice(votes, candidates)
+        local results = VotingEngine:TallyRankedChoice(votes, candidates)
 
         -- With redistribution, Alice should win
         AssertNotNil(results.winner, "Should have a winner")
@@ -280,9 +288,9 @@ Describe("Ranked Choice Voting - Basic Mechanics", function()
         })
 
         local candidates = { "Alice", "Bob", "Charlie" }
-        local results = LoothingVotingEngine:TallyRankedChoice(votes, candidates)
+        local results = VotingEngine:TallyRankedChoice(votes, candidates)
 
-        AssertEquals(results.winner, LoothingUtils.NormalizeName("Alice"), "Alice should win with majority")
+        AssertEquals(results.winner, Utils.NormalizeName("Alice"), "Alice should win with majority")
         AssertEquals(#results.rounds, 1, "Should only need one round for majority")
     end)
 
@@ -295,7 +303,7 @@ Describe("Ranked Choice Voting - Basic Mechanics", function()
         })
 
         local candidates = { "Alice", "Bob", "Charlie", "Dave" }
-        local results = LoothingVotingEngine:TallyRankedChoice(votes, candidates)
+        local results = VotingEngine:TallyRankedChoice(votes, candidates)
 
         AssertGreaterThan(#results.rounds, 1, "Should have multiple rounds")
         AssertGreaterThan(#results.eliminated, 1, "Should eliminate multiple candidates")
@@ -313,7 +321,7 @@ Describe("Tie Breaking", function()
             { "P2", "MAGE", { Loothing.Response.GREED } }
         })
 
-        local results = LoothingVotingEngine:TallySimple(votes)
+        local results = VotingEngine:TallySimple(votes)
 
         AssertTrue(results.isTie, "Should detect tie")
         AssertNotNil(results.tiedResponses, "Should have tied responses list")
@@ -323,7 +331,7 @@ Describe("Tie Breaking", function()
     It("Random tiebreaker returns one of tied candidates", function()
         local tiedCandidates = { "Alice", "Bob", "Charlie" }
 
-        local winner = LoothingVotingEngine:BreakTie(tiedCandidates, {}, "random")
+        local winner = VotingEngine:BreakTie(tiedCandidates, {}, "random")
 
         AssertNotNil(winner, "Should return a winner")
 
@@ -341,7 +349,7 @@ Describe("Tie Breaking", function()
     It("Alphabetical tiebreaker returns first alphabetically", function()
         local tiedCandidates = { "Charlie", "Alice", "Bob" }
 
-        local winner = LoothingVotingEngine:BreakTie(tiedCandidates, {}, "alphabetical")
+        local winner = VotingEngine:BreakTie(tiedCandidates, {}, "alphabetical")
 
         AssertEquals(winner, "Alice", "Alice should win alphabetically")
     end)
@@ -349,7 +357,7 @@ Describe("Tie Breaking", function()
     It("Manual tiebreaker returns nil", function()
         local tiedCandidates = { "Alice", "Bob" }
 
-        local winner = LoothingVotingEngine:BreakTie(tiedCandidates, {}, "manual")
+        local winner = VotingEngine:BreakTie(tiedCandidates, {}, "manual")
 
         AssertNil(winner, "Manual mode should return nil for ML decision")
     end)
@@ -357,7 +365,7 @@ Describe("Tie Breaking", function()
     It("Single candidate tie returns that candidate", function()
         local tiedCandidates = { "OnlyOne" }
 
-        local winner = LoothingVotingEngine:BreakTie(tiedCandidates, {}, "random")
+        local winner = VotingEngine:BreakTie(tiedCandidates, {}, "random")
 
         AssertEquals(winner, "OnlyOne", "Should return the only candidate")
     end)
@@ -365,7 +373,7 @@ Describe("Tie Breaking", function()
     It("Empty tie list returns nil", function()
         local tiedCandidates = {}
 
-        local winner = LoothingVotingEngine:BreakTie(tiedCandidates, {}, "random")
+        local winner = VotingEngine:BreakTie(tiedCandidates, {}, "random")
 
         AssertNil(winner, "Should return nil for empty list")
     end)
@@ -377,7 +385,7 @@ Describe("Tie Breaking", function()
             { "P3", "PRIEST", { Loothing.Response.GREED } }
         })
 
-        local results = LoothingVotingEngine:TallySimple(votes)
+        local results = VotingEngine:TallySimple(votes)
 
         AssertFalse(results.isTie, "Should not be a tie")
         AssertNil(results.tiedResponses, "Should not have tied responses")
@@ -394,7 +402,7 @@ Describe("Vote Tallying - Results Structure", function()
             { "P1", "WARRIOR", { Loothing.Response.NEED } }
         })
 
-        local results = LoothingVotingEngine:TallySimple(votes)
+        local results = VotingEngine:TallySimple(votes)
 
         AssertNotNil(results.winningResponse, "Should have winningResponse")
         AssertNotNil(results.counts, "Should have counts")
@@ -409,7 +417,7 @@ Describe("Vote Tallying - Results Structure", function()
         })
 
         local candidates = { "Alice", "Bob" }
-        local results = LoothingVotingEngine:TallyRankedChoice(votes, candidates)
+        local results = VotingEngine:TallyRankedChoice(votes, candidates)
 
         AssertNotNil(results.rounds, "Should have rounds")
         AssertNotNil(results.eliminated, "Should have eliminated list")
@@ -430,7 +438,7 @@ Describe("Vote Tallying - Results Structure", function()
             { "P4", "ROGUE", { Loothing.Response.PASS } }
         })
 
-        local percentages = LoothingVotingEngine:GetVotePercentages(votes)
+        local percentages = VotingEngine:GetVotePercentages(votes)
 
         AssertEquals(percentages[Loothing.Response.NEED], 50, "NEED should be 50%")
         AssertEquals(percentages[Loothing.Response.GREED], 25, "GREED should be 25%")
@@ -443,7 +451,7 @@ Describe("Vote Tallying - Results Structure", function()
             { "P2", "MAGE", { Loothing.Response.GREED } }
         })
 
-        local summary = LoothingVotingEngine:GetResponseSummary(votes)
+        local summary = VotingEngine:GetResponseSummary(votes)
 
         AssertNotNil(summary, "Summary should not be nil")
         AssertGreaterThan(#summary, 0, "Summary should have entries")
@@ -463,7 +471,7 @@ Describe("Vote Tallying - Results Structure", function()
             { "Charlie", "PRIEST", { Loothing.Response.GREED } }
         })
 
-        local groups = LoothingVotingEngine:GroupVotersByResponse(votes)
+        local groups = VotingEngine:GroupVotersByResponse(votes)
 
         AssertEquals(#groups[Loothing.Response.NEED], 2, "NEED should have 2 voters")
         AssertEquals(#groups[Loothing.Response.GREED], 1, "GREED should have 1 voter")
@@ -477,7 +485,7 @@ Describe("Vote Tallying - Results Structure", function()
             { "P4", "ROGUE", { Loothing.Response.GREED } }
         })
 
-        local hasClear, winner = LoothingVotingEngine:HasClearWinner(votes, 50)
+        local hasClear, winner = VotingEngine:HasClearWinner(votes, 50)
 
         AssertTrue(hasClear, "Should have clear winner at 50% threshold")
         AssertEquals(winner, Loothing.Response.NEED, "NEED should be the winner")
@@ -490,7 +498,7 @@ Describe("Vote Tallying - Results Structure", function()
             { "P3", "PRIEST", { Loothing.Response.OFFSPEC } }
         })
 
-        local hasClear, winner = LoothingVotingEngine:HasClearWinner(votes, 50)
+        local hasClear, winner = VotingEngine:HasClearWinner(votes, 50)
 
         AssertFalse(hasClear, "Should not have clear winner")
     end)
@@ -504,7 +512,7 @@ Describe("Edge Cases", function()
     It("Zero votes handling in simple mode", function()
         local votes = CreateVoteArray({})
 
-        local results = LoothingVotingEngine:TallySimple(votes)
+        local results = VotingEngine:TallySimple(votes)
 
         AssertEquals(results.totalVotes, 0, "Total votes should be 0")
         AssertNil(results.winningResponse, "Should have no winning response")
@@ -514,7 +522,7 @@ Describe("Edge Cases", function()
         local votes = CreateVoteArray({})
         local candidates = { "Alice", "Bob" }
 
-        local results = LoothingVotingEngine:TallyRankedChoice(votes, candidates)
+        local results = VotingEngine:TallyRankedChoice(votes, candidates)
 
         AssertNil(results.winner, "Should have no winner")
         AssertEquals(#results.rounds, 0, "Should have no rounds")
@@ -525,7 +533,7 @@ Describe("Edge Cases", function()
             { "OnlyVoter", "WARRIOR", { Loothing.Response.NEED } }
         })
 
-        local results = LoothingVotingEngine:TallySimple(votes)
+        local results = VotingEngine:TallySimple(votes)
 
         AssertEquals(results.totalVotes, 1, "Should have 1 vote")
         AssertEquals(results.winningResponse, Loothing.Response.NEED, "Single vote should win")
@@ -539,7 +547,7 @@ Describe("Edge Cases", function()
             { "P3", "PRIEST", { Loothing.Response.NEED } }
         })
 
-        local results = LoothingVotingEngine:TallySimple(votes)
+        local results = VotingEngine:TallySimple(votes)
 
         AssertEquals(results.winningResponse, Loothing.Response.NEED, "NEED should win")
         AssertEquals(results.counts[Loothing.Response.NEED].count, 3, "NEED should have all votes")
@@ -553,7 +561,7 @@ Describe("Edge Cases", function()
             { "P3", "PRIEST", { Loothing.Response.PASS } }
         })
 
-        local results = LoothingVotingEngine:TallySimple(votes)
+        local results = VotingEngine:TallySimple(votes)
 
         AssertEquals(results.winningResponse, Loothing.Response.PASS, "PASS should win")
         AssertEquals(results.counts[Loothing.Response.PASS].count, 3, "All should be PASS")
@@ -564,7 +572,7 @@ Describe("Edge Cases", function()
             { "P1", "WARRIOR", {} }
         })
 
-        local results = LoothingVotingEngine:TallySimple(votes)
+        local results = VotingEngine:TallySimple(votes)
 
         -- Should handle gracefully without crashing
         AssertNotNil(results, "Results should exist")
@@ -578,8 +586,8 @@ Describe("Edge Cases", function()
 
         local votesProvider = CreateVoteDataProvider(votesArray)
 
-        local resultsArray = LoothingVotingEngine:TallySimple(votesArray)
-        local resultsProvider = LoothingVotingEngine:TallySimple(votesProvider)
+        local resultsArray = VotingEngine:TallySimple(votesArray)
+        local resultsProvider = VotingEngine:TallySimple(votesProvider)
 
         AssertEquals(resultsArray.totalVotes, resultsProvider.totalVotes, "Total votes should match")
         AssertEquals(resultsArray.winningResponse, resultsProvider.winningResponse, "Winning response should match")
@@ -593,8 +601,8 @@ Describe("Edge Cases", function()
 
         local votesProvider = CreateVoteDataProvider(votesArray)
 
-        local countArray = LoothingVotingEngine:CountVotes(votesArray)
-        local countProvider = LoothingVotingEngine:CountVotes(votesProvider)
+        local countArray = VotingEngine:CountVotes(votesArray)
+        local countProvider = VotingEngine:CountVotes(votesProvider)
 
         AssertEquals(countArray, 2, "Array should have 2 votes")
         AssertEquals(countProvider, 2, "DataProvider should have 2 votes")
@@ -606,7 +614,7 @@ Describe("Edge Cases", function()
         })
 
         local candidates = {}
-        local results = LoothingVotingEngine:TallyRankedChoice(votes, candidates)
+        local results = VotingEngine:TallyRankedChoice(votes, candidates)
 
         AssertNil(results.winner, "Should have no winner with empty candidates")
         AssertEquals(#results.rounds, 0, "Should have no rounds")
@@ -622,16 +630,16 @@ Describe("Edge Cases", function()
         })
 
         local candidates = { "Alice", "Bob" }
-        local results = LoothingVotingEngine:TallyRankedChoice(votes, candidates)
+        local results = VotingEngine:TallyRankedChoice(votes, candidates)
 
         AssertNotNil(results.winner, "Should have a winner")
-        AssertEquals(results.winner, LoothingUtils.NormalizeName("Alice"), "Alice should win")
+        AssertEquals(results.winner, Utils.NormalizeName("Alice"), "Alice should win")
     end)
 
     It("Percentage calculation with zero votes", function()
         local votes = CreateVoteArray({})
 
-        local percentages = LoothingVotingEngine:GetVotePercentages(votes)
+        local percentages = VotingEngine:GetVotePercentages(votes)
 
         for response, percentage in pairs(percentages) do
             AssertEquals(percentage, 0, string.format("Response %d should have 0%%", response))
@@ -645,7 +653,7 @@ end)
 
 Describe("Integration with Item System", function()
     It("Item accepts and stores votes", function()
-        local item = CreateLoothingItem("|cffa335ee|Hitem:212398::::::::80::::::::::|h[Epic Sword]|h|r", "Looter", 123)
+        local item = CreateItem("|cffa335ee|Hitem:212398::::::::80::::::::::|h[Epic Sword]|h|r", "Looter", 123)
 
         item:StartVoting(30)
 
@@ -658,7 +666,7 @@ Describe("Integration with Item System", function()
     end)
 
     It("Cannot add vote when not in VOTING state", function()
-        local item = CreateLoothingItem("|cffa335ee|Hitem:212398::::::::80::::::::::|h[Epic Sword]|h|r", "Looter", 123)
+        local item = CreateItem("|cffa335ee|Hitem:212398::::::::80::::::::::|h[Epic Sword]|h|r", "Looter", 123)
 
         local added = item:AddVote("Voter1", "WARRIOR", { Loothing.Response.NEED })
 
@@ -667,7 +675,7 @@ Describe("Integration with Item System", function()
     end)
 
     It("Vote update replaces existing vote", function()
-        local item = CreateLoothingItem("|cffa335ee|Hitem:212398::::::::80::::::::::|h[Epic Sword]|h|r", "Looter", 123)
+        local item = CreateItem("|cffa335ee|Hitem:212398::::::::80::::::::::|h[Epic Sword]|h|r", "Looter", 123)
 
         item:StartVoting(30)
         item:AddVote("Voter1", "WARRIOR", { Loothing.Response.NEED })
@@ -680,7 +688,7 @@ Describe("Integration with Item System", function()
     end)
 
     It("GetVotesByResponse filters correctly", function()
-        local item = CreateLoothingItem("|cffa335ee|Hitem:212398::::::::80::::::::::|h[Epic Sword]|h|r", "Looter", 123)
+        local item = CreateItem("|cffa335ee|Hitem:212398::::::::80::::::::::|h[Epic Sword]|h|r", "Looter", 123)
 
         item:StartVoting(30)
         item:AddVote("V1", "WARRIOR", { Loothing.Response.NEED })
@@ -695,21 +703,21 @@ Describe("Integration with Item System", function()
     end)
 
     It("Item vote tallying integrates with VotingEngine", function()
-        local item = CreateLoothingItem("|cffa335ee|Hitem:212398::::::::80::::::::::|h[Epic Sword]|h|r", "Looter", 123)
+        local item = CreateItem("|cffa335ee|Hitem:212398::::::::80::::::::::|h[Epic Sword]|h|r", "Looter", 123)
 
         item:StartVoting(30)
         item:AddVote("V1", "WARRIOR", { Loothing.Response.NEED })
         item:AddVote("V2", "MAGE", { Loothing.Response.NEED })
         item:AddVote("V3", "PRIEST", { Loothing.Response.GREED })
 
-        local results = LoothingVotingEngine:Tally(item:GetVotes())
+        local results = VotingEngine:Tally(item:GetVotes())
 
         AssertNotNil(results, "Should have tally results")
         AssertEquals(results.winningResponse, Loothing.Response.NEED, "NEED should win")
     end)
 
     It("RemoveVote removes from item", function()
-        local item = CreateLoothingItem("|cffa335ee|Hitem:212398::::::::80::::::::::|h[Epic Sword]|h|r", "Looter", 123)
+        local item = CreateItem("|cffa335ee|Hitem:212398::::::::80::::::::::|h[Epic Sword]|h|r", "Looter", 123)
 
         item:StartVoting(30)
         item:AddVote("Voter1", "WARRIOR", { Loothing.Response.NEED })

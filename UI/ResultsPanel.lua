@@ -3,13 +3,17 @@
     ResultsPanel - Vote results display (candidate-centric)
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local Popups = ns.Popups
 
 --[[--------------------------------------------------------------------
-    LoothingResultsPanelMixin
+    ResultsPanelMixin
 ----------------------------------------------------------------------]]
 
-LoothingResultsPanelMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+local ResultsPanelMixin = ns.ResultsPanelMixin or Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+ns.ResultsPanelMixin = ResultsPanelMixin
 
 local RESULTS_EVENTS = {
     "OnAwardClicked",
@@ -21,7 +25,7 @@ local PANEL_WIDTH = 400
 local PANEL_HEIGHT = 450
 
 --- Initialize the results panel
-function LoothingResultsPanelMixin:Init()
+function ResultsPanelMixin:Init()
     Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(RESULTS_EVENTS)
 
@@ -35,8 +39,8 @@ function LoothingResultsPanelMixin:Init()
 end
 
 --- Create the main frame
-function LoothingResultsPanelMixin:CreateFrame()
-    local frame = CreateFrame("Frame", "LoothingResultsPanel", UIParent, "BackdropTemplate")
+function ResultsPanelMixin:CreateFrame()
+    local frame = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
     frame:SetSize(PANEL_WIDTH, PANEL_HEIGHT)
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("DIALOG")
@@ -69,10 +73,11 @@ function LoothingResultsPanelMixin:CreateFrame()
     end)
 
     self.frame = frame
+    ns.ResultsPanelFrame = frame
 end
 
 --- Create UI elements
-function LoothingResultsPanelMixin:CreateElements()
+function ResultsPanelMixin:CreateElements()
     local L = Loothing.Locale
 
     -- Title
@@ -98,7 +103,7 @@ function LoothingResultsPanelMixin:CreateElements()
 end
 
 --- Create item display
-function LoothingResultsPanelMixin:CreateItemDisplay()
+function ResultsPanelMixin:CreateItemDisplay()
     local container = CreateFrame("Frame", nil, self.frame)
     container:SetPoint("TOPLEFT", 20, -50)
     container:SetPoint("TOPRIGHT", -20, -50)
@@ -133,7 +138,7 @@ function LoothingResultsPanelMixin:CreateItemDisplay()
 end
 
 --- Create results display area
-function LoothingResultsPanelMixin:CreateResultsArea()
+function ResultsPanelMixin:CreateResultsArea()
     local container = CreateFrame("Frame", nil, self.frame, "BackdropTemplate")
     container:SetPoint("TOPLEFT", 20, -110)
     container:SetPoint("BOTTOMRIGHT", -20, 60)
@@ -156,7 +161,7 @@ function LoothingResultsPanelMixin:CreateResultsArea()
     content:SetSize(1, 400)
     scrollFrame:SetScrollChild(content)
 
-    scrollFrame:SetScript("OnSizeChanged", function(sf, w, h)
+    scrollFrame:SetScript("OnSizeChanged", function(_, w)
         content:SetWidth(w)
     end)
 
@@ -178,7 +183,7 @@ function LoothingResultsPanelMixin:CreateResultsArea()
 end
 
 --- Create action buttons
-function LoothingResultsPanelMixin:CreateActionButtons()
+function ResultsPanelMixin:CreateActionButtons()
     local L = Loothing.Locale
 
     -- Award button
@@ -217,7 +222,7 @@ end
 --- Set item and results to display
 -- @param item table - LoothingItem
 -- @param results table - Tally results (optional, kept for backward compat)
-function LoothingResultsPanelMixin:SetItem(item, results)
+function ResultsPanelMixin:SetItem(item, results)
     self.item = item
     self.results = results
 
@@ -227,7 +232,7 @@ function LoothingResultsPanelMixin:SetItem(item, results)
     end
 
     -- Update item display
-    local texture = item.texture or GetItemIcon(item.itemID or 0)
+    local texture = item.texture or C_Item.GetItemIconByID(item.itemID or 0)
     self.itemIcon:SetTexture(texture or "Interface\\Icons\\INV_Misc_QuestionMark")
 
     local quality = item.quality or 1
@@ -269,7 +274,7 @@ end
 
 --- Display vote results (candidate-centric)
 -- @param results table - Legacy results (ignored; data comes from candidateManager)
-function LoothingResultsPanelMixin:DisplayResults(results)
+function ResultsPanelMixin:DisplayResults(_results)
     -- Clear existing rows
     for _, row in ipairs(self.responseRows) do
         row:Hide()
@@ -292,7 +297,7 @@ function LoothingResultsPanelMixin:DisplayResults(results)
         candidates = cm:GetCandidatesSortedBy("votes", false)
     else
         candidates = cm:GetAllCandidates()
-        table.sort(candidates, LoothingCandidateSorting.ByResponsePriority)
+        table.sort(candidates, CandidateSorting.ByResponsePriority)
     end
 
     -- Update winner header
@@ -319,7 +324,7 @@ function LoothingResultsPanelMixin:DisplayResults(results)
 
     for _, candidate in ipairs(candidates) do
         local isWinner = (winner and candidate == winner and totalVotes > 0)
-        local row = LoothingUI_CreateCandidateResultRow(
+        local row = CreateCandidateResultRow(
             self.resultsContent, candidate, yOffset, totalVotes, isWinner, clickCallback
         )
         row.candidate = candidate
@@ -341,9 +346,9 @@ function LoothingResultsPanelMixin:DisplayResults(results)
 end
 
 --- Select a candidate as the award recipient
--- @param candidate table - LoothingCandidateMixin
+-- @param candidate table - CandidateMixin
 -- @param rowFrame Frame - The row frame to highlight
-function LoothingResultsPanelMixin:SelectCandidate(candidate, rowFrame)
+function ResultsPanelMixin:SelectCandidate(candidate, rowFrame)
     if self.selectedRow and self.selectedRow.SetSelected then
         self.selectedRow:SetSelected(false)
     end
@@ -356,7 +361,7 @@ function LoothingResultsPanelMixin:SelectCandidate(candidate, rowFrame)
 end
 
 --- Update award button text to reflect the selected candidate
-function LoothingResultsPanelMixin:UpdateAwardButtonText()
+function ResultsPanelMixin:UpdateAwardButtonText()
     if self.selectedCandidate then
         local name
         if self.selectedCandidate.GetShortName then
@@ -378,7 +383,7 @@ end
 -- @param winner table|nil - Winning candidate
 -- @param totalVotes number - Total council votes
 -- @param candidates table - All candidates sorted
-function LoothingResultsPanelMixin:UpdateWinnerSection(winner, totalVotes, candidates)
+function ResultsPanelMixin:UpdateWinnerSection(winner, totalVotes, candidates)
     if totalVotes == 0 then
         self.winnerText:SetText("|cff888888No council votes cast|r")
         return
@@ -416,7 +421,7 @@ end
 --- Update compact response summary line
 -- @param cm table - CandidateManager
 -- @return number - yOffset after the summary
-function LoothingResultsPanelMixin:UpdateResponseSummary(cm)
+function ResultsPanelMixin:UpdateResponseSummary(cm)
     local counts = cm:GetResponseCounts()
     local parts = {}
 
@@ -455,7 +460,7 @@ end
 
 --- Update action buttons based on user permissions
 -- Only ML can award, re-vote, or skip. Observers and non-council see no actions.
-function LoothingResultsPanelMixin:UpdateActionButtons()
+function ResultsPanelMixin:UpdateActionButtons()
     local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
 
     if isML then
@@ -470,7 +475,7 @@ function LoothingResultsPanelMixin:UpdateActionButtons()
 end
 
 --- Handle award button click
-function LoothingResultsPanelMixin:OnAwardClick()
+function ResultsPanelMixin:OnAwardClick()
     if not self.item or not self.selectedCandidate then return end
 
     if Loothing.Settings and Loothing.Settings:GetAwardReasonsEnabled() then
@@ -485,7 +490,7 @@ end
 -- @param winnerResponse number|nil - Unused, kept for backward compat
 -- @param awardReasonId number|nil - Award reason ID
 -- @param awardReasonName string|nil - Award reason name
-function LoothingResultsPanelMixin:ShowAwardDialog(winnerResponse, awardReasonId, awardReasonName)
+function ResultsPanelMixin:ShowAwardDialog(_winnerResponse, awardReasonId, awardReasonName)
     if not self.item or not self.selectedCandidate then return end
 
     local candidate = self.selectedCandidate
@@ -493,7 +498,7 @@ function LoothingResultsPanelMixin:ShowAwardDialog(winnerResponse, awardReasonId
     local itemLink = self.item.itemLink or self.item.name or "Unknown Item"
     local playerName = candidate.playerName or "Unknown"
 
-    LoothingPopups:Show("LOOTHING_CONFIRM_AWARD", {
+    Popups:Show("LOOTHING_CONFIRM_AWARD", {
         item = itemLink,
         player = playerName,
         reason = awardReasonName,
@@ -507,12 +512,12 @@ end
 
 --- Show award reason dropdown
 -- Presents award reasons in a context menu, then shows the award confirm dialog
-function LoothingResultsPanelMixin:ShowAwardReasonDropdown()
+function ResultsPanelMixin:ShowAwardReasonDropdown()
     if not Loothing.Settings then return end
 
     local reasons = Loothing.Settings:GetAwardReasons()
 
-    MenuUtil.CreateContextMenu(self.awardButton, function(ownerRegion, rootDescription)
+    MenuUtil.CreateContextMenu(self.awardButton, function(_, rootDescription)
         rootDescription:CreateTitle("Select Award Reason")
 
         if not Loothing.Settings:GetRequireAwardReason() then
@@ -540,15 +545,15 @@ end
     Visibility
 ----------------------------------------------------------------------]]
 
-function LoothingResultsPanelMixin:Show()
+function ResultsPanelMixin:Show()
     self.frame:Show()
 end
 
-function LoothingResultsPanelMixin:Hide()
+function ResultsPanelMixin:Hide()
     self.frame:Hide()
 end
 
-function LoothingResultsPanelMixin:Toggle()
+function ResultsPanelMixin:Toggle()
     if self.frame:IsShown() then
         self:Hide()
     else
@@ -556,7 +561,7 @@ function LoothingResultsPanelMixin:Toggle()
     end
 end
 
-function LoothingResultsPanelMixin:IsShown()
+function ResultsPanelMixin:IsShown()
     return self.frame:IsShown()
 end
 
@@ -564,8 +569,10 @@ end
     Factory
 ----------------------------------------------------------------------]]
 
-function CreateLoothingResultsPanel()
-    local panel = Loolib.CreateFromMixins(LoothingResultsPanelMixin)
+local function CreateResultsPanel()
+    local panel = Loolib.CreateFromMixins(ResultsPanelMixin)
     panel:Init()
     return panel
 end
+
+ns.CreateResultsPanel = CreateResultsPanel

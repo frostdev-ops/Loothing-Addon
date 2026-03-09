@@ -3,6 +3,9 @@
     IconList - Common icons for the response button icon picker
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
+local Loothing = ns.Addon
+
 Loothing.IconList = {
     -- Loot / Group Loot
     { path = "Interface\\Buttons\\UI-GroupLoot-Dice-Up",   label = "Dice" },

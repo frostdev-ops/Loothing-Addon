@@ -3,6 +3,9 @@
     IconPickerFrame - Modal grid for picking a response button icon
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
+local Loothing = ns.Addon
+
 local GRID_COLS    = 8
 local ICON_SIZE    = 36
 local ICON_PADDING = 4
@@ -10,15 +13,15 @@ local SEARCH_HEIGHT = 24
 local FRAME_PADDING = 12
 local MAX_VISIBLE_ROWS = 8
 
-LoothingIconPickerMixin = {}
+local IconPickerMixin = ns.IconPickerMixin or {}
+ns.IconPickerMixin = IconPickerMixin
 
 --- Show the icon picker near anchorFrame.
 -- onSelect(iconPath) is called when the user clicks an icon.
 -- Pass nil to clear the current icon.
 -- @param anchorFrame Frame
 -- @param onSelect function(iconPath)
--- @param currentIcon string|nil
-function LoothingIconPickerMixin:Open(anchorFrame, onSelect, currentIcon)
+function IconPickerMixin:Open(anchorFrame, onSelect)
     self.onSelect  = onSelect
     self.searchStr = ""
     self.searchBox:SetText("")
@@ -31,12 +34,12 @@ function LoothingIconPickerMixin:Open(anchorFrame, onSelect, currentIcon)
 end
 
 --- Close the picker without selecting
-function LoothingIconPickerMixin:Close()
+function IconPickerMixin:Close()
     self:Hide()
 end
 
 --- Rebuild the icon grid based on current search string
-function LoothingIconPickerMixin:Refresh()
+function IconPickerMixin:Refresh()
     local search  = self.searchStr and self.searchStr:lower() or ""
     local filtered = {}
     for _, entry in ipairs(Loothing.IconList) do
@@ -79,7 +82,7 @@ function LoothingIconPickerMixin:Refresh()
 end
 
 --- Create a single icon button at grid index i
-function LoothingIconPickerMixin:CreateIconButton(i)
+function IconPickerMixin:CreateIconButton(i)
     local col = ((i - 1) % GRID_COLS)
     local row = math.floor((i - 1) / GRID_COLS)
 
@@ -124,7 +127,7 @@ function LoothingIconPickerMixin:CreateIconButton(i)
 end
 
 --- Build the frame on first use
-function LoothingIconPickerMixin:OnLoad()
+function IconPickerMixin:OnLoad()
     self:SetFrameStrata("FULLSCREEN_DIALOG")
     self:SetMovable(true)
     self:EnableMouse(true)
@@ -210,12 +213,21 @@ function LoothingIconPickerMixin:OnLoad()
     self:Hide()
 end
 
---- Global singleton access
-function LoothingIconPicker_Open(anchorFrame, onSelect, currentIcon)
-    if not LoothingIconPickerFrame then
-        LoothingIconPickerFrame = CreateFrame("Frame", "LoothingIconPickerFrame", UIParent, "BackdropTemplate")
-        Mixin(LoothingIconPickerFrame, LoothingIconPickerMixin)
-        LoothingIconPickerFrame:OnLoad()
+local function GetIconPickerFrame()
+    local frame = ns.IconPickerFrame
+    if not frame then
+        frame = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+        Mixin(frame, IconPickerMixin)
+        frame:OnLoad()
+        ns.IconPickerFrame = frame
+        -- frame already stored in ns.IconPickerFrame above
     end
-    LoothingIconPickerFrame:Open(anchorFrame, onSelect, currentIcon)
+    return frame
 end
+
+local function IconPicker_Open(anchorFrame, onSelect, currentIcon)
+    GetIconPickerFrame():Open(anchorFrame, onSelect, currentIcon)
+end
+
+ns.OpenIconPicker = IconPicker_Open
+

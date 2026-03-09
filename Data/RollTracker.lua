@@ -3,18 +3,22 @@
     RollTracker - Track /roll results for loot distribution
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local Utils = ns.Utils
 local CreateFromMixins = Loolib.CreateFromMixins
 local Events = Loolib.Events
 
 --[[--------------------------------------------------------------------
-    LoothingRollTrackerMixin
+    RollTrackerMixin
 ----------------------------------------------------------------------]]
 
-LoothingRollTrackerMixin = {}
+local RollTrackerMixin = {}
+ns.RollTrackerMixin = RollTrackerMixin
 
 --- Initialize roll tracker
-function LoothingRollTrackerMixin:Init()
+function RollTrackerMixin:Init()
     -- Store rolls by player name
     -- { [playerName] = { roll = number, minRoll = number, maxRoll = number, timestamp = number } }
     self.rolls = {}
@@ -30,7 +34,7 @@ end
 --- Parse roll message from CHAT_MSG_SYSTEM
 -- Pattern: "PlayerName rolls 42 (1-100)"
 -- @param text string - Chat message text
-function LoothingRollTrackerMixin:OnChatMessage(text)
+function RollTrackerMixin:OnChatMessage(text)
     if not text then return end
 
     -- Convert to untainted string - CHAT_MSG_SYSTEM text is hardware-tainted
@@ -52,7 +56,7 @@ function LoothingRollTrackerMixin:OnChatMessage(text)
         maxRoll = tonumber(maxRoll) or 100
 
         -- Normalize player name
-        playerName = LoothingUtils.NormalizeName(playerName)
+        playerName = Utils.NormalizeName(playerName)
 
         -- Store the roll
         self:RecordRoll(playerName, roll, minRoll, maxRoll)
@@ -66,8 +70,9 @@ end
 -- @param roll number
 -- @param minRoll number
 -- @param maxRoll number
-function LoothingRollTrackerMixin:RecordRoll(playerName, roll, minRoll, maxRoll)
-    playerName = LoothingUtils.NormalizeName(playerName)
+function RollTrackerMixin:RecordRoll(playerName, roll, minRoll, maxRoll)
+    playerName = Utils.NormalizeName(playerName)
+    if not playerName then return end
 
     self.rolls[playerName] = {
         roll = roll,
@@ -88,40 +93,41 @@ end
 --- Get roll for a player
 -- @param playerName string
 -- @return table|nil - { roll, minRoll, maxRoll, timestamp }
-function LoothingRollTrackerMixin:GetRoll(playerName)
-    playerName = LoothingUtils.NormalizeName(playerName)
+function RollTrackerMixin:GetRoll(playerName)
+    playerName = Utils.NormalizeName(playerName)
     return self.rolls[playerName]
 end
 
 --- Check if player has rolled
 -- @param playerName string
 -- @return boolean
-function LoothingRollTrackerMixin:HasRolled(playerName)
-    playerName = LoothingUtils.NormalizeName(playerName)
+function RollTrackerMixin:HasRolled(playerName)
+    playerName = Utils.NormalizeName(playerName)
     return self.rolls[playerName] ~= nil
 end
 
 --- Get all current rolls
 -- @return table - { [playerName] = rollData }
-function LoothingRollTrackerMixin:GetAllRolls()
+function RollTrackerMixin:GetAllRolls()
     return self.rolls
 end
 
 --- Clear all rolls
-function LoothingRollTrackerMixin:ClearAllRolls()
+function RollTrackerMixin:ClearAllRolls()
     wipe(self.rolls)
 end
 
 --- Clear roll for a specific player
 -- @param playerName string
-function LoothingRollTrackerMixin:ClearRoll(playerName)
-    playerName = LoothingUtils.NormalizeName(playerName)
+function RollTrackerMixin:ClearRoll(playerName)
+    playerName = Utils.NormalizeName(playerName)
+    if not playerName then return end
     self.rolls[playerName] = nil
 end
 
 --- Clean up rolls older than threshold
 -- @param maxAge number - Max age in seconds (default 300 = 5 minutes)
-function LoothingRollTrackerMixin:CleanupOldRolls(maxAge)
+function RollTrackerMixin:CleanupOldRolls(maxAge)
     maxAge = maxAge or 300 -- 5 minutes default
 
     local now = time()
@@ -145,7 +151,7 @@ end
 --- Request rolls from raid
 -- Announces a message asking players to /roll
 -- @param itemLink string - Optional item link to include in message
-function LoothingRollTrackerMixin:RequestRolls(itemLink)
+function RollTrackerMixin:RequestRolls(itemLink)
     local L = Loothing.Locale
 
     -- Clear previous rolls
@@ -159,9 +165,9 @@ function LoothingRollTrackerMixin:RequestRolls(itemLink)
 
     -- Announce to raid
     if IsInRaid() then
-        SendChatMessage(message, "RAID_WARNING")
+        C_ChatInfo.SendChatMessage(message, "RAID_WARNING")
     elseif IsInGroup() then
-        SendChatMessage(message, "PARTY")
+        C_ChatInfo.SendChatMessage(message, "PARTY")
     end
 
     Loothing:Print(L["ROLL_REQUEST_SENT"] or "Roll request sent to raid")
@@ -173,8 +179,9 @@ end
 
 --- Create the RollTracker singleton
 -- @return table
-function CreateLoothingRollTracker()
-    local tracker = CreateFromMixins(LoothingRollTrackerMixin)
+local function CreateRollTracker()
+    local tracker = CreateFromMixins(RollTrackerMixin)
     tracker:Init()
     return tracker
 end
+ns.CreateRollTracker = CreateRollTracker

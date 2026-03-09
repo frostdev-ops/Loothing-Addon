@@ -3,10 +3,14 @@
     ItemStorage - Enhanced item tracking with trade window monitoring
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local Utils = ns.Utils
+local SavedVariables = Loolib.Data.SavedVariables
 
 --[[--------------------------------------------------------------------
-    LoothingItemStorageMixin
+    ItemStorageMixin
 
     Provides enhanced item tracking beyond TradeQueue. Tracks items in
     player's bags with trade time remaining, supports "award later"
@@ -20,13 +24,14 @@ local Loolib = LibStub("Loolib")
     - Persistence to SavedVariables
 
     Usage:
-        local storage = CreateLoothingItemStorage()
+        local storage = CreateItemStorage()
         local item = storage:New(itemLink, "TO_TRADE", { winner = playerName })
         local bag, slot, timeRemaining = storage:FindInBags(itemLink)
         storage:WatchForItem(itemLink, onFound, onFail, 3)
 ----------------------------------------------------------------------]]
 
-LoothingItemStorageMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+local ItemStorageMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+ns.ItemStorageMixin = ItemStorageMixin
 
 local ITEM_STORAGE_EVENTS = {
     "OnItemAdded",
@@ -46,7 +51,7 @@ local ITEM_WATCH_DELAY = 1.0
     TEMP - Temporary tracking (must be in bags)
 ----------------------------------------------------------------------]]
 
-LoothingItemStorageMixin.AcceptedTypes = {
+ItemStorageMixin.AcceptedTypes = {
     ["TO_TRADE"] = {
         bagged = true,  -- Must be in player's bags
     },
@@ -84,7 +89,7 @@ function ItemClass:GetTimeRemaining()
     end
 
     -- Update from bags
-    local storage = LoothingItemStorageMixin._instance
+    local storage = ItemStorageMixin._instance
     if storage then
         storage:UpdateItemTime(self)
     end
@@ -112,7 +117,7 @@ end
 
 --- Store item to SavedVariables
 function ItemClass:Store()
-    local storage = LoothingItemStorageMixin._instance
+    local storage = ItemStorageMixin._instance
     if storage then
         storage:StoreItem(self)
     end
@@ -121,7 +126,7 @@ end
 
 --- Remove item from SavedVariables
 function ItemClass:Unstore()
-    local storage = LoothingItemStorageMixin._instance
+    local storage = ItemStorageMixin._instance
     if storage then
         storage:UnstoreItem(self)
     end
@@ -144,7 +149,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Initialize the item storage
-function LoothingItemStorageMixin:Init()
+function ItemStorageMixin:Init()
     Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(ITEM_STORAGE_EVENTS)
 
@@ -152,7 +157,7 @@ function LoothingItemStorageMixin:Init()
     self.items = {}  -- Active tracked items
 
     -- Set singleton reference for ItemClass methods
-    LoothingItemStorageMixin._instance = self
+    ItemStorageMixin._instance = self
 
     Loothing:Debug("ItemStorage initialized")
 end
@@ -166,7 +171,7 @@ end
 -- @param itemType string - Type: TO_TRADE, AWARD_LATER, TEMP
 -- @param ... any - User data (stored in item.args as table)
 -- @return table - Item object
-function LoothingItemStorageMixin:New(itemLink, itemType, ...)
+function ItemStorageMixin:New(itemLink, itemType, ...)
     if not itemType then
         itemType = "TEMP"
     end
@@ -213,7 +218,7 @@ end
 --- Remove an item from storage
 -- @param itemOrLink table|string - Item object or item link
 -- @return boolean - True if removed
-function LoothingItemStorageMixin:RemoveItem(itemOrLink)
+function ItemStorageMixin:RemoveItem(itemOrLink)
     local item = self:GetItem(itemOrLink)
     if not item then
         return false
@@ -242,7 +247,7 @@ end
 -- @param itemOrLink table|string - Item object or item link
 -- @param itemType string|nil - Optional type filter
 -- @return table|nil - Item object or nil
-function LoothingItemStorageMixin:GetItem(itemOrLink, itemType)
+function ItemStorageMixin:GetItem(itemOrLink, itemType)
     -- If already an item object, return it
     if type(itemOrLink) == "table" and itemOrLink.link then
         return itemOrLink
@@ -264,7 +269,7 @@ end
 --- Get all items of a specific type
 -- @param itemType string - Type: TO_TRADE, AWARD_LATER, TEMP
 -- @return table - Array of items
-function LoothingItemStorageMixin:GetAllOfType(itemType)
+function ItemStorageMixin:GetAllOfType(itemType)
     local results = {}
     for _, item in ipairs(self.items) do
         if item.type == itemType then
@@ -276,13 +281,13 @@ end
 
 --- Get all tracked items
 -- @return table - Array of items
-function LoothingItemStorageMixin:GetAllItems()
+function ItemStorageMixin:GetAllItems()
     return self.items
 end
 
 --- Remove expired items (trade window has passed)
 -- @return number - Number of items removed
-function LoothingItemStorageMixin:RemoveExpired()
+function ItemStorageMixin:RemoveExpired()
     local removed = 0
     local currentTime = time()
 
@@ -303,7 +308,7 @@ end
 
 --- Remove all items of a specific type
 -- @param itemType string - Type to remove
-function LoothingItemStorageMixin:RemoveAllOfType(itemType)
+function ItemStorageMixin:RemoveAllOfType(itemType)
     for i = #self.items, 1, -1 do
         if self.items[i].type == itemType and self.items[i]:IsSafeToRemove() then
             table.remove(self.items, i)
@@ -319,7 +324,7 @@ end
 -- @param itemLink string - Item link to find
 -- @param skip table|nil - Array of {container, slot} positions to skip
 -- @return number|nil, number|nil, number|nil - bag, slot, tradeTimeRemaining
-function LoothingItemStorageMixin:FindInBags(itemLink, skip)
+function ItemStorageMixin:FindInBags(itemLink, skip)
     if not itemLink or itemLink == "" then
         return nil, nil, nil
     end
@@ -356,7 +361,7 @@ end
 --- Get trade time remaining for an item
 -- @param item table|string - Item object or link
 -- @return number - Seconds remaining (0 if expired or not tradeable)
-function LoothingItemStorageMixin:GetTradeTimeRemaining(item)
+function ItemStorageMixin:GetTradeTimeRemaining(item)
     local itemLink = type(item) == "table" and item.link or item
     local bag, slot = self:FindInBags(itemLink)
 
@@ -371,7 +376,7 @@ end
 -- @param bag number - Bag index
 -- @param slot number - Slot index
 -- @return number|nil - Seconds remaining, or nil if not tradeable
-function LoothingItemStorageMixin:GetTradeTimeRemainingFromSlot(bag, slot)
+function ItemStorageMixin:GetTradeTimeRemainingFromSlot(bag, slot)
     -- Use Blizzard's built-in function if available
     if C_Container.GetContainerItemInfo then
         local info = C_Container.GetContainerItemInfo(bag, slot)
@@ -391,7 +396,7 @@ end
 -- @param bag number - Bag index
 -- @param slot number - Slot index
 -- @return number|nil - Seconds remaining, or nil
-function LoothingItemStorageMixin:ParseTradeTimeFromTooltip(bag, slot)
+function ItemStorageMixin:ParseTradeTimeFromTooltip(bag, slot)
     -- Delegate to TradeQueue's more robust parser if available
     if Loothing and Loothing.TradeQueue and Loothing.TradeQueue.GetContainerItemTradeTimeRemaining then
         local result = Loothing.TradeQueue:GetContainerItemTradeTimeRemaining(bag, slot)
@@ -468,7 +473,7 @@ end
 
 --- Update an item's time from current bag position
 -- @param item table - Item object
-function LoothingItemStorageMixin:UpdateItemTime(item)
+function ItemStorageMixin:UpdateItemTime(item)
     if not item.inBags then
         return
     end
@@ -490,7 +495,7 @@ end
 -- @param onFound function|nil - Callback(item, bag, slot, time) when found
 -- @param onFail function|nil - Callback(item) when max attempts reached
 -- @param maxAttempts number|nil - Max polling attempts (default: 3)
-function LoothingItemStorageMixin:WatchForItem(itemLink, onFound, onFail, maxAttempts)
+function ItemStorageMixin:WatchForItem(itemLink, onFound, onFail, maxAttempts)
     maxAttempts = maxAttempts or 3
 
     -- Create temporary item for tracking
@@ -511,7 +516,7 @@ end
 
 --- Schedule next item watch attempt
 -- @param item table - Item object with itemWatch args
-function LoothingItemStorageMixin:ScheduleItemWatch(item)
+function ItemStorageMixin:ScheduleItemWatch(item)
     C_Timer.After(ITEM_WATCH_DELAY, function()
         self:CheckItemWatch(item)
     end)
@@ -519,7 +524,7 @@ end
 
 --- Check if watched item has appeared
 -- @param item table - Item object with itemWatch args
-function LoothingItemStorageMixin:CheckItemWatch(item)
+function ItemStorageMixin:CheckItemWatch(item)
     local bag, slot, timeRemaining = self:FindInBags(item.link)
 
     if bag and slot then
@@ -577,8 +582,8 @@ end
 --- Get the item storage array from SavedVariables (global scope)
 -- FIX(Area4-3): Added owner key to prevent cross-character bleed
 -- @return table - The storage array
-function LoothingItemStorageMixin:GetStorageTable()
-    local currentOwner = LoothingUtils and LoothingUtils.GetPlayerFullName and LoothingUtils.GetPlayerFullName()
+function ItemStorageMixin:GetStorageTable()
+    local currentOwner = Utils and Utils.GetPlayerFullName and Utils.GetPlayerFullName()
 
     if Loothing and Loothing.Settings and Loothing.Settings.GetGlobalValue then
         local storage = Loothing.Settings:GetGlobalValue("itemStorage")
@@ -598,22 +603,20 @@ function LoothingItemStorageMixin:GetStorageTable()
         return storage
     end
 
-    -- Fallback to direct LoothingDB access
-    if not LoothingDB then
-        LoothingDB = {}
+    local store = SavedVariables.GetAddonData("Loothing", true)
+    store.global = store.global or {}
+    if not store.global.itemStorage then
+        store.global.itemStorage = { _owner = currentOwner }
     end
-    if not LoothingDB.itemStorage then
-        LoothingDB.itemStorage = { _owner = currentOwner }
+    if store.global.itemStorage._owner and currentOwner and store.global.itemStorage._owner ~= currentOwner then
+        store.global.itemStorage = { _owner = currentOwner }
     end
-    if LoothingDB.itemStorage._owner and currentOwner and LoothingDB.itemStorage._owner ~= currentOwner then
-        LoothingDB.itemStorage = { _owner = currentOwner }
-    end
-    return LoothingDB.itemStorage
+    return store.global.itemStorage
 end
 
 --- Store an item to SavedVariables (global scope)
 -- @param item table - Item object
-function LoothingItemStorageMixin:StoreItem(item)
+function ItemStorageMixin:StoreItem(item)
     local storage = self:GetStorageTable()
 
     -- Check if already stored
@@ -631,7 +634,7 @@ end
 
 --- Remove an item from SavedVariables (global scope)
 -- @param item table - Item object
-function LoothingItemStorageMixin:UnstoreItem(item)
+function ItemStorageMixin:UnstoreItem(item)
     local storage = self:GetStorageTable()
 
     for i = #storage, 1, -1 do
@@ -643,7 +646,7 @@ function LoothingItemStorageMixin:UnstoreItem(item)
 end
 
 --- Initialize from SavedVariables (call on PLAYER_LOGIN)
-function LoothingItemStorageMixin:InitFromSavedVariables()
+function ItemStorageMixin:InitFromSavedVariables()
     local storage = self:GetStorageTable()
 
     if not storage or #storage == 0 then
@@ -703,7 +706,7 @@ end
 --- Serialize item for storage
 -- @param item table - Item object
 -- @return table - Serialized data
-function LoothingItemStorageMixin:SerializeItem(item)
+function ItemStorageMixin:SerializeItem(item)
     return {
         type = item.type,
         link = item.link,
@@ -722,13 +725,13 @@ end
 -- @param link1 string - First item link
 -- @param link2 string - Second item link
 -- @return boolean - True if same item
-function LoothingItemStorageMixin:ItemLinksMatch(link1, link2)
+function ItemStorageMixin:ItemLinksMatch(link1, link2)
     if not link1 or not link2 then
         return false
     end
 
-    local id1 = LoothingUtils.GetItemID(link1)
-    local id2 = LoothingUtils.GetItemID(link2)
+    local id1 = Utils.GetItemID(link1)
+    local id2 = Utils.GetItemID(link2)
 
     return id1 and id2 and id1 == id2
 end
@@ -738,7 +741,7 @@ end
 -- @param bag number - Bag index
 -- @param slot number - Slot index
 -- @return boolean
-function LoothingItemStorageMixin:ShouldSkipSlot(skip, bag, slot)
+function ItemStorageMixin:ShouldSkipSlot(skip, bag, slot)
     if not skip then
         return false
     end
@@ -758,8 +761,10 @@ end
 
 --- Create a new item storage instance
 -- @return table - ItemStorage instance
-function CreateLoothingItemStorage()
-    local storage = Loolib.CreateFromMixins(LoothingItemStorageMixin)
+local function CreateItemStorage()
+    local storage = Loolib.CreateFromMixins(ItemStorageMixin)
     storage:Init()
     return storage
 end
+
+ns.CreateItemStorage = CreateItemStorage

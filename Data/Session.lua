@@ -3,18 +3,27 @@
     Session - Loot session management
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local Utils = ns.Utils
+
+local function GetPopups()
+    return ns.Popups
+end
 
 local function IsTestModeEnabled()
+    local TestMode = ns.TestMode
     return (Loothing and Loothing.TestMode and Loothing.TestMode:IsActive())
-        or (LoothingTestMode and LoothingTestMode:IsEnabled())
+        or (TestMode and TestMode:IsEnabled())
 end
 
 --[[--------------------------------------------------------------------
-    LoothingSessionMixin
+    SessionMixin
 ----------------------------------------------------------------------]]
 
-LoothingSessionMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+local SessionMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+ns.SessionMixin = SessionMixin
 
 local SESSION_EVENTS = {
     "OnSessionStarted",
@@ -35,7 +44,7 @@ local SESSION_EVENTS = {
 }
 
 --- Initialize the session manager
-function LoothingSessionMixin:Init()
+function SessionMixin:Init()
     Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(SESSION_EVENTS)
 
@@ -70,7 +79,7 @@ end
 
 --- Safely show RollFrame for loot response
 -- @param item table - The item to display
-function LoothingSessionMixin:ShowRollFrameForItem(item)
+function SessionMixin:ShowRollFrameForItem(item)
     if not item then return end
 
     -- RollFrame handles OnVotingStarted events automatically and adds items
@@ -101,7 +110,7 @@ end
 
 -- DEPRECATED: Use ShowRollFrameForItem instead. Kept for external consumer compatibility.
 -- @param item table - The item to display
-function LoothingSessionMixin:ShowVotePanelForItem(item)
+function SessionMixin:ShowVotePanelForItem(item)
     -- Redirect to RollFrame
     self:ShowRollFrameForItem(item)
 end
@@ -109,7 +118,7 @@ end
 --- Safely show ResultsPanel to council members
 -- @param item table - The item that was voted on
 -- @param results table - The voting results
-function LoothingSessionMixin:ShowResultsPanelForItem(item, results)
+function SessionMixin:ShowResultsPanelForItem(item, results)
     if not item then return end
 
     -- Check if player is a council member, ML, or observer
@@ -135,7 +144,7 @@ function LoothingSessionMixin:ShowResultsPanelForItem(item, results)
 end
 
 --- Register for communication events
-function LoothingSessionMixin:RegisterCommEvents()
+function SessionMixin:RegisterCommEvents()
     if not Loothing.Comm then return end
 
     Loothing.Comm:RegisterCallback("OnSessionStart", function(_, data)
@@ -209,7 +218,7 @@ end
 
 --- Handle tradability status for a looted item
 -- @param data table - { itemLink, timeRemaining, playerName, guid, itemID }
-function LoothingSessionMixin:HandleTradable(data)
+function SessionMixin:HandleTradable(data)
     if not data or not data.itemLink then return end
 
     -- Find the matching item: prefer GUID > itemID+looter > itemLink fallback
@@ -243,7 +252,7 @@ end
 
 --- Handle non-tradability status for a looted item
 -- @param data table - { itemLink, playerName, guid, itemID }
-function LoothingSessionMixin:HandleNonTradable(data)
+function SessionMixin:HandleNonTradable(data)
     if not data or not data.itemLink then return end
 
     -- Find the matching item: prefer GUID > itemID+looter > itemLink fallback
@@ -283,7 +292,7 @@ end
 -- @param encounterID number
 -- @param encounterName string
 -- @return boolean
-function LoothingSessionMixin:StartSession(encounterID, encounterName)
+function SessionMixin:StartSession(encounterID, encounterName)
     if self.state ~= Loothing.SessionState.INACTIVE then
         Loothing:Debug("Session already active")
         return false
@@ -299,7 +308,7 @@ function LoothingSessionMixin:StartSession(encounterID, encounterName)
         return false
     end
 
-    local sessionID = LoothingUtils.GenerateGUID()
+    local sessionID = Utils.GenerateGUID()
     if Loothing and Loothing.TestMode and Loothing.TestMode.ApplySessionTag then
         sessionID = Loothing.TestMode:ApplySessionTag(sessionID)
     end
@@ -308,7 +317,7 @@ function LoothingSessionMixin:StartSession(encounterID, encounterName)
     self.encounterID = encounterID
     self.encounterName = encounterName
     self.startTime = time()
-    self.masterLooter = LoothingUtils.GetPlayerFullName()
+    self.masterLooter = Utils.GetPlayerFullName()
 
     self:SetState(Loothing.SessionState.ACTIVE)
 
@@ -344,10 +353,13 @@ end
 
 --- End the current session
 -- @return boolean
-function LoothingSessionMixin:EndSession()
+function SessionMixin:EndSession()
     if self.state == Loothing.SessionState.INACTIVE then
         -- Still cleanup pending state even if inactive
-        LoothingPopups:Hide("LOOTHING_CONFIRM_START_SESSION")
+        local Popups = GetPopups()
+        if Popups then
+            Popups:Hide("LOOTHING_CONFIRM_START_SESSION")
+        end
         return false
     end
 
@@ -376,7 +388,10 @@ function LoothingSessionMixin:EndSession()
     if self.lootBuffer then wipe(self.lootBuffer) end
 
     -- Hide any pending session prompt dialog
-    LoothingPopups:Hide("LOOTHING_CONFIRM_START_SESSION")
+    local Popups = GetPopups()
+    if Popups then
+        Popups:Hide("LOOTHING_CONFIRM_START_SESSION")
+    end
 
     local sessionID = self.sessionID
     local wasML = self:IsMasterLooter()
@@ -422,7 +437,7 @@ function LoothingSessionMixin:EndSession()
 end
 
 --- Close session (no more items, finish voting)
-function LoothingSessionMixin:CloseSession()
+function SessionMixin:CloseSession()
     if self.state ~= Loothing.SessionState.ACTIVE then
         return false
     end
@@ -437,13 +452,13 @@ end
 
 --- Get current state
 -- @return number
-function LoothingSessionMixin:GetState()
+function SessionMixin:GetState()
     return self.state
 end
 
 --- Set state
 -- @param state number
-function LoothingSessionMixin:SetState(state)
+function SessionMixin:SetState(state)
     if self.state ~= state then
         local oldState = self.state
         self.state = state
@@ -453,20 +468,20 @@ end
 
 --- Check if session is active
 -- @return boolean
-function LoothingSessionMixin:IsActive()
+function SessionMixin:IsActive()
     return self.state ~= Loothing.SessionState.INACTIVE
 end
 
 --- Get session ID
 -- @return string|nil
-function LoothingSessionMixin:GetSessionID()
+function SessionMixin:GetSessionID()
     return self.sessionID
 end
 
 --- Validate a sessionID against current session
 -- @param sessionID string|nil
 -- @return boolean
-function LoothingSessionMixin:IsCurrentSession(sessionID)
+function SessionMixin:IsCurrentSession(sessionID)
     if not sessionID or sessionID == "" then
         return false
     end
@@ -475,27 +490,27 @@ end
 
 --- Get encounter ID
 -- @return number|nil
-function LoothingSessionMixin:GetEncounterID()
+function SessionMixin:GetEncounterID()
     return self.encounterID
 end
 
 --- Get encounter name
 -- @return string|nil
-function LoothingSessionMixin:GetEncounterName()
+function SessionMixin:GetEncounterName()
     return self.encounterName
 end
 
 --- Get master looter
 -- @return string|nil
-function LoothingSessionMixin:GetMasterLooter()
+function SessionMixin:GetMasterLooter()
     return self.masterLooter
 end
 
 --- Check if local player is the master looter
 -- @return boolean
-function LoothingSessionMixin:IsMasterLooter()
+function SessionMixin:IsMasterLooter()
     if self.masterLooter then
-        return LoothingUtils.IsSamePlayer(self.masterLooter, LoothingUtils.GetPlayerFullName())
+        return Utils.IsSamePlayer(self.masterLooter, Utils.GetPlayerFullName())
     end
     return Loothing.handleLoot == true
 end
@@ -510,7 +525,7 @@ end
 -- @param guid string|nil - Optional GUID (uses new one if nil)
 -- @param force boolean - Force add (bypass quality check)
 -- @return table|nil - The item, or nil if failed
-function LoothingSessionMixin:AddItem(itemLink, looter, guid, force)
+function SessionMixin:AddItem(itemLink, looter, guid, force)
     if self.state == Loothing.SessionState.INACTIVE then
         return nil
     end
@@ -522,7 +537,7 @@ function LoothingSessionMixin:AddItem(itemLink, looter, guid, force)
 
     -- Check quality threshold
     if not force then
-        local quality = LoothingUtils.GetItemQuality(itemLink)
+        local quality = Utils.GetItemQuality(itemLink)
         if quality < Loothing.MinQuality then
             Loothing:Debug("Item below quality threshold:", itemLink)
             return nil
@@ -541,7 +556,7 @@ function LoothingSessionMixin:AddItem(itemLink, looter, guid, force)
     end
 
     -- Create item
-    local item = CreateLoothingItem(itemLink, looter, self.encounterID)
+    local item = ns.CreateItem(itemLink, looter, self.encounterID)
     if guid then
         item.guid = guid
     end
@@ -585,7 +600,7 @@ end
 --- Remove an item from the session
 -- @param guid string
 -- @return boolean
-function LoothingSessionMixin:RemoveItem(guid)
+function SessionMixin:RemoveItem(guid)
     local item = self:GetItemByGUID(guid)
     if not item then
         return false
@@ -599,7 +614,7 @@ end
 --- Get item by GUID
 -- @param guid string
 -- @return table|nil
-function LoothingSessionMixin:GetItemByGUID(guid)
+function SessionMixin:GetItemByGUID(guid)
     for _, item in self.items:Enumerate() do
         if item.guid == guid then
             return item
@@ -610,13 +625,13 @@ end
 
 --- Get all items
 -- @return DataProvider
-function LoothingSessionMixin:GetItems()
+function SessionMixin:GetItems()
     return self.items
 end
 
 --- Get pending items
 -- @return table
-function LoothingSessionMixin:GetPendingItems()
+function SessionMixin:GetPendingItems()
     local pending = {}
     for _, item in self.items:Enumerate() do
         if item:IsPending() then
@@ -628,7 +643,7 @@ end
 
 --- Get item count
 -- @return number
-function LoothingSessionMixin:GetItemCount()
+function SessionMixin:GetItemCount()
     return self.items:GetSize()
 end
 
@@ -641,7 +656,7 @@ end
 -- @param timeout number - Optional timeout
 -- @param skipBroadcast boolean - If true, caller is responsible for broadcasting vote request
 -- @return boolean
-function LoothingSessionMixin:StartVoting(guid, timeout, skipBroadcast)
+function SessionMixin:StartVoting(guid, timeout, skipBroadcast)
     if not self:IsMasterLooter() then
         Loothing:Debug("Not master looter, cannot start voting")
         return false
@@ -707,7 +722,7 @@ end
 --- Start voting on all pending items at once
 -- @param timeout number - Optional timeout
 -- @return number - Count of items now in voting state
-function LoothingSessionMixin:StartVotingOnAllItems(timeout)
+function SessionMixin:StartVotingOnAllItems(timeout)
     if not self:IsMasterLooter() then
         Loothing:Debug("Not master looter, cannot start voting")
         return 0
@@ -762,7 +777,7 @@ end
 
 --- Handle per-item vote timeout
 -- @param item table - The item that timed out
-function LoothingSessionMixin:OnItemVoteTimeout(item)
+function SessionMixin:OnItemVoteTimeout(item)
     if not item or not item:IsVoting() then
         return
     end
@@ -776,7 +791,7 @@ end
 --- Cancel voting on a specific item
 -- @param guid string - Item GUID (optional, cancels all if nil)
 -- @return boolean
-function LoothingSessionMixin:CancelVoting(guid)
+function SessionMixin:CancelVoting(guid)
     if guid then
         -- Cancel specific item
         local item = self:GetItemByGUID(guid)
@@ -824,7 +839,7 @@ end
 --- End voting on a specific item and tally results
 -- @param guid string - Item GUID
 -- @return table|nil - Tally results
-function LoothingSessionMixin:EndVotingForItem(guid)
+function SessionMixin:EndVotingForItem(guid)
     local item = self:GetItemByGUID(guid)
     if not item or not item:IsVoting() then
         return nil
@@ -857,7 +872,7 @@ end
 -- DEPRECATED: Use EndVotingForItem(guid) instead. Kept for external consumer compatibility.
 -- @param guid string - Optional item GUID
 -- @return table|nil - Tally results for last item
-function LoothingSessionMixin:EndVoting(guid)
+function SessionMixin:EndVoting(guid)
     if guid then
         return self:EndVotingForItem(guid)
     end
@@ -873,14 +888,14 @@ function LoothingSessionMixin:EndVoting(guid)
 end
 
 --- Handle vote timeout (legacy - now handled per-item)
-function LoothingSessionMixin:OnVoteTimeout()
+function SessionMixin:OnVoteTimeout()
     Loothing:Debug("Vote timeout (legacy)")
     self:EndVoting()
 end
 
 --- Get all items currently in voting state
 -- @return table - Array of voting items
-function LoothingSessionMixin:GetVotingItems()
+function SessionMixin:GetVotingItems()
     local votingItems = {}
     for _, item in self.items:Enumerate() do
         if item:IsVoting() then
@@ -892,7 +907,7 @@ end
 
 --- Get current voting item (legacy - returns first voting item)
 -- @return table|nil
-function LoothingSessionMixin:GetCurrentVotingItem()
+function SessionMixin:GetCurrentVotingItem()
     for _, item in self.items:Enumerate() do
         if item:IsVoting() then
             return item
@@ -904,7 +919,7 @@ end
 --- Update a candidate's voter list based on current votes
 -- @param item table - The item
 -- @param candidateName string - Name of the candidate
-function LoothingSessionMixin:UpdateCandidateVoters(item, candidateName)
+function SessionMixin:UpdateCandidateVoters(item, candidateName)
     if not item or not candidateName then return end
 
     local candidateManager = item.GetCandidateManager and item:GetCandidateManager()
@@ -917,9 +932,9 @@ function LoothingSessionMixin:UpdateCandidateVoters(item, candidateName)
     if not candidate then
         -- Try to pick up class from raid roster for accuracy
         local candidateClass = "UNKNOWN"
-        local roster = LoothingUtils.GetRaidRoster()
+        local roster = Utils.GetRaidRoster()
         for _, member in ipairs(roster) do
-            if LoothingUtils.IsSamePlayer(member.name, candidateName) then
+            if Utils.IsSamePlayer(member.name, candidateName) then
                 candidateClass = member.classFile or "UNKNOWN"
                 break
             end
@@ -945,10 +960,10 @@ function LoothingSessionMixin:UpdateCandidateVoters(item, candidateName)
     candidate.councilVotes = #voters
 
     -- Mark whether the local player has voted for this candidate
-    local myName = LoothingUtils.GetPlayerFullName()
+    local myName = Utils.GetPlayerFullName()
     candidate.hasMyVote = false
     for _, voter in ipairs(voters) do
-        if LoothingUtils.IsSamePlayer(voter, myName) then
+        if Utils.IsSamePlayer(voter, myName) then
             candidate.hasMyVote = true
             break
         end
@@ -964,7 +979,7 @@ end
 -- @param itemGUID string - Item GUID
 -- @param candidateName string - Candidate to add to voter's responses
 -- @return boolean
-function LoothingSessionMixin:CastVote(itemGUID, candidateName)
+function SessionMixin:CastVote(itemGUID, candidateName)
     if not itemGUID or not candidateName then
         Loothing:Debug("CastVote: nil itemGUID or candidateName")
         return false
@@ -980,7 +995,7 @@ function LoothingSessionMixin:CastVote(itemGUID, candidateName)
         return false
     end
 
-    local voter = LoothingUtils.GetPlayerFullName()
+    local voter = Utils.GetPlayerFullName()
     local existing = item:GetVoteByVoter(voter)
 
     -- Copy existing responses, skipping any duplicate, then append
@@ -1001,13 +1016,13 @@ end
 -- @param itemGUID string - Item GUID
 -- @param candidateName string - Candidate to remove from voter's responses
 -- @return boolean
-function LoothingSessionMixin:RetractVote(itemGUID, candidateName)
+function SessionMixin:RetractVote(itemGUID, candidateName)
     if not itemGUID or not candidateName then return false end
 
     local item = self:GetItemByGUID(itemGUID)
     if not item or not item:IsVoting() then return false end
 
-    local voter = LoothingUtils.GetPlayerFullName()
+    local voter = Utils.GetPlayerFullName()
     local existing = item:GetVoteByVoter(voter)
     if not existing then return false end
 
@@ -1029,13 +1044,13 @@ end
 --- Retract all votes on an item (clears the voter's full response list)
 -- @param itemGUID string - Item GUID
 -- @return boolean
-function LoothingSessionMixin:RetractAllVotes(itemGUID)
+function SessionMixin:RetractAllVotes(itemGUID)
     if not itemGUID then return false end
 
     local item = self:GetItemByGUID(itemGUID)
     if not item or not item:IsVoting() then return false end
 
-    local voter = LoothingUtils.GetPlayerFullName()
+    local voter = Utils.GetPlayerFullName()
 
     -- Snapshot affected candidates before removing the vote locally
     local existing = item:GetVoteByVoter(voter)
@@ -1083,7 +1098,7 @@ end
 -- @param itemGUID string - Item GUID
 -- @param responses table - Ranked responses
 -- @return boolean
-function LoothingSessionMixin:SubmitVote(itemGUID, responses)
+function SessionMixin:SubmitVote(itemGUID, responses)
     if not itemGUID then
         Loothing:Error("SubmitVote called with nil itemGUID")
         return false
@@ -1094,12 +1109,12 @@ function LoothingSessionMixin:SubmitVote(itemGUID, responses)
         return false
     end
 
-    local voter = LoothingUtils.GetPlayerFullName()
+    local voter = Utils.GetPlayerFullName()
     -- FIX(Area4-4): Use SafeUnitClass to avoid secret value tainting
     local _, class = Loolib.SecretUtil.SafeUnitClass("player")
 
     -- Only council members should vote (bypass in test mode)
-    local isTestMode = LoothingTestMode and LoothingTestMode:IsEnabled()
+    local isTestMode = ns.TestMode and ns.TestMode:IsEnabled()
     if Loothing.Council and not Loothing.Council:IsMember(voter) and not isTestMode then
         Loothing:Debug("SubmitVote: rejected - not a council member:", voter)
         Loothing:Error("You are not on the council for this session.")
@@ -1152,7 +1167,7 @@ end
 -- @param response number - Optional response type
 -- @param awardReasonId number - Optional award reason ID
 -- @return boolean
-function LoothingSessionMixin:AwardItem(guid, winner, response, awardReasonId)
+function SessionMixin:AwardItem(guid, winner, response, awardReasonId)
     if not self:IsMasterLooter() then
         return false
     end
@@ -1282,7 +1297,7 @@ end
 --- Skip an item
 -- @param guid string - Item GUID
 -- @return boolean
-function LoothingSessionMixin:SkipItem(guid)
+function SessionMixin:SkipItem(guid)
     if not self:IsMasterLooter() then
         return false
     end
@@ -1309,7 +1324,7 @@ end
 --- Revote on a previously voted item (resets votes and restarts voting)
 -- @param guid string - Item GUID
 -- @return boolean
-function LoothingSessionMixin:RevoteItem(guid)
+function SessionMixin:RevoteItem(guid)
     if not self:IsMasterLooter() then
         Loothing:Debug("Not master looter, cannot revote")
         return false
@@ -1336,7 +1351,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Handle encounter start
-function LoothingSessionMixin:OnEncounterStart(encounterID, encounterName, difficultyID, groupSize)
+function SessionMixin:OnEncounterStart()
     -- Wipe stale buffer from previous encounter that never started a session
     if self.lootBuffer then wipe(self.lootBuffer) end
 end
@@ -1347,7 +1362,7 @@ end
 -- @param difficultyID number
 -- @param groupSize number
 -- @param success number - 1 if boss killed, 0 if wipe
-function LoothingSessionMixin:OnEncounterEnd(encounterID, encounterName, difficultyID, groupSize, success)
+function SessionMixin:OnEncounterEnd(encounterID, encounterName, _difficultyID, _groupSize, success)
     if success ~= 1 then return end
     if not IsInGroup() and not IsTestModeEnabled() then return end
     if not Loothing.handleLoot and not IsTestModeEnabled() then return end
@@ -1375,7 +1390,7 @@ end
 --- Show session start confirmation dialog to ML
 -- @param encounterID number
 -- @param encounterName string
-function LoothingSessionMixin:ShowSessionPrompt(encounterID, encounterName)
+function SessionMixin:ShowSessionPrompt(encounterID, encounterName)
     -- Guard: Don't show if session already active
     if self.state ~= Loothing.SessionState.INACTIVE then
         return
@@ -1387,7 +1402,10 @@ function LoothingSessionMixin:ShowSessionPrompt(encounterID, encounterName)
         encounterName = encounterName or "Unknown Boss"
     end
 
-    LoothingPopups:Show("LOOTHING_CONFIRM_START_SESSION", {
+    local Popups = GetPopups()
+    if not Popups then return end
+
+    Popups:Show("LOOTHING_CONFIRM_START_SESSION", {
         boss = encounterName or "Unknown Boss",
         onAccept = function()
             self:StartSession(encounterID, encounterName)
@@ -1396,24 +1414,24 @@ function LoothingSessionMixin:ShowSessionPrompt(encounterID, encounterName)
 end
 
 --- Handle boss kill
-function LoothingSessionMixin:OnBossKill(encounterID, encounterName)
+function SessionMixin:OnBossKill()
     -- Same as encounter end with success
 end
 
 --- Handle loot received
-function LoothingSessionMixin:OnLootReceived(encounterID, itemID, itemLink, quantity, playerName, className)
+function SessionMixin:OnLootReceived(_encounterID, _itemID, itemLink, _quantity, playerName)
     local mode = Loothing.Settings:GetSessionTriggerMode()
 
     -- For afterRolls mode: track when ML receives loot, then prompt
     if mode == "afterRolls" and Loothing.handleLoot then
         -- Use IsSamePlayer if available for robust cross-realm comparison
         local isMyLoot = false
-        if LoothingUtils.IsSamePlayer then
-            local myName = LoothingUtils.GetPlayerFullName()
-            isMyLoot = LoothingUtils.IsSamePlayer(playerName, myName)
+        if Utils.IsSamePlayer then
+            local myName = Utils.GetPlayerFullName()
+            isMyLoot = Utils.IsSamePlayer(playerName, myName)
         else
             -- Fallback: simple comparison
-            local myName = LoothingUtils.GetPlayerFullName()
+            local myName = Utils.GetPlayerFullName()
             local rawPlayerName = Loolib.SecretUtil.SafeUnitName("player")
             isMyLoot = playerName == myName or (rawPlayerName and playerName == rawPlayerName)
         end
@@ -1445,7 +1463,7 @@ function LoothingSessionMixin:OnLootReceived(encounterID, itemID, itemLink, quan
     -- Active session + ML: add item directly
     if self:IsActive() and self:IsMasterLooter() then
         self:AddItem(itemLink, playerName)
-        if LoothingUtils.IsSamePlayer(playerName, LoothingUtils.GetPlayerFullName()) and Loothing.TradeQueue then
+        if Utils.IsSamePlayer(playerName, Utils.GetPlayerFullName()) and Loothing.TradeQueue then
             Loothing.TradeQueue:UpdateAndSendRecentTradableItem(itemLink)
         end
         return
@@ -1453,7 +1471,7 @@ function LoothingSessionMixin:OnLootReceived(encounterID, itemID, itemLink, quan
 
     -- Inactive but we're designated to handle loot: buffer the item for replay on session start
     if not self:IsActive() and Loothing.handleLoot then
-        local quality = LoothingUtils.GetItemQuality(itemLink)
+        local quality = Utils.GetItemQuality(itemLink)
         if quality and quality >= Loothing.MinQuality then
             if Loothing.ItemFilter and Loothing.ItemFilter:ShouldIgnoreItem(itemLink) then
                 Loothing:Debug("Item filtered (buffer):", itemLink)
@@ -1461,11 +1479,11 @@ function LoothingSessionMixin:OnLootReceived(encounterID, itemID, itemLink, quan
                 table.insert(self.lootBuffer, {
                     itemLink = itemLink,
                     playerName = playerName,
-                    encounterID = encounterID,
+                    encounterID = _encounterID,
                     timestamp = time(),
                 })
-                Loothing:Debug("Buffered loot item:", itemLink, "from", playerName, "encounter", encounterID)
-                if LoothingUtils.IsSamePlayer(playerName, LoothingUtils.GetPlayerFullName()) and Loothing.TradeQueue then
+                Loothing:Debug("Buffered loot item:", itemLink, "from", playerName, "encounter", _encounterID)
+                if Utils.IsSamePlayer(playerName, Utils.GetPlayerFullName()) and Loothing.TradeQueue then
                     Loothing.TradeQueue:UpdateAndSendRecentTradableItem(itemLink)
                 end
             end
@@ -1474,15 +1492,15 @@ function LoothingSessionMixin:OnLootReceived(encounterID, itemID, itemLink, quan
 end
 
 --- Handle roster update — detect if ML left the group
-function LoothingSessionMixin:OnRosterUpdate()
+function SessionMixin:OnRosterUpdate()
     if not self:IsActive() then return end
     if not self.masterLooter then return end
 
     -- Check if ML is still in the group
-    local roster = LoothingUtils.GetRaidRoster()
+    local roster = Utils.GetRaidRoster()
     local mlFound = false
     for _, member in ipairs(roster) do
-        if LoothingUtils.IsSamePlayer(member.name, self.masterLooter) then
+        if Utils.IsSamePlayer(member.name, self.masterLooter) then
             mlFound = true
             break
         end
@@ -1491,7 +1509,7 @@ function LoothingSessionMixin:OnRosterUpdate()
     if not mlFound then
         Loothing:Debug("ML left the group:", self.masterLooter)
         -- Clear global ML reference
-        if LoothingUtils.IsSamePlayer(self.masterLooter, Loothing.masterLooter or "") then
+        if Utils.IsSamePlayer(self.masterLooter, Loothing.masterLooter or "") then
             Loothing.masterLooter = nil
         end
         -- End the orphaned session on this client
@@ -1503,9 +1521,9 @@ end
     Remote Message Handlers
 ----------------------------------------------------------------------]]
 
-function LoothingSessionMixin:HandleRemoteSessionStart(data)
+function SessionMixin:HandleRemoteSessionStart(data)
     -- Don't process our own messages
-    if data.masterLooter == LoothingUtils.GetPlayerFullName() then
+    if data.masterLooter == Utils.GetPlayerFullName() then
         return
     end
 
@@ -1523,10 +1541,13 @@ function LoothingSessionMixin:HandleRemoteSessionStart(data)
     self.receivedLootCount = 0
     self.pendingEncounterID = nil
     self.pendingEncounterName = nil
-    LoothingPopups:Hide("LOOTHING_CONFIRM_START_SESSION")
+    local Popups = GetPopups()
+    if Popups then
+        Popups:Hide("LOOTHING_CONFIRM_START_SESSION")
+    end
 
     -- Prefer authoritative sessionID from ML, fall back to generating locally
-    self.sessionID = data.sessionID or LoothingUtils.GenerateGUID()
+    self.sessionID = data.sessionID or Utils.GenerateGUID()
     self.encounterID = data.encounterID
     self.encounterName = data.encounterName
     self.startTime = time()
@@ -1538,16 +1559,16 @@ function LoothingSessionMixin:HandleRemoteSessionStart(data)
     Loothing:Print(string.format(Loothing.Locale["SESSION_STARTED"], data.encounterName or Loothing.Locale["MANUAL_SESSION"]))
 end
 
-function LoothingSessionMixin:HandleRemoteSessionEnd(data)
-    if data.masterLooter == LoothingUtils.GetPlayerFullName() then
+function SessionMixin:HandleRemoteSessionEnd(data)
+    if data.masterLooter == Utils.GetPlayerFullName() then
         return
     end
 
     self:EndSession()
 end
 
-function LoothingSessionMixin:HandleRemoteItemAdd(data)
-    if data.masterLooter == LoothingUtils.GetPlayerFullName() then
+function SessionMixin:HandleRemoteItemAdd(data)
+    if data.masterLooter == Utils.GetPlayerFullName() then
         return
     end
 
@@ -1555,8 +1576,8 @@ function LoothingSessionMixin:HandleRemoteItemAdd(data)
     self:AddItem(data.itemLink, data.looter, data.guid, true)
 end
 
-function LoothingSessionMixin:HandleRemoteVoteRequest(data)
-    if data.masterLooter == LoothingUtils.GetPlayerFullName() then
+function SessionMixin:HandleRemoteVoteRequest(data)
+    if data.masterLooter == Utils.GetPlayerFullName() then
         return
     end
 
@@ -1607,7 +1628,7 @@ function LoothingSessionMixin:HandleRemoteVoteRequest(data)
     end
 end
 
-function LoothingSessionMixin:HandleRemoteVoteCommit(data)
+function SessionMixin:HandleRemoteVoteCommit(data)
     -- Only ML receives vote commits
     if not self:IsMasterLooter() then
         return
@@ -1660,7 +1681,7 @@ function LoothingSessionMixin:HandleRemoteVoteCommit(data)
     if not selfVote and data.voter then
         local filtered = {}
         for _, candidateName in ipairs(data.responses) do
-            if not LoothingUtils.IsSamePlayer(candidateName, data.voter) then
+            if not Utils.IsSamePlayer(candidateName, data.voter) then
                 filtered[#filtered + 1] = candidateName
             end
         end
@@ -1672,10 +1693,10 @@ function LoothingSessionMixin:HandleRemoteVoteCommit(data)
     end
 
     -- Get voter's class from raid roster
-    local roster = LoothingUtils.GetRaidRoster()
+    local roster = Utils.GetRaidRoster()
     local voterClass = "UNKNOWN"
     for _, member in ipairs(roster) do
-        if LoothingUtils.IsSamePlayer(member.name, data.voter) then
+        if Utils.IsSamePlayer(member.name, data.voter) then
             voterClass = member.classFile
             break
         end
@@ -1699,8 +1720,8 @@ function LoothingSessionMixin:HandleRemoteVoteCommit(data)
     end
 end
 
-function LoothingSessionMixin:HandleRemoteVoteAward(data)
-    if data.masterLooter == LoothingUtils.GetPlayerFullName() then
+function SessionMixin:HandleRemoteVoteAward(data)
+    if data.masterLooter == Utils.GetPlayerFullName() then
         return
     end
 
@@ -1717,8 +1738,8 @@ function LoothingSessionMixin:HandleRemoteVoteAward(data)
     self:TriggerEvent("OnItemAwarded", item, data.winner)
 end
 
-function LoothingSessionMixin:HandleRemoteVoteSkip(data)
-    if data.masterLooter == LoothingUtils.GetPlayerFullName() then
+function SessionMixin:HandleRemoteVoteSkip(data)
+    if data.masterLooter == Utils.GetPlayerFullName() then
         return
     end
 
@@ -1735,8 +1756,8 @@ function LoothingSessionMixin:HandleRemoteVoteSkip(data)
     self:TriggerEvent("OnItemSkipped", item)
 end
 
-function LoothingSessionMixin:HandleRemoteVoteCancel(data)
-    if data.masterLooter == LoothingUtils.GetPlayerFullName() then
+function SessionMixin:HandleRemoteVoteCancel(data)
+    if data.masterLooter == Utils.GetPlayerFullName() then
         return
     end
 
@@ -1773,8 +1794,8 @@ function LoothingSessionMixin:HandleRemoteVoteCancel(data)
     self:TriggerEvent("OnVotingEnded", item)
 end
 
-function LoothingSessionMixin:HandleRemoteVoteResults(data)
-    if data.masterLooter == LoothingUtils.GetPlayerFullName() then
+function SessionMixin:HandleRemoteVoteResults(data)
+    if data.masterLooter == Utils.GetPlayerFullName() then
         return
     end
 
@@ -1811,7 +1832,7 @@ end
 --- Request gear info from a player
 -- @param itemGUID string - Item GUID
 -- @param playerName string - Player to request from
-function LoothingSessionMixin:RequestPlayerGearInfo(itemGUID, playerName)
+function SessionMixin:RequestPlayerGearInfo(itemGUID, playerName)
     if not self:IsMasterLooter() then
         return
     end
@@ -1822,7 +1843,7 @@ end
 --- Get equipped item info for a given equip slot
 -- @param equipSlot string - Equipment slot (e.g., "INVTYPE_HEAD")
 -- @return string|nil, string|nil, number, number - slot1Link, slot2Link, slot1ilvl, slot2ilvl
-function LoothingSessionMixin:GetEquippedGearForSlot(equipSlot)
+function SessionMixin:GetEquippedGearForSlot(equipSlot)
     if not equipSlot then
         return nil, nil, 0, 0
     end
@@ -1879,12 +1900,12 @@ function LoothingSessionMixin:GetEquippedGearForSlot(equipSlot)
 end
 
 --- Handle player info request (respond with our gear)
-function LoothingSessionMixin:HandlePlayerInfoRequest(data)
+function SessionMixin:HandlePlayerInfoRequest(data)
     local itemGUID = data.itemGUID
     local playerName = data.playerName
 
     -- Only respond if it's for us
-    if not LoothingUtils.IsSamePlayer(playerName, LoothingUtils.GetPlayerFullName()) then
+    if not Utils.IsSamePlayer(playerName, Utils.GetPlayerFullName()) then
         return
     end
 
@@ -1902,7 +1923,7 @@ function LoothingSessionMixin:HandlePlayerInfoRequest(data)
 end
 
 --- Handle player info response (store gear data on vote)
-function LoothingSessionMixin:HandlePlayerInfoResponse(data)
+function SessionMixin:HandlePlayerInfoResponse(data)
     -- Only ML processes these
     if not self:IsMasterLooter() then
         return
@@ -1939,9 +1960,9 @@ function LoothingSessionMixin:HandlePlayerInfoResponse(data)
     if candidateManager then
         -- Resolve candidate class from raid roster (fallback to vote if roster missing)
         local candidateClass = "UNKNOWN"
-        local roster = LoothingUtils.GetRaidRoster()
+        local roster = Utils.GetRaidRoster()
         for _, member in ipairs(roster) do
-            if LoothingUtils.IsSamePlayer(member.name, data.playerName) then
+            if Utils.IsSamePlayer(member.name, data.playerName) then
                 candidateClass = member.classFile or "UNKNOWN"
                 break
             end
@@ -1974,7 +1995,7 @@ end
 
 --- Handle incoming player response from raid member
 -- @param data table - { sender, itemGUID, response, note, roll, rollMin, rollMax }
-function LoothingSessionMixin:HandlePlayerResponse(data)
+function SessionMixin:HandlePlayerResponse(data)
     -- Only ML processes these
     if not self:IsMasterLooter() then
         return
@@ -2027,9 +2048,9 @@ function LoothingSessionMixin:HandlePlayerResponse(data)
 
     -- Get sender's class from roster
     local senderClass = "UNKNOWN"
-    local roster = LoothingUtils.GetRaidRoster()
+    local roster = Utils.GetRaidRoster()
     for _, member in ipairs(roster) do
-        if LoothingUtils.IsSamePlayer(member.name, sender) then
+        if Utils.IsSamePlayer(member.name, sender) then
             senderClass = member.classFile or "UNKNOWN"
             break
         end
@@ -2039,7 +2060,7 @@ function LoothingSessionMixin:HandlePlayerResponse(data)
     local candidateManager = item:GetCandidateManager()
     if not candidateManager then
         -- Initialize candidate manager if not present
-        item.candidateManager = CreateLoothingCandidateManager()
+        item.candidateManager = ns.CreateCandidateManager()
         candidateManager = item.candidateManager
     end
 
@@ -2094,7 +2115,7 @@ end
 
 --- Handle player response acknowledgment (ML -> player)
 -- @param data table - { itemGUID, success, masterLooter }
-function LoothingSessionMixin:HandlePlayerResponseAck(data)
+function SessionMixin:HandlePlayerResponseAck(data)
     if not data or not data.itemGUID then
         return
     end
@@ -2105,20 +2126,20 @@ end
 --- Get the number of items a player has won in this session
 -- @param playerName string
 -- @return number
-function LoothingSessionMixin:GetItemsWonByPlayer(playerName)
+function SessionMixin:GetItemsWonByPlayer(playerName)
     local count = 0
 
     if not playerName or not self.items then
         return count
     end
 
-    local normalizedName = LoothingUtils.NormalizeName(playerName)
+    local normalizedName = Utils.NormalizeName(playerName)
 
     for _, item in self.items:Enumerate() do
         if item.state == Loothing.ItemState.AWARDED then
             local winner = item.winner or item.awardedTo
             if winner then
-                local normalizedWinner = LoothingUtils.NormalizeName(winner)
+                local normalizedWinner = Utils.NormalizeName(winner)
                 if normalizedWinner == normalizedName then
                     count = count + 1
                 end
@@ -2130,7 +2151,7 @@ function LoothingSessionMixin:GetItemsWonByPlayer(playerName)
 end
 
 --- Handle remote candidate update (Council view)
-function LoothingSessionMixin:HandleRemoteCandidateUpdate(data)
+function SessionMixin:HandleRemoteCandidateUpdate(data)
     -- Don't process if we are ML (we generated it)
     if self:IsMasterLooter() then return end
 
@@ -2144,7 +2165,7 @@ function LoothingSessionMixin:HandleRemoteCandidateUpdate(data)
     local cData = data.candidateData
     local candidateManager = item:GetCandidateManager()
     if not candidateManager then
-        item.candidateManager = CreateLoothingCandidateManager()
+        item.candidateManager = ns.CreateCandidateManager()
         candidateManager = item.candidateManager
     end
 
@@ -2186,7 +2207,7 @@ end
 -- @param roll number - Roll result
 -- @param minRoll number - Min roll range
 -- @param maxRoll number - Max roll range
-function LoothingSessionMixin:HandleRollTracked(playerName, roll, minRoll, maxRoll)
+function SessionMixin:HandleRollTracked(playerName, roll, minRoll, maxRoll)
     -- Check autoAddRolls: MLDB first (authoritative from ML), Settings fallback
     local mldb = Loothing.MLDB and Loothing.MLDB:Get()
     local autoAddRolls
@@ -2235,7 +2256,7 @@ function LoothingSessionMixin:HandleRollTracked(playerName, roll, minRoll, maxRo
 end
 
 --- Handle remote vote update (Council view)
-function LoothingSessionMixin:HandleRemoteVoteUpdate(data)
+function SessionMixin:HandleRemoteVoteUpdate(data)
     -- Don't process if we are ML
     if self:IsMasterLooter() then return end
 
@@ -2252,7 +2273,7 @@ function LoothingSessionMixin:HandleRemoteVoteUpdate(data)
     -- Ensure CandidateManager exists
     local candidateManager = item:GetCandidateManager()
     if not candidateManager then
-        item.candidateManager = CreateLoothingCandidateManager()
+        item.candidateManager = ns.CreateCandidateManager()
         candidateManager = item.candidateManager
     end
 
@@ -2273,7 +2294,7 @@ end
 
 --- Sync session from remote data
 -- @param data table
-function LoothingSessionMixin:SyncFromData(data)
+function SessionMixin:SyncFromData(data)
     self.sessionID = data.sessionID
     self.encounterID = data.encounterID
     self.encounterName = data.encounterName
@@ -2297,7 +2318,7 @@ function LoothingSessionMixin:SyncFromData(data)
                 -- Restore candidates if included in sync data
                 if itemData.candidates and #itemData.candidates > 0 then
                     if not item.candidateManager then
-                        item.candidateManager = CreateLoothingCandidateManager()
+                        item.candidateManager = ns.CreateCandidateManager()
                     end
                     local cm = item.candidateManager
                     for _, cData in ipairs(itemData.candidates) do

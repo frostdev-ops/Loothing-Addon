@@ -20,19 +20,25 @@
         mldbHash    = number (Adler-32 of serialized MLDB)
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
+local Loothing = ns.Addon
 local Loolib = LibStub("Loolib")
+local CreateFromMixins = Loolib.CreateFromMixins
+local GetTime = GetTime
+
+ns.AckTrackerMixin = ns.AckTrackerMixin or {}
 
 --[[--------------------------------------------------------------------
-    LoothingAckTrackerMixin
+    AckTrackerMixin
 ----------------------------------------------------------------------]]
 
-LoothingAckTrackerMixin = {}
+local AckTrackerMixin = ns.AckTrackerMixin
 
 local HEARTBEAT_INTERVAL    = 30    -- Seconds between ML heartbeat broadcasts
 local AUTO_SYNC_COOLDOWN    = 60    -- Minimum seconds between auto-sync triggers
 
 --- Initialize the AckTracker
-function LoothingAckTrackerMixin:Init()
+function AckTrackerMixin:Init()
     self.heartbeatTimer   = nil
     self.lastAutoSyncTime = 0
 end
@@ -42,7 +48,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Start the periodic heartbeat timer (call when ML session becomes active)
-function LoothingAckTrackerMixin:StartHeartbeat()
+function AckTrackerMixin:StartHeartbeat()
     self:StopHeartbeat()
     self.heartbeatTimer = C_Timer.NewTicker(HEARTBEAT_INTERVAL, function()
         self:BroadcastHeartbeat()
@@ -51,7 +57,7 @@ function LoothingAckTrackerMixin:StartHeartbeat()
 end
 
 --- Stop the heartbeat timer (call when session ends or ML role lost)
-function LoothingAckTrackerMixin:StopHeartbeat()
+function AckTrackerMixin:StopHeartbeat()
     if self.heartbeatTimer then
         self.heartbeatTimer:Cancel()
         self.heartbeatTimer = nil
@@ -60,7 +66,7 @@ function LoothingAckTrackerMixin:StopHeartbeat()
 end
 
 --- Broadcast one heartbeat digest to the group
-function LoothingAckTrackerMixin:BroadcastHeartbeat()
+function AckTrackerMixin:BroadcastHeartbeat()
     if not Loothing.Session or not Loothing.Session:IsMasterLooter() then
         self:StopHeartbeat()
         return
@@ -73,13 +79,13 @@ function LoothingAckTrackerMixin:BroadcastHeartbeat()
     if not digest then return end
 
     -- BULK priority — 30s interval means ~3.3 B/s against our 800 B/s budget
-    Loothing.Comm:Send(Loothing.MsgType.HEARTBEAT, digest, nil, "BULK")
+    Loothing.Comm.Send(Loothing.Comm, Loothing.MsgType.HEARTBEAT, digest, nil, "BULK")
     Loothing:Debug("AckTracker: heartbeat broadcast")
 end
 
 --- Build the current session state digest for the heartbeat payload
 -- @return table|nil
-function LoothingAckTrackerMixin:BuildHeartbeatDigest()
+function AckTrackerMixin:BuildHeartbeatDigest()
     local session = Loothing.Session
     if not session then return nil end
 
@@ -116,7 +122,7 @@ end
 --- Handle an incoming HEARTBEAT from the ML
 -- @param digest table - Heartbeat payload
 -- @param sender string - Sender (the ML)
-function LoothingAckTrackerMixin:HandleHeartbeat(digest, sender)
+function AckTrackerMixin:HandleHeartbeat(digest, sender)
     -- Only non-ML clients should act on heartbeats
     if Loothing.Session and Loothing.Session:IsMasterLooter() then return end
 
@@ -163,7 +169,7 @@ end
 --- Handle an incoming ACK message (reserved for future extensibility)
 -- @param data table - { command, msgID, success }
 -- @param sender string
-function LoothingAckTrackerMixin:HandleAck(data, sender)
+function AckTrackerMixin:HandleAck(data, sender)
     -- Placeholder — ACK tracking for point-to-point messages can be
     -- built here when needed without a wire-format change.
     Loothing:Debug("AckTracker: received ACK from", sender,
@@ -172,7 +178,7 @@ end
 
 --- Trigger an auto-sync with the ML, subject to cooldown
 -- @param mlName string - The ML to sync from
-function LoothingAckTrackerMixin:TriggerAutoSync(mlName)
+function AckTrackerMixin:TriggerAutoSync(mlName)
     local now = GetTime()
     if now - self.lastAutoSyncTime < AUTO_SYNC_COOLDOWN then
         Loothing:Debug("AckTracker: auto-sync cooldown active, skipping")
@@ -193,7 +199,7 @@ end
 
 --- Compute Adler-32 hash of the council member list
 -- @return number
-function LoothingAckTrackerMixin:ComputeCouncilHash()
+function AckTrackerMixin:ComputeCouncilHash()
     if not Loothing.Council then return 0 end
 
     local members = Loothing.Council:GetAllMembers()
@@ -210,7 +216,7 @@ end
 
 --- Compute Adler-32 hash of the current MLDB
 -- @return number
-function LoothingAckTrackerMixin:ComputeMLDBHash()
+function AckTrackerMixin:ComputeMLDBHash()
     if not Loothing.MLDB then return 0 end
 
     local mldb = Loothing.MLDB:Get()
@@ -224,7 +230,7 @@ end
 
 --- Get the number of items in the local session
 -- @return number
-function LoothingAckTrackerMixin:GetLocalItemCount()
+function AckTrackerMixin:GetLocalItemCount()
     local session = Loothing.Session
     if not session or not session.items then return 0 end
 
@@ -239,8 +245,10 @@ end
     Factory
 ----------------------------------------------------------------------]]
 
-function CreateLoothingAckTracker()
-    local tracker = Loolib.CreateFromMixins(LoothingAckTrackerMixin)
+function ns.CreateAckTracker()
+    local tracker = CreateFromMixins(AckTrackerMixin)
     tracker:Init()
     return tracker
 end
+
+-- ns.AckTrackerMixin and ns.CreateAckTracker exported above

@@ -6,9 +6,13 @@
     in production. To run tests, load this file manually in-game.
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
+local Loothing = ns.Addon
+local CreateItem = ns.CreateItem
+
 local function RunItemTests()
-    if not Loothing or not CreateLoothingItem then
-        print("[Tests] LoothingItem not loaded")
+    if not Loothing or not CreateItem then
+        print("[Tests] ItemMixin not loaded")
         return
     end
 
@@ -63,8 +67,8 @@ local function RunItemTests()
     ----------------------------------------------------------------------]]
     printGroup("Item Creation")
 
-    local item = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
-    assertNotNil(item, "CreateLoothingItem returns object")
+    local item = CreateItem(testItemLink, testLooter, testEncounterID)
+    assertNotNil(item, "CreateItem returns object")
     assertNotNil(item.guid, "Item has GUID")
     assertEqual(item.itemLink, testItemLink, "Item link stored correctly")
     assertEqual(item.looter, testLooter, "Looter stored correctly")
@@ -74,11 +78,11 @@ local function RunItemTests()
     assertNotNil(item.name, "Item name extracted")
 
     -- Test GUID uniqueness
-    local item2 = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
+    local item2 = CreateItem(testItemLink, testLooter, testEncounterID)
     assert(item.guid ~= item2.guid, "GUID generation is unique")
 
     -- Test looter normalization
-    local item3 = CreateLoothingItem(testItemLink, "PlayerNoRealm", testEncounterID)
+    local item3 = CreateItem(testItemLink, "PlayerNoRealm", testEncounterID)
     assert(item3.looter:find("-"), "Looter name normalized with realm")
 
     --[[--------------------------------------------------------------------
@@ -86,7 +90,7 @@ local function RunItemTests()
     ----------------------------------------------------------------------]]
     printGroup("State Management")
 
-    local stateItem = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
+    local stateItem = CreateItem(testItemLink, testLooter, testEncounterID)
 
     -- Initial state
     assertEqual(stateItem:GetState(), Loothing.ItemState.PENDING, "Initial state is PENDING")
@@ -115,7 +119,7 @@ local function RunItemTests()
     assert(stateItem:IsComplete(), "IsComplete returns true for AWARDED state")
 
     -- Change to SKIPPED
-    local skipItem = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
+    local skipItem = CreateItem(testItemLink, testLooter, testEncounterID)
     skipItem:SetState(Loothing.ItemState.SKIPPED)
     assert(skipItem:IsSkipped(), "IsSkipped returns true for SKIPPED state")
     assert(skipItem:IsComplete(), "IsComplete returns true for SKIPPED state")
@@ -124,7 +128,7 @@ local function RunItemTests()
     local eventFired = false
     local oldStateCapture = nil
     local newStateCapture = nil
-    local eventItem = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
+    local eventItem = CreateItem(testItemLink, testLooter, testEncounterID)
     eventItem:RegisterCallback("OnStateChanged", function(_, newState, oldState)
         eventFired = true
         newStateCapture = newState
@@ -140,7 +144,7 @@ local function RunItemTests()
     ----------------------------------------------------------------------]]
     printGroup("Vote Management")
 
-    local voteItem = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
+    local voteItem = CreateItem(testItemLink, testLooter, testEncounterID)
     voteItem:SetState(Loothing.ItemState.VOTING)
 
     -- Add vote
@@ -189,7 +193,7 @@ local function RunItemTests()
 
     -- Test vote events
     local voteEventFired = false
-    local voteEventItem = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
+    local voteEventItem = CreateItem(testItemLink, testLooter, testEncounterID)
     voteEventItem:SetState(Loothing.ItemState.VOTING)
     voteEventItem:RegisterCallback("OnVoteAdded", function()
         voteEventFired = true
@@ -198,13 +202,13 @@ local function RunItemTests()
     assert(voteEventFired, "OnVoteAdded event triggered")
 
     -- Test voter normalization
-    local normalizeItem = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
+    local normalizeItem = CreateItem(testItemLink, testLooter, testEncounterID)
     normalizeItem:SetState(Loothing.ItemState.VOTING)
     normalizeItem:AddVote("VoterNoRealm", "ROGUE", { Loothing.Response.NEED })
     assert(normalizeItem:HasVoted("VoterNoRealm-" .. GetNormalizedRealmName()), "Voter name normalized correctly")
 
     -- Test voting only allowed in VOTING state
-    local pendingItem = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
+    local pendingItem = CreateItem(testItemLink, testLooter, testEncounterID)
     local pendingResult = pendingItem:AddVote("Voter-Realm", "WARRIOR", { Loothing.Response.NEED })
     assert(not pendingResult, "AddVote fails when not in VOTING state")
 
@@ -213,7 +217,7 @@ local function RunItemTests()
     ----------------------------------------------------------------------]]
     printGroup("Timer Management")
 
-    local timerItem = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
+    local timerItem = CreateItem(testItemLink, testLooter, testEncounterID)
 
     -- Start voting with default timeout
     local startResult = timerItem:StartVoting()
@@ -229,18 +233,18 @@ local function RunItemTests()
     assert(remaining <= timerItem.voteTimeout, "Time remaining within timeout")
 
     -- Start voting with custom timeout
-    local customItem = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
+    local customItem = CreateItem(testItemLink, testLooter, testEncounterID)
     customItem:StartVoting(60)
     assertEqual(customItem.voteTimeout, 60, "Custom timeout respected")
 
     -- Start voting fails if not pending
-    local notPendingItem = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
+    local notPendingItem = CreateItem(testItemLink, testLooter, testEncounterID)
     notPendingItem:SetState(Loothing.ItemState.TALLIED)
     local failResult = notPendingItem:StartVoting()
     assert(not failResult, "StartVoting fails when not PENDING")
 
     -- End voting
-    local endItem = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
+    local endItem = CreateItem(testItemLink, testLooter, testEncounterID)
     endItem:StartVoting()
     local endResult = endItem:EndVoting()
     assert(endResult, "EndVoting returns true")
@@ -255,7 +259,7 @@ local function RunItemTests()
     printGroup("Award and Skip")
 
     -- Set winner
-    local awardItem = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
+    local awardItem = CreateItem(testItemLink, testLooter, testEncounterID)
     local winner = "Winner-Realm"
     local winnerResponse = Loothing.Response.NEED
     awardItem:SetWinner(winner, winnerResponse)
@@ -265,13 +269,13 @@ local function RunItemTests()
     assertNotNil(awardItem.awardedTime, "awardedTime set")
 
     -- Test winner normalization
-    local normWinnerItem = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
+    local normWinnerItem = CreateItem(testItemLink, testLooter, testEncounterID)
     normWinnerItem:SetWinner("WinnerNoRealm", Loothing.Response.NEED)
     assert(normWinnerItem.winner:find("-"), "Winner name normalized")
 
     -- Test winner event
     local winnerEventFired = false
-    local winnerEventItem = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
+    local winnerEventItem = CreateItem(testItemLink, testLooter, testEncounterID)
     winnerEventItem:RegisterCallback("OnWinnerSet", function()
         winnerEventFired = true
     end)
@@ -279,7 +283,7 @@ local function RunItemTests()
     assert(winnerEventFired, "OnWinnerSet event triggered")
 
     -- Skip item
-    local skipItem = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
+    local skipItem = CreateItem(testItemLink, testLooter, testEncounterID)
     skipItem:Skip()
     assert(skipItem:IsSkipped(), "Skip changes state to SKIPPED")
     assertNotNil(skipItem.awardedTime, "awardedTime set on skip")
@@ -291,7 +295,7 @@ local function RunItemTests()
     printGroup("Serialization")
 
     -- Create item with votes
-    local serItem = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
+    local serItem = CreateItem(testItemLink, testLooter, testEncounterID)
     serItem:SetState(Loothing.ItemState.VOTING)
     serItem:AddVote("SerVoter1-Realm", "WARRIOR", { Loothing.Response.NEED })
     serItem:AddVote("SerVoter2-Realm", "MAGE", { Loothing.Response.GREED })
@@ -309,7 +313,7 @@ local function RunItemTests()
     assertEqual(#serialized.votes, 2, "Serialized votes count correct")
 
     -- Deserialize
-    local deserItem = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
+    local deserItem = CreateItem(testItemLink, testLooter, testEncounterID)
     deserItem:Deserialize(serialized)
     assertEqual(deserItem.guid, serialized.guid, "Deserialized GUID matches")
     assertEqual(deserItem.itemLink, serialized.itemLink, "Deserialized itemLink matches")
@@ -323,17 +327,17 @@ local function RunItemTests()
     printGroup("Edge Cases")
 
     -- Nil item link handling
-    local nilLinkItem = CreateLoothingItem(nil, testLooter, testEncounterID)
+    local nilLinkItem = CreateItem(nil, testLooter, testEncounterID)
     assertNotNil(nilLinkItem, "Item created with nil link")
     assertEqual(nilLinkItem.itemLink, nil, "Nil link stored as nil")
 
     -- Invalid item link
-    local invalidLinkItem = CreateLoothingItem("not_a_link", testLooter, testEncounterID)
+    local invalidLinkItem = CreateItem("not_a_link", testLooter, testEncounterID)
     assertNotNil(invalidLinkItem, "Item created with invalid link")
     assertEqual(invalidLinkItem.name, "Unknown", "Invalid link gets 'Unknown' name")
 
     -- Empty voter handling
-    local emptyVoteItem = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
+    local emptyVoteItem = CreateItem(testItemLink, testLooter, testEncounterID)
     emptyVoteItem:SetState(Loothing.ItemState.VOTING)
     assertEqual(emptyVoteItem:GetVoteCount(), 0, "Empty votes returns 0 count")
     assertEqual(emptyVoteItem:GetVoteByVoter("NonExistent-Realm"), nil, "Non-existent voter returns nil")
@@ -348,7 +352,7 @@ local function RunItemTests()
     assertEqual(#noNeedVotes, 0, "GetVotesByResponse returns empty table")
 
     -- Callback registry initialized
-    local callbackItem = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
+    local callbackItem = CreateItem(testItemLink, testLooter, testEncounterID)
     assertNotNil(callbackItem.RegisterCallback, "Item has callback registry")
 
     --[[--------------------------------------------------------------------
@@ -356,7 +360,7 @@ local function RunItemTests()
     ----------------------------------------------------------------------]]
     printGroup("Display Helpers")
 
-    local displayItem = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
+    local displayItem = CreateItem(testItemLink, testLooter, testEncounterID)
 
     -- Quality color
     local color = displayItem:GetQualityColor()
@@ -375,7 +379,7 @@ local function RunItemTests()
     ----------------------------------------------------------------------]]
     printGroup("Candidate Manager")
 
-    local candItem = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
+    local candItem = CreateItem(testItemLink, testLooter, testEncounterID)
 
     -- Get candidate manager (lazy initialization)
     local manager = candItem:GetCandidateManager()

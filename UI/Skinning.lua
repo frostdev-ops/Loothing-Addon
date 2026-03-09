@@ -3,13 +3,15 @@
     Skinning - Frame skinning, combat minimize, scale, Escape-to-close
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
 
 --[[--------------------------------------------------------------------
     Skin Presets
 ----------------------------------------------------------------------]]
 
-Loothing.SkinPresets = {
+ns.SkinPresets = ns.SkinPresets or {
     Default = {
         bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
         edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
@@ -41,9 +43,10 @@ Loothing.SkinPresets = {
         borderColor = { 0.15, 0.15, 0.15, 0.8 },
     },
 }
+Loothing.SkinPresets = ns.SkinPresets
 
 --[[--------------------------------------------------------------------
-    LoothingSkinningMixin
+    SkinningMixin
 
     Provides:
     - Frame skin application (backdrop, colors)
@@ -53,7 +56,8 @@ Loothing.SkinPresets = {
     - Escape-to-close registration
 ----------------------------------------------------------------------]]
 
-LoothingSkinningMixin = {}
+local SkinningMixin = ns.SkinningMixin or {}
+ns.SkinningMixin = SkinningMixin
 
 --- Managed frames (for combat minimize/maximize)
 local managedFrames = {}
@@ -67,7 +71,7 @@ local isInCombat = false
 --- Apply a skin preset to a frame
 -- @param frame Frame - The frame to skin
 -- @param skinName string|nil - Preset name (nil = use current setting)
-function LoothingSkinningMixin:ApplySkin(frame, skinName)
+function SkinningMixin:ApplySkin(frame, skinName)
     if not frame or not frame.SetBackdrop then return end
 
     skinName = skinName or self:GetCurrentSkin()
@@ -91,7 +95,7 @@ end
 
 --- Get the current skin name
 -- @return string
-function LoothingSkinningMixin:GetCurrentSkin()
+function SkinningMixin:GetCurrentSkin()
     if Loothing.Settings then
         return Loothing.Settings:Get("frame.skin") or "Default"
     end
@@ -100,7 +104,7 @@ end
 
 --- Set the current skin and apply to all managed frames
 -- @param skinName string
-function LoothingSkinningMixin:SetCurrentSkin(skinName)
+function SkinningMixin:SetCurrentSkin(skinName)
     if not Loothing.SkinPresets[skinName] then return end
 
     if Loothing.Settings then
@@ -118,7 +122,7 @@ end
 --- Apply per-frame overrides (bgColor, borderColor)
 -- @param frame Frame
 -- @param frameName string - Key for db.UI lookup
-function LoothingSkinningMixin:ApplyFrameOverrides(frame, frameName)
+function SkinningMixin:ApplyFrameOverrides(frame, frameName)
     if not Loothing.Settings or not frame then return end
 
     local uiData = Loothing.Settings:Get("frame.UI." .. frameName)
@@ -139,7 +143,7 @@ end
 --- Save frame position and scale to db.UI[frameName]
 -- @param frame Frame
 -- @param frameName string
-function LoothingSkinningMixin:SaveFrameState(frame, frameName)
+function SkinningMixin:SaveFrameState(frame, frameName)
     if not Loothing.Settings or not frame then return end
 
     local point, _, relativePoint, x, y = frame:GetPoint()
@@ -160,7 +164,7 @@ end
 --- Load frame position and scale from db.UI[frameName]
 -- @param frame Frame
 -- @param frameName string
-function LoothingSkinningMixin:LoadFrameState(frame, frameName)
+function SkinningMixin:LoadFrameState(frame, frameName)
     if not Loothing.Settings or not frame then return end
 
     local uiData = Loothing.Settings:Get("frame.UI." .. frameName)
@@ -195,7 +199,7 @@ end
 -- @param frameName string - Key for persistence
 -- @param minScale number - Minimum scale (default 0.5)
 -- @param maxScale number - Maximum scale (default 2.0)
-function LoothingSkinningMixin:EnableCtrlScroll(frame, frameName, minScale, maxScale)
+function SkinningMixin:EnableCtrlScroll(frame, frameName, minScale, maxScale)
     if not frame then return end
 
     minScale = minScale or 0.5
@@ -232,7 +236,7 @@ end
 -- @param frameName string - Name for tracking
 -- @param minimizeFunc function|nil - Custom minimize (default: frame:Hide())
 -- @param maximizeFunc function|nil - Custom maximize (default: frame:Show())
-function LoothingSkinningMixin:RegisterForCombatMinimize(frame, frameName, minimizeFunc, maximizeFunc)
+function SkinningMixin:RegisterForCombatMinimize(frame, frameName, minimizeFunc, maximizeFunc)
     if not frame then return end
 
     managedFrames[#managedFrames + 1] = {
@@ -250,9 +254,9 @@ function LoothingSkinningMixin:RegisterForCombatMinimize(frame, frameName, minim
         combatFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
         combatFrame:SetScript("OnEvent", function(_, event)
             if event == "PLAYER_REGEN_DISABLED" then
-                LoothingSkinningMixin:OnCombatStart()
+                SkinningMixin:OnCombatStart()
             elseif event == "PLAYER_REGEN_ENABLED" then
-                LoothingSkinningMixin:OnCombatEnd()
+                SkinningMixin:OnCombatEnd()
             end
         end)
     end
@@ -260,7 +264,7 @@ end
 
 --- Unregister a frame from combat minimize
 -- @param frame Frame
-function LoothingSkinningMixin:UnregisterForCombatMinimize(frame)
+function SkinningMixin:UnregisterForCombatMinimize(frame)
     for i = #managedFrames, 1, -1 do
         if managedFrames[i].frame == frame then
             table.remove(managedFrames, i)
@@ -270,7 +274,7 @@ function LoothingSkinningMixin:UnregisterForCombatMinimize(frame)
 end
 
 --- Handle combat start - minimize all registered frames
-function LoothingSkinningMixin:OnCombatStart()
+function SkinningMixin:OnCombatStart()
     if not Loothing.Settings then return end
 
     local minimizeInCombat = Loothing.Settings:Get("frame.minimizeInCombat", false)
@@ -289,7 +293,7 @@ function LoothingSkinningMixin:OnCombatStart()
 end
 
 --- Handle combat end - restore minimized frames
-function LoothingSkinningMixin:OnCombatEnd()
+function SkinningMixin:OnCombatEnd()
     isInCombat = false
 
     for _, entry in ipairs(managedFrames) do
@@ -307,7 +311,7 @@ end
 --- Register a frame for Escape-to-close
 -- @param frame Frame - Must have a global name
 -- @param globalName string - Global frame name
-function LoothingSkinningMixin:RegisterForEscapeClose(frame, globalName)
+function SkinningMixin:RegisterForEscapeClose(frame, globalName)
     if not frame or not globalName then return end
 
     -- Check setting
@@ -334,7 +338,7 @@ end
 -- @param frameName string - Unique name for persistence
 -- @param globalName string|nil - Global name for Escape-to-close
 -- @param options table|nil - { combatMinimize, ctrlScroll, escapeClose }
-function LoothingSkinningMixin:SetupFrame(frame, frameName, globalName, options)
+function SkinningMixin:SetupFrame(frame, frameName, globalName, options)
     if not frame then return end
     options = options or {}
 
@@ -365,7 +369,7 @@ end
     Init (called from Core/Init.lua)
 ----------------------------------------------------------------------]]
 
-function LoothingSkinningMixin:Init()
+function SkinningMixin:Init()
     -- Ensure defaults exist
     if Loothing.Settings and not Loothing.Settings:Get("frame.skin") then
         Loothing.Settings:Set("frame.skin", "Default")

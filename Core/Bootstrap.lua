@@ -3,5 +3,12 @@
     Bootstrap - Early addon namespace setup
 ----------------------------------------------------------------------]]
 
-Loothing = Loothing or {}
-Loothing.Locale = Loothing.Locale or {}
+local ADDON_NAME, ns = ...
+local Loolib = LibStub("Loolib")
+
+ns.Locale = ns.Locale or {}
+ns.Addon = ns.Addon or Loolib:NewAddon({}, ADDON_NAME)
+
+local Addon = ns.Addon
+Addon.Locale = ns.Locale
+Addon.ns = ns

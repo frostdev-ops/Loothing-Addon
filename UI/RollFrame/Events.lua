@@ -3,11 +3,15 @@
     Extracted to reduce monolith size in RollFrame.lua
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
-LoothingRollFrameMixin = LoothingRollFrameMixin or {}
+local Loothing = ns.Addon
+local Utils = ns.Utils
+local RollFrameMixin = ns.RollFrameMixin or {}
+ns.RollFrameMixin = RollFrameMixin
 
 --- Register for session events to auto-show
-function LoothingRollFrameMixin:RegisterSessionEvents()
+function RollFrameMixin:RegisterSessionEvents()
     if not Loothing.Session then return end
 
     Loothing.Session:RegisterCallback("OnVotingStarted", function(_, item, timeout)
@@ -61,7 +65,7 @@ function LoothingRollFrameMixin:RegisterSessionEvents()
     end, self)
 end
 
-function LoothingRollFrameMixin:RegisterRollCapture()
+function RollFrameMixin:RegisterRollCapture()
     if not self.eventFrame then
         self.eventFrame = CreateFrame("Frame")
         self.eventFrame:RegisterEvent("CHAT_MSG_SYSTEM")
@@ -73,13 +77,13 @@ function LoothingRollFrameMixin:RegisterRollCapture()
     end
 end
 
-function LoothingRollFrameMixin:UnregisterRollCapture()
+function RollFrameMixin:UnregisterRollCapture()
     if self.eventFrame then
         self.eventFrame:UnregisterEvent("CHAT_MSG_SYSTEM")
     end
 end
 
-function LoothingRollFrameMixin:UnregisterSessionEvents()
+function RollFrameMixin:UnregisterSessionEvents()
     if not Loothing.Session then return end
     Loothing.Session:UnregisterCallback("OnVotingStarted", self)
     Loothing.Session:UnregisterCallback("OnItemAwarded", self)
@@ -88,7 +92,7 @@ function LoothingRollFrameMixin:UnregisterSessionEvents()
 end
 
 --- Parse roll message from chat
-function LoothingRollFrameMixin:OnChatMessage(text)
+function RollFrameMixin:OnChatMessage(text)
     if not text then return end
     local safeText = tostring(text)
 
@@ -109,9 +113,9 @@ function LoothingRollFrameMixin:OnChatMessage(text)
     if not playerName then return end
 
     -- FIX(Area4-4): Use SafeUnitName to avoid secret value tainting
-    local myFullName = LoothingUtils and LoothingUtils.GetPlayerFullName and LoothingUtils.GetPlayerFullName() or Loolib.SecretUtil.SafeUnitName("player")
-    if LoothingUtils and LoothingUtils.IsSamePlayer then
-        if not LoothingUtils.IsSamePlayer(playerName, myFullName) then
+    local myFullName = Utils and Utils.GetPlayerFullName and Utils.GetPlayerFullName() or Loolib.SecretUtil.SafeUnitName("player")
+    if Utils and Utils.IsSamePlayer then
+        if not Utils.IsSamePlayer(playerName, myFullName) then
             return
         end
     else
@@ -139,4 +143,3 @@ function LoothingRollFrameMixin:OnChatMessage(text)
 
     self:TriggerEvent("OnRollCompleted", playerName, roll, minRoll, maxRoll)
 end
-

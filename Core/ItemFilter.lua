@@ -3,7 +3,10 @@
     ItemFilter - Item filtering logic for ignore list
 ----------------------------------------------------------------------]]
 
+local ADDON_NAME, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local Utils = ns.Utils
 
 --[[--------------------------------------------------------------------
     Item Type Constants
@@ -25,13 +28,14 @@ local GEM_COGWHEEL = 6  -- Cogwheel gems
 local GEM_META = 7  -- Meta gems
 
 --[[--------------------------------------------------------------------
-    LoothingItemFilterMixin
+    ItemFilterMixin
 ----------------------------------------------------------------------]]
 
-LoothingItemFilterMixin = {}
+ns.ItemFilterMixin = ns.ItemFilterMixin or {}
+local ItemFilterMixin = ns.ItemFilterMixin
 
 --- Initialize the item filter
-function LoothingItemFilterMixin:Init()
+function ItemFilterMixin:Init()
     -- Nothing to initialize currently
 end
 
@@ -39,7 +43,7 @@ end
 -- @param itemLink string - Full item link
 -- @return boolean - True if item should be ignored
 -- @return string|nil - Reason for ignoring (for debugging)
-function LoothingItemFilterMixin:ShouldIgnoreItem(itemLink)
+function ItemFilterMixin:ShouldIgnoreItem(itemLink)
     if not itemLink then
         return false
     end
@@ -49,7 +53,7 @@ function LoothingItemFilterMixin:ShouldIgnoreItem(itemLink)
         return false
     end
 
-    local itemID = LoothingUtils.GetItemID(itemLink)
+    local itemID = Utils.GetItemID(itemLink)
     if not itemID then
         return false
     end
@@ -105,7 +109,7 @@ end
 --- Get item category type for display
 -- @param itemLink string - Full item link
 -- @return string|nil - Category name or nil
-function LoothingItemFilterMixin:GetItemCategory(itemLink)
+function ItemFilterMixin:GetItemCategory(itemLink)
     if not itemLink then
         return nil
     end
@@ -145,6 +149,6 @@ end
 
 --- Create a new ItemFilter instance
 -- @return table - ItemFilter instance
-function CreateLoothingItemFilter()
-    return Loolib.CreateFromMixins(LoothingItemFilterMixin)
+ns.CreateItemFilter = ns.CreateItemFilter or function()
+    return Loolib.CreateFromMixins(ItemFilterMixin)
 end

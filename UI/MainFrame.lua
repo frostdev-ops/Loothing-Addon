@@ -3,13 +3,17 @@
     MainFrame - Primary addon window with tabbed interface
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local SkinningMixin = ns.SkinningMixin
 
 --[[--------------------------------------------------------------------
-    LoothingMainFrameMixin
+    MainFrameMixin
 ----------------------------------------------------------------------]]
 
-LoothingMainFrameMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+local MainFrameMixin = ns.MainFrameMixin or Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+ns.MainFrameMixin = MainFrameMixin
 
 local MAIN_FRAME_EVENTS = {
     "OnShow",
@@ -22,7 +26,7 @@ local FRAME_HEIGHT = 500
 local TAB_HEIGHT = 32
 
 --- Initialize the main frame
-function LoothingMainFrameMixin:Init()
+function MainFrameMixin:Init()
     Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(MAIN_FRAME_EVENTS)
 
@@ -37,8 +41,8 @@ function LoothingMainFrameMixin:Init()
 end
 
 --- Create the main frame
-function LoothingMainFrameMixin:CreateFrame()
-    local frame = CreateFrame("Frame", "LoothingMainFrame", UIParent, "BackdropTemplate")
+function MainFrameMixin:CreateFrame()
+    local frame = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
     frame:SetSize(FRAME_WIDTH, FRAME_HEIGHT)
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("HIGH")
@@ -49,12 +53,13 @@ function LoothingMainFrameMixin:CreateFrame()
     frame:SetResizeBounds(500, 400, 900, 700)
     frame:Hide()
 
-    -- Apply skin via LoothingSkinningMixin
-    LoothingSkinningMixin:SetupFrame(frame, "MainFrame", "LoothingMainFrame", {
+    -- Apply skin via SkinningMixin
+    SkinningMixin:SetupFrame(frame, "MainFrame", "LoothingMainFrame", {
         combatMinimize = true,
         ctrlScroll = true,
         escapeClose = true,
     })
+    ns.MainFrameFrame = frame
 
     -- Title
     self.titleText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
@@ -86,7 +91,7 @@ function LoothingMainFrameMixin:CreateFrame()
     end)
     self.settingsButton:SetScript("OnEnter", function(btn)
         GameTooltip:SetOwner(btn, "ANCHOR_TOP")
-        GameTooltip:SetText(Loothing.Locale["TAB_SETTINGS"])
+        GameTooltip:SetText(Loothing.Locale["TAB_SETTINGS"], 1, 1, 1)
         GameTooltip:Show()
     end)
     self.settingsButton:SetScript("OnLeave", function()
@@ -139,7 +144,7 @@ function LoothingMainFrameMixin:CreateFrame()
 end
 
 --- Create tab buttons
-function LoothingMainFrameMixin:CreateTabs()
+function MainFrameMixin:CreateTabs()
     local L = Loothing.Locale
 
     local tabDefs = {
@@ -153,7 +158,7 @@ function LoothingMainFrameMixin:CreateTabs()
     local spacing = 4
     local xOffset = 0
 
-    for i, def in ipairs(tabDefs) do
+    for _, def in ipairs(tabDefs) do
         local tab = self:CreateTab(def.id, def.name, xOffset)
         self.tabs[def.id] = tab
         xOffset = xOffset + tabWidth + spacing
@@ -165,7 +170,7 @@ end
 -- @param name string - Display name
 -- @param xOffset number
 -- @return Frame
-function LoothingMainFrameMixin:CreateTab(id, name, xOffset)
+function MainFrameMixin:CreateTab(id, name, xOffset)
     local tab = CreateFrame("Button", nil, self.tabContainer, "BackdropTemplate")
     tab:SetSize(100, TAB_HEIGHT - 4)
     tab:SetPoint("BOTTOMLEFT", xOffset, 0)
@@ -238,14 +243,14 @@ function LoothingMainFrameMixin:CreateTab(id, name, xOffset)
 end
 
 --- Create panel contents
-function LoothingMainFrameMixin:CreatePanels()
+function MainFrameMixin:CreatePanels()
     -- Session panel
     local sessionFrame = CreateFrame("Frame", nil, self.contentContainer)
     sessionFrame:SetAllPoints()
     sessionFrame:Hide()
     self.panels.session = {
         frame = sessionFrame,
-        panel = CreateLoothingSessionPanel(sessionFrame),
+        panel = ns.CreateSessionPanel(sessionFrame),
     }
 
     -- Roster panel
@@ -254,7 +259,7 @@ function LoothingMainFrameMixin:CreatePanels()
     rosterFrame:Hide()
     self.panels.roster = {
         frame = rosterFrame,
-        panel = CreateLoothingRosterPanel(rosterFrame),
+        panel = ns.CreateRosterPanel(rosterFrame),
     }
 
     -- Trade panel
@@ -263,7 +268,7 @@ function LoothingMainFrameMixin:CreatePanels()
     tradeFrame:Hide()
     self.panels.trade = {
         frame = tradeFrame,
-        panel = CreateLoothingTradePanel(tradeFrame),
+        panel = ns.CreateTradePanel(tradeFrame),
     }
 
     -- History panel
@@ -272,7 +277,7 @@ function LoothingMainFrameMixin:CreatePanels()
     historyFrame:Hide()
     self.panels.history = {
         frame = historyFrame,
-        panel = CreateLoothingHistoryPanel(historyFrame),
+        panel = ns.CreateHistoryPanel(historyFrame),
     }
 
     -- Select default tab
@@ -285,7 +290,7 @@ end
 
 --- Select a tab
 -- @param tabId string
-function LoothingMainFrameMixin:SelectTab(tabId)
+function MainFrameMixin:SelectTab(tabId)
     if self.currentTab == tabId then
         return
     end
@@ -332,7 +337,7 @@ end
 
 --- Get current tab
 -- @return string
-function LoothingMainFrameMixin:GetCurrentTab()
+function MainFrameMixin:GetCurrentTab()
     return self.currentTab
 end
 
@@ -341,7 +346,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Show the main frame
-function LoothingMainFrameMixin:Show()
+function MainFrameMixin:Show()
     self.frame:Show()
 
     -- Refresh current panel
@@ -354,13 +359,13 @@ function LoothingMainFrameMixin:Show()
 end
 
 --- Hide the main frame
-function LoothingMainFrameMixin:Hide()
+function MainFrameMixin:Hide()
     self.frame:Hide()
     self:TriggerEvent("OnHide")
 end
 
 --- Toggle visibility
-function LoothingMainFrameMixin:Toggle()
+function MainFrameMixin:Toggle()
     if self.frame:IsShown() then
         self:Hide()
     else
@@ -370,13 +375,13 @@ end
 
 --- Check if shown
 -- @return boolean
-function LoothingMainFrameMixin:IsShown()
+function MainFrameMixin:IsShown()
     return self.frame:IsShown()
 end
 
 --- Refresh the currently active panel
 -- Delegates to the current panel's Refresh method if available
-function LoothingMainFrameMixin:Refresh()
+function MainFrameMixin:Refresh()
     local currentTab = self.currentTab
     if not currentTab then return end
 
@@ -387,7 +392,7 @@ function LoothingMainFrameMixin:Refresh()
 end
 
 --- Refresh all panels
-function LoothingMainFrameMixin:RefreshAll()
+function MainFrameMixin:RefreshAll()
     for _, panelWrapper in pairs(self.panels) do
         if panelWrapper and panelWrapper.panel and type(panelWrapper.panel.Refresh) == "function" then
             panelWrapper.panel:Refresh()
@@ -400,7 +405,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Load position from settings
-function LoothingMainFrameMixin:LoadPosition()
+function MainFrameMixin:LoadPosition()
     if not Loothing.Settings then return end
 
     local pos = Loothing.Settings:Get("settings.mainFramePosition")
@@ -417,7 +422,7 @@ function LoothingMainFrameMixin:LoadPosition()
 end
 
 --- Save position to settings
-function LoothingMainFrameMixin:SavePosition()
+function MainFrameMixin:SavePosition()
     if not Loothing.Settings then return end
 
     local point, _, relativePoint, x, y = self.frame:GetPoint()
@@ -434,7 +439,7 @@ function LoothingMainFrameMixin:SavePosition()
 end
 
 --- Update frame scale
-function LoothingMainFrameMixin:UpdateScale()
+function MainFrameMixin:UpdateScale()
     if not Loothing.Settings then return end
 
     local scale = Loothing.Settings:Get("settings.uiScale") or 1.0
@@ -442,7 +447,7 @@ function LoothingMainFrameMixin:UpdateScale()
 end
 
 --- Handle resize
-function LoothingMainFrameMixin:OnResize()
+function MainFrameMixin:OnResize()
     -- Notify panels of size change if needed
     for _, panelData in pairs(self.panels) do
         if panelData.panel and panelData.panel.OnResize then
@@ -457,30 +462,30 @@ end
 
 --- Get session panel
 -- @return table
-function LoothingMainFrameMixin:GetSessionPanel()
+function MainFrameMixin:GetSessionPanel()
     return self.panels.session and self.panels.session.panel
 end
 
 --- Get trade panel
 -- @return table
-function LoothingMainFrameMixin:GetTradePanel()
+function MainFrameMixin:GetTradePanel()
     return self.panels.trade and self.panels.trade.panel
 end
 
 --- Get roster panel
 -- @return table
-function LoothingMainFrameMixin:GetRosterPanel()
+function MainFrameMixin:GetRosterPanel()
     return self.panels.roster and self.panels.roster.panel
 end
 
 --- Get history panel
 -- @return table
-function LoothingMainFrameMixin:GetHistoryPanel()
+function MainFrameMixin:GetHistoryPanel()
     return self.panels.history and self.panels.history.panel
 end
 
 --- Open the standalone settings dialog
-function LoothingMainFrameMixin:OpenSettings()
+function MainFrameMixin:OpenSettings()
     if Loolib.Config then
         Loolib.Config:Open("Loothing")
     end
@@ -490,8 +495,10 @@ end
     Factory
 ----------------------------------------------------------------------]]
 
-function CreateLoothingMainFrame()
-    local mainFrame = Loolib.CreateFromMixins(LoothingMainFrameMixin)
+local function CreateMainFrame()
+    local mainFrame = Loolib.CreateFromMixins(MainFrameMixin)
     mainFrame:Init()
     return mainFrame
 end
+
+ns.CreateMainFrame = CreateMainFrame

@@ -1,13 +1,19 @@
+local _, ns = ...
+local Loothing = ns.Addon
+local Utils = ns.Utils
+
+ns.VotingEngine = ns.VotingEngine or {}
+
 --[[--------------------------------------------------------------------
     Loothing - Loot Council Addon for WoW 12.0+
     VotingEngine - Vote tallying algorithms
 ----------------------------------------------------------------------]]
 
 --[[--------------------------------------------------------------------
-    LoothingVotingEngine (Singleton)
+    VotingEngine (Singleton)
 ----------------------------------------------------------------------]]
 
-LoothingVotingEngine = {}
+local VotingEngine = ns.VotingEngine
 
 --- Enumerate votes from either a DataProvider or a plain array
 -- @param votes table - DataProvider or array
@@ -28,7 +34,7 @@ end
 -- @param votes table - DataProvider or array of votes
 -- @param mode string|nil - Optional voting mode override (defaults to settings)
 -- @return table - Results from the appropriate tally method
-function LoothingVotingEngine:Tally(votes, mode)
+function VotingEngine:Tally(votes, mode)
     -- Get mode from settings if not provided
     mode = mode or (Loothing.Settings and Loothing.Settings:GetVotingMode()) or Loothing.VotingMode.SIMPLE
 
@@ -49,7 +55,7 @@ end
 --- Extract unique candidates from votes (for ranked choice)
 -- @param votes table - DataProvider or array of votes
 -- @return table - Array of unique voter names who cast first-choice votes
-function LoothingVotingEngine:GetCandidatesFromVotes(votes)
+function VotingEngine:GetCandidatesFromVotes(votes)
     local candidateSet = {}
     local candidates = {}
 
@@ -72,7 +78,7 @@ end
 -- @param votes table - DataProvider or array of votes
 -- @param candidates table - Array of candidate names (optional, for filtering)
 -- @return table - { winner, response, counts, isTie, tiedCandidates }
-function LoothingVotingEngine:TallySimple(votes, candidates)
+function VotingEngine:TallySimple(votes, candidates)
     local counts = {}
     local candidateSet = nil
 
@@ -80,7 +86,7 @@ function LoothingVotingEngine:TallySimple(votes, candidates)
     if candidates then
         candidateSet = {}
         for _, name in ipairs(candidates) do
-            candidateSet[LoothingUtils.NormalizeName(name)] = true
+            candidateSet[Utils.NormalizeName(name)] = true
         end
     end
 
@@ -137,7 +143,7 @@ end
 -- @param votes table - DataProvider or array of votes
 -- @param candidates table - Array of candidate names
 -- @return table - { winner, rounds, eliminated }
-function LoothingVotingEngine:TallyRankedChoice(votes, candidates)
+function VotingEngine:TallyRankedChoice(votes, candidates)
     if not candidates or #candidates == 0 then
         return { winner = nil, rounds = {}, eliminated = {} }
     end
@@ -145,7 +151,7 @@ function LoothingVotingEngine:TallyRankedChoice(votes, candidates)
     -- Normalize candidate names
     local activeCandidates = {}
     for _, name in ipairs(candidates) do
-        activeCandidates[LoothingUtils.NormalizeName(name)] = true
+        activeCandidates[Utils.NormalizeName(name)] = true
     end
 
     -- Convert votes to working format
@@ -266,7 +272,7 @@ end
 -- @param votes table - Working votes array
 -- @param activeCandidates table - Set of active candidate names
 -- @return table - { [candidate] = count }
-function LoothingVotingEngine:CountFirstChoices(votes, activeCandidates)
+function VotingEngine:CountFirstChoices(votes, activeCandidates)
     local counts = {}
 
     -- Initialize counts for all active candidates
@@ -277,7 +283,7 @@ function LoothingVotingEngine:CountFirstChoices(votes, activeCandidates)
     for _, vote in ipairs(votes) do
         -- Find the first choice that's still active
         for _, choice in ipairs(vote.responses) do
-            local normalized = LoothingUtils.NormalizeName(tostring(choice))
+            local normalized = Utils.NormalizeName(tostring(choice))
             if activeCandidates[normalized] then
                 counts[normalized] = counts[normalized] + 1
                 break
@@ -291,12 +297,12 @@ end
 --- Redistribute votes after elimination
 -- @param votes table - Working votes array
 -- @param activeCandidates table - Set of remaining active candidates
-function LoothingVotingEngine:RedistributeVotes(votes, activeCandidates)
+function VotingEngine:RedistributeVotes(votes, activeCandidates)
     -- Remove eliminated candidates from vote responses
     for _, vote in ipairs(votes) do
         local newResponses = {}
         for _, choice in ipairs(vote.responses) do
-            local normalized = LoothingUtils.NormalizeName(tostring(choice))
+            local normalized = Utils.NormalizeName(tostring(choice))
             if activeCandidates[normalized] then
                 newResponses[#newResponses + 1] = choice
             end
@@ -312,7 +318,7 @@ end
 --- Count total votes
 -- @param votes table - DataProvider or array
 -- @return number
-function LoothingVotingEngine:CountVotes(votes)
+function VotingEngine:CountVotes(votes)
     if votes.GetSize then
         return votes:GetSize()
     end
@@ -323,7 +329,7 @@ end
 --- Get voters by their first-choice response
 -- @param votes table - DataProvider or array
 -- @return table - { [response] = { voter1, voter2, ... } }
-function LoothingVotingEngine:GroupVotersByResponse(votes)
+function VotingEngine:GroupVotersByResponse(votes)
     local groups = {}
 
     for _, response in pairs(Loothing.Response) do
@@ -343,7 +349,7 @@ end
 --- Calculate vote percentage for each response
 -- @param votes table - DataProvider or array
 -- @return table - { [response] = percentage }
-function LoothingVotingEngine:GetVotePercentages(votes)
+function VotingEngine:GetVotePercentages(votes)
     local result = self:TallySimple(votes)
     local total = result.totalVotes
 
@@ -363,7 +369,7 @@ end
 -- @param votes table - DataProvider or array
 -- @param threshold number - Percentage threshold for "clear" winner (default 50)
 -- @return boolean, string|nil - hasClearWinner, winningResponse
-function LoothingVotingEngine:HasClearWinner(votes, threshold)
+function VotingEngine:HasClearWinner(votes, threshold)
     threshold = threshold or 50
 
     local percentages = self:GetVotePercentages(votes)
@@ -383,7 +389,7 @@ end
 --- Get a summary of votes by response type
 -- @param votes table - DataProvider or array
 -- @return table - Array of { response, responseInfo, count, voters, percentage }
-function LoothingVotingEngine:GetResponseSummary(votes)
+function VotingEngine:GetResponseSummary(votes)
     local result = self:TallySimple(votes)
     local summary = {}
 
@@ -417,7 +423,7 @@ end
 -- @param votes table - DataProvider or array
 -- @param mode string - Tiebreaker mode ("random", "alphabetical", "manual")
 -- @return string|nil - Winner, or nil if manual resolution needed
-function LoothingVotingEngine:BreakTie(tiedCandidates, votes, mode)
+function VotingEngine:BreakTie(tiedCandidates, votes, mode)
     mode = mode or "manual"
 
     if #tiedCandidates == 0 then
@@ -439,3 +445,5 @@ function LoothingVotingEngine:BreakTie(tiedCandidates, votes, mode)
         return nil
     end
 end
+
+-- ns.VotingEngine exported above

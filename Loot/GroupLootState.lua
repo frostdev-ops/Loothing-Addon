@@ -1,17 +1,22 @@
+local _, ns = ...
+local pairs, time = pairs, time
+
+ns.GroupLootMixin = ns.GroupLootMixin or {}
+
+local GroupLootMixin = ns.GroupLootMixin
+
 --[[--------------------------------------------------------------------
     Loothing - Group Loot State
     Maintains pending rolls and cleanup helpers.
 ----------------------------------------------------------------------]]
 
-LoothingGroupLootMixin = LoothingGroupLootMixin or {}
-
 --- Initialize the group loot handler state.
-function LoothingGroupLootMixin:Init()
+function GroupLootMixin:Init()
     self.pendingRolls = {}
 end
 
 --- Clean up stale pending rolls (called periodically if needed).
-function LoothingGroupLootMixin:CleanupPendingRolls()
+function GroupLootMixin:CleanupPendingRolls()
     local now = time()
     local timeout = 60 -- 1 minute timeout
 
@@ -21,4 +26,3 @@ function LoothingGroupLootMixin:CleanupPendingRolls()
         end
     end
 end
-

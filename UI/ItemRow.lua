@@ -3,7 +3,10 @@
     ItemRow - Individual loot item display row
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local Utils = ns.Utils
 
 --[[--------------------------------------------------------------------
     Constants
@@ -14,14 +17,15 @@ local ICON_SIZE = 36
 local PADDING = 4
 
 --[[--------------------------------------------------------------------
-    LoothingItemRowMixin
+    ItemRowMixin
 ----------------------------------------------------------------------]]
 
-LoothingItemRowMixin = {}
+local ItemRowMixin = ns.ItemRowMixin or {}
+ns.ItemRowMixin = ItemRowMixin
 
 --- Initialize the item row
 -- @param parent Frame - Parent frame
-function LoothingItemRowMixin:Init(parent)
+function ItemRowMixin:Init(parent)
     self.parent = parent
     self.item = nil
     self.isSelected = false
@@ -32,7 +36,7 @@ function LoothingItemRowMixin:Init(parent)
 end
 
 --- Create UI elements
-function LoothingItemRowMixin:CreateElements()
+function ItemRowMixin:CreateElements()
     -- Main frame
     self.frame = CreateFrame("Button", nil, self.parent, "BackdropTemplate")
     self.frame:SetHeight(ROW_HEIGHT)
@@ -124,7 +128,7 @@ function LoothingItemRowMixin:CreateElements()
 end
 
 --- Setup event scripts
-function LoothingItemRowMixin:SetupScripts()
+function ItemRowMixin:SetupScripts()
     self.frame:SetScript("OnEnter", function()
         self:OnEnter()
     end)
@@ -146,28 +150,26 @@ end
 
 --- Set the item data
 -- @param item table - LoothingItem
-function LoothingItemRowMixin:SetItem(item)
+function ItemRowMixin:SetItem(item)
     self.item = item
     self:Refresh()
 end
 
 --- Get the item data
 -- @return table|nil
-function LoothingItemRowMixin:GetItem()
+function ItemRowMixin:GetItem()
     return self.item
 end
 
 --- Refresh the display
-function LoothingItemRowMixin:Refresh()
+function ItemRowMixin:Refresh()
     if not self.item then
         self:Clear()
         return
     end
 
-    local L = Loothing.Locale
-
     -- Icon
-    local texture = self.item.texture or GetItemIcon(self.item.itemID or 0)
+    local texture = self.item.texture or C_Item.GetItemIconByID(self.item.itemID or 0)
     self.icon:SetTexture(texture or "Interface\\Icons\\INV_Misc_QuestionMark")
 
     -- Quality color
@@ -208,7 +210,7 @@ function LoothingItemRowMixin:Refresh()
 end
 
 --- Restore the default row layout used outside ML-only pending controls.
-function LoothingItemRowMixin:ApplyDefaultLayout()
+function ItemRowMixin:ApplyDefaultLayout()
     self.actionButton:ClearAllPoints()
     self.actionButton:SetPoint("RIGHT", -PADDING, 0)
 
@@ -232,7 +234,7 @@ function LoothingItemRowMixin:ApplyDefaultLayout()
 end
 
 --- Adjust the row layout for the current display state.
-function LoothingItemRowMixin:UpdateLayout()
+function ItemRowMixin:UpdateLayout()
     local isAwarded = self.item and self.item.state == Loothing.ItemState.AWARDED and self.item.winner
 
     if isAwarded == self._layoutAwarded then return end
@@ -252,7 +254,7 @@ function LoothingItemRowMixin:UpdateLayout()
 end
 
 --- Update status display
-function LoothingItemRowMixin:UpdateStatus()
+function ItemRowMixin:UpdateStatus()
     if not self.item then return end
 
     local L = Loothing.Locale
@@ -313,7 +315,7 @@ function LoothingItemRowMixin:UpdateStatus()
 end
 
 --- Update action button
-function LoothingItemRowMixin:UpdateActionButton()
+function ItemRowMixin:UpdateActionButton()
     if not self.item then
         self.actionButton:Hide()
         return
@@ -339,7 +341,7 @@ function LoothingItemRowMixin:UpdateActionButton()
             self.actionButton:Show()
             self.actionButton:Enable()
         elseif isCouncil then
-            local hasVoted = self.item:HasVoted(LoothingUtils.GetPlayerFullName())
+            local hasVoted = self.item:HasVoted(Utils.GetPlayerFullName())
             if hasVoted then
                 self.actionButton:SetText(L["CHANGE_VOTE"])
             else
@@ -368,21 +370,21 @@ function LoothingItemRowMixin:UpdateActionButton()
 end
 
 --- Update winner display
-function LoothingItemRowMixin:UpdateWinner()
+function ItemRowMixin:UpdateWinner()
     if not self.item then
         self.winnerText:Hide()
         return
     end
 
     if self.item.state == Loothing.ItemState.AWARDED and self.item.winner then
-        local winnerName = LoothingUtils.GetShortName(self.item.winner)
+        local winnerName = Utils.GetShortName(self.item.winner)
         -- Try to get class color
         local coloredName = winnerName
         if IsInGroup() then
-            local roster = LoothingUtils.GetRaidRoster()
+            local roster = Utils.GetRaidRoster()
             for _, entry in ipairs(roster) do
-                if LoothingUtils.IsSamePlayer(self.item.winner, entry.name) then
-                    coloredName = LoothingUtils.ColorByClass(winnerName, entry.classFile)
+                if Utils.IsSamePlayer(self.item.winner, entry.name) then
+                    coloredName = Utils.ColorByClass(winnerName, entry.classFile)
                     break
                 end
             end
@@ -396,7 +398,7 @@ function LoothingItemRowMixin:UpdateWinner()
 end
 
 --- Clear the display
-function LoothingItemRowMixin:Clear()
+function ItemRowMixin:Clear()
     self.item = nil
     self._layoutAwarded = nil
 
@@ -418,7 +420,7 @@ end
 
 --- Set selected state
 -- @param selected boolean
-function LoothingItemRowMixin:SetSelected(selected)
+function ItemRowMixin:SetSelected(selected)
     self.isSelected = selected
 
     if selected then
@@ -436,7 +438,7 @@ end
 
 --- Get selected state
 -- @return boolean
-function LoothingItemRowMixin:IsSelected()
+function ItemRowMixin:IsSelected()
     return self.isSelected
 end
 
@@ -445,7 +447,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Handle mouse enter
-function LoothingItemRowMixin:OnEnter()
+function ItemRowMixin:OnEnter()
     if not self.item then return end
 
     -- Show item tooltip
@@ -467,13 +469,13 @@ function LoothingItemRowMixin:OnEnter()
 end
 
 --- Handle mouse leave
-function LoothingItemRowMixin:OnLeave()
+function ItemRowMixin:OnLeave()
     GameTooltip:Hide()
 end
 
 --- Handle click
 -- @param button string
-function LoothingItemRowMixin:OnClick(button)
+function ItemRowMixin:OnClick(button)
     if button == "LeftButton" then
         -- Select this row
         if self.callbacks.onSelect then
@@ -490,7 +492,7 @@ function LoothingItemRowMixin:OnClick(button)
 end
 
 --- Handle action button click
-function LoothingItemRowMixin:OnActionClick()
+function ItemRowMixin:OnActionClick()
     if not self.item then return end
 
     local state = self.item.state or Loothing.ItemState.PENDING
@@ -532,13 +534,13 @@ function LoothingItemRowMixin:OnActionClick()
 end
 
 --- Show context menu
-function LoothingItemRowMixin:ShowContextMenu()
+function ItemRowMixin:ShowContextMenu()
     if not self.item then return end
 
     local L = Loothing.Locale
     local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
 
-    MenuUtil.CreateContextMenu(self.frame, function(ownerRegion, rootDescription)
+    MenuUtil.CreateContextMenu(self.frame, function(_, rootDescription)
         rootDescription:CreateTitle(self.item.name or "Item")
 
         if isML then
@@ -589,7 +591,7 @@ end
 --- Set callback
 -- @param event string - Event name
 -- @param callback function
-function LoothingItemRowMixin:SetCallback(event, callback)
+function ItemRowMixin:SetCallback(event, callback)
     self.callbacks[event] = callback
 end
 
@@ -599,19 +601,19 @@ end
 
 --- Get the frame
 -- @return Frame
-function LoothingItemRowMixin:GetFrame()
+function ItemRowMixin:GetFrame()
     return self.frame
 end
 
 --- Set frame width
 -- @param width number
-function LoothingItemRowMixin:SetWidth(width)
+function ItemRowMixin:SetWidth(width)
     self.frame:SetWidth(width)
 end
 
 --- Set frame height
 -- @param height number
-function LoothingItemRowMixin:SetHeight(height)
+function ItemRowMixin:SetHeight(height)
     self.frame:SetHeight(height)
 end
 
@@ -622,11 +624,13 @@ end
 --- Create a new item row
 -- @param parent Frame
 -- @return table - LoothingItemRow
-function CreateLoothingItemRow(parent)
-    local row = Loolib.CreateFromMixins(LoothingItemRowMixin)
+local function CreateItemRow(parent)
+    local row = Loolib.CreateFromMixins(ItemRowMixin)
     row:Init(parent)
     return row
 end
+
+ns.CreateItemRow = CreateItemRow
 
 --[[--------------------------------------------------------------------
     Pool Reset Function
@@ -635,7 +639,7 @@ end
 --- Reset function for frame pool
 -- @param pool table - Pool reference
 -- @param row table - Row to reset
-function LoothingItemRow_Reset(pool, row)
+function ItemRow_Reset(_, row)
     if row.Clear then
         row:Clear()
     end

@@ -4,19 +4,20 @@
 --- Based on RCLootCouncil tokenData.lua
 --- @author James Kueller
 
-local AddonName, Loothing = ...
+local _, ns = ...
+local Loothing = ns.Addon
 
 --- Token data module
---- @class LoothingTokenData
+--- @class TokenData
 local TokenData = {}
-Loothing.TokenData = TokenData
+ns.TokenData = TokenData
 
 --- Table mapping item IDs to equipment slots
 --- @type table<number, string>
 --- Format: [itemID] = "SlotName"
 --- Valid slot names: HeadSlot, ShoulderSlot, BackSlot, ChestSlot, HandsSlot, LegsSlot,
 ---                   WristSlot, WaistSlot, FeetSlot, Trinket, MultiSlots
-_G.LoothingTokenTable = {
+ns.TokenTable = {
     -- Vanilla (Naxxramas)
     [22349] = "ChestSlot",  -- Desecrated Breastplate,
     [22350] = "ChestSlot",  -- Desecrated Tunic,
@@ -812,7 +813,7 @@ _G.LoothingTokenTable = {
 --- @type table<number, number>
 --- Note: From Sepulcher of the First Ones onward, tokens report their actual item level
 --- This table is maintained for historical tokens but may be empty for modern content
-_G.LoothingTokenIlvls = {
+ns.TokenIlvls = {
     -- Empty for now - modern tokens report their own item level
     -- Historical data can be added here if needed for legacy content
 }
@@ -821,14 +822,14 @@ _G.LoothingTokenIlvls = {
 --- @param itemID number The item ID to check
 --- @return boolean isToken True if the item is a token, false otherwise
 function TokenData:IsToken(itemID)
-    return LoothingTokenTable[itemID] ~= nil
+    return ns.TokenTable[itemID] ~= nil
 end
 
 --- Get the equipment slot for a token
 --- @param itemID number The item ID to check
 --- @return string|nil slot The equipment slot name (e.g., "HeadSlot", "ChestSlot"), or nil if not a token
 function TokenData:GetSlot(itemID)
-    return LoothingTokenTable[itemID]
+    return ns.TokenTable[itemID]
 end
 
 --- Get the base item level for a token (normal difficulty)
@@ -836,7 +837,7 @@ end
 --- @return number|nil ilvl The base item level, or nil if not found
 --- Note: Modern tokens (Sepulcher+) report their actual item level and may not be in this table
 function TokenData:GetIlvl(itemID)
-    return LoothingTokenIlvls[itemID]
+    return ns.TokenIlvls[itemID]
 end
 
 --- Get the classes that can use a token
@@ -888,7 +889,7 @@ end
 --- @return table<number, boolean> tokens Table of item IDs for the given slot (keys are item IDs, values are true)
 function TokenData:GetTokensForSlot(slot)
     local tokens = {}
-    for itemID, itemSlot in pairs(LoothingTokenTable) do
+    for itemID, itemSlot in pairs(ns.TokenTable) do
         if itemSlot == slot then
             tokens[itemID] = true
         end

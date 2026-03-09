@@ -3,13 +3,17 @@
     HistoryImport - CSV/TSV history import functionality
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local Utils = ns.Utils
 
 --[[--------------------------------------------------------------------
-    LoothingHistoryImportMixin
+    HistoryImportMixin
 ----------------------------------------------------------------------]]
 
-LoothingHistoryImportMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+local HistoryImportMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+ns.HistoryImportMixin = HistoryImportMixin
 
 local IMPORT_EVENTS = {
     "OnImportStarted",
@@ -38,7 +42,7 @@ local private = {
 ----------------------------------------------------------------------]]
 
 --- Initialize the import module
-function LoothingHistoryImportMixin:Init()
+function HistoryImportMixin:Init()
     Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(IMPORT_EVENTS)
 end
@@ -50,21 +54,21 @@ end
 --- Parse CSV text into entries array
 -- @param text string - CSV formatted text
 -- @return table|nil - Array of entry tables or nil on error
-function LoothingHistoryImportMixin:ParseCSV(text)
+function HistoryImportMixin:ParseCSV(text)
     return self:ParseDelimited(text, ",")
 end
 
 --- Parse TSV text into entries array
 -- @param text string - TSV formatted text
 -- @return table|nil - Array of entry tables or nil on error
-function LoothingHistoryImportMixin:ParseTSV(text)
+function HistoryImportMixin:ParseTSV(text)
     return self:ParseDelimited(text, "\t")
 end
 
 --- Auto-detect format and parse
 -- @param text string - Import text
 -- @return table|nil - Array of entry tables or nil on error
-function LoothingHistoryImportMixin:DetectFormat(text)
+function HistoryImportMixin:DetectFormat(text)
     if not text or text == "" then
         return nil, "Empty import text"
     end
@@ -97,7 +101,7 @@ end
 -- @param text string - Delimited text
 -- @param delimiter string - Delimiter character
 -- @return table|nil, string|nil - Array of entries or nil, error message
-function LoothingHistoryImportMixin:ParseDelimited(text, delimiter)
+function HistoryImportMixin:ParseDelimited(text, delimiter)
     if not text or text == "" then
         return nil, "Empty import text"
     end
@@ -169,7 +173,7 @@ end
 -- @param lineNum number - Line number for error reporting
 -- @param colMap table - Column name to index map (nil = use positional fallback)
 -- @return table|nil - Entry table or nil on error
-function LoothingHistoryImportMixin:ParseEntry(fields, lineNum, colMap)
+function HistoryImportMixin:ParseEntry(fields, lineNum, colMap)
     -- Helper: get field by column name.
     -- When colMap is present (always in practice), ONLY the named column is used —
     -- positional fallback is ignored to prevent wrong fields on mismatched formats.
@@ -228,7 +232,7 @@ function LoothingHistoryImportMixin:ParseEntry(fields, lineNum, colMap)
     end
 
     -- Normalize winner name
-    entry.winner = LoothingUtils.NormalizeName(entry.winner)
+    entry.winner = Utils.NormalizeName(entry.winner)
 
     -- winnerResponse: prefer numeric responseID column, then map from text response name
     local responseID = tonumber(col("responseid"))
@@ -239,11 +243,11 @@ function LoothingHistoryImportMixin:ParseEntry(fields, lineNum, colMap)
     end
 
     -- Use imported guid or generate a new one
-    entry.guid = col("id") or LoothingUtils.GenerateGUID()
+    entry.guid = col("id") or Utils.GenerateGUID()
 
     -- Get item quality if we have an itemID and it wasn't in the import
     if entry.itemID and entry.itemID > 0 then
-        local itemInfo = LoothingUtils.GetItemInfo(string.format("item:%d", entry.itemID))
+        local itemInfo = Utils.GetItemInfo(string.format("item:%d", entry.itemID))
         if itemInfo then
             entry.quality = entry.quality or itemInfo.quality
             entry.itemLevel = entry.itemLevel or itemInfo.itemLevel
@@ -259,7 +263,7 @@ end
 -- @param delimiter string - Delimiter character
 -- @param notFirst boolean - Internal flag for recursion
 -- @return table, number|nil - Array of fields, field count
-function LoothingHistoryImportMixin:ExtractLine(input, delimiter, notFirst)
+function HistoryImportMixin:ExtractLine(input, delimiter, notFirst)
     local ret = {}
 
     if not input or input == "" then
@@ -332,7 +336,7 @@ end
 -- @param header string - Header line
 -- @param delimiter string - Delimiter character
 -- @return boolean - True if valid
-function LoothingHistoryImportMixin:ValidateHeader(header, delimiter)
+function HistoryImportMixin:ValidateHeader(header, delimiter)
     -- Accept any header that contains a date column and a winner or player column
     local lower = header:lower()
     return lower:find("date") ~= nil and (lower:find("winner") ~= nil or lower:find("player") ~= nil)
@@ -342,7 +346,7 @@ end
 -- @param header string - Header line
 -- @param delimiter string - Delimiter character
 -- @return table - { [lowerColumnName] = columnIndex }
-function LoothingHistoryImportMixin:BuildColumnMap(header, delimiter)
+function HistoryImportMixin:BuildColumnMap(header, delimiter)
     local colMap = {}
     local fields = { strsplit(delimiter, header) }
     for i, name in ipairs(fields) do
@@ -356,7 +360,7 @@ end
 --- Validate an array of entries
 -- @param entries table - Array of entry tables
 -- @return boolean, string|nil - Valid status, error message if invalid
-function LoothingHistoryImportMixin:ValidateEntries(entries)
+function HistoryImportMixin:ValidateEntries(entries)
     if not entries or #entries == 0 then
         return false, "No entries to validate"
     end
@@ -386,7 +390,7 @@ end
 --- Find entries that would conflict with existing history
 -- @param entries table - Array of entries to check
 -- @return table - Array of conflicting entries
-function LoothingHistoryImportMixin:GetConflicts(entries)
+function HistoryImportMixin:GetConflicts(entries)
     if not entries or not Loothing.History then
         return {}
     end
@@ -422,7 +426,7 @@ end
 -- @param entries table - Array of entries to import
 -- @param overwrite boolean - Whether to overwrite conflicts
 -- @return boolean, string|nil - Success status, error message if failed
-function LoothingHistoryImportMixin:ImportEntries(entries, overwrite)
+function HistoryImportMixin:ImportEntries(entries, overwrite)
     if private.importing then
         return false, "Import already in progress"
     end
@@ -519,7 +523,7 @@ end
 
 --- Get import statistics
 -- @return table - { imported, skipped, errors }
-function LoothingHistoryImportMixin:GetImportStats()
+function HistoryImportMixin:GetImportStats()
     return {
         imported = private.stats.imported,
         skipped = private.stats.skipped,
@@ -529,7 +533,7 @@ end
 
 --- Check if import is in progress
 -- @return boolean
-function LoothingHistoryImportMixin:IsImporting()
+function HistoryImportMixin:IsImporting()
     return private.importing
 end
 
@@ -541,7 +545,7 @@ end
 -- Supports formats: YYYY-MM-DD HH:MM, YYYY-MM-DD, MM/DD/YYYY, etc.
 -- @param dateStr string - Date string
 -- @return number|nil - Unix timestamp or nil if invalid
-function LoothingHistoryImportMixin:ParseDate(dateStr)
+function HistoryImportMixin:ParseDate(dateStr)
     if not dateStr or dateStr == "" then
         return nil
     end
@@ -630,7 +634,7 @@ end
 --- Find response ID by response name
 -- @param responseName string - Response name to find
 -- @return string|nil - Response ID or nil if not found
-function LoothingHistoryImportMixin:FindResponseByName(responseName)
+function HistoryImportMixin:FindResponseByName(responseName)
     if not responseName or not Loothing.ResponseInfo then
         return nil
     end
@@ -649,7 +653,7 @@ end
 -- @param lineNum number - Line number
 -- @param value string - Field value that caused error
 -- @param desc string - Error description
-function LoothingHistoryImportMixin:AddError(lineNum, value, desc)
+function HistoryImportMixin:AddError(lineNum, value, desc)
     private.errorList[#private.errorList + 1] = {
         line = lineNum,
         value = value,
@@ -659,12 +663,12 @@ end
 
 --- Get all errors from last import attempt
 -- @return table - Array of error tables
-function LoothingHistoryImportMixin:GetErrors()
+function HistoryImportMixin:GetErrors()
     return private.errorList
 end
 
 --- Clear error list
-function LoothingHistoryImportMixin:ClearErrors()
+function HistoryImportMixin:ClearErrors()
     wipe(private.errorList)
 end
 
@@ -675,7 +679,7 @@ end
 --[==[
 
 -- Initialize
-local importer = Loolib.CreateFromMixins(LoothingHistoryImportMixin)
+local importer = Loolib.CreateFromMixins(HistoryImportMixin)
 importer:Init()
 
 -- Register callbacks

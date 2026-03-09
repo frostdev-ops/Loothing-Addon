@@ -3,21 +3,26 @@
     SettingsPanel - Configuration UI (Using ConfigDialog)
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Config = Loolib.Config
 local CreateFromMixins = Loolib.CreateFromMixins
+local Loothing = ns.Addon
+local Loothing = ns.Addon
+local OptionsTable = ns.OptionsTable
 
 local HEADER_HEIGHT = 56
 
 --[[--------------------------------------------------------------------
-    LoothingSettingsPanelMixin
+    SettingsPanelMixin
 ----------------------------------------------------------------------]]
 
-LoothingSettingsPanelMixin = {}
+local SettingsPanelMixin = ns.SettingsPanelMixin or {}
+ns.SettingsPanelMixin = SettingsPanelMixin
 
 --- Initialize the settings panel
 -- @param parent Frame - Parent frame
-function LoothingSettingsPanelMixin:Init(parent)
+function SettingsPanelMixin:Init(parent)
     self.parent = parent
 
     self:CreateFrame()
@@ -26,7 +31,7 @@ function LoothingSettingsPanelMixin:Init(parent)
 end
 
 --- Create the main frame
-function LoothingSettingsPanelMixin:CreateFrame()
+function SettingsPanelMixin:CreateFrame()
     local frame = CreateFrame("Frame", nil, self.parent)
     frame:SetAllPoints()
 
@@ -34,7 +39,7 @@ function LoothingSettingsPanelMixin:CreateFrame()
 end
 
 --- Create branding header: [logo] LOOTHING  v1.0.0
-function LoothingSettingsPanelMixin:CreateHeader()
+function SettingsPanelMixin:CreateHeader()
     local frame = self.frame
 
     -- Header container
@@ -84,7 +89,7 @@ function LoothingSettingsPanelMixin:CreateHeader()
 end
 
 --- Create UI elements using ConfigDialog
-function LoothingSettingsPanelMixin:CreateElements()
+function SettingsPanelMixin:CreateElements()
     -- Ensure Loolib.Config is initialized
     if not Config or not Config.Dialog or type(Config.Dialog.Open) ~= "function" then
         -- Fallback: show error message
@@ -101,10 +106,10 @@ function LoothingSettingsPanelMixin:CreateElements()
     container:SetPoint("BOTTOMRIGHT", 0, 0)
 
     -- Open the dialog with our options table
-    if LoothingOptionsTable then
+    if OptionsTable then
         -- Register the options table if not already registered
         if not Config:IsRegistered("Loothing") then
-            Config:RegisterOptionsTable("Loothing", LoothingOptionsTable)
+            Config:RegisterOptionsTable("Loothing", OptionsTable)
         end
 
         -- Open dialog in our container
@@ -113,7 +118,7 @@ function LoothingSettingsPanelMixin:CreateElements()
         -- Fallback: show error message
         local errText = container:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
         errText:SetPoint("CENTER")
-        errText:SetText("Error: LoothingOptionsTable not available")
+        errText:SetText("Error: ns.OptionsTable not available")
         errText:SetTextColor(1, 0, 0)
     end
 
@@ -125,7 +130,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Refresh settings display
-function LoothingSettingsPanelMixin:Refresh()
+function SettingsPanelMixin:Refresh()
     -- ConfigDialog handles this automatically when options change via get/set
     -- If we need to force a refresh, we can notify the system
     if Config and Config.Dialog then
@@ -135,18 +140,18 @@ end
 
 --- Get the frame
 -- @return Frame
-function LoothingSettingsPanelMixin:GetFrame()
+function SettingsPanelMixin:GetFrame()
     return self.frame
 end
 
 --- Show the panel
-function LoothingSettingsPanelMixin:Show()
+function SettingsPanelMixin:Show()
     self.frame:Show()
     -- Refresh is handled by ConfigDialog automatically
 end
 
 --- Hide the panel
-function LoothingSettingsPanelMixin:Hide()
+function SettingsPanelMixin:Hide()
     self.frame:Hide()
 end
 
@@ -154,8 +159,10 @@ end
     Factory
 ----------------------------------------------------------------------]]
 
-function CreateLoothingSettingsPanel(parent)
-    local panel = CreateFromMixins(LoothingSettingsPanelMixin)
+local function CreateSettingsPanel(parent)
+    local panel = CreateFromMixins(SettingsPanelMixin)
     panel:Init(parent)
     return panel
 end
+
+ns.CreateSettingsPanel = CreateSettingsPanel

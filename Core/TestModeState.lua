@@ -3,10 +3,14 @@
     Centralized test mode state, gating, and persistence safeguards.
 ----------------------------------------------------------------------]]
 
-Loothing = Loothing or {}
+local ADDON_NAME, ns = ...
+local Loothing = ns.Addon
+local GetTime, IsInGroup, IsInRaid = GetTime, IsInGroup, IsInRaid
+local UnitIsGroupAssistant, UnitIsGroupLeader = UnitIsGroupAssistant, UnitIsGroupLeader
+local print, time = print, time
 
 local function safePrint(...)
-    if Loothing and Loothing.Print then
+    if Loothing.Print then
         Loothing:Print(...)
     else
         print(...)
@@ -14,14 +18,14 @@ local function safePrint(...)
 end
 
 local function safeError(...)
-    if Loothing and Loothing.Error then
+    if Loothing.Error then
         Loothing:Error(...)
     else
         print(...)
     end
 end
 
-local TestModeState = {
+local TestModeState = ns.TestModeState or {
     active = false,
     persistenceAllowed = false,
     commTag = "[TEST]",
@@ -30,14 +34,14 @@ local TestModeState = {
 }
 
 local function isLeaderOrAssistant()
-    if LoothingUtils and LoothingUtils.IsRaidLeaderOrAssistant then
-        return LoothingUtils.IsRaidLeaderOrAssistant()
+    if ns.Utils and ns.Utils.IsRaidLeaderOrAssistant then
+        return ns.Utils.IsRaidLeaderOrAssistant()
     end
     return UnitIsGroupLeader("player") or UnitIsGroupAssistant("player")
 end
 
 function TestModeState:IsActive()
-    return self.active or (LoothingTestMode and LoothingTestMode:IsEnabled())
+    return self.active
 end
 
 function TestModeState:IsPersistenceAllowed()
@@ -93,9 +97,8 @@ function TestModeState:Enter(opts)
     self.active = true
     self.persistenceAllowed = opts.allowPersistence or false
 
-    if LoothingTestMode and not LoothingTestMode:IsEnabled() then
-        LoothingTestMode:Enable()
-    end
+    -- Legacy global LoothingTestMode removed; TestModeState is the canonical source
+
 
     local persistenceText = self.persistenceAllowed and "persistence ALLOWED" or "persistence BLOCKED"
     safePrint(string.format("Test mode ENABLED (%s).", persistenceText))
@@ -104,7 +107,7 @@ function TestModeState:Enter(opts)
 end
 
 function TestModeState:Exit()
-    if not self.active and not (LoothingTestMode and LoothingTestMode:IsEnabled()) then
+    if not self.active then
         safePrint("Test mode already disabled.")
         return false
     end
@@ -112,10 +115,6 @@ function TestModeState:Exit()
     self.active = false
     self.persistenceAllowed = false
     self.lastPersistenceWarning = 0
-
-    if LoothingTestMode and LoothingTestMode:IsEnabled() then
-        LoothingTestMode:Disable()
-    end
 
     safePrint("Test mode disabled. Live persistence restored.")
     return true
@@ -203,5 +202,6 @@ function TestModeState:HandleSlash(args)
     safePrint("  /lt testmode persist on|off - Allow or block SavedVariables writes")
 end
 
+ns.TestModeState = TestModeState
 Loothing.TestMode = TestModeState
 

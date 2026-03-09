@@ -3,19 +3,25 @@
     HistoryPanel - Past loot history browser
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local Utils = ns.Utils
+local Loothing = ns.Addon
+local Popups = ns.Popups
 
 --[[--------------------------------------------------------------------
-    LoothingHistoryPanelMixin
+    HistoryPanelMixin
 ----------------------------------------------------------------------]]
 
-LoothingHistoryPanelMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+local HistoryPanelMixin = ns.HistoryPanelMixin or Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+ns.HistoryPanelMixin = HistoryPanelMixin
 
 local HISTORY_PANEL_EVENTS = {}
 
 --- Initialize the history panel
 -- @param parent Frame - Parent frame
-function LoothingHistoryPanelMixin:Init(parent)
+function HistoryPanelMixin:Init(parent)
     Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(HISTORY_PANEL_EVENTS)
     self.parent = parent
@@ -29,7 +35,7 @@ function LoothingHistoryPanelMixin:Init(parent)
 end
 
 --- Create the main frame
-function LoothingHistoryPanelMixin:CreateFrame()
+function HistoryPanelMixin:CreateFrame()
     local frame = CreateFrame("Frame", nil, self.parent)
     frame:SetAllPoints()
 
@@ -37,7 +43,7 @@ function LoothingHistoryPanelMixin:CreateFrame()
 end
 
 --- Create UI elements
-function LoothingHistoryPanelMixin:CreateElements()
+function HistoryPanelMixin:CreateElements()
     local L = Loothing.Locale
 
     -- Three-pane container (starts below filter bar)
@@ -79,7 +85,7 @@ function LoothingHistoryPanelMixin:CreateElements()
 end
 
 --- Create filter bar with response, class, instance, and date range filters
-function LoothingHistoryPanelMixin:CreateFilterBar()
+function HistoryPanelMixin:CreateFilterBar()
     local L = Loothing.Locale
 
     local filterBar = CreateFrame("Frame", nil, self.frame)
@@ -175,7 +181,7 @@ function LoothingHistoryPanelMixin:CreateFilterBar()
 end
 
 --- Show response filter dropdown
-function LoothingHistoryPanelMixin:ShowResponseFilterDropdown()
+function HistoryPanelMixin:ShowResponseFilterDropdown()
     MenuUtil.CreateContextMenu(self.responseFilterButton, function(ownerRegion, rootDescription)
         rootDescription:CreateButton("All Responses", function()
             self:SetResponseFilter(nil)
@@ -191,7 +197,7 @@ function LoothingHistoryPanelMixin:ShowResponseFilterDropdown()
 end
 
 --- Set response filter
-function LoothingHistoryPanelMixin:SetResponseFilter(responseId)
+function HistoryPanelMixin:SetResponseFilter(responseId)
     if not Loothing.History then return end
     local filter = Loothing.History.filter or {}
     filter.response = responseId
@@ -208,7 +214,7 @@ function LoothingHistoryPanelMixin:SetResponseFilter(responseId)
 end
 
 --- Show class filter dropdown
-function LoothingHistoryPanelMixin:ShowClassFilterDropdown()
+function HistoryPanelMixin:ShowClassFilterDropdown()
     local classes = { "WARRIOR", "PALADIN", "HUNTER", "ROGUE", "PRIEST", "DEATHKNIGHT",
                       "SHAMAN", "MAGE", "WARLOCK", "MONK", "DRUID", "DEMONHUNTER", "EVOKER" }
 
@@ -227,7 +233,7 @@ function LoothingHistoryPanelMixin:ShowClassFilterDropdown()
 end
 
 --- Set class filter
-function LoothingHistoryPanelMixin:SetClassFilter(class)
+function HistoryPanelMixin:SetClassFilter(class)
     if not Loothing.History then return end
     local filter = Loothing.History.filter or {}
     filter.class = class
@@ -238,7 +244,7 @@ function LoothingHistoryPanelMixin:SetClassFilter(class)
 end
 
 --- Create history list
-function LoothingHistoryPanelMixin:CreateHistoryList()
+function HistoryPanelMixin:CreateHistoryList()
     local container = CreateFrame("Frame", nil, self.historyPane, "BackdropTemplate")
     container:SetPoint("TOPLEFT", 0, 0)
     container:SetPoint("BOTTOMRIGHT", 0, 0)
@@ -320,7 +326,7 @@ function LoothingHistoryPanelMixin:CreateHistoryList()
 end
 
 --- Create footer
-function LoothingHistoryPanelMixin:CreateFooter()
+function HistoryPanelMixin:CreateFooter()
     local L = Loothing.Locale
 
     local footer = CreateFrame("Frame", nil, self.frame)
@@ -350,7 +356,7 @@ function LoothingHistoryPanelMixin:CreateFooter()
 end
 
 --- Create date list in the left pane
-function LoothingHistoryPanelMixin:CreateDateList()
+function HistoryPanelMixin:CreateDateList()
     -- Header
     local header = self.datePane:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     header:SetPoint("TOP", 0, -4)
@@ -389,7 +395,7 @@ function LoothingHistoryPanelMixin:CreateDateList()
 end
 
 --- Create player list in the center pane
-function LoothingHistoryPanelMixin:CreatePlayerList()
+function HistoryPanelMixin:CreatePlayerList()
     -- Header
     local header = self.playerPane:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     header:SetPoint("TOP", 0, -4)
@@ -432,7 +438,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Refresh the history display
-function LoothingHistoryPanelMixin:Refresh()
+function HistoryPanelMixin:Refresh()
     self:RefreshDateList()
     self:RefreshPlayerList()
     self:RefreshList()
@@ -440,7 +446,7 @@ function LoothingHistoryPanelMixin:Refresh()
 end
 
 --- Refresh the date list in the left pane
-function LoothingHistoryPanelMixin:RefreshDateList()
+function HistoryPanelMixin:RefreshDateList()
     self.dateButtonPool:ReleaseAll()
 
     if not Loothing.History then return end
@@ -497,7 +503,7 @@ function LoothingHistoryPanelMixin:RefreshDateList()
 end
 
 --- Refresh the player list in the center pane
-function LoothingHistoryPanelMixin:RefreshPlayerList()
+function HistoryPanelMixin:RefreshPlayerList()
     self.playerButtonPool:ReleaseAll()
 
     if not Loothing.History then return end
@@ -574,7 +580,7 @@ function LoothingHistoryPanelMixin:RefreshPlayerList()
 end
 
 --- Refresh the history list
-function LoothingHistoryPanelMixin:RefreshList()
+function HistoryPanelMixin:RefreshList()
     self.rowPool:ReleaseAll()
     wipe(self.historyRows)
 
@@ -690,7 +696,7 @@ end
 -- @param row Button - Acquired pooled frame
 -- @param entry table - History entry
 -- @param yOffset number
-function LoothingHistoryPanelMixin:SetupHistoryRow(row, entry, yOffset)
+function HistoryPanelMixin:SetupHistoryRow(row, entry, yOffset)
     -- Initialize child elements on first use
     if not row._initialized then
         InitHistoryRowElements(row)
@@ -703,7 +709,7 @@ function LoothingHistoryPanelMixin:SetupHistoryRow(row, entry, yOffset)
 
     -- Date
     if entry.timestamp then
-        row.dateText:SetText(LoothingUtils.FormatDate(entry.timestamp))
+        row.dateText:SetText(Utils.FormatDate(entry.timestamp))
     else
         row.dateText:SetText("")
     end
@@ -724,7 +730,7 @@ function LoothingHistoryPanelMixin:SetupHistoryRow(row, entry, yOffset)
 
     -- Winner
     if entry.winner then
-        row.winnerText:SetText(LoothingUtils.GetShortName(entry.winner))
+        row.winnerText:SetText(Utils.GetShortName(entry.winner))
     else
         row.winnerText:SetText("")
     end
@@ -787,7 +793,7 @@ end
 --- Show context menu for a history row
 -- @param row Frame
 -- @param entry table
-function LoothingHistoryPanelMixin:ShowHistoryRowContextMenu(row, entry)
+function HistoryPanelMixin:ShowHistoryRowContextMenu(row, entry)
     local L = Loothing.Locale or {}
 
     MenuUtil.CreateContextMenu(row, function(ownerRegion, rootDescription)
@@ -803,7 +809,7 @@ function LoothingHistoryPanelMixin:ShowHistoryRowContextMenu(row, entry)
         -- Filter by winner
         if entry.winner then
             rootDescription:CreateButton(
-                string.format(L["FILTER_BY_WINNER"] or "Filter by %s", LoothingUtils.GetShortName(entry.winner)),
+                string.format(L["FILTER_BY_WINNER"] or "Filter by %s", Utils.GetShortName(entry.winner)),
                 function()
                     self:SetWinnerFilter(entry.winner)
                 end
@@ -835,7 +841,7 @@ function LoothingHistoryPanelMixin:ShowHistoryRowContextMenu(row, entry)
 end
 
 --- Update count display
-function LoothingHistoryPanelMixin:UpdateCount()
+function HistoryPanelMixin:UpdateCount()
     if not Loothing.History then
         self.countText:SetText("")
         return
@@ -857,7 +863,7 @@ end
 
 --- Handle search text change
 -- @param text string
-function LoothingHistoryPanelMixin:OnSearchChanged(text)
+function HistoryPanelMixin:OnSearchChanged(text)
     if not Loothing.History then return end
 
     local filter = Loothing.History.filter or {}
@@ -868,7 +874,7 @@ function LoothingHistoryPanelMixin:OnSearchChanged(text)
 end
 
 --- Show winner dropdown
-function LoothingHistoryPanelMixin:ShowWinnerDropdown()
+function HistoryPanelMixin:ShowWinnerDropdown()
     if not Loothing.History then return end
 
     local L = Loothing.Locale
@@ -881,7 +887,7 @@ function LoothingHistoryPanelMixin:ShowWinnerDropdown()
         rootDescription:CreateDivider()
 
         for _, winner in ipairs(winners) do
-            rootDescription:CreateButton(LoothingUtils.GetShortName(winner), function()
+            rootDescription:CreateButton(Utils.GetShortName(winner), function()
                 self:SetWinnerFilter(winner)
             end)
         end
@@ -890,7 +896,7 @@ end
 
 --- Set winner filter
 -- @param winner string|nil
-function LoothingHistoryPanelMixin:SetWinnerFilter(winner)
+function HistoryPanelMixin:SetWinnerFilter(winner)
     if not Loothing.History then return end
 
     local L = Loothing.Locale
@@ -900,7 +906,7 @@ function LoothingHistoryPanelMixin:SetWinnerFilter(winner)
     Loothing.History:SetFilter(filter)
 
     if winner then
-        self.winnerButton:SetText(LoothingUtils.GetShortName(winner))
+        self.winnerButton:SetText(Utils.GetShortName(winner))
     else
         self.winnerButton:SetText(L["ALL_WINNERS"])
     end
@@ -909,7 +915,7 @@ function LoothingHistoryPanelMixin:SetWinnerFilter(winner)
 end
 
 --- Clear all filters
-function LoothingHistoryPanelMixin:ClearFilters()
+function HistoryPanelMixin:ClearFilters()
     if not Loothing.History then return end
 
     local L = Loothing.Locale
@@ -938,14 +944,14 @@ end
 ----------------------------------------------------------------------]]
 
 --- Show export dialog
-function LoothingHistoryPanelMixin:ShowExportDialog()
+function HistoryPanelMixin:ShowExportDialog()
     if not Loothing.History then return end
 
     local L = Loothing.Locale
 
     -- Create export frame if it doesn't exist
     if not self.exportFrame then
-        local frame = CreateFrame("Frame", "LoothingExportFrame", UIParent, "BackdropTemplate")
+        local frame = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
         frame:SetSize(580, 400)
         frame:SetPoint("CENTER")
         frame:SetFrameStrata("DIALOG")
@@ -1078,8 +1084,8 @@ function LoothingHistoryPanelMixin:ShowExportDialog()
 end
 
 --- Confirm and clear history
-function LoothingHistoryPanelMixin:ConfirmClearHistory()
-    LoothingPopups:Show("LOOTHING_CONFIRM_DELETE_HISTORY", {
+function HistoryPanelMixin:ConfirmClearHistory()
+    Popups:Show("LOOTHING_CONFIRM_DELETE_HISTORY", {
         count = "all",
         onAccept = function()
             if Loothing.History then
@@ -1094,16 +1100,16 @@ end
     Frame Access
 ----------------------------------------------------------------------]]
 
-function LoothingHistoryPanelMixin:GetFrame()
+function HistoryPanelMixin:GetFrame()
     return self.frame
 end
 
-function LoothingHistoryPanelMixin:Show()
+function HistoryPanelMixin:Show()
     self.frame:Show()
     self:Refresh()
 end
 
-function LoothingHistoryPanelMixin:Hide()
+function HistoryPanelMixin:Hide()
     self.frame:Hide()
 end
 
@@ -1111,8 +1117,10 @@ end
     Factory
 ----------------------------------------------------------------------]]
 
-function CreateLoothingHistoryPanel(parent)
-    local panel = Loolib.CreateFromMixins(LoothingHistoryPanelMixin)
+local function CreateHistoryPanel(parent)
+    local panel = Loolib.CreateFromMixins(HistoryPanelMixin)
     panel:Init(parent)
     return panel
 end
+
+ns.CreateHistoryPanel = CreateHistoryPanel

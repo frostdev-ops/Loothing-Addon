@@ -10,9 +10,12 @@
     - Settings accessor methods
 ----------------------------------------------------------------------]]
 
-local TestRunner = LoothingTestRunner
-local Assert = LoothingAssert
-local TestHelpers = LoothingTestHelpers
+local _, ns = ...
+local Loothing = ns.Addon
+
+local TestRunner = TestRunner
+local Assert = Assert
+local TestHelpers = TestHelpers
 
 --[[--------------------------------------------------------------------
     Mock/Stub Helpers
@@ -784,5 +787,5 @@ end)
 ----------------------------------------------------------------------]]
 
 print("|cff00ff00[Loothing]|r RollFrame/Session/Settings tests loaded")
-print("  Run with: |cffffffffLoothingTestRunner:RunAll()|r")
-print("  Or run specific: |cffffffffLoothingTestRunner:RunSuite('RollFrame Dynamic Layout')|r")
+print("  Run with: |cffffffffTestRunner:RunAll()|r")
+print("  Or run specific: |cffffffffTestRunner:RunSuite('RollFrame Dynamic Layout')|r")

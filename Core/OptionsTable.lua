@@ -3,15 +3,16 @@
     Aggregates all option groups into the main config table
 ----------------------------------------------------------------------]]
 
--- Ensure namespace exists even before Core/Init loads
-Loothing = Loothing or {}
-Loothing.Options = Loothing.Options or {}
+local ADDON_NAME, ns = ...
+local Loothing = ns.Addon
+local Options = ns.Options or {}
+ns.Options = Options
 
-local L = Loothing.Locale
+local L = ns.Locale
 
 -- Resolve an options getter by name, returning the group table or nil
 local function resolveOptions(name)
-    local getter = Loothing.Options and Loothing.Options[name]
+    local getter = Options[name]
     if getter then
         return getter()
     end
@@ -135,7 +136,7 @@ local function BuildArgs()
     }
 end
 
-LoothingOptionsTable = {
+ns.OptionsTable = ns.OptionsTable or {
     type = "group",
     name = L["ADDON_NAME"],
     childGroups = "tab",
@@ -149,9 +150,10 @@ LoothingOptionsTable = {
     end,
     args = {},
 }
+local OptionsTable = ns.OptionsTable
 
 -- Populate args after all Options files have loaded.
 -- Called from Init.lua during initialization, or on first dialog open.
-function Loothing.Options.BuildOptionsTable()
-    LoothingOptionsTable.args = BuildArgs()
+function Options.BuildOptionsTable()
+    OptionsTable.args = BuildArgs()
 end

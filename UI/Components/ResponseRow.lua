@@ -9,7 +9,7 @@
 -- @param yOffset number - Vertical offset
 -- @param totalVotes number - Total vote count for percentage
 -- @param isWinner boolean - whether this response is the winner
-function LoothingUI_CreateResponseRow(parent, data, yOffset, totalVotes, isWinner)
+function CreateResponseRow(parent, data, yOffset, totalVotes, isWinner)
     local row = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     row:SetPoint("TOPLEFT", 0, yOffset)
     row:SetPoint("TOPRIGHT", 0, yOffset)
@@ -79,12 +79,12 @@ function LoothingUI_CreateResponseRow(parent, data, yOffset, totalVotes, isWinne
     if data.voters and #data.voters > 0 then
         local voterNames = {}
         for _, voter in ipairs(data.voters) do
-            local shortName = LoothingUtils.GetShortName(voter)
+            local shortName = Utils.GetShortName(voter)
             if IsInGroup() then
-                local roster = LoothingUtils.GetRaidRoster()
+                local roster = Utils.GetRaidRoster()
                 for _, entry in ipairs(roster) do
-                    if LoothingUtils.IsSamePlayer(voter, entry.name) then
-                        shortName = LoothingUtils.ColorByClass(shortName, entry.classFile)
+                    if Utils.IsSamePlayer(voter, entry.name) then
+                        shortName = Utils.ColorByClass(shortName, entry.classFile)
                         break
                     end
                 end

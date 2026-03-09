@@ -3,6 +3,10 @@
     Comprehensive test suite for Session lifecycle and item management
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
+local Loothing = ns.Addon
+local Utils = ns.Utils
+
 local Loolib = LibStub("Loolib")
 
 --[[--------------------------------------------------------------------
@@ -95,7 +99,7 @@ end
 ----------------------------------------------------------------------]]
 
 local function CreateMockSession()
-    local session = Loolib.CreateFromMixins(LoothingSessionMixin)
+    local session = Loolib.CreateFromMixins(SessionMixin)
     session:Init()
     return session
 end
@@ -103,7 +107,7 @@ end
 local function CreateMockItem(itemLink, looter)
     itemLink = itemLink or "|cffa335ee|Hitem:212398::::::::80::::::::::|h[Test Epic Item]|h|r"
     looter = looter or "TestPlayer"
-    return CreateLoothingItem(itemLink, looter, 12345)
+    return CreateItem(itemLink, looter, 12345)
 end
 
 -- Mock only addon-owned Loothing.handleLoot (not Blizzard globals or TestMode).
@@ -217,7 +221,7 @@ end)
 ----------------------------------------------------------------------]]
 
 Describe("Item Management", function()
-    It("AddItem creates LoothingItemMixin", function()
+    It("AddItem creates ItemMixin", function()
         local session = CreateMockSession()
 
         local saved = MockSessionPermissions(true)
@@ -372,7 +376,7 @@ Describe("State Transitions", function()
         session:AwardItem(item.guid, "Winner", Loothing.Response.NEED)
 
         AssertEquals(item:GetState(), Loothing.ItemState.AWARDED, "Item should be AWARDED")
-        AssertEquals(item:GetWinner(), LoothingUtils.NormalizeName("Winner"), "Winner should be set")
+        AssertEquals(item:GetWinner(), Utils.NormalizeName("Winner"), "Winner should be set")
 
         RestoreSessionPermissions(saved)
         session:EndSession()

@@ -3,6 +3,10 @@
     IntegrationTests - End-to-end workflow tests
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
+local Loothing = ns.Addon
+local Utils = ns.Utils
+
 --[[--------------------------------------------------------------------
     Test Infrastructure
 ----------------------------------------------------------------------]]
@@ -12,16 +16,6 @@ local IntegrationTests = {
     tests = {},
     results = {},
     currentTest = nil,
-}
-
--- Test result tracking
-local TestResult = {
-    name = nil,
-    passed = false,
-    error = nil,
-    duration = 0,
-    assertions = 0,
-    timestamp = 0,
 }
 
 --- Create a new test result
@@ -67,22 +61,6 @@ local function AssertTrue(value, message)
     Assert(value == true, message or "Expected true")
 end
 
---- Wait for condition with timeout
-local function WaitFor(condition, timeout, checkInterval)
-    timeout = timeout or 5
-    checkInterval = checkInterval or 0.1
-
-    local startTime = GetTime()
-    while not condition() do
-        if GetTime() - startTime > timeout then
-            return false
-        end
-        -- In real WoW, we'd use C_Timer.After or frame OnUpdate
-        -- For test purposes, assume synchronous execution
-    end
-    return true
-end
-
 --[[--------------------------------------------------------------------
     Test Helper Functions
 ----------------------------------------------------------------------]]
@@ -90,8 +68,8 @@ end
 --- Setup test environment
 local function SetupTest()
     -- Enable test mode
-    if LoothingTestMode and not LoothingTestMode:IsEnabled() then
-        LoothingTestMode:SetEnabled(true)
+    if TestMode and not TestMode:IsEnabled() then
+        TestMode:SetEnabled(true)
     end
 
     -- Clear any existing session
@@ -116,8 +94,8 @@ end
 --- Create a test item
 local function CreateTestItem(itemID)
     itemID = itemID or 19019  -- Thunderfury
-    local itemLink = LoothingTestMode:GenerateFakeItemLink(itemID)
-    local looter = LoothingUtils.GetPlayerFullName()
+    local itemLink = TestMode:GenerateFakeItemLink(itemID)
+    local looter = Utils.GetPlayerFullName()
 
     return Loothing.Session:AddItem(itemLink, looter)
 end
@@ -125,11 +103,11 @@ end
 --- Simulate council votes for an item
 local function SimulateVotes(item, voteDistribution)
     -- voteDistribution: { [Loothing.Response.NEED] = 3, [Loothing.Response.GREED] = 2, ... }
-    local councilMembers = LoothingTestMode:GetFakeCouncilMembers()
+    local councilMembers = TestMode:GetFakeCouncilMembers()
     local memberIndex = 2  -- Skip player at index 1
 
     for response, count in pairs(voteDistribution) do
-        for i = 1, count do
+        for _ = 1, count do
             if memberIndex > #councilMembers then
                 break
             end
@@ -321,7 +299,7 @@ local function Test_FiveItemSession()
         Loothing.Session:StartVoting(item.guid)
         SimulateVotes(item, { [Loothing.Response.NEED] = math.random(1, 3) })
         local results = item:TallyVotes()
-        local winner = results.winner or "Player" .. i .. "-Realm"
+        local winner = results.winner or ("Player" .. i .. "-Realm")
         Loothing.Session:AwardItem(item.guid, winner, "Main Spec")
     end
 
@@ -337,7 +315,7 @@ local function Test_TenItemsDifferentWinners()
 
     Loothing.Session:StartSession(0, "Test Raid")
 
-    local councilMembers = LoothingTestMode:GetFakeCouncilMembers()
+    local councilMembers = TestMode:GetFakeCouncilMembers()
     local winners = {}
 
     for i = 1, 10 do
@@ -411,7 +389,7 @@ local function Test_RankedChoiceVoting()
     Loothing.Session:StartVoting(item.guid)
 
     -- Simulate ranked votes
-    local councilMembers = LoothingTestMode:GetFakeCouncilMembers()
+    local councilMembers = TestMode:GetFakeCouncilMembers()
     for i = 2, math.min(5, #councilMembers) do
         local member = councilMembers[i]
         local rankedResponses = {
@@ -571,8 +549,6 @@ local function Test_SessionRecovery()
     SetupTest()
 
     Loothing.Session:StartSession(0, "Test Boss")
-    local sessionID = Loothing.Session.sessionID
-
     -- Add items
     CreateTestItem(19019)
     CreateTestItem(17182)
@@ -741,5 +717,5 @@ end
     Global Access
 ----------------------------------------------------------------------]]
 
-_G.LoothingIntegrationTests = IntegrationTests
+_G.IntegrationTests = IntegrationTests
 

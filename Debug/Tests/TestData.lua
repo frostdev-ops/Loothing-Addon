@@ -13,20 +13,22 @@
     - Encounter data (TWW Season 1+ raid bosses)
 
     Usage:
-        local TestData = LoothingTestData
+        local TestData = TestData
         local trinket = TestData.Items.Trinkets[1]
         local tank = TestData.Players.Tank
         local scenario = TestData.VoteScenarios.SimpleMajority
 ----------------------------------------------------------------------]]
 
-local Loolib = LibStub("Loolib")
+local _, ns = ...
+local Loothing = ns.Addon
+local Utils = ns.Utils
 
 --[[--------------------------------------------------------------------
     Global TestData Table
 ----------------------------------------------------------------------]]
 
-LoothingTestData = {}
-local TestData = LoothingTestData
+TestData = {}
+local TestData = TestData
 
 --[[====================================================================
     ITEM DATA - Modern TWW/DF Items

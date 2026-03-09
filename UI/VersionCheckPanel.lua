@@ -3,14 +3,19 @@
     VersionCheckPanel - Displays addon version status for group/guild
 ----------------------------------------------------------------------]]
 
+local ADDON_NAME, ns = ...
 local Loolib = LibStub("Loolib")
-local L = Loothing.Locale
+local Loothing = ns.Addon
+local Utils = ns.Utils
+local L = ns.Locale
+local VersionCheck = ns.VersionCheck
 
 --[[--------------------------------------------------------------------
-    LoothingVersionCheckPanelMixin
+    VersionCheckPanelMixin
 ----------------------------------------------------------------------]]
 
-LoothingVersionCheckPanelMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+local VersionCheckPanelMixin = ns.VersionCheckPanelMixin or Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+ns.VersionCheckPanelMixin = VersionCheckPanelMixin
 
 local VC_EVENTS = {
     "OnQueryStarted",
@@ -22,7 +27,7 @@ local PANEL_HEIGHT = 380
 local ROW_HEIGHT = 22
 
 --- Initialize the version check panel
-function LoothingVersionCheckPanelMixin:Init()
+function VersionCheckPanelMixin:Init()
     Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(VC_EVENTS)
 
@@ -34,8 +39,8 @@ function LoothingVersionCheckPanelMixin:Init()
 end
 
 --- Create the main frame
-function LoothingVersionCheckPanelMixin:CreateFrame()
-    local frame = CreateFrame("Frame", "LoothingVersionCheckPanel", UIParent, "BackdropTemplate")
+function VersionCheckPanelMixin:CreateFrame()
+    local frame = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
     frame:SetSize(PANEL_WIDTH, PANEL_HEIGHT)
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("DIALOG")
@@ -68,10 +73,11 @@ function LoothingVersionCheckPanelMixin:CreateFrame()
     end)
 
     self.frame = frame
+    ns.VersionCheckPanelFrame = frame
 end
 
 --- Create UI elements
-function LoothingVersionCheckPanelMixin:CreateElements()
+function VersionCheckPanelMixin:CreateElements()
     -- Title
     self.title = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     self.title:SetPoint("TOP", 0, -20)
@@ -113,7 +119,7 @@ function LoothingVersionCheckPanelMixin:CreateElements()
 end
 
 --- Create column headers
-function LoothingVersionCheckPanelMixin:CreateColumnHeaders()
+function VersionCheckPanelMixin:CreateColumnHeaders()
     local headers = CreateFrame("Frame", nil, self.frame)
     headers:SetPoint("TOPLEFT", 20, -42)
     headers:SetPoint("TOPRIGHT", -20, -42)
@@ -133,7 +139,7 @@ function LoothingVersionCheckPanelMixin:CreateColumnHeaders()
 end
 
 --- Create scrollable list area
-function LoothingVersionCheckPanelMixin:CreateScrollArea()
+function VersionCheckPanelMixin:CreateScrollArea()
     local container = CreateFrame("Frame", nil, self.frame, "BackdropTemplate")
     container:SetPoint("TOPLEFT", 16, -66)
     container:SetPoint("BOTTOMRIGHT", -16, 50)
@@ -166,11 +172,11 @@ end
 ----------------------------------------------------------------------]]
 
 --- Query versions from group/guild members
-function LoothingVersionCheckPanelMixin:QueryVersions()
+function VersionCheckPanelMixin:QueryVersions()
     wipe(self.entries)
 
     -- Gather current group members
-    local roster = LoothingUtils.GetRaidRoster()
+    local roster = Utils.GetRaidRoster()
     if #roster > 0 then
         for _, member in ipairs(roster) do
             self.entries[member.name] = {
@@ -195,8 +201,8 @@ function LoothingVersionCheckPanelMixin:QueryVersions()
     end
 
     -- Register for version responses (once)
-    if not self.versionCallbackRegistered and LoothingVersionCheck then
-        LoothingVersionCheck:RegisterCallback("OnVersionReceived", function(_, name, version)
+    if not self.versionCallbackRegistered and VersionCheck then
+        VersionCheck:RegisterCallback("OnVersionReceived", function(_, name, version)
             if self.entries[name] then
                 self.entries[name].version = version
                 self.entries[name].status = self:GetVersionStatus(version)
@@ -207,8 +213,8 @@ function LoothingVersionCheckPanelMixin:QueryVersions()
     end
 
     -- Also pull any already-cached data from VersionCheck
-    if LoothingVersionCheck then
-        local cached = LoothingVersionCheck:GetSortedVersions()
+    if VersionCheck then
+        local cached = VersionCheck:GetSortedVersions()
         for _, entry in ipairs(cached) do
             if self.entries[entry.name] then
                 self.entries[entry.name].version = entry.version
@@ -217,7 +223,7 @@ function LoothingVersionCheckPanelMixin:QueryVersions()
         end
 
         -- Trigger the query
-        LoothingVersionCheck:Query("raid")
+        VersionCheck:Query("raid")
     end
 
     self:RefreshList()
@@ -239,7 +245,7 @@ end
 --- Determine version status relative to our version
 -- @param version string
 -- @return string - "current", "outdated", or "not_installed"
-function LoothingVersionCheckPanelMixin:GetVersionStatus(version)
+function VersionCheckPanelMixin:GetVersionStatus(version)
     if not version or version == "N/A" or version == "Not Installed" then
         return "not_installed"
     end
@@ -250,8 +256,8 @@ function LoothingVersionCheckPanelMixin:GetVersionStatus(version)
     end
 
     -- Use VersionCheck's comparator if available
-    if LoothingVersionCheck and LoothingVersionCheck.IsOutdated then
-        return LoothingVersionCheck:IsOutdated(version) and "outdated" or "current"
+    if VersionCheck and VersionCheck.IsOutdated then
+        return VersionCheck:IsOutdated(version) and "outdated" or "current"
     end
 
     -- Fallback: simple string comparison
@@ -263,7 +269,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Refresh the version list display
-function LoothingVersionCheckPanelMixin:RefreshList()
+function VersionCheckPanelMixin:RefreshList()
     self.rowPool:ReleaseAll()
 
     -- Sort entries by name
@@ -348,15 +354,15 @@ end
     Visibility
 ----------------------------------------------------------------------]]
 
-function LoothingVersionCheckPanelMixin:Show()
+function VersionCheckPanelMixin:Show()
     self.frame:Show()
 end
 
-function LoothingVersionCheckPanelMixin:Hide()
+function VersionCheckPanelMixin:Hide()
     self.frame:Hide()
 end
 
-function LoothingVersionCheckPanelMixin:Toggle()
+function VersionCheckPanelMixin:Toggle()
     if self.frame:IsShown() then
         self:Hide()
     else
@@ -364,7 +370,7 @@ function LoothingVersionCheckPanelMixin:Toggle()
     end
 end
 
-function LoothingVersionCheckPanelMixin:IsShown()
+function VersionCheckPanelMixin:IsShown()
     return self.frame:IsShown()
 end
 
@@ -372,8 +378,10 @@ end
     Factory
 ----------------------------------------------------------------------]]
 
-function CreateLoothingVersionCheckPanel()
-    local panel = Loolib.CreateFromMixins(LoothingVersionCheckPanelMixin)
+local function CreateVersionCheckPanel()
+    local panel = Loolib.CreateFromMixins(VersionCheckPanelMixin)
     panel:Init()
     return panel
 end
+
+ns.CreateVersionCheckPanel = CreateVersionCheckPanel

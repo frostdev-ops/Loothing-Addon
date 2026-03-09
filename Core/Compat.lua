@@ -3,9 +3,9 @@
     Compat - Compatibility shims for deprecated/changed WoW APIs
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
 
-local GetLootMethod = GetLootMethod
 local GetLootRollItemInfo = GetLootRollItemInfo
 local UnitIsInMyGuild = UnitIsInMyGuild
 
@@ -21,41 +21,22 @@ local enumLootMethod = Enum and Enum.LootMethod or {
     Personal = 5,
 }
 
--- Delegate to Loolib.Compat instead of reimplementing
-Loothing.GuildRoster = Loolib.Compat.GuildRoster
-Loothing.GetGuildRosterInfo = Loolib.Compat.GetGuildRosterInfo
-Loothing.UnitIsInMyGuild = UnitIsInMyGuild
+local Addon = ns.Addon
 
-function Loothing.GetLootMethod()
+-- Delegate to Loolib.Compat instead of reimplementing
+Addon.GuildRoster = Loolib.Compat.GuildRoster
+Addon.GetGuildRosterInfo = Loolib.Compat.GetGuildRosterInfo
+Addon.UnitIsInMyGuild = UnitIsInMyGuild
+
+function Addon.GetLootMethod()
     if C_PartyInfo and C_PartyInfo.GetLootMethod then
         return C_PartyInfo.GetLootMethod()
     end
 
-    if not GetLootMethod then
-        return enumLootMethod.Personal
-    end
-
-    local method, partyID, raidID = GetLootMethod()
-    if not method then
-        method = enumLootMethod.Personal
-    elseif method == "freeforall" then
-        method = enumLootMethod.Freeforall
-    elseif method == "roundrobin" then
-        method = enumLootMethod.Roundrobin
-    elseif method == "master" then
-        method = enumLootMethod.Masterlooter
-    elseif method == "group" then
-        method = enumLootMethod.Group
-    elseif method == "needbeforegreed" then
-        method = enumLootMethod.Needbeforegreed
-    elseif method == "personalloot" then
-        method = enumLootMethod.Personal
-    end
-
-    return method, partyID, raidID
+    return enumLootMethod.Personal
 end
 
-function Loothing.GetLootRollItemData(rollID)
+function Addon.GetLootRollItemData(rollID)
     if not GetLootRollItemInfo then
         return nil
     end

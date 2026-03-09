@@ -3,9 +3,12 @@
     Extracted from RollFrame.lua to reduce monolith size.
 ----------------------------------------------------------------------]]
 
-local Loolib = LibStub("Loolib")
+local _, ns = ...
+local Loothing = ns.Addon
+local SkinningMixin = ns.SkinningMixin
 
-LoothingRollFrameMixin = LoothingRollFrameMixin or {}
+local RollFrameMixin = ns.RollFrameMixin or {}
+ns.RollFrameMixin = RollFrameMixin
 
 -- Frame dimensions
 local FRAME_WIDTH = 380
@@ -33,8 +36,8 @@ local MAX_SESSION_BUTTONS = 50  -- 5 columns max to prevent UI overflow
     Frame Creation
 ----------------------------------------------------------------------]]
 
-function LoothingRollFrameMixin:CreateFrame()
-    local frame = CreateFrame("Frame", "LoothingRollFrame", UIParent, "BackdropTemplate")
+function RollFrameMixin:CreateFrame()
+    local frame = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
     frame:SetSize(FRAME_WIDTH, MIN_FRAME_HEIGHT)  -- Height will be updated dynamically
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("DIALOG")
@@ -43,12 +46,13 @@ function LoothingRollFrameMixin:CreateFrame()
     frame:SetClampedToScreen(true)
     frame:Hide()
 
-    -- Apply skin via LoothingSkinningMixin
-    LoothingSkinningMixin:SetupFrame(frame, "RollFrame", "LoothingRollFrame", {
+    -- Apply skin via SkinningMixin
+    SkinningMixin:SetupFrame(frame, "RollFrame", "LoothingRollFrame", {
         combatMinimize = true,
         ctrlScroll = true,
         escapeClose = false, -- RollFrame should not close with Escape during voting
     })
+    ns.RollFrameFrame = frame
 
     -- Gold accent bar at top
     local accentBar = frame:CreateTexture(nil, "OVERLAY", nil, 7)
@@ -91,7 +95,7 @@ function LoothingRollFrameMixin:CreateFrame()
     self.frame = frame
 end
 
-function LoothingRollFrameMixin:CreateElements()
+function RollFrameMixin:CreateElements()
     local L = Loothing.Locale
 
     self.closeButton = CreateFrame("Button", nil, self.frame, "UIPanelCloseButton")
@@ -154,7 +158,7 @@ end
     Session Button Frame (Multi-Item Support)
 ----------------------------------------------------------------------]]
 
-function LoothingRollFrameMixin:CreateSessionButtonFrame()
+function RollFrameMixin:CreateSessionButtonFrame()
     local container = CreateFrame("Frame", nil, self.frame)
     container:SetSize(SESSION_BUTTON_SIZE + 4, self.frame:GetHeight())
     container:SetPoint("TOPRIGHT", self.frame, "TOPLEFT", -2, 0)
@@ -162,7 +166,7 @@ function LoothingRollFrameMixin:CreateSessionButtonFrame()
     self.sessionButtonFrame = container
 end
 
-function LoothingRollFrameMixin:CreateSessionButton(index, item)
+function RollFrameMixin:CreateSessionButton(index, item)
     if index > MAX_SESSION_BUTTONS then
         return nil
     end
@@ -257,7 +261,7 @@ function LoothingRollFrameMixin:CreateSessionButton(index, item)
         self.sessionButtons[index] = btn
     end
 
-    local texture = item.texture or GetItemIcon(item.itemID or 0)
+    local texture = item.texture or C_Item.GetItemIconByID(item.itemID or 0)
     btn.icon:SetTexture(texture or "Interface\\Icons\\INV_Misc_QuestionMark")
 
     local quality = item.quality or 1
@@ -312,7 +316,7 @@ function LoothingRollFrameMixin:CreateSessionButton(index, item)
     return btn
 end
 
-function LoothingRollFrameMixin:UpdateSessionButtons()
+function RollFrameMixin:UpdateSessionButtons()
     local displayedCount = math.min(#self.items, MAX_SESSION_BUTTONS)
 
     if #self.items > MAX_SESSION_BUTTONS and not self.sessionButtonWarningShown then
@@ -347,7 +351,7 @@ function LoothingRollFrameMixin:UpdateSessionButtons()
     self:UpdateCounterText()
 end
 
-function LoothingRollFrameMixin:UpdateCounterText()
+function RollFrameMixin:UpdateCounterText()
     if not self.counterText then return end
 
     local total = #self.items
@@ -366,7 +370,7 @@ function LoothingRollFrameMixin:UpdateCounterText()
     end
 end
 
-function LoothingRollFrameMixin:SwitchToItem(index)
+function RollFrameMixin:SwitchToItem(index)
     if index < 1 or index > #self.items then
         return
     end
@@ -387,7 +391,7 @@ end
     Dynamic Layout System
 ----------------------------------------------------------------------]]
 
-function LoothingRollFrameMixin:UpdateLayout()
+function RollFrameMixin:UpdateLayout()
     local showGear = true
     local showTimer = true
     local showRolls = false
@@ -443,7 +447,7 @@ function LoothingRollFrameMixin:UpdateLayout()
     self:ReanchorSections(showGear, showTimer, showRolls, numButtons)
 end
 
-function LoothingRollFrameMixin:ReanchorSections(showGear, showTimer, showRolls, numButtons)
+function RollFrameMixin:ReanchorSections(showGear, showTimer, showRolls, numButtons)
     local responseHeight = RESPONSE_LABEL_HEIGHT + numButtons * (BUTTON_HEIGHT + BUTTON_SPACING)
     self.responseContainer:SetHeight(responseHeight)
 
@@ -493,7 +497,7 @@ end
     Item Display Section
 ----------------------------------------------------------------------]]
 
-function LoothingRollFrameMixin:CreateItemDisplay()
+function RollFrameMixin:CreateItemDisplay()
     local container = CreateFrame("Frame", nil, self.frame)
     container:SetPoint("TOPLEFT", 20, -40)
     container:SetPoint("TOPRIGHT", -20, -40)
@@ -551,7 +555,7 @@ end
     Gear Comparison Section
 ----------------------------------------------------------------------]]
 
-function LoothingRollFrameMixin:CreateGearComparison()
+function RollFrameMixin:CreateGearComparison()
     local container = CreateFrame("Frame", nil, self.frame, "BackdropTemplate")
     container:SetPoint("TOPLEFT", 20, -75)
     container:SetPoint("TOPRIGHT", -20, -75)
@@ -661,7 +665,7 @@ end
     Response Buttons Section
 ----------------------------------------------------------------------]]
 
-function LoothingRollFrameMixin:CreateResponseSection()
+function RollFrameMixin:CreateResponseSection()
     local L = Loothing.Locale
 
     local container = CreateFrame("Frame", nil, self.frame)
@@ -681,7 +685,7 @@ function LoothingRollFrameMixin:CreateResponseSection()
     self:RefreshResponseButtons()
 end
 
-function LoothingRollFrameMixin:RefreshResponseButtons()
+function RollFrameMixin:RefreshResponseButtons()
     for _, button in ipairs(self.responseButtonsArray) do
         button:Hide()
         button:SetParent(nil)
@@ -844,7 +848,7 @@ function LoothingRollFrameMixin:RefreshResponseButtons()
     self:UpdateLayout()
 end
 
-function LoothingRollFrameMixin:OnResponseClick(button)
+function RollFrameMixin:OnResponseClick(button)
     for _, btn in pairs(self.responseButtons) do
         if btn.selectedGlow then btn.selectedGlow:Hide() end
         if btn.accentBar then btn.accentBar:Hide() end
@@ -879,7 +883,7 @@ end
     Roll-Type Button Section (Roll + Pass only)
 ----------------------------------------------------------------------]]
 
-function LoothingRollFrameMixin:CreateRollButtonSection()
+function RollFrameMixin:CreateRollButtonSection()
     local container = CreateFrame("Frame", nil, self.frame)
     container:SetHeight(24 + 2 * (BUTTON_HEIGHT + BUTTON_SPACING))
     container:Hide()
@@ -975,7 +979,7 @@ function LoothingRollFrameMixin:CreateRollButtonSection()
 end
 
 --- Show roll-type buttons (Roll + Pass) instead of response buttons
-function LoothingRollFrameMixin:ShowRollButtons()
+function RollFrameMixin:ShowRollButtons()
     if self.responseContainer then
         self.responseContainer:Hide()
     end
@@ -994,7 +998,7 @@ function LoothingRollFrameMixin:ShowRollButtons()
 end
 
 --- Show normal response buttons (hide roll buttons)
-function LoothingRollFrameMixin:ShowResponseButtons()
+function RollFrameMixin:ShowResponseButtons()
     if self.rollButtonSection then
         self.rollButtonSection:Hide()
     end
@@ -1007,7 +1011,7 @@ end
     Note Input Section
 ----------------------------------------------------------------------]]
 
-function LoothingRollFrameMixin:CreateNoteInput()
+function RollFrameMixin:CreateNoteInput()
     local container = CreateFrame("Frame", nil, self.frame)
     container:SetPoint("TOPLEFT", 20, -285)
     container:SetPoint("TOPRIGHT", -20, -285)
@@ -1079,7 +1083,7 @@ end
     Roll Section
 ----------------------------------------------------------------------]]
 
-function LoothingRollFrameMixin:CreateRollSection()
+function RollFrameMixin:CreateRollSection()
     local container = CreateFrame("Frame", nil, self.frame)
     container:SetPoint("TOPLEFT", 20, -335)
     container:SetPoint("TOPRIGHT", -20, -335)
@@ -1103,7 +1107,7 @@ end
     Timer Bar
 ----------------------------------------------------------------------]]
 
-function LoothingRollFrameMixin:CreateTimerBar()
+function RollFrameMixin:CreateTimerBar()
     local container = CreateFrame("Frame", nil, self.frame, "BackdropTemplate")
     container:SetPoint("BOTTOMLEFT", 20, 55)
     container:SetPoint("BOTTOMRIGHT", -20, 55)
@@ -1142,4 +1146,3 @@ function LoothingRollFrameMixin:CreateTimerBar()
 
     self.timerContainer = container
 end
-

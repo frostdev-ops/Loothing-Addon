@@ -3,20 +3,24 @@
     Init - Addon initialization and namespace
 ----------------------------------------------------------------------]]
 
+local ADDON_NAME, ns = ...
 local Loolib = LibStub("Loolib")
 local Config = Loolib.Config
+local GlobalBridge = Loolib.Compat.GlobalBridge
 local CreateFromMixins = Loolib.CreateFromMixins
 local Events = Loolib.Events
 local SecretUtil = Loolib.SecretUtil
 local CreateFrame, GetTime, GetInstanceInfo = CreateFrame, GetTime, GetInstanceInfo
 local GetNumGroupMembers, IsInGroup, IsInRaid = GetNumGroupMembers, IsInGroup, IsInRaid
 local print, select, UnitExists, UnitIsGroupLeader = print, select, UnitExists, UnitIsGroupLeader
+local Loothing = ns.Addon
+local Addon = ns.Addon
+local Utils = ns.Utils
 
 --[[--------------------------------------------------------------------
     Addon Namespace
 ----------------------------------------------------------------------]]
 
-Loothing = Loothing or {}
 Loothing.version = Loothing.VERSION
 Loothing.initialized = false
 
@@ -43,6 +47,7 @@ Loothing.GroupLoot = nil
 Loothing.Session = nil
 Loothing.Council = nil
 Loothing.Observer = nil
+---@type CommMixin?
 Loothing.Comm = nil
 Loothing.Sync = nil
 Loothing.AckTracker = nil
@@ -61,9 +66,16 @@ Loothing.ResponseButtonSettings = nil
 Loothing.UI = nil
 
 -- Localization shortcut
-local L = Loothing.Locale
+local L = ns.Locale
 
--- All popup dialogs are registered in UI/Popups.lua via LoothingPopups:Register()
+-- All popup dialogs are registered in UI/Popups.lua via ns.Popups:Register()
+local function GetPopups()
+    return ns.Popups
+end
+
+local function GetVersionCheck()
+    return ns.VersionCheck
+end
 
 --[[--------------------------------------------------------------------
     Event Frame
@@ -110,157 +122,157 @@ eventFrame:RegisterEvent("PLAYER_LOGOUT")
 local function InitializeModules()
     -- Initialize settings (must be first - other modules depend on it)
     -- Uses Loolib SavedVariables with multi-profile support
-    if LoothingSettingsMixin then
-        Loothing.Settings = CreateFromMixins(LoothingSettingsMixin)
+    if ns.SettingsMixin then
+        Loothing.Settings = CreateFromMixins(ns.SettingsMixin)
         Loothing.Settings:Init()
     end
 
     -- Initialize auto-award system (depends on Settings)
-    if CreateLoothingAutoAward then
-        Loothing.AutoAward = CreateLoothingAutoAward()
+    if ns.CreateAutoAward then
+        Loothing.AutoAward = ns.CreateAutoAward()
     end
 
     -- Run migrations after settings are loaded (uses global scope)
-    if LoothingMigration then
-        LoothingMigration:Init()
-        LoothingMigration:RunOnLoad()
+    if ns.Migration then
+        ns.Migration:Init()
+        ns.Migration:RunOnLoad()
     end
 
     -- Build the options table args now that all Options/*.lua files have loaded
-    if Loothing.Options.BuildOptionsTable then
-        Loothing.Options.BuildOptionsTable()
+    if ns.Options and ns.Options.BuildOptionsTable then
+        ns.Options.BuildOptionsTable()
     end
 
     -- Register options table with Loolib.Config for settings dialog
-    if Config and LoothingOptionsTable then
+    if Config and ns.OptionsTable then
         if not Config:IsRegistered("Loothing") then
-            Config:RegisterOptionsTable("Loothing", LoothingOptionsTable)
+            Config:RegisterOptionsTable("Loothing", ns.OptionsTable)
         end
     end
 
     -- Initialize response manager
-    if CreateLoothingResponseManager then
-        Loothing.ResponseManager = CreateLoothingResponseManager()
+    if ns.CreateResponseManager then
+        Loothing.ResponseManager = ns.CreateResponseManager()
         Loothing.ResponseManager:LoadResponses()
     end
 
     -- Initialize item filter
-    if CreateLoothingItemFilter then
-        Loothing.ItemFilter = CreateLoothingItemFilter()
+    if ns.CreateItemFilter then
+        Loothing.ItemFilter = ns.CreateItemFilter()
         Loothing.ItemFilter:Init()
     end
 
     -- Initialize roll tracker
-    if CreateLoothingRollTracker then
-        Loothing.RollTracker = CreateLoothingRollTracker()
+    if ns.CreateRollTracker then
+        Loothing.RollTracker = ns.CreateRollTracker()
     end
 
     -- Initialize group loot handler (auto-roll on group loot)
-    if CreateLoothingGroupLoot then
-        Loothing.GroupLoot = CreateLoothingGroupLoot()
+    if ns.CreateGroupLoot then
+        Loothing.GroupLoot = ns.CreateGroupLoot()
     end
 
     -- Initialize history
-    if LoothingHistoryMixin then
-        Loothing.History = CreateFromMixins(LoothingHistoryMixin)
+    if ns.HistoryMixin then
+        Loothing.History = CreateFromMixins(ns.HistoryMixin)
         Loothing.History:Init()
     end
 
     -- Initialize history import
-    if LoothingHistoryImportMixin then
-        Loothing.HistoryImport = CreateFromMixins(LoothingHistoryImportMixin)
+    if ns.HistoryImportMixin then
+        Loothing.HistoryImport = CreateFromMixins(ns.HistoryImportMixin)
         Loothing.HistoryImport:Init()
     end
 
     -- Initialize player cache (GUID-based player data)
-    if CreateLoothingPlayerCache then
-        Loothing.PlayerCache = CreateLoothingPlayerCache()
+    if ns.CreatePlayerCache then
+        Loothing.PlayerCache = ns.CreatePlayerCache()
     end
 
     -- Initialize item storage
-    if CreateLoothingItemStorage then
-        Loothing.ItemStorage = CreateLoothingItemStorage()
+    if ns.CreateItemStorage then
+        Loothing.ItemStorage = ns.CreateItemStorage()
     end
 
     -- Initialize trade queue
-    if CreateLoothingTradeQueue then
-        Loothing.TradeQueue = CreateLoothingTradeQueue()
+    if ns.CreateTradeQueue then
+        Loothing.TradeQueue = ns.CreateTradeQueue()
     end
 
     -- Initialize council manager
-    if LoothingCouncilMixin then
-        Loothing.Council = CreateFromMixins(LoothingCouncilMixin)
+    if ns.CouncilMixin then
+        Loothing.Council = CreateFromMixins(ns.CouncilMixin)
         Loothing.Council:Init()
     end
 
     -- Initialize observer manager
-    if LoothingObserverMixin then
-        Loothing.Observer = CreateFromMixins(LoothingObserverMixin)
+    if ns.ObserverMixin then
+        Loothing.Observer = CreateFromMixins(ns.ObserverMixin)
         Loothing.Observer:Init()
     end
 
     -- Initialize communication (Loolib.Comm handles prefix registration + CHAT_MSG_ADDON)
-    if LoothingCommMixin then
-        Loothing.Comm = CreateFromMixins(LoothingCommMixin)
+    if ns.CommMixin then
+        Loothing.Comm = CreateFromMixins(ns.CommMixin)
         Loothing.Comm:Init()
     end
 
     -- Initialize encounter restrictions handler (must be before Announcer so it can hook OnRestrictionChanged)
-    if CreateLoothingRestrictions then
-        Loothing.Restrictions = CreateLoothingRestrictions()
+    if ns.CreateRestrictions then
+        Loothing.Restrictions = ns.CreateRestrictions()
     end
 
     -- FIX(Area2-2): Initialize announcer AFTER Restrictions so it can register the callback
-    if CreateLoothingAnnouncer then
-        Loothing.Announcer = CreateLoothingAnnouncer()
+    if ns.CreateAnnouncer then
+        Loothing.Announcer = ns.CreateAnnouncer()
     end
 
     -- Initialize sync handler
-    if LoothingSyncMixin then
-        Loothing.Sync = CreateFromMixins(LoothingSyncMixin)
+    if ns.SyncMixin then
+        Loothing.Sync = CreateFromMixins(ns.SyncMixin)
         Loothing.Sync:Init()
     end
 
     -- Initialize AckTracker (ML heartbeat + client auto-recovery)
-    if LoothingAckTrackerMixin then
-        Loothing.AckTracker = CreateLoothingAckTracker()
+    if ns.CreateAckTracker then
+        Loothing.AckTracker = ns.CreateAckTracker()
     end
 
     -- Initialize whisper command handler
-    if CreateLoothingWhisperHandler then
-        Loothing.WhisperHandler = CreateLoothingWhisperHandler()
+    if ns.CreateWhisperHandler then
+        Loothing.WhisperHandler = ns.CreateWhisperHandler()
     end
 
     -- Initialize error handler and structured logging
-    if CreateLoothingErrorHandler then
-        Loothing.ErrorHandler = CreateLoothingErrorHandler()
+    if ns.CreateErrorHandler then
+        Loothing.ErrorHandler = ns.CreateErrorHandler()
         Loothing.ErrorHandler:LoadFromDatabase()
     end
 
     -- Initialize MLDB (Master Looter Database)
-    if CreateLoothingMLDB then
-        Loothing.MLDB = CreateLoothingMLDB()
+    if ns.CreateMLDB then
+        Loothing.MLDB = ns.CreateMLDB()
     end
 
     -- Initialize session manager
-    if LoothingSessionMixin then
-        Loothing.Session = CreateFromMixins(LoothingSessionMixin)
+    if ns.SessionMixin then
+        Loothing.Session = CreateFromMixins(ns.SessionMixin)
         Loothing.Session:Init()
     end
 
     -- Initialize voting engine (singleton, not a mixin)
-    if LoothingVotingEngine then
-        Loothing.VotingEngine = LoothingVotingEngine
+    if ns.VotingEngine then
+        Loothing.VotingEngine = ns.VotingEngine
     end
 
     -- Initialize response button settings frame
-    if CreateLoothingResponseButtonSettings then
-        Loothing.ResponseButtonSettings = CreateLoothingResponseButtonSettings()
+    if ns.CreateResponseButtonSettings then
+        Loothing.ResponseButtonSettings = ns.CreateResponseButtonSettings()
     end
 
     -- Initialize UI last (depends on all other modules)
-    if LoothingMainFrameMixin then
-        Loothing.MainFrame = CreateLoothingMainFrame()
+    if ns.CreateMainFrame then
+        Loothing.MainFrame = ns.CreateMainFrame()
     end
 
     -- Initialize UI namespace with all panels
@@ -269,8 +281,8 @@ local function InitializeModules()
     }
 
     -- Initialize Sync Panel (modal dialog for settings/history sync)
-    if CreateLoothingSyncPanel then
-        local success, result = pcall(CreateLoothingSyncPanel)
+    if ns.CreateSyncPanel then
+        local success, result = pcall(ns.CreateSyncPanel)
         if success and result then
             Loothing.UI.SyncPanel = result
         else
@@ -279,8 +291,8 @@ local function InitializeModules()
     end
 
     -- Initialize Version Check Panel (group/guild version status)
-    if CreateLoothingVersionCheckPanel then
-        local success, result = pcall(CreateLoothingVersionCheckPanel)
+    if ns.CreateVersionCheckPanel then
+        local success, result = pcall(ns.CreateVersionCheckPanel)
         if success and result then
             Loothing.UI.VersionCheckPanel = result
         else
@@ -289,8 +301,8 @@ local function InitializeModules()
     end
 
     -- Initialize Council Table (tabular view for ML/council to see all candidates and award)
-    if CreateLoothingCouncilTable then
-        local success, result = pcall(CreateLoothingCouncilTable)
+    if ns.CreateCouncilTable then
+        local success, result = pcall(ns.CreateCouncilTable)
         if success and result then
             Loothing.UI.CouncilTable = result
         else
@@ -299,8 +311,8 @@ local function InitializeModules()
     end
 
     -- Initialize Results Panel (modal dialog for viewing vote results)
-    if CreateLoothingResultsPanel then
-        local success, result = pcall(CreateLoothingResultsPanel)
+    if ns.CreateResultsPanel then
+        local success, result = pcall(ns.CreateResultsPanel)
         if success and result then
             Loothing.UI.ResultsPanel = result
         else
@@ -309,20 +321,20 @@ local function InitializeModules()
     end
 
     -- Initialize Roll Frame (popup for raid members to respond to loot)
-    if CreateLoothingRollFrame then
-        local success, result = pcall(CreateLoothingRollFrame)
+    if ns.CreateRollFrame then
+        local success, result = pcall(ns.CreateRollFrame)
         if success and result then
             Loothing.UI.RollFrame = result
         else
             Loothing:Error("Failed to create RollFrame:", result or "unknown error")
         end
     else
-        Loothing:Error("CreateLoothingRollFrame not defined - check TOC load order")
+        Loothing:Error("ns.CreateRollFrame not defined - check TOC load order")
     end
 
     -- Initialize AddItemFrame (dedicated frame for manually adding items)
-    if CreateLoothingAddItemFrame then
-        local success, result = pcall(CreateLoothingAddItemFrame)
+    if ns.CreateAddItemFrame then
+        local success, result = pcall(ns.CreateAddItemFrame)
         if success and result then
             Loothing.AddItemFrame = result
         else
@@ -345,12 +357,12 @@ end
 -- @return boolean - True if we should skip ML detection
 local function ShouldSkipMLCheck()
     -- Skip in PvP battlegrounds, arenas, and scenarios
-    if LoothingUtils.IsInPvPOrScenario() then
+    if Utils.IsInPvPOrScenario() then
         return true
     end
     -- Skip if "onlyUseInRaids" is set and we're not in a raid
     if Loothing.Settings and Loothing.Settings:Get("ml.onlyUseInRaids", true) then
-        if not LoothingUtils.IsInRaidInstance() then
+        if not Utils.IsInRaidInstance() then
             return true
         end
     end
@@ -373,12 +385,12 @@ local function DetermineML()
         for i = 1, GetNumGroupMembers() do
             local name, rank = SecretUtil.SafeGetRaidRosterInfo(i)
             if rank == 2 and name then -- Raid leader
-                return LoothingUtils.NormalizeName(name)
+                return Utils.NormalizeName(name)
             end
         end
     elseif IsInGroup() then
         if UnitIsGroupLeader("player") then
-            return LoothingUtils.GetPlayerFullName()
+            return Utils.GetPlayerFullName()
         end
         for i = 1, 4 do
             local unit = "party" .. i
@@ -388,7 +400,7 @@ local function DetermineML()
                 if realm and realm ~= "" then
                     return name .. "-" .. realm
                 end
-                return LoothingUtils.NormalizeName(name)
+                return Utils.NormalizeName(name)
             end
         end
     end
@@ -431,13 +443,13 @@ local function PerformMLCheck()
 
     mlRetryCount = 0
 
-    local playerName = LoothingUtils.GetPlayerFullName()
+    local playerName = Utils.GetPlayerFullName()
     local wasML = Loothing.isMasterLooter
     local oldML = Loothing.masterLooter
-    local isNowML = LoothingUtils.NormalizeName(ml) == LoothingUtils.NormalizeName(playerName)
+    local isNowML = Utils.NormalizeName(ml) == Utils.NormalizeName(playerName)
 
     -- Update guild group status
-    Loothing.isInGuildGroup = LoothingUtils.IsGuildGroup()
+    Loothing.isInGuildGroup = Utils.IsGuildGroup()
 
     -- Update stored loot method
     Loothing.lootMethod = Loothing.GetLootMethod and Loothing.GetLootMethod() or nil
@@ -497,7 +509,7 @@ local function PerformMLCheck()
         if usageMode == "ask_gl" then
             -- Prompt the user for confirmation
             Loothing:Debug("ML detected, usage mode 'ask_gl' - prompting")
-            LoothingPopups:Show("LOOTHING_ML_USAGE_PROMPT", nil, function()
+            GetPopups():Show("LOOTHING_ML_USAGE_PROMPT", nil, function()
                 Loothing:StartHandleLoot()
             end)
             return
@@ -540,10 +552,10 @@ OnRaidEnter = function()
 
     local usageMode = Loothing.Settings and Loothing.Settings:Get("ml.usageMode", "ask_gl") or "ask_gl"
     if usageMode == "never" then return end
-    if LoothingUtils.IsInPvPOrScenario() then return end
+    if Utils.IsInPvPOrScenario() then return end
 
     if Loothing.Settings and Loothing.Settings:Get("ml.onlyUseInRaids", true) then
-        if not LoothingUtils.IsInRaidInstance() then return end
+        if not Utils.IsInRaidInstance() then return end
     end
 
     if Loothing.handleLoot then return end
@@ -553,21 +565,21 @@ OnRaidEnter = function()
     end
 
     local guildOnly = Loothing.Settings and Loothing.Settings:Get("settings.autoGroupLootGuildOnly", false) or false
-    if guildOnly and not LoothingUtils.IsGuildGroup() then return end
+    if guildOnly and not Utils.IsGuildGroup() then return end
 
-    LoothingPopups:Hide("LOOTHING_ML_USAGE_PROMPT")
+    GetPopups():Hide("LOOTHING_ML_USAGE_PROMPT")
 
     if usageMode == "gl" then
         Loothing.isMasterLooter = true
-        Loothing.masterLooter = LoothingUtils.GetPlayerFullName()
+        Loothing.masterLooter = Utils.GetPlayerFullName()
         Loothing:StartHandleLoot()
     elseif usageMode == "ask_gl" then
         local instanceName = select(1, GetInstanceInfo())
-        LoothingPopups:Show("LOOTHING_ML_USAGE_PROMPT",
+        GetPopups():Show("LOOTHING_ML_USAGE_PROMPT",
             { instance = instanceName },
             function()
                 Loothing.isMasterLooter = true
-                Loothing.masterLooter = LoothingUtils.GetPlayerFullName()
+                Loothing.masterLooter = Utils.GetPlayerFullName()
                 Loothing:StartHandleLoot()
             end,
             function()
@@ -579,7 +591,7 @@ end
 
 --- Start handling loot (broadcast to group)
 -- Called when we become ML and usage mode permits
-function Loothing:StartHandleLoot()
+function Addon:StartHandleLoot()
     if self.handleLoot then return end
 
     self.handleLoot = true
@@ -598,8 +610,9 @@ function Loothing:StartHandleLoot()
     end
 
     -- Send version check to group
-    if LoothingVersionCheck and LoothingVersionCheck.Query then
-        LoothingVersionCheck:Query("raid")
+    local versionCheck = GetVersionCheck()
+    if versionCheck and versionCheck.Query then
+        versionCheck:Query("raid")
     end
 
     -- Enable whisper command handler
@@ -610,7 +623,7 @@ end
 
 --- Stop handling loot (broadcast to group)
 -- Ends any active session and notifies the group
-function Loothing:StopHandleLoot()
+function Addon:StopHandleLoot()
     if not self.handleLoot then return end
 
     self.handleLoot = false
@@ -677,7 +690,7 @@ local function RegisterEvents()
         end
 
         -- Dismiss any pending ML usage prompt
-        LoothingPopups:Hide("LOOTHING_ML_USAGE_PROMPT")
+        GetPopups():Hide("LOOTHING_ML_USAGE_PROMPT")
     end, Loothing)
 
     Events.Registry:RegisterEventCallback("RAID_INSTANCE_WELCOME", function()
@@ -697,8 +710,9 @@ local function RegisterEvents()
             Loothing.Sync:CheckNeedSync()
         end
         -- Periodic version check on roster changes
-        if LoothingVersionCheck then
-            LoothingVersionCheck:OnGroupRosterUpdate()
+        local versionCheck = GetVersionCheck()
+        if versionCheck then
+            versionCheck:OnGroupRosterUpdate()
         end
     end, Loothing)
 
@@ -728,16 +742,17 @@ local function RegisterEvents()
         end
     end, Loothing)
 
-    -- NOTE: CHAT_MSG_ADDON is handled by Loolib.Comm (registered in LoothingCommMixin:Init)
+    -- NOTE: CHAT_MSG_ADDON is handled by Loolib.Comm (registered in CommMixin:Init)
 
     -- Wire VersionCheck callbacks to Comm events
-    if Loothing.Comm and LoothingVersionCheck then
+    local versionCheck = GetVersionCheck()
+    if Loothing.Comm and versionCheck then
         Loothing.Comm:RegisterCallback("OnVersionRequest", function(_, data)
-            LoothingVersionCheck:HandleRequest(data.requester)
+            versionCheck:HandleRequest(data.requester)
         end, Loothing)
 
         Loothing.Comm:RegisterCallback("OnVersionResponse", function(_, data)
-            LoothingVersionCheck:HandleResponse(data.version, data.sender)
+            versionCheck:HandleResponse(data.version, data.sender)
         end, Loothing)
     end
 
@@ -745,7 +760,7 @@ local function RegisterEvents()
     if Loothing.Comm then
         Loothing.Comm:RegisterCallback("OnStopHandleLoot", function(_, data)
             if data and data.masterLooter then
-                if LoothingUtils.IsSamePlayer(data.masterLooter, Loothing.masterLooter or "") then
+                if Utils.IsSamePlayer(data.masterLooter, Loothing.masterLooter or "") then
                     Loothing.masterLooter = nil
                     Loothing.isMasterLooter = false
                 end
@@ -763,7 +778,7 @@ local function RegisterEvents()
     -- Wire Session award → TradeQueue (only for items the local player looted)
     if Loothing.Session and Loothing.TradeQueue then
         Loothing.Session:RegisterCallback("OnItemAwarded", function(_, item, winner)
-            if item.looter and LoothingUtils.IsSamePlayer(item.looter, LoothingUtils.GetPlayerFullName()) then
+            if item.looter and Utils.IsSamePlayer(item.looter, Utils.GetPlayerFullName()) then
                 Loothing.TradeQueue:AddToQueue(item.guid, item.itemLink, winner, item.timestamp)
             end
         end, Loothing)
@@ -826,13 +841,13 @@ local function RegisterSlashCommands()
             return
         end
 
-        local itemID = LoothingUtils.GetItemID(itemLink)
+        local itemID = Utils.GetItemID(itemLink)
         if not itemID then
             printError(L["SLASH_INVALID_ITEM"] or "Invalid item link.")
             return
         end
 
-        local itemName = LoothingUtils.GetItemName(itemLink) or "Item"
+        local itemName = Utils.GetItemName(itemLink) or "Item"
         if Loothing.Settings:IsItemIgnored(itemID) then
             Loothing.Settings:RemoveIgnoredItem(itemID)
             printLine(string.format(L["ITEM_UNIGNORED"], itemName))
@@ -864,7 +879,7 @@ local function RegisterSlashCommands()
         end
 
         if arg == "clear" or arg == "reset" then
-            local canModify = Loothing.Settings:IsMasterLooter() or LoothingUtils.IsRaidLeader()
+            local canModify = Loothing.Settings:IsMasterLooter() or Utils.IsRaidLeader()
             if not canModify then
                 printError(L["ERROR_NOT_ML_OR_RL"])
                 return
@@ -874,7 +889,7 @@ local function RegisterSlashCommands()
             return
         end
 
-        local canModify = Loothing.Settings:IsMasterLooter() or LoothingUtils.IsRaidLeader()
+        local canModify = Loothing.Settings:IsMasterLooter() or Utils.IsRaidLeader()
         if not canModify then
             printError(L["ERROR_NOT_ML_OR_RL"])
             return
@@ -1045,7 +1060,7 @@ local function RegisterSlashCommands()
                     return
                 end
                 Loothing.isMasterLooter = true
-                Loothing.masterLooter = LoothingUtils.GetPlayerFullName()
+                Loothing.masterLooter = Utils.GetPlayerFullName()
                 Loothing:StartHandleLoot()
             end,
         },
@@ -1176,8 +1191,9 @@ local function RegisterSlashCommands()
                 if not requireDebug("/lt test") then
                     return
                 end
-                if LoothingTestMode then
-                    LoothingTestMode:HandleCommand(args or "")
+                local TestMode = ns.TestModeState
+                if TestMode and TestMode.HandleCommand then
+                    TestMode:HandleCommand(args or "")
                 else
                     printError(L["SLASH_TEST_UNAVAILABLE"] or "Test mode not available.")
                 end
@@ -1192,8 +1208,9 @@ local function RegisterSlashCommands()
                 if not requireDebug("/lt testmode") then
                     return
                 end
-                if Loothing.TestMode and Loothing.TestMode.HandleSlash then
-                    Loothing.TestMode:HandleSlash(args or "")
+                local TestMode = ns.TestModeState
+                if TestMode and TestMode.HandleSlash then
+                    TestMode:HandleSlash(args or "")
                 else
                     printError(L["SLASH_TEST_UNAVAILABLE"] or "Test mode not available.")
                 end
@@ -1255,7 +1272,11 @@ local function RegisterSlashCommands()
         end
     end
 
-    Loolib.Compat.RegisterSlashCommand("LOOTHING", "/loothing", "/lt", function(msg)
+    GlobalBridge:RegisterSlashCommands(ADDON_NAME, {
+        {
+            id = "LOOTHING",
+            commands = { "/loothing", "/lt" },
+            handler = function(msg)
         local token, rest = msg:match("^(%S*)%s*(.*)$")
         token = (token or ""):lower()
         rest = rest or ""
@@ -1285,7 +1306,9 @@ local function RegisterSlashCommands()
         end
 
         command.handler(rest, command, commands)
-    end)
+            end,
+        },
+    })
 end
 
 --[[--------------------------------------------------------------------
@@ -1295,7 +1318,7 @@ end
 eventFrame:SetScript("OnEvent", function(self, event, ...)
     if event == "ADDON_LOADED" then
         local addonName = ...
-        if addonName == "Loothing" then
+        if addonName == ADDON_NAME then
             -- Initialize all modules (Loolib.Comm handles addon prefix registration)
             InitializeModules()
 
@@ -1325,8 +1348,8 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             end
 
             -- Initialize minimap button (deferred to PLAYER_LOGIN so Minimap frame exists)
-            if CreateLoothingMinimapButton then
-                local success, result = pcall(CreateLoothingMinimapButton)
+            if ns.CreateMinimapButton then
+                local success, result = pcall(ns.CreateMinimapButton)
                 if success and result then
                     Loothing.MinimapButton = result
                     Loothing.UI.MinimapButton = result
@@ -1336,8 +1359,9 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             end
 
             -- Load persisted version data (Settings is now available)
-            if LoothingVersionCheck and LoothingVersionCheck.LoadPersistedVersions then
-                LoothingVersionCheck:LoadPersistedVersions()
+            local versionCheck = GetVersionCheck()
+            if versionCheck and versionCheck.LoadPersistedVersions then
+                versionCheck:LoadPersistedVersions()
             end
 
             -- Register with Blizzard's built-in addon settings panel
@@ -1427,17 +1451,17 @@ end)
 
 Loothing.debug = false
 
-function Loothing:Debug(...)
+function Addon:Debug(...)
     if self.debug then
         print("|cff00ff00[Loothing Debug]|r", SecretUtil.SecretsForPrint(...))
     end
 end
 
-function Loothing:Error(...)
+function Addon:Error(...)
     print("|cffff0000[Loothing Error]|r", SecretUtil.SecretsForPrint(...))
 end
 
-function Loothing:Print(...)
+function Addon:Print(...)
     print("|cff00ccff[Loothing]|r", SecretUtil.SecretsForPrint(...))
 end
 
@@ -1447,30 +1471,30 @@ end
 
 --- Check if the addon is ready
 -- @return boolean
-function Loothing:IsReady()
+function Addon:IsReady()
     return self.initialized
 end
 
 --- Get current session
 -- @return table|nil
-function Loothing:GetSession()
+function Addon:GetSession()
     return self.Session
 end
 
 --- Get council manager
 -- @return table|nil
-function Loothing:GetCouncil()
+function Addon:GetCouncil()
     return self.Council
 end
 
 --- Get settings
 -- @return table|nil
-function Loothing:GetSettings()
+function Addon:GetSettings()
     return self.Settings
 end
 
 --- Toggle main window
-function Loothing:Toggle()
+function Addon:Toggle()
     if self.MainFrame then
         if self.MainFrame:IsShown() then
             self.MainFrame:Hide()
@@ -1491,7 +1515,7 @@ end
 local RECONNECT_CACHE_MAX_AGE = 15 * 60  -- 15 minutes
 
 --- Cache current state to global SavedVariables for reconnect
-function Loothing:CacheStateForReconnect()
+function Addon:CacheStateForReconnect()
     if not self.Settings then return end
 
     local cache = {
@@ -1566,7 +1590,7 @@ function Loothing:CacheStateForReconnect()
     end
 
     -- FIX(critical-02): Tag cache with owner to prevent alt character restore
-    cache.owner = LoothingUtils.GetPlayerFullName()
+    cache.owner = Utils.GetPlayerFullName()
 
     -- Store in global scope (persists across profiles)
     self.Settings:SetGlobalValue("reconnectCache", cache)
@@ -1574,7 +1598,7 @@ function Loothing:CacheStateForReconnect()
 end
 
 --- Restore state from cache after UI reload
-function Loothing:RestoreFromCache()
+function Addon:RestoreFromCache()
     if not self.Settings then return end
 
     local cache = self.Settings:GetGlobalValue("reconnectCache")
@@ -1584,7 +1608,7 @@ function Loothing:RestoreFromCache()
     end
 
     -- FIX(critical-02): Reject cache if it belongs to a different character
-    local currentOwner = LoothingUtils.GetPlayerFullName()
+    local currentOwner = Utils.GetPlayerFullName()
     if cache.owner and currentOwner and cache.owner ~= currentOwner then
         self:Debug("Reconnect cache owner mismatch; clearing stale cache from", tostring(cache.owner))
         self.Settings:SetGlobalValue("reconnectCache", nil)

@@ -3,13 +3,17 @@
     CouncilManager - Council member management
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local CreateFromMixins = Loolib.CreateFromMixins
+local Utils = ns.Utils
+ns.CouncilMixin = CreateFromMixins(Loolib.CallbackRegistryMixin, ns.CouncilMixin or {})
+
+local CouncilMixin = ns.CouncilMixin
 
 --[[--------------------------------------------------------------------
-    LoothingCouncilMixin
+    CouncilMixin
 ----------------------------------------------------------------------]]
-
-LoothingCouncilMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
 
 local COUNCIL_EVENTS = {
     "OnMemberAdded",
@@ -19,7 +23,7 @@ local COUNCIL_EVENTS = {
 }
 
 --- Initialize council manager
-function LoothingCouncilMixin:Init()
+function CouncilMixin:Init()
     Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(COUNCIL_EVENTS)
 
@@ -46,11 +50,11 @@ end
 
 --- Set remote roster (received from ML)
 -- @param members table - Array of member names
-function LoothingCouncilMixin:SetRemoteRoster(members)
+function CouncilMixin:SetRemoteRoster(members)
     wipe(self.remoteRoster)
 
     for _, name in ipairs(members) do
-        self.remoteRoster[LoothingUtils.NormalizeName(name)] = true
+        self.remoteRoster[Utils.NormalizeName(name)] = true
     end
 
     self.remotePrimary = true
@@ -59,7 +63,7 @@ function LoothingCouncilMixin:SetRemoteRoster(members)
 end
 
 --- Clear remote roster (become primary)
-function LoothingCouncilMixin:ClearRemoteRoster()
+function CouncilMixin:ClearRemoteRoster()
     wipe(self.remoteRoster)
     self.remotePrimary = false
     self:TriggerEvent("OnRosterChanged")
@@ -67,7 +71,7 @@ end
 
 --- Check if using remote roster
 -- @return boolean
-function LoothingCouncilMixin:IsUsingRemoteRoster()
+function CouncilMixin:IsUsingRemoteRoster()
     return self.remotePrimary
 end
 
@@ -77,8 +81,10 @@ end
     Factory
 ----------------------------------------------------------------------]]
 
-function CreateLoothingCouncil()
-    local council = Loolib.CreateFromMixins(LoothingCouncilMixin)
+function ns.CreateCouncil()
+    local council = CreateFromMixins(CouncilMixin)
     council:Init()
     return council
 end
+
+-- ns.CouncilMixin and ns.CreateCouncil exported above

@@ -15,10 +15,14 @@
     Protocol version 3 (breaking from v2 — pre-release, acceptable).
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Compressor = Loolib.Compressor
 local CreateFromMixins = Loolib.CreateFromMixins
 local Serializer = Loolib.Serializer
+local Loothing = ns.Addon
+
+ns.ProtocolMixin = ns.ProtocolMixin or {}
 
 --[[--------------------------------------------------------------------
     Checksum Helpers
@@ -41,13 +45,13 @@ local function Unpack32(s, offset)
 end
 
 --[[--------------------------------------------------------------------
-    LoothingProtocolMixin
+    ProtocolMixin
 ----------------------------------------------------------------------]]
 
-LoothingProtocolMixin = {}
+local ProtocolMixin = ns.ProtocolMixin
 
 --- Initialize protocol handler
-function LoothingProtocolMixin:Init()
+function ProtocolMixin:Init()
     self.version = Loothing.PROTOCOL_VERSION
 
     self.Serializer = Serializer
@@ -66,7 +70,7 @@ end
 -- @param command string - Message type from Loothing.MsgType
 -- @param data table|nil - Message payload (structured table)
 -- @return string|nil - Encoded message ready for Loolib.Comm
-function LoothingProtocolMixin:Encode(command, data)
+function ProtocolMixin:Encode(command, data)
     -- Step 1: Serialize (version + command + data → string)
     local serialized = self.Serializer:Serialize(self.version, command, data)
     if not serialized then return nil end
@@ -87,7 +91,7 @@ end
 -- Pipeline: DecodeForAddonChannel → split checksum → Decompress → verify → Deserialize
 -- @param encoded string - Encoded message from Loolib.Comm callback
 -- @return number|nil, string|nil, table|nil - version, command, data (all nil on error)
-function LoothingProtocolMixin:Decode(encoded)
+function ProtocolMixin:Decode(encoded)
     if not encoded or encoded == "" then
         return nil, nil, nil
     end
@@ -130,5 +134,7 @@ end
     Singleton Instance
 ----------------------------------------------------------------------]]
 
-LoothingProtocol = CreateFromMixins(LoothingProtocolMixin)
-LoothingProtocol:Init()
+ns.Protocol = ns.Protocol or CreateFromMixins(ProtocolMixin)
+ns.Protocol:Init()
+
+-- ns.ProtocolMixin and ns.Protocol exported above

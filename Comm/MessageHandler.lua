@@ -3,20 +3,29 @@
     MessageHandler - Message routing, sending, and receiving
 
     Uses Loolib.Comm for transport (handles chunking, throttling, queuing).
-    Uses LoothingProtocol for encoding (Serializer + Compressor pipeline).
-    Integrates with LoothingRestrictions for encounter restriction handling.
+    Uses ns.Protocol for encoding (Serializer + Compressor pipeline).
+    Integrates with ns.RestrictionsMixin for encounter restriction handling.
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
 local CallbackRegistryMixin = Loolib.CallbackRegistryMixin
 local Comm = Loolib.Comm
 local CreateFromMixins = Loolib.CreateFromMixins
+local Loothing = ns.Addon
+
+ns.CommMixin = CreateFromMixins(CallbackRegistryMixin, ns.CommMixin or {})
 
 --[[--------------------------------------------------------------------
-    LoothingCommMixin
+    CommMixin
 ----------------------------------------------------------------------]]
 
-LoothingCommMixin = CreateFromMixins(CallbackRegistryMixin)
+local Utils = ns.Utils
+local TestMode = ns.TestMode
+
+---@class CommMixin
+---@field Send fun(self: CommMixin, command: string, data: table|nil, target: string|nil, priority: string|nil)
+local CommMixin = ns.CommMixin
 
 local COMM_EVENTS = {
     "OnSessionStart",
@@ -119,7 +128,7 @@ local HANDLERS = {
 }
 
 --- Initialize communication handler
-function LoothingCommMixin:Init()
+function CommMixin:Init()
     CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(COMM_EVENTS)
 
@@ -135,18 +144,19 @@ end
 ----------------------------------------------------------------------]]
 
 --- Send a command + data to group or a specific player
--- @param command string - Loothing.MsgType value
--- @param data table|nil - Structured message payload
--- @param target string|nil - Player name for WHISPER, nil for group broadcast
--- @param priority string|nil - "ALERT", "NORMAL" (default), or "BULK"
-function LoothingCommMixin:Send(command, data, target, priority)
-    local encoded = LoothingProtocol:Encode(command, data)
+---@param self table
+---@param command string Loothing.MsgType value
+---@param data table|nil Structured message payload
+---@param target string|nil Player name for WHISPER, nil for group broadcast
+---@param priority string|nil "ALERT", "NORMAL" (default), or "BULK"
+function CommMixin.Send(self, command, data, target, priority)
+    local encoded = ns.Protocol:Encode(command, data)
     if not encoded then return end
 
     -- Test mode intercept
-    if LoothingTestMode and LoothingTestMode.OnOutgoingComm then
+    if TestMode and TestMode.OnOutgoingComm then
         local channel = target and "WHISPER" or (IsInRaid() and "RAID" or "PARTY")
-        LoothingTestMode:OnOutgoingComm(channel, target)
+        TestMode:OnOutgoingComm(channel, target)
     end
 
     -- Backpressure: downgrade non-critical NORMAL to BULK when queue is under pressure
@@ -179,7 +189,7 @@ end
 -- @param data table|nil - Message payload
 -- @param target string|nil - Player name or nil for broadcast
 -- @param priority string|nil - "ALERT", "NORMAL", or "BULK"
-function LoothingCommMixin:QueueForBatch(command, data, target, priority)
+function CommMixin:QueueForBatch(command, data, target, priority)
     local key   = GetBatchKey(target, priority)
     local batch = batchAccumulator[key]
 
@@ -205,7 +215,7 @@ end
 
 --- Flush a pending batch immediately
 -- @param key string - Batch key from GetBatchKey
-function LoothingCommMixin:FlushBatch(key)
+function CommMixin:FlushBatch(key)
     local batch = batchAccumulator[key]
     if not batch then return end
     batchAccumulator[key] = nil
@@ -226,7 +236,7 @@ function LoothingCommMixin:FlushBatch(key)
 end
 
 --- Flush all pending batches immediately
-function LoothingCommMixin:FlushAll()
+function CommMixin:FlushAll()
     -- Collect keys first to avoid modifying table during iteration
     local keys = {}
     for k in pairs(batchAccumulator) do
@@ -241,17 +251,17 @@ end
 -- @param command string - Loothing.MsgType value
 -- @param data table|nil - Message payload
 -- @param priority string|nil
-function LoothingCommMixin:SendGuild(command, data, priority)
+function CommMixin:SendGuild(command, data, priority)
     if not IsInGuild() then
         Loothing:Debug("Cannot send to GUILD: not in a guild")
         return
     end
 
-    local encoded = LoothingProtocol:Encode(command, data)
+    local encoded = ns.Protocol:Encode(command, data)
     if not encoded then return end
 
-    if LoothingTestMode and LoothingTestMode.OnOutgoingComm then
-        LoothingTestMode:OnOutgoingComm("GUILD", nil)
+    if TestMode and TestMode.OnOutgoingComm then
+        TestMode:OnOutgoingComm("GUILD", nil)
     end
 
     Comm:SendCommMessage(Loothing.ADDON_PREFIX, encoded, "GUILD", nil, priority or "NORMAL")
@@ -263,7 +273,7 @@ end
 -- @param data table|nil - Message payload
 -- @param target string|nil - Player name or nil for group
 -- @param priority string|nil
-function LoothingCommMixin:SendGuaranteed(command, data, target, priority)
+function CommMixin:SendGuaranteed(command, data, target, priority)
     -- Check encounter restrictions
     if Loothing.Restrictions and Loothing.Restrictions:IsRestricted() then
         Loothing.Restrictions:QueueGuaranteed(command, data, target, priority)
@@ -281,7 +291,7 @@ end
 -- @param data table|nil - Message payload
 -- @param target string - Target player name (with realm suffix)
 -- @param priority string|nil
-function LoothingCommMixin:SendViaRelay(command, data, target, priority)
+function CommMixin:SendViaRelay(command, data, target, priority)
     self:Send(Loothing.MsgType.XREALM, {
         target = target,
         command = command,
@@ -297,9 +307,9 @@ end
 -- @param message string - Encoded message (already reassembled if multi-part)
 -- @param distribution string - Channel received on
 -- @param sender string - Sender name
-function LoothingCommMixin:OnMessage(message, distribution, sender)
+function CommMixin:OnMessage(message, distribution, sender)
     -- Decode message
-    local version, command, data = LoothingProtocol:Decode(message)
+    local version, command, data = ns.Protocol:Decode(message)
 
     if not version or not command then
         Loothing:Debug("Failed to decode message from", sender)
@@ -313,7 +323,7 @@ function LoothingCommMixin:OnMessage(message, distribution, sender)
     end
 
     -- Normalize sender name
-    sender = LoothingUtils.NormalizeName(sender)
+    sender = Utils.NormalizeName(sender)
 
     -- Route to handler
     self:RouteMessage(command, data, sender, distribution)
@@ -324,7 +334,7 @@ end
 -- @param data table - Deserialized message data
 -- @param sender string - Normalized sender name
 -- @param distribution string - Channel
-function LoothingCommMixin:RouteMessage(command, data, sender, distribution)
+function CommMixin:RouteMessage(command, data, sender, distribution)
     Loothing:Debug("Received:", command, "from", sender)
 
     local handlerName = HANDLERS[command]
@@ -344,7 +354,7 @@ end
 -- @param data table - { target, command, data }
 -- @param sender string
 -- @param distribution string
-function LoothingCommMixin:HandleXRealm(data, sender, distribution)
+function CommMixin:HandleXRealm(data, sender, distribution)
     if not data or not data.target then return end
 
     -- Prevent recursive processing: inner message must not be XREALM or BATCH
@@ -353,8 +363,8 @@ function LoothingCommMixin:HandleXRealm(data, sender, distribution)
         return
     end
 
-    local localName = LoothingUtils.GetPlayerFullName()
-    if not LoothingUtils.IsSamePlayer(data.target, localName) then
+    local localName = Utils.GetPlayerFullName()
+    if not Utils.IsSamePlayer(data.target, localName) then
         return -- Not for us
     end
 
@@ -372,7 +382,7 @@ end
 -- @param encounterID number
 -- @param encounterName string
 -- @param sessionID string|nil
-function LoothingCommMixin:BroadcastSessionStart(encounterID, encounterName, sessionID)
+function CommMixin:BroadcastSessionStart(encounterID, encounterName, sessionID)
     self:Send(Loothing.MsgType.SESSION_START, {
         encounterID = encounterID,
         encounterName = encounterName,
@@ -381,12 +391,12 @@ function LoothingCommMixin:BroadcastSessionStart(encounterID, encounterName, ses
 end
 
 --- Broadcast session end
-function LoothingCommMixin:BroadcastSessionEnd()
+function CommMixin:BroadcastSessionEnd()
     self:SendGuaranteed(Loothing.MsgType.SESSION_END, {})
 end
 
 --- Broadcast that ML has stopped handling loot entirely
-function LoothingCommMixin:BroadcastStopHandleLoot()
+function CommMixin:BroadcastStopHandleLoot()
     self:Send(Loothing.MsgType.STOP_HANDLE_LOOT, {})
 end
 
@@ -394,7 +404,7 @@ end
 -- @param itemLink string
 -- @param guid string
 -- @param looter string
-function LoothingCommMixin:BroadcastItemAdd(itemLink, guid, looter)
+function CommMixin:BroadcastItemAdd(itemLink, guid, looter)
     self:Send(Loothing.MsgType.ITEM_ADD, {
         itemLink = itemLink,
         guid = guid,
@@ -404,7 +414,7 @@ end
 
 --- Broadcast item removed
 -- @param guid string
-function LoothingCommMixin:BroadcastItemRemove(guid)
+function CommMixin:BroadcastItemRemove(guid)
     self:Send(Loothing.MsgType.ITEM_REMOVE, {
         guid = guid,
     })
@@ -418,7 +428,7 @@ end
 -- @param itemGUID string
 -- @param timeout number
 -- @param sessionID string|nil
-function LoothingCommMixin:BroadcastVoteRequest(itemGUID, timeout, sessionID)
+function CommMixin:BroadcastVoteRequest(itemGUID, timeout, sessionID)
     self:Send(Loothing.MsgType.VOTE_REQUEST, {
         itemGUID = itemGUID,
         timeout = timeout,
@@ -431,7 +441,7 @@ end
 -- @param responses table
 -- @param masterLooter string
 -- @param sessionID string|nil
-function LoothingCommMixin:SendVoteCommit(itemGUID, responses, masterLooter, sessionID)
+function CommMixin:SendVoteCommit(itemGUID, responses, masterLooter, sessionID)
     self:SendGuaranteed(Loothing.MsgType.VOTE_COMMIT, {
         itemGUID = itemGUID,
         responses = responses,
@@ -443,7 +453,7 @@ end
 -- @param itemGUID string
 -- @param winnerName string
 -- @param sessionID string|nil
-function LoothingCommMixin:BroadcastVoteAward(itemGUID, winnerName, sessionID)
+function CommMixin:BroadcastVoteAward(itemGUID, winnerName, sessionID)
     self:SendGuaranteed(Loothing.MsgType.VOTE_AWARD, {
         itemGUID = itemGUID,
         winner = winnerName,
@@ -454,7 +464,7 @@ end
 --- Broadcast vote skip
 -- @param itemGUID string
 -- @param sessionID string|nil
-function LoothingCommMixin:BroadcastVoteSkip(itemGUID, sessionID)
+function CommMixin:BroadcastVoteSkip(itemGUID, sessionID)
     self:SendGuaranteed(Loothing.MsgType.VOTE_SKIP, {
         itemGUID = itemGUID,
         sessionID = sessionID,
@@ -464,7 +474,7 @@ end
 --- Broadcast vote cancellation
 -- @param itemGUID string
 -- @param sessionID string|nil
-function LoothingCommMixin:BroadcastVoteCancel(itemGUID, sessionID)
+function CommMixin:BroadcastVoteCancel(itemGUID, sessionID)
     self:Send(Loothing.MsgType.VOTE_CANCEL, {
         itemGUID = itemGUID,
         sessionID = sessionID,
@@ -475,7 +485,7 @@ end
 -- @param itemGUID string
 -- @param results table
 -- @param sessionID string|nil
-function LoothingCommMixin:BroadcastVoteResults(itemGUID, results, sessionID)
+function CommMixin:BroadcastVoteResults(itemGUID, results, sessionID)
     self:SendGuaranteed(Loothing.MsgType.VOTE_RESULTS, {
         itemGUID = itemGUID,
         results = results,
@@ -489,7 +499,7 @@ end
 
 --- Broadcast council roster
 -- @param members table
-function LoothingCommMixin:BroadcastCouncilRoster(members)
+function CommMixin:BroadcastCouncilRoster(members)
     self:Send(Loothing.MsgType.COUNCIL_ROSTER, {
         members = members,
     })
@@ -497,7 +507,7 @@ end
 
 --- Request sync from ML
 -- @param masterLooter string
-function LoothingCommMixin:RequestSync(masterLooter)
+function CommMixin:RequestSync(masterLooter)
     self:Send(Loothing.MsgType.SYNC_REQUEST, {
         timestamp = time(),
     }, masterLooter)
@@ -506,7 +516,7 @@ end
 --- Send sync data to requester
 -- @param sessionData table
 -- @param target string
-function LoothingCommMixin:SendSyncData(sessionData, target)
+function CommMixin:SendSyncData(sessionData, target)
     self:Send(Loothing.MsgType.SYNC_DATA, sessionData, target)
 end
 
@@ -517,7 +527,7 @@ end
 --- Request player info (gear comparison)
 -- @param itemGUID string
 -- @param playerName string
-function LoothingCommMixin:RequestPlayerInfo(itemGUID, playerName)
+function CommMixin:RequestPlayerInfo(itemGUID, playerName)
     self:Send(Loothing.MsgType.PLAYER_INFO_REQUEST, {
         itemGUID = itemGUID,
         playerName = playerName,
@@ -532,7 +542,7 @@ end
 -- @param slot2ilvl number
 -- @param target string
 -- @param sessionID string|nil
-function LoothingCommMixin:SendPlayerInfo(itemGUID, slot1Link, slot2Link, slot1ilvl, slot2ilvl, target, sessionID)
+function CommMixin:SendPlayerInfo(itemGUID, slot1Link, slot2Link, slot1ilvl, slot2ilvl, target, sessionID)
     self:Send(Loothing.MsgType.PLAYER_INFO_RESPONSE, {
         itemGUID = itemGUID,
         slot1Link = slot1Link,
@@ -552,10 +562,10 @@ end
 -- @param rollMax number|nil
 -- @param masterLooter string
 -- @param sessionID string|nil
-function LoothingCommMixin:SendPlayerResponse(itemGUID, response, note, roll, rollMin, rollMax, masterLooter, sessionID)
+function CommMixin:SendPlayerResponse(itemGUID, response, note, roll, rollMin, rollMax, masterLooter, sessionID)
     -- In test mode, short-circuit network and invoke locally.
     -- Deferred one frame so RollFrame:StartAckTimeout() runs before the ACK arrives.
-    if LoothingTestMode and LoothingTestMode:IsEnabled() then
+    if TestMode and TestMode:IsEnabled() then
         local payload = {
             itemGUID = itemGUID,
             response = response,
@@ -563,7 +573,7 @@ function LoothingCommMixin:SendPlayerResponse(itemGUID, response, note, roll, ro
             roll = roll,
             rollMin = rollMin or 1,
             rollMax = rollMax or 100,
-            playerName = LoothingUtils.GetPlayerFullName(),
+            playerName = Utils.GetPlayerFullName(),
             sessionID = sessionID,
         }
         C_Timer.After(0, function()
@@ -590,14 +600,14 @@ end
 -- @param success boolean
 -- @param target string
 -- @param sessionID string|nil
-function LoothingCommMixin:SendPlayerResponseAck(itemGUID, success, target, sessionID)
+function CommMixin:SendPlayerResponseAck(itemGUID, success, target, sessionID)
     -- In test mode, short-circuit network and invoke locally
-    if LoothingTestMode and LoothingTestMode:IsEnabled() then
+    if TestMode and TestMode:IsEnabled() then
         local payload = {
             itemGUID = itemGUID,
             success = success,
             sessionID = sessionID,
-            masterLooter = LoothingUtils.GetPlayerFullName(),
+            masterLooter = Utils.GetPlayerFullName(),
         }
         if Loothing.Session then
             Loothing.Session:HandlePlayerResponseAck(payload)
@@ -620,7 +630,7 @@ end
 -- @param itemGUID string
 -- @param candidateData table
 -- @param sessionID string|nil
-function LoothingCommMixin:BroadcastCandidateUpdate(itemGUID, candidateData, sessionID)
+function CommMixin:BroadcastCandidateUpdate(itemGUID, candidateData, sessionID)
     self:Send(Loothing.MsgType.CANDIDATE_UPDATE, {
         itemGUID = itemGUID,
         candidateData = candidateData,
@@ -633,7 +643,7 @@ end
 -- @param candidateName string
 -- @param voters table
 -- @param sessionID string|nil
-function LoothingCommMixin:BroadcastVoteUpdate(itemGUID, candidateName, voters, sessionID)
+function CommMixin:BroadcastVoteUpdate(itemGUID, candidateName, voters, sessionID)
     self:Send(Loothing.MsgType.VOTE_UPDATE, {
         itemGUID = itemGUID,
         candidateName = candidateName,
@@ -648,7 +658,7 @@ end
 
 --- Broadcast MLDB (Master Looter Database)
 -- @param mldbData table - Compressed MLDB data
-function LoothingCommMixin:BroadcastMLDB(mldbData)
+function CommMixin:BroadcastMLDB(mldbData)
     self:Send(Loothing.MsgType.MLDB_BROADCAST, {
         data = mldbData,
     })
@@ -656,7 +666,7 @@ end
 
 --- Send version request
 -- @param target string|nil - "guild" for guild, nil for group, or player name
-function LoothingCommMixin:SendVersionRequest(target)
+function CommMixin:SendVersionRequest(target)
     if target == "guild" then
         self:SendGuild(Loothing.MsgType.VERSION_REQUEST, {})
     elseif target then
@@ -668,7 +678,7 @@ end
 
 --- Send version response
 -- @param target string - Player to respond to
-function LoothingCommMixin:SendVersionResponse(target)
+function CommMixin:SendVersionResponse(target)
     self:Send(Loothing.MsgType.VERSION_RESPONSE, {
         version = Loothing.VERSION,
     }, target)
@@ -680,7 +690,7 @@ end
 
 --- Send settings sync request
 -- @param target string - "guild" or player name
-function LoothingCommMixin:SendSettingsSyncRequest(target)
+function CommMixin:SendSettingsSyncRequest(target)
     if target == "guild" then
         self:SendGuild(Loothing.MsgType.SYNC_SETTINGS_REQUEST, {})
     else
@@ -690,14 +700,14 @@ end
 
 --- Send settings sync acknowledgment
 -- @param target string
-function LoothingCommMixin:SendSettingsSyncAck(target)
+function CommMixin:SendSettingsSyncAck(target)
     self:Send(Loothing.MsgType.SYNC_SETTINGS_ACK, {}, target)
 end
 
 --- Send settings data
 -- @param settingsData table - Serialized settings
 -- @param target string
-function LoothingCommMixin:SendSettingsData(settingsData, target)
+function CommMixin:SendSettingsData(settingsData, target)
     self:Send(Loothing.MsgType.SYNC_SETTINGS_DATA, {
         data = settingsData,
     }, target, "BULK")
@@ -706,7 +716,7 @@ end
 --- Send history sync request
 -- @param target string - "guild" or player name
 -- @param days number
-function LoothingCommMixin:SendHistorySyncRequest(target, days)
+function CommMixin:SendHistorySyncRequest(target, days)
     if target == "guild" then
         self:SendGuild(Loothing.MsgType.SYNC_HISTORY_REQUEST, { days = days })
     else
@@ -716,15 +726,17 @@ end
 
 --- Send history sync acknowledgment
 -- @param target string
-function LoothingCommMixin:SendHistorySyncAck(target)
+function CommMixin:SendHistorySyncAck(target)
     self:Send(Loothing.MsgType.SYNC_HISTORY_ACK, {}, target)
 end
 
 --- Send history data
 -- @param historyData table - History entries
 -- @param target string
-function LoothingCommMixin:SendHistoryData(historyData, target)
+function CommMixin:SendHistoryData(historyData, target)
     self:Send(Loothing.MsgType.SYNC_HISTORY_DATA, {
         data = historyData,
     }, target, "BULK")
 end
+
+-- ns.CommMixin exported above

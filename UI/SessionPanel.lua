@@ -3,13 +3,19 @@
     SessionPanel - Active loot session view
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local Utils = ns.Utils
+local Loothing = ns.Addon
+local Popups = ns.Popups
 
 --[[--------------------------------------------------------------------
-    LoothingSessionPanelMixin
+    SessionPanelMixin
 ----------------------------------------------------------------------]]
 
-LoothingSessionPanelMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+local SessionPanelMixin = ns.SessionPanelMixin or Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+ns.SessionPanelMixin = SessionPanelMixin
 
 local SESSION_PANEL_EVENTS = {
     "OnItemSelected",
@@ -19,7 +25,7 @@ local SESSION_PANEL_EVENTS = {
 
 --- Initialize the session panel
 -- @param parent Frame - Parent frame (usually a tab content area)
-function LoothingSessionPanelMixin:Init(parent)
+function SessionPanelMixin:Init(parent)
     Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(SESSION_PANEL_EVENTS)
 
@@ -36,7 +42,7 @@ function LoothingSessionPanelMixin:Init(parent)
 end
 
 --- Create the main frame
-function LoothingSessionPanelMixin:CreateFrame()
+function SessionPanelMixin:CreateFrame()
     local frame = CreateFrame("Frame", nil, self.parent)
     frame:SetAllPoints()
 
@@ -44,7 +50,7 @@ function LoothingSessionPanelMixin:CreateFrame()
 end
 
 --- Create UI elements
-function LoothingSessionPanelMixin:CreateElements()
+function SessionPanelMixin:CreateElements()
     local L = Loothing.Locale
 
     -- Header area
@@ -64,7 +70,7 @@ function LoothingSessionPanelMixin:CreateElements()
 end
 
 --- Create header
-function LoothingSessionPanelMixin:CreateHeader()
+function SessionPanelMixin:CreateHeader()
     local L = Loothing.Locale
 
     local header = CreateFrame("Frame", nil, self.frame)
@@ -95,10 +101,10 @@ function LoothingSessionPanelMixin:CreateHeader()
 end
 
 --- Create filter bar
-function LoothingSessionPanelMixin:CreateFilterBar()
+function SessionPanelMixin:CreateFilterBar()
     -- Initialize filters if not already done
     if not Loothing.Filters then
-        Loothing.Filters = Loolib.CreateAndInitFromMixin(LoothingFiltersMixin)
+        Loothing.Filters = Loolib.CreateAndInitFromMixin(ns.FiltersMixin)
     end
 
     -- Create filter bar
@@ -118,7 +124,7 @@ function LoothingSessionPanelMixin:CreateFilterBar()
 end
 
 --- Toggle filter bar visibility
-function LoothingSessionPanelMixin:ToggleFilterBar()
+function SessionPanelMixin:ToggleFilterBar()
     if self.filterBar:IsShown() then
         self.filterBar:Hide()
         self.listContainer:SetPoint("TOPLEFT", 8, -66)
@@ -129,7 +135,7 @@ function LoothingSessionPanelMixin:ToggleFilterBar()
 end
 
 --- Create item list
-function LoothingSessionPanelMixin:CreateItemList()
+function SessionPanelMixin:CreateItemList()
     local L = Loothing.Locale
 
     -- List container
@@ -201,13 +207,13 @@ end
 --- Check if an item is selected
 -- @param guid string - Item GUID
 -- @return boolean
-function LoothingSessionPanelMixin:IsItemSelected(guid)
+function SessionPanelMixin:IsItemSelected(guid)
     return self.selectedItems[guid] ~= nil
 end
 
 --- Get all selected items
 -- @return table - Array of items
-function LoothingSessionPanelMixin:GetSelectedItems()
+function SessionPanelMixin:GetSelectedItems()
     local items = {}
     for _, item in pairs(self.selectedItems) do
         items[#items + 1] = item
@@ -217,7 +223,7 @@ end
 
 --- Get count of selected items
 -- @return number
-function LoothingSessionPanelMixin:GetSelectedCount()
+function SessionPanelMixin:GetSelectedCount()
     local count = 0
     for _ in pairs(self.selectedItems) do
         count = count + 1
@@ -228,7 +234,7 @@ end
 --- Get selected items filtered by state
 -- @param state number - Loothing.ItemState value
 -- @return table - Array of items matching state
-function LoothingSessionPanelMixin:GetSelectedItemsByState(state)
+function SessionPanelMixin:GetSelectedItemsByState(state)
     local items = {}
     for _, item in pairs(self.selectedItems) do
         if item.state == state then
@@ -240,19 +246,19 @@ end
 
 --- Select an item
 -- @param item table - Item to select
-function LoothingSessionPanelMixin:SelectItem(item)
+function SessionPanelMixin:SelectItem(item)
     self.selectedItems[item.guid] = item
 end
 
 --- Deselect an item by guid
 -- @param guid string
-function LoothingSessionPanelMixin:DeselectItem(guid)
+function SessionPanelMixin:DeselectItem(guid)
     self.selectedItems[guid] = nil
 end
 
 --- Toggle selection on an item
 -- @param item table
-function LoothingSessionPanelMixin:ToggleItemSelection(item)
+function SessionPanelMixin:ToggleItemSelection(item)
     if self.selectedItems[item.guid] then
         self.selectedItems[item.guid] = nil
     else
@@ -261,14 +267,14 @@ function LoothingSessionPanelMixin:ToggleItemSelection(item)
 end
 
 --- Clear all selection
-function LoothingSessionPanelMixin:ClearSelection()
+function SessionPanelMixin:ClearSelection()
     wipe(self.selectedItems)
     self.selectedItem = nil
     self.lastClickedGuid = nil
 end
 
 --- Select all visible items
-function LoothingSessionPanelMixin:SelectAllItems()
+function SessionPanelMixin:SelectAllItems()
     for _, row in ipairs(self.itemRows) do
         local item = row:GetItem()
         if item then
@@ -280,7 +286,7 @@ end
 --- Select a range of items from one guid to another (based on display order)
 -- @param fromGuid string
 -- @param toGuid string
-function LoothingSessionPanelMixin:SelectRange(fromGuid, toGuid)
+function SessionPanelMixin:SelectRange(fromGuid, toGuid)
     local startIdx, endIdx
     for i, row in ipairs(self.itemRows) do
         local item = row:GetItem()
@@ -306,7 +312,7 @@ function LoothingSessionPanelMixin:SelectRange(fromGuid, toGuid)
 end
 
 --- Sync selectedItem (backward compat) and show/hide bulk bar
-function LoothingSessionPanelMixin:UpdateSelectionState()
+function SessionPanelMixin:UpdateSelectionState()
     local count = self:GetSelectedCount()
     if count == 1 then
         -- Exactly one selected - set backward-compat selectedItem
@@ -330,7 +336,7 @@ function LoothingSessionPanelMixin:UpdateSelectionState()
 end
 
 --- Update visual selection state on all rows
-function LoothingSessionPanelMixin:UpdateSelectionVisuals()
+function SessionPanelMixin:UpdateSelectionVisuals()
     for _, row in ipairs(self.itemRows) do
         local item = row:GetItem()
         if item then
@@ -344,7 +350,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Create the bulk action bar (hidden by default)
-function LoothingSessionPanelMixin:CreateBulkActionBar()
+function SessionPanelMixin:CreateBulkActionBar()
     local L = Loothing.Locale
 
     local bar = CreateFrame("Frame", nil, self.listContainer, "BackdropTemplate")
@@ -450,7 +456,7 @@ function LoothingSessionPanelMixin:CreateBulkActionBar()
 end
 
 --- Show bulk action bar and adjust scroll frame
-function LoothingSessionPanelMixin:ShowBulkBar()
+function SessionPanelMixin:ShowBulkBar()
     if not self.bulkBar then return end
     if self.bulkBar:IsShown() then return end
 
@@ -460,7 +466,7 @@ function LoothingSessionPanelMixin:ShowBulkBar()
 end
 
 --- Hide bulk action bar and restore scroll frame
-function LoothingSessionPanelMixin:HideBulkBar()
+function SessionPanelMixin:HideBulkBar()
     if not self.bulkBar then return end
     if not self.bulkBar:IsShown() then return end
 
@@ -470,7 +476,7 @@ function LoothingSessionPanelMixin:HideBulkBar()
 end
 
 --- Update bulk bar button states based on selected items
-function LoothingSessionPanelMixin:UpdateBulkBarButtons()
+function SessionPanelMixin:UpdateBulkBarButtons()
     if not self.bulkBar then return end
 
     local L = Loothing.Locale
@@ -547,7 +553,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Start voting on all selected PENDING items
-function LoothingSessionPanelMixin:OnBulkStartVote()
+function SessionPanelMixin:OnBulkStartVote()
     if not Loothing.Session then return end
 
     local items = self:GetSelectedItemsByState(Loothing.ItemState.PENDING)
@@ -560,7 +566,7 @@ function LoothingSessionPanelMixin:OnBulkStartVote()
 end
 
 --- End voting on all selected VOTING items
-function LoothingSessionPanelMixin:OnBulkEndVote()
+function SessionPanelMixin:OnBulkEndVote()
     if not Loothing.Session then return end
 
     local items = self:GetSelectedItemsByState(Loothing.ItemState.VOTING)
@@ -573,7 +579,7 @@ function LoothingSessionPanelMixin:OnBulkEndVote()
 end
 
 --- Skip all selected PENDING/VOTING items (with confirmation)
-function LoothingSessionPanelMixin:OnBulkSkip()
+function SessionPanelMixin:OnBulkSkip()
     if not Loothing.Session then return end
 
     local L = Loothing.Locale
@@ -582,7 +588,7 @@ function LoothingSessionPanelMixin:OnBulkSkip()
     local count = #pending + #voting
     if count == 0 then return end
 
-    LoothingPopups:Confirm(
+    Popups:Confirm(
         L["SKIP_ITEM"],
         string.format(L["CONFIRM_BULK_SKIP"], count),
         function()
@@ -599,14 +605,14 @@ function LoothingSessionPanelMixin:OnBulkSkip()
 end
 
 --- Remove all selected PENDING items (with confirmation)
-function LoothingSessionPanelMixin:OnBulkRemove()
+function SessionPanelMixin:OnBulkRemove()
     if not Loothing.Session then return end
 
     local L = Loothing.Locale
     local items = self:GetSelectedItemsByState(Loothing.ItemState.PENDING)
     if #items == 0 then return end
 
-    LoothingPopups:Confirm(
+    Popups:Confirm(
         L["REMOVE_ITEMS"],
         string.format(L["CONFIRM_BULK_REMOVE"], #items),
         function()
@@ -620,14 +626,14 @@ function LoothingSessionPanelMixin:OnBulkRemove()
 end
 
 --- Re-vote on all selected TALLIED items (with confirmation)
-function LoothingSessionPanelMixin:OnBulkRevote()
+function SessionPanelMixin:OnBulkRevote()
     if not Loothing.Session then return end
 
     local L = Loothing.Locale
     local items = self:GetSelectedItemsByState(Loothing.ItemState.TALLIED)
     if #items == 0 then return end
 
-    LoothingPopups:Confirm(
+    Popups:Confirm(
         L["RE_VOTE"],
         string.format(L["CONFIRM_BULK_REVOTE"], #items),
         function()
@@ -641,14 +647,14 @@ function LoothingSessionPanelMixin:OnBulkRevote()
 end
 
 --- Select all visible items
-function LoothingSessionPanelMixin:OnSelectAll()
+function SessionPanelMixin:OnSelectAll()
     self:SelectAllItems()
     self:UpdateSelectionVisuals()
     self:UpdateSelectionState()
 end
 
 --- Deselect all items
-function LoothingSessionPanelMixin:OnDeselectAll()
+function SessionPanelMixin:OnDeselectAll()
     self:ClearSelection()
     self:UpdateSelectionVisuals()
     self:UpdateSelectionState()
@@ -660,7 +666,7 @@ end
 
 --- Show context menu for multi-selected items
 -- @param row table - The right-clicked row
-function LoothingSessionPanelMixin:ShowBulkContextMenu(row)
+function SessionPanelMixin:ShowBulkContextMenu(row)
     local L = Loothing.Locale
     local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
     local count = self:GetSelectedCount()
@@ -712,7 +718,7 @@ function LoothingSessionPanelMixin:ShowBulkContextMenu(row)
 end
 
 --- Create footer with controls
-function LoothingSessionPanelMixin:CreateFooter()
+function SessionPanelMixin:CreateFooter()
     local L = Loothing.Locale
 
     local footer = CreateFrame("Frame", nil, self.frame)
@@ -799,7 +805,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Register for session events
-function LoothingSessionPanelMixin:RegisterEvents()
+function SessionPanelMixin:RegisterEvents()
     if not Loothing.Session then return end
 
     Loothing.Session:RegisterCallback("OnSessionStarted", function()
@@ -853,14 +859,14 @@ end
 ----------------------------------------------------------------------]]
 
 --- Refresh all display elements
-function LoothingSessionPanelMixin:Refresh()
+function SessionPanelMixin:Refresh()
     self:UpdateHeader()
     self:UpdateFooter()
     self:RefreshItems()
 end
 
 --- Update header display
-function LoothingSessionPanelMixin:UpdateHeader()
+function SessionPanelMixin:UpdateHeader()
     local L = Loothing.Locale
 
     if not Loothing.Session then
@@ -923,7 +929,7 @@ function LoothingSessionPanelMixin:UpdateHeader()
     else
         local ml = Loothing.Session:GetMasterLooter()
         if ml then
-            self.mlIndicator:SetText(string.format(L["ML_IS"], LoothingUtils.GetShortName(ml)))
+            self.mlIndicator:SetText(string.format(L["ML_IS"], Utils.GetShortName(ml)))
             self.mlIndicator:SetTextColor(0.7, 0.7, 0.7)
         else
             self.mlIndicator:SetText("")
@@ -932,7 +938,7 @@ function LoothingSessionPanelMixin:UpdateHeader()
 end
 
 --- Update footer buttons
-function LoothingSessionPanelMixin:UpdateFooter()
+function SessionPanelMixin:UpdateFooter()
     local L = Loothing.Locale
     local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
 
@@ -998,7 +1004,7 @@ end
 --- Sort items by typeCode then ilvl descending
 -- @param items table - Array of items
 -- @return table - Sorted copy
-function LoothingSessionPanelMixin:SortItems(items)
+function SessionPanelMixin:SortItems(items)
     local sorted = {}
     for _, item in ipairs(items) do
         sorted[#sorted + 1] = item
@@ -1021,25 +1027,25 @@ function LoothingSessionPanelMixin:SortItems(items)
 end
 
 --- Acquire a row from the pool or create a new one
-function LoothingSessionPanelMixin:AcquireItemRow()
+function SessionPanelMixin:AcquireItemRow()
     local row = table.remove(self.itemRowPool)
     if not row then
-        row = CreateLoothingItemRow(self.listContent)
+        row = ns.CreateItemRow(self.listContent)
     end
     return row
 end
 
 --- Release all active rows back to the pool
-function LoothingSessionPanelMixin:ReleaseAllItemRows()
+function SessionPanelMixin:ReleaseAllItemRows()
     for _, row in ipairs(self.itemRows) do
-        LoothingItemRow_Reset(nil, row)
+        ItemRow_Reset(nil, row)
         self.itemRowPool[#self.itemRowPool + 1] = row
     end
     wipe(self.itemRows)
 end
 
 --- Refresh item list
-function LoothingSessionPanelMixin:RefreshItems()
+function SessionPanelMixin:RefreshItems()
     -- Return active rows to pool
     self:ReleaseAllItemRows()
 
@@ -1153,7 +1159,7 @@ end
 
 --- Hide ML-only controls and restore the row's default layout.
 -- @param row table - Item row
-function LoothingSessionPanelMixin:ResetMLControls(row)
+function SessionPanelMixin:ResetMLControls(row)
     local frame = row and row:GetFrame()
     if not frame then return end
 
@@ -1173,7 +1179,7 @@ end
 --- Add ML-specific controls to an item row (delete button, award later checkbox)
 -- @param row table - Item row
 -- @param item table - Item data
-function LoothingSessionPanelMixin:AddMLControls(row, item)
+function SessionPanelMixin:AddMLControls(row, item)
     local frame = row:GetFrame()
     if not frame then return end
 
@@ -1262,7 +1268,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Handle item selection (supports Ctrl+click multi-select and Shift+click range)
-function LoothingSessionPanelMixin:OnItemSelect(row, item)
+function SessionPanelMixin:OnItemSelect(row, item)
     local isCtrl = IsControlKeyDown()
     local isShift = IsShiftKeyDown()
 
@@ -1288,7 +1294,7 @@ function LoothingSessionPanelMixin:OnItemSelect(row, item)
 end
 
 --- Start voting for an item
-function LoothingSessionPanelMixin:OnStartVote(item)
+function SessionPanelMixin:OnStartVote(item)
     if not Loothing.Session then return end
 
     Loothing.Session:StartVoting(item.guid)
@@ -1296,7 +1302,7 @@ function LoothingSessionPanelMixin:OnStartVote(item)
 end
 
 --- End voting for an item
-function LoothingSessionPanelMixin:OnEndVote(item)
+function SessionPanelMixin:OnEndVote(item)
     if not Loothing.Session then return end
 
     Loothing.Session:EndVoting(item.guid)
@@ -1304,28 +1310,28 @@ function LoothingSessionPanelMixin:OnEndVote(item)
 end
 
 --- Open vote panel for an item (routes to RollFrame since VotePanel is disabled)
-function LoothingSessionPanelMixin:OnVote(item)
+function SessionPanelMixin:OnVote(item)
     if Loothing.UI and Loothing.UI.RollFrame then
         Loothing.UI.RollFrame:SetItem(item)
     end
 end
 
 --- Open award dialog for an item
-function LoothingSessionPanelMixin:OnAward(item)
+function SessionPanelMixin:OnAward(item)
     if Loothing.UI and Loothing.UI.ResultsPanel then
         Loothing.UI.ResultsPanel:SetItem(item)
     end
 end
 
 --- View results for an item
-function LoothingSessionPanelMixin:OnViewResults(item)
+function SessionPanelMixin:OnViewResults(item)
     if Loothing.UI and Loothing.UI.ResultsPanel then
         Loothing.UI.ResultsPanel:SetItem(item)
     end
 end
 
 --- Skip an item
-function LoothingSessionPanelMixin:OnSkip(item)
+function SessionPanelMixin:OnSkip(item)
     if not Loothing.Session then return end
 
     Loothing.Session:SkipItem(item.guid)
@@ -1333,7 +1339,7 @@ function LoothingSessionPanelMixin:OnSkip(item)
 end
 
 --- Start revote for an item
-function LoothingSessionPanelMixin:OnRevote(item)
+function SessionPanelMixin:OnRevote(item)
     if not Loothing.Session then return end
 
     Loothing.Session:RevoteItem(item.guid)
@@ -1346,7 +1352,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Handle session button click
-function LoothingSessionPanelMixin:OnSessionButtonClick()
+function SessionPanelMixin:OnSessionButtonClick()
     if not Loothing.Session then return end
 
     local state = Loothing.Session:GetState()
@@ -1363,7 +1369,7 @@ function LoothingSessionPanelMixin:OnSessionButtonClick()
 end
 
 --- Start voting on all pending items
-function LoothingSessionPanelMixin:OnStartAllClick()
+function SessionPanelMixin:OnStartAllClick()
     if not Loothing.Session then return end
 
     local items = Loothing.Session:GetItems()
@@ -1382,16 +1388,16 @@ end
     Frame Access
 ----------------------------------------------------------------------]]
 
-function LoothingSessionPanelMixin:GetFrame()
+function SessionPanelMixin:GetFrame()
     return self.frame
 end
 
-function LoothingSessionPanelMixin:Show()
+function SessionPanelMixin:Show()
     self.frame:Show()
     self:Refresh()
 end
 
-function LoothingSessionPanelMixin:Hide()
+function SessionPanelMixin:Hide()
     self.frame:Hide()
 end
 
@@ -1399,8 +1405,10 @@ end
     Factory
 ----------------------------------------------------------------------]]
 
-function CreateLoothingSessionPanel(parent)
-    local panel = Loolib.CreateFromMixins(LoothingSessionPanelMixin)
+local function CreateSessionPanel(parent)
+    local panel = Loolib.CreateFromMixins(SessionPanelMixin)
     panel:Init(parent)
     return panel
 end
+
+ns.CreateSessionPanel = CreateSessionPanel

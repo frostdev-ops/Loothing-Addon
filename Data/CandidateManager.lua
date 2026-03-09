@@ -3,13 +3,17 @@
     CandidateManager - Manages candidates for a single loot item
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local Utils = ns.Utils
 
 --[[--------------------------------------------------------------------
-    LoothingCandidateManagerMixin
+    CandidateManagerMixin
 ----------------------------------------------------------------------]]
 
-LoothingCandidateManagerMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+local CandidateManagerMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+ns.CandidateManagerMixin = CandidateManagerMixin
 
 local MANAGER_EVENTS = {
     "OnCandidateAdded",
@@ -19,7 +23,7 @@ local MANAGER_EVENTS = {
 }
 
 --- Initialize the candidate manager
-function LoothingCandidateManagerMixin:Init()
+function CandidateManagerMixin:Init()
     Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(MANAGER_EVENTS)
 
@@ -36,12 +40,12 @@ end
 -- @param playerName string - Player name (will be normalized)
 -- @param playerClass string - Player class file (e.g., "WARRIOR")
 -- @return table - Candidate object
-function LoothingCandidateManagerMixin:GetOrCreateCandidate(playerName, playerClass)
+function CandidateManagerMixin:GetOrCreateCandidate(playerName, playerClass)
     if not playerName then
         return nil
     end
 
-    local normalizedName = LoothingUtils.NormalizeName(playerName)
+    local normalizedName = Utils.NormalizeName(playerName)
 
     local candidate = self.candidates[normalizedName]
     if candidate then
@@ -49,7 +53,7 @@ function LoothingCandidateManagerMixin:GetOrCreateCandidate(playerName, playerCl
     end
 
     -- Create new candidate
-    candidate = CreateLoothingCandidate(playerName, playerClass)
+    candidate = ns.CreateCandidate(playerName, playerClass)
     self.candidates[normalizedName] = candidate
     self.candidateCount = self.candidateCount + 1
 
@@ -60,30 +64,30 @@ end
 --- Get a candidate by player name
 -- @param playerName string - Player name (will be normalized)
 -- @return table|nil - Candidate object or nil
-function LoothingCandidateManagerMixin:GetCandidate(playerName)
+function CandidateManagerMixin:GetCandidate(playerName)
     if not playerName then
         return nil
     end
 
-    local normalizedName = LoothingUtils.NormalizeName(playerName)
+    local normalizedName = Utils.NormalizeName(playerName)
     return self.candidates[normalizedName]
 end
 
 --- Check if a candidate exists
 -- @param playerName string - Player name (will be normalized)
 -- @return boolean
-function LoothingCandidateManagerMixin:HasCandidate(playerName)
+function CandidateManagerMixin:HasCandidate(playerName)
     if not playerName then
         return false
     end
 
-    local normalizedName = LoothingUtils.NormalizeName(playerName)
+    local normalizedName = Utils.NormalizeName(playerName)
     return self.candidates[normalizedName] ~= nil
 end
 
 --- Get all candidates as a table
 -- @return table - Array of candidate objects
-function LoothingCandidateManagerMixin:GetAllCandidates()
+function CandidateManagerMixin:GetAllCandidates()
     local result = {}
     for _, candidate in pairs(self.candidates) do
         result[#result + 1] = candidate
@@ -93,7 +97,7 @@ end
 
 --- Get candidate count
 -- @return number
-function LoothingCandidateManagerMixin:GetCandidateCount()
+function CandidateManagerMixin:GetCandidateCount()
     return self.candidateCount
 end
 
@@ -104,12 +108,12 @@ end
 --- Remove a candidate
 -- @param playerName string - Player name (will be normalized)
 -- @return boolean - True if candidate was removed
-function LoothingCandidateManagerMixin:RemoveCandidate(playerName)
+function CandidateManagerMixin:RemoveCandidate(playerName)
     if not playerName then
         return false
     end
 
-    local normalizedName = LoothingUtils.NormalizeName(playerName)
+    local normalizedName = Utils.NormalizeName(playerName)
 
     local candidate = self.candidates[normalizedName]
     if not candidate then
@@ -124,7 +128,7 @@ function LoothingCandidateManagerMixin:RemoveCandidate(playerName)
 end
 
 --- Clear all candidates
-function LoothingCandidateManagerMixin:Clear()
+function CandidateManagerMixin:Clear()
     if self.candidateCount == 0 then
         return
     end
@@ -144,7 +148,7 @@ end
 -- @param response number - Loothing.Response value
 -- @param note string|nil - Optional note
 -- @return boolean - True if updated
-function LoothingCandidateManagerMixin:SetCandidateResponse(playerName, response, note)
+function CandidateManagerMixin:SetCandidateResponse(playerName, response, note)
     local candidate = self:GetCandidate(playerName)
     if not candidate then
         return false
@@ -161,7 +165,7 @@ end
 -- @param minRoll number - Optional minimum roll (default 1)
 -- @param maxRoll number - Optional maximum roll (default 100)
 -- @return boolean - True if updated
-function LoothingCandidateManagerMixin:UpdateCandidateRoll(playerName, roll, minRoll, maxRoll)
+function CandidateManagerMixin:UpdateCandidateRoll(playerName, roll, minRoll, maxRoll)
     local candidate = self:GetCandidate(playerName)
     if not candidate then
         return false
@@ -180,7 +184,7 @@ end
 -- @param gear2ilvl number - Item level of second item
 -- @param ilvlDiff number - Optional item level difference (will be calculated if not provided)
 -- @return boolean - True if updated
-function LoothingCandidateManagerMixin:UpdateCandidateGear(playerName, gear1Link, gear2Link, gear1ilvl, gear2ilvl, ilvlDiff)
+function CandidateManagerMixin:UpdateCandidateGear(playerName, gear1Link, gear2Link, gear1ilvl, gear2ilvl, ilvlDiff)
     local candidate = self:GetCandidate(playerName)
     if not candidate then
         return false
@@ -199,7 +203,7 @@ end
 --- Add a vote to a candidate
 -- @param playerName string - Player name
 -- @return boolean - True if vote was added
-function LoothingCandidateManagerMixin:AddVoteToCandidate(playerName)
+function CandidateManagerMixin:AddVoteToCandidate(playerName)
     local candidate = self:GetCandidate(playerName)
     if not candidate then
         return false
@@ -213,7 +217,7 @@ end
 --- Remove a vote from a candidate
 -- @param playerName string - Player name
 -- @return boolean - True if vote was removed
-function LoothingCandidateManagerMixin:RemoveVoteFromCandidate(playerName)
+function CandidateManagerMixin:RemoveVoteFromCandidate(playerName)
     local candidate = self:GetCandidate(playerName)
     if not candidate then
         return false
@@ -231,7 +235,7 @@ end
 --- Get candidates filtered by response type
 -- @param response number - Loothing.Response value
 -- @return table - Array of candidates
-function LoothingCandidateManagerMixin:GetCandidatesByResponse(response)
+function CandidateManagerMixin:GetCandidatesByResponse(response)
     local result = {}
 
     for _, candidate in pairs(self.candidates) do
@@ -247,7 +251,7 @@ end
 -- @param column string - Column to sort by ("response", "roll", "ilvl", "votes", "name")
 -- @param ascending boolean - Sort direction (default true)
 -- @return table - Sorted array of candidates
-function LoothingCandidateManagerMixin:GetCandidatesSortedBy(column, ascending)
+function CandidateManagerMixin:GetCandidatesSortedBy(column, ascending)
     if ascending == nil then
         ascending = true
     end
@@ -308,7 +312,7 @@ end
 
 --- Get count of candidates by response type
 -- @return table - { [responseType] = count }
-function LoothingCandidateManagerMixin:GetResponseCounts()
+function CandidateManagerMixin:GetResponseCounts()
     local counts = {}
 
     -- Initialize all response types to 0
@@ -327,7 +331,7 @@ end
 
 --- Get the most common response
 -- @return number|nil, number - Response type and count
-function LoothingCandidateManagerMixin:GetMostCommonResponse()
+function CandidateManagerMixin:GetMostCommonResponse()
     local counts = self:GetResponseCounts()
 
     local maxResponse = nil
@@ -349,7 +353,7 @@ end
 
 --- Get average item level difference
 -- @return number
-function LoothingCandidateManagerMixin:GetAverageIlvlDiff()
+function CandidateManagerMixin:GetAverageIlvlDiff()
     if self.candidateCount == 0 then
         return 0
     end
@@ -369,7 +373,7 @@ end
 
 --- Get total votes across all candidates
 -- @return number
-function LoothingCandidateManagerMixin:GetTotalVotes()
+function CandidateManagerMixin:GetTotalVotes()
     local total = 0
 
     for _, candidate in pairs(self.candidates) do
@@ -381,7 +385,7 @@ end
 
 --- Get candidate with highest roll
 -- @return table|nil - Candidate or nil if none have rolled
-function LoothingCandidateManagerMixin:GetHighestRoll()
+function CandidateManagerMixin:GetHighestRoll()
     local highest = nil
     local maxRoll = -1
 
@@ -397,7 +401,7 @@ end
 
 --- Get candidate with most votes
 -- @return table|nil - Candidate or nil
-function LoothingCandidateManagerMixin:GetMostVoted()
+function CandidateManagerMixin:GetMostVoted()
     local mostVoted = nil
     local maxVotes = -1
 
@@ -418,7 +422,7 @@ end
 
 --- Serialize all candidates
 -- @return table - Array of serialized candidate data
-function LoothingCandidateManagerMixin:Serialize()
+function CandidateManagerMixin:Serialize()
     local data = {}
 
     for _, candidate in pairs(self.candidates) do
@@ -432,11 +436,11 @@ end
 
 --- Deserialize candidates
 -- @param data table - Array of candidate data
-function LoothingCandidateManagerMixin:Deserialize(data)
+function CandidateManagerMixin:Deserialize(data)
     self:Clear()
 
     for _, candidateData in ipairs(data) do
-        local candidate = CreateLoothingCandidate(
+        local candidate = ns.CreateCandidate(
             candidateData.playerName,
             candidateData.playerClass
         )
@@ -445,7 +449,7 @@ function LoothingCandidateManagerMixin:Deserialize(data)
             candidate:Deserialize(candidateData)
         end
 
-        local normalizedName = LoothingUtils.NormalizeName(candidate.playerName)
+        local normalizedName = Utils.NormalizeName(candidate.playerName)
         self.candidates[normalizedName] = candidate
         self.candidateCount = self.candidateCount + 1
     end
@@ -457,8 +461,10 @@ end
 
 --- Create a new candidate manager
 -- @return table - CandidateManager instance
-function CreateLoothingCandidateManager()
-    local manager = Loolib.CreateFromMixins(LoothingCandidateManagerMixin)
+local function CreateCandidateManager()
+    local manager = Loolib.CreateFromMixins(CandidateManagerMixin)
     manager:Init()
     return manager
 end
+
+ns.CreateCandidateManager = CreateCandidateManager

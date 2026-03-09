@@ -3,13 +3,17 @@
     VotePanel - Voting interface for council members
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local Utils = ns.Utils
 
 --[[--------------------------------------------------------------------
-    LoothingVotePanelMixin
+    VotePanelMixin
 ----------------------------------------------------------------------]]
 
-LoothingVotePanelMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+local VotePanelMixin = ns.VotePanelMixin or Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+ns.VotePanelMixin = VotePanelMixin
 
 local VOTE_PANEL_EVENTS = {
     "OnVoteSubmitted",
@@ -23,7 +27,7 @@ local PANEL_HEIGHT = 400
 local responseButtonPool = {}
 
 --- Initialize the vote panel
-function LoothingVotePanelMixin:Init()
+function VotePanelMixin:Init()
     Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(VOTE_PANEL_EVENTS)
 
@@ -36,8 +40,8 @@ function LoothingVotePanelMixin:Init()
 end
 
 --- Create the main frame
-function LoothingVotePanelMixin:CreateFrame()
-    local frame = CreateFrame("Frame", "LoothingVotePanel", UIParent, "BackdropTemplate")
+function VotePanelMixin:CreateFrame()
+    local frame = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
     frame:SetSize(PANEL_WIDTH, PANEL_HEIGHT)
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("DIALOG")
@@ -71,10 +75,11 @@ function LoothingVotePanelMixin:CreateFrame()
     end)
 
     self.frame = frame
+    ns.VotePanelFrame = frame
 end
 
 --- Create UI elements
-function LoothingVotePanelMixin:CreateElements()
+function VotePanelMixin:CreateElements()
     local L = Loothing.Locale
 
     -- Title
@@ -116,7 +121,7 @@ function LoothingVotePanelMixin:CreateElements()
 end
 
 --- Create note input field
-function LoothingVotePanelMixin:CreateNoteInput()
+function VotePanelMixin:CreateNoteInput()
     local L = Loothing.Locale
 
     -- Container for note input
@@ -132,17 +137,13 @@ function LoothingVotePanelMixin:CreateNoteInput()
     label:SetTextColor(0.8, 0.8, 0.8)
 
     -- Edit box
-    local editBox = CreateFrame("EditBox", "LoothingVotePanelNoteInput", container, "InputBoxTemplate")
+    local editBox = CreateFrame("EditBox", nil, container, "InputBoxTemplate")
     editBox:SetPoint("TOPLEFT", label, "TOPRIGHT", 5, 3)
     editBox:SetPoint("BOTTOMRIGHT", 0, 0)
     editBox:SetAutoFocus(false)
     editBox:SetMaxLetters(100)
-    editBox:SetScript("OnEnterPressed", function(self)
-        self:ClearFocus()
-    end)
-    editBox:SetScript("OnEscapePressed", function(self)
-        self:ClearFocus()
-    end)
+    editBox:SetScript("OnEnterPressed", function(eb) eb:ClearFocus() end)
+    editBox:SetScript("OnEscapePressed", function(eb) eb:ClearFocus() end)
 
     self.noteInput = editBox
     self.noteContainer = container
@@ -158,7 +159,7 @@ end
 
 --- Get the current note text
 -- @return string
-function LoothingVotePanelMixin:GetNote()
+function VotePanelMixin:GetNote()
     if self.noteInput then
         return self.noteInput:GetText() or ""
     end
@@ -166,14 +167,14 @@ function LoothingVotePanelMixin:GetNote()
 end
 
 --- Clear the note input
-function LoothingVotePanelMixin:ClearNote()
+function VotePanelMixin:ClearNote()
     if self.noteInput then
         self.noteInput:SetText("")
     end
 end
 
 --- Update note input visibility based on settings
-function LoothingVotePanelMixin:UpdateNoteInputVisibility()
+function VotePanelMixin:UpdateNoteInputVisibility()
     if not self.noteContainer then return end
 
     local requireNotes = Loothing.Settings and Loothing.Settings:GetRequireNotes()
@@ -183,7 +184,7 @@ function LoothingVotePanelMixin:UpdateNoteInputVisibility()
 end
 
 --- Create item display area
-function LoothingVotePanelMixin:CreateItemDisplay()
+function VotePanelMixin:CreateItemDisplay()
     local container = CreateFrame("Frame", nil, self.frame)
     container:SetPoint("TOPLEFT", 20, -50)
     container:SetPoint("TOPRIGHT", -20, -50)
@@ -220,7 +221,7 @@ function LoothingVotePanelMixin:CreateItemDisplay()
 end
 
 --- Create response buttons
-function LoothingVotePanelMixin:CreateResponseButtons()
+function VotePanelMixin:CreateResponseButtons()
     local L = Loothing.Locale
 
     local container = CreateFrame("Frame", nil, self.frame)
@@ -304,7 +305,7 @@ local function ReleaseResponseButton(button)
 end
 
 --- Refresh response buttons based on active button set
-function LoothingVotePanelMixin:RefreshResponseButtons()
+function VotePanelMixin:RefreshResponseButtons()
     -- Return existing buttons to the pool instead of orphaning them
     for _, button in ipairs(self.responseButtonsArray) do
         ReleaseResponseButton(button)
@@ -335,7 +336,7 @@ function LoothingVotePanelMixin:RefreshResponseButtons()
         button:SetPoint("TOPLEFT", 0, yOffset - (i - 1) * (buttonHeight + spacing))
 
         -- Parse color (normalize to array format in case of named-field colors from sync)
-        local r, g, b = unpack(LoothingUtils.ColorToArray(btnData.color))
+        local r, g, b = unpack(Utils.ColorToArray(btnData.color))
 
         -- Update sub-region colors
         button.bg:SetColorTexture(r * 0.3, g * 0.3, b * 0.3, 0.5)
@@ -358,14 +359,14 @@ function LoothingVotePanelMixin:RefreshResponseButtons()
 end
 
 --- Update button visibility (all buttons in the active set are shown)
-function LoothingVotePanelMixin:UpdateButtonVisibility()
+function VotePanelMixin:UpdateButtonVisibility()
     for _, button in ipairs(self.responseButtonsArray) do
         button:Show()
     end
 end
 
 --- Create ranked choice display
-function LoothingVotePanelMixin:CreateRankedDisplay()
+function VotePanelMixin:CreateRankedDisplay()
     local L = Loothing.Locale
 
     local container = CreateFrame("Frame", nil, self.frame)
@@ -400,7 +401,7 @@ function LoothingVotePanelMixin:CreateRankedDisplay()
 end
 
 --- Create timer bar
-function LoothingVotePanelMixin:CreateTimerBar()
+function VotePanelMixin:CreateTimerBar()
     local container = CreateFrame("Frame", nil, self.frame)
     container:SetPoint("BOTTOMLEFT", 20, 50)
     container:SetPoint("BOTTOMRIGHT", -20, 50)
@@ -434,7 +435,7 @@ end
 
 --- Set the item to vote on
 -- @param item table - LoothingItem
-function LoothingVotePanelMixin:SetItem(item)
+function VotePanelMixin:SetItem(item)
     self.item = item
     wipe(self.selectedResponses)
 
@@ -444,7 +445,7 @@ function LoothingVotePanelMixin:SetItem(item)
     end
 
     -- Update item display
-    local texture = item.texture or GetItemIcon(item.itemID or 0)
+    local texture = item.texture or C_Item.GetItemIconByID(item.itemID or 0)
     self.itemIcon:SetTexture(texture or "Interface\\Icons\\INV_Misc_QuestionMark")
 
     local quality = item.quality or 1
@@ -470,7 +471,7 @@ function LoothingVotePanelMixin:SetItem(item)
     self:ResetResponseButtons()
 
     -- Check for existing vote (only if item has the method)
-    local existingVote = item.GetVoteByVoter and item:GetVoteByVoter(LoothingUtils.GetPlayerFullName())
+    local existingVote = item.GetVoteByVoter and item:GetVoteByVoter(Utils.GetPlayerFullName())
     if existingVote and existingVote.responses then
         for i, response in ipairs(existingVote.responses) do
             if self.votingMode == Loothing.VotingMode.RANKED_CHOICE then
@@ -496,7 +497,7 @@ function LoothingVotePanelMixin:SetItem(item)
 end
 
 --- Apply observe mode restrictions
-function LoothingVotePanelMixin:ApplyObserveMode()
+function VotePanelMixin:ApplyObserveMode()
     if not Loothing.Settings then return end
 
     local observeMode = Loothing.Settings:GetObserveMode()
@@ -524,7 +525,7 @@ end
 
 --- Handle response button click
 -- @param button Frame
-function LoothingVotePanelMixin:OnResponseClick(button)
+function VotePanelMixin:OnResponseClick(button)
     local buttonId = button.buttonId
 
     if self.votingMode == Loothing.VotingMode.RANKED_CHOICE then
@@ -539,7 +540,7 @@ end
 
 --- Add response to ranking (ranked choice mode)
 -- @param buttonId number
-function LoothingVotePanelMixin:AddToRanking(buttonId)
+function VotePanelMixin:AddToRanking(buttonId)
     -- Check if already ranked
     for i, id in ipairs(self.selectedResponses) do
         if id == buttonId then
@@ -556,13 +557,13 @@ function LoothingVotePanelMixin:AddToRanking(buttonId)
 end
 
 --- Clear ranking
-function LoothingVotePanelMixin:ClearRanking()
+function VotePanelMixin:ClearRanking()
     wipe(self.selectedResponses)
     self:UpdateResponseButtons()
 end
 
 --- Reset response buttons
-function LoothingVotePanelMixin:ResetResponseButtons()
+function VotePanelMixin:ResetResponseButtons()
     for _, button in pairs(self.responseButtons) do
         button.selected:Hide()
         button.rank:Hide()
@@ -571,7 +572,7 @@ function LoothingVotePanelMixin:ResetResponseButtons()
 end
 
 --- Update response buttons based on selection
-function LoothingVotePanelMixin:UpdateResponseButtons()
+function VotePanelMixin:UpdateResponseButtons()
     self:ResetResponseButtons()
 
     if self.votingMode == Loothing.VotingMode.RANKED_CHOICE then
@@ -602,7 +603,7 @@ function LoothingVotePanelMixin:UpdateResponseButtons()
 end
 
 --- Update ranking text display
-function LoothingVotePanelMixin:UpdateRankingText()
+function VotePanelMixin:UpdateRankingText()
     if #self.selectedResponses == 0 then
         self.rankingText:SetText(Loothing.Locale["NO_SELECTION"])
         return
@@ -620,7 +621,7 @@ function LoothingVotePanelMixin:UpdateRankingText()
 end
 
 --- Update submit button state
-function LoothingVotePanelMixin:UpdateSubmitButton()
+function VotePanelMixin:UpdateSubmitButton()
     local hasSelection = #self.selectedResponses > 0
     self.submitButton:SetEnabled(hasSelection)
 end
@@ -630,7 +631,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Submit the vote
-function LoothingVotePanelMixin:SubmitVote()
+function VotePanelMixin:SubmitVote()
     if #self.selectedResponses == 0 then
         return
     end
@@ -674,7 +675,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Start the timer display
-function LoothingVotePanelMixin:StartTimer()
+function VotePanelMixin:StartTimer()
     if self.ticker then
         self.ticker:Cancel()
     end
@@ -687,7 +688,7 @@ function LoothingVotePanelMixin:StartTimer()
 end
 
 --- Stop the timer
-function LoothingVotePanelMixin:StopTimer()
+function VotePanelMixin:StopTimer()
     if self.ticker then
         self.ticker:Cancel()
         self.ticker = nil
@@ -695,7 +696,7 @@ function LoothingVotePanelMixin:StopTimer()
 end
 
 --- Update timer display
-function LoothingVotePanelMixin:UpdateTimer()
+function VotePanelMixin:UpdateTimer()
     if not self.item then
         self.timerText:SetText("")
         return
@@ -753,18 +754,18 @@ end
 ----------------------------------------------------------------------]]
 
 --- Show the panel
-function LoothingVotePanelMixin:Show()
+function VotePanelMixin:Show()
     self.frame:Show()
 end
 
 --- Hide the panel
-function LoothingVotePanelMixin:Hide()
+function VotePanelMixin:Hide()
     self:StopTimer()
     self.frame:Hide()
 end
 
 --- Toggle visibility
-function LoothingVotePanelMixin:Toggle()
+function VotePanelMixin:Toggle()
     if self.frame:IsShown() then
         self:Hide()
     else
@@ -774,7 +775,7 @@ end
 
 --- Check if shown
 -- @return boolean
-function LoothingVotePanelMixin:IsShown()
+function VotePanelMixin:IsShown()
     return self.frame:IsShown()
 end
 
@@ -784,7 +785,7 @@ end
 
 --- Set voting mode
 -- @param mode string - Loothing.VotingMode value
-function LoothingVotePanelMixin:SetVotingMode(mode)
+function VotePanelMixin:SetVotingMode(mode)
     self.votingMode = mode
 
     if mode == Loothing.VotingMode.RANKED_CHOICE then
@@ -800,8 +801,10 @@ end
     Factory
 ----------------------------------------------------------------------]]
 
-function CreateLoothingVotePanel()
-    local panel = Loolib.CreateFromMixins(LoothingVotePanelMixin)
+local function CreateVotePanel()
+    local panel = Loolib.CreateFromMixins(VotePanelMixin)
     panel:Init()
     return panel
 end
+
+ns.CreateVotePanel = CreateVotePanel

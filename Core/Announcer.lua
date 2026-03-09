@@ -3,15 +3,19 @@
     Announcer - Multi-channel announcement system
 ----------------------------------------------------------------------]]
 
+local ADDON_NAME, ns = ...
 local Loolib = LibStub("Loolib")
 local CreateFromMixins = Loolib.CreateFromMixins
 local Events = Loolib.Events
+local Loothing = ns.Addon
+local Utils = ns.Utils
 
 --[[--------------------------------------------------------------------
-    LoothingAnnouncerMixin
+    AnnouncerMixin
 ----------------------------------------------------------------------]]
 
-LoothingAnnouncerMixin = {}
+ns.AnnouncerMixin = ns.AnnouncerMixin or {}
+local AnnouncerMixin = ns.AnnouncerMixin
 
 -- Valid chat channels for announcements
 local CHANNELS = {
@@ -40,13 +44,8 @@ local GROUP_CHANNEL_ALIAS = "group"
 -- {ml} = Master Looter name
 -- {session} = Session/encounter name
 -- {votes} = Number of votes received
-local SUPPORTED_TOKENS = {
-    "item", "winner", "reason", "notes", "ilvl", "type",
-    "oldItem", "ml", "session", "votes"
-}
-
 --- Initialize the announcer
-function LoothingAnnouncerMixin:Init()
+function AnnouncerMixin:Init()
     -- Queue for announcements blocked by combat/encounter restrictions
     self.announcementQueue = {}
 
@@ -70,7 +69,7 @@ end
 --- Build a full replacement table with all possible tokens
 -- @param params table - Partial params
 -- @return table - Full params with defaults
-function LoothingAnnouncerMixin:BuildReplacements(params)
+function AnnouncerMixin:BuildReplacements(params)
     local replacements = {}
 
     -- Item info
@@ -81,7 +80,7 @@ function LoothingAnnouncerMixin:BuildReplacements(params)
     -- Winner info
     replacements.winner = params.winner or ""
     if replacements.winner ~= "" then
-        replacements.winner = LoothingUtils.GetShortName(replacements.winner) or replacements.winner
+        replacements.winner = Utils.GetShortName(replacements.winner) or replacements.winner
     end
 
     -- Response/reason
@@ -103,7 +102,7 @@ function LoothingAnnouncerMixin:BuildReplacements(params)
     -- Master Looter
     -- FIX(Area4-4): Use SafeUnitName to avoid secret value tainting
     replacements.ml = params.ml or Loolib.SecretUtil.SafeUnitName("player") or ""
-    replacements.ml = LoothingUtils.GetShortName(replacements.ml) or replacements.ml
+    replacements.ml = Utils.GetShortName(replacements.ml) or replacements.ml
 
     -- Session/encounter name
     replacements.session = params.session or params.encounterName or ""
@@ -119,7 +118,7 @@ end
 -- @param winner string - Winner name
 -- @param reason string - Response reason
 -- @param extraParams table - Optional extra params (notes, votes, oldItem, etc.)
-function LoothingAnnouncerMixin:AnnounceAward(itemLink, winner, reason, extraParams)
+function AnnouncerMixin:AnnounceAward(itemLink, winner, reason, extraParams)
     if not Loothing.Settings or not Loothing.Settings:GetAnnounceAwards() then
         return
     end
@@ -145,7 +144,7 @@ function LoothingAnnouncerMixin:AnnounceAward(itemLink, winner, reason, extraPar
 
     if awardLines and #awardLines > 0 then
         -- New multi-line system
-        for i, line in ipairs(awardLines) do
+        for _, line in ipairs(awardLines) do
             if line and line.enabled and line.channel ~= "NONE" and line.text and line.text ~= "" then
                 local message = self:FormatText(line.text, replacements)
                 self:SendToChannel(message, line.channel)
@@ -169,7 +168,7 @@ end
 --- Announce a new item added to session using multi-line configuration
 -- @param itemLink string - Item link
 -- @param extraParams table - Optional extra params (itemLevel, itemType, session, etc.)
-function LoothingAnnouncerMixin:AnnounceItem(itemLink, extraParams)
+function AnnouncerMixin:AnnounceItem(itemLink, extraParams)
     if not Loothing.Settings or not Loothing.Settings:GetAnnounceItems() then
         return
     end
@@ -190,7 +189,7 @@ function LoothingAnnouncerMixin:AnnounceItem(itemLink, extraParams)
 
     if itemLines and #itemLines > 0 then
         -- New multi-line system
-        for i, line in ipairs(itemLines) do
+        for _, line in ipairs(itemLines) do
             if line and line.enabled and line.channel ~= "NONE" and line.text and line.text ~= "" then
                 local message = self:FormatText(line.text, replacements)
                 self:SendToChannel(message, line.channel)
@@ -208,7 +207,7 @@ end
 --- Announce that ML is considering an item (new feature)
 -- @param itemLink string - Item link
 -- @param extraParams table - Optional extra params
-function LoothingAnnouncerMixin:AnnounceConsiderations(itemLink, extraParams)
+function AnnouncerMixin:AnnounceConsiderations(itemLink, extraParams)
     if not Loothing.Settings then
         return
     end
@@ -237,7 +236,7 @@ end
 
 --- Announce session start
 -- @param sessionName string - Optional session/encounter name
-function LoothingAnnouncerMixin:AnnounceSessionStart(sessionName)
+function AnnouncerMixin:AnnounceSessionStart(sessionName)
     if not Loothing.Settings or not Loothing.Settings:GetAnnounceBossKill() then
         return
     end
@@ -255,7 +254,7 @@ function LoothingAnnouncerMixin:AnnounceSessionStart(sessionName)
 end
 
 --- Announce session end
-function LoothingAnnouncerMixin:AnnounceSessionEnd()
+function AnnouncerMixin:AnnounceSessionEnd()
     if not Loothing.Settings or not Loothing.Settings:GetAnnounceBossKill() then
         return
     end
@@ -272,7 +271,7 @@ end
 -- @param template string - Template with {placeholder} tokens
 -- @param replacements table - Key-value pairs for replacement
 -- @return string
-function LoothingAnnouncerMixin:FormatText(template, replacements)
+function AnnouncerMixin:FormatText(template, replacements)
     local result = template
 
     for key, value in pairs(replacements) do
@@ -288,7 +287,7 @@ end
 
 --- Check if announcements should be suppressed due to combat/encounter restrictions
 -- @return boolean - True if announcements should be skipped
-function LoothingAnnouncerMixin:IsRestricted()
+function AnnouncerMixin:IsRestricted()
     -- Skip during encounter restrictions (addon comm restrictions active)
     if Loothing.Restrictions and Loothing.Restrictions:IsRestricted() then
         return true
@@ -305,7 +304,7 @@ end
 --- Send message to a chat channel
 -- @param text string - Message to send
 -- @param channel string - Channel name (RAID, GUILD, etc.)
-function LoothingAnnouncerMixin:SendToChannel(text, channel)
+function AnnouncerMixin:SendToChannel(text, channel)
     if not text or text == "" then
         return
     end
@@ -343,13 +342,13 @@ function LoothingAnnouncerMixin:SendToChannel(text, channel)
     end
 
     -- Send the message
-    SendChatMessage(text, channel)
+    C_ChatInfo.SendChatMessage(text, channel)
 end
 
 --- Check if player can send to a specific channel
 -- @param channel string - Channel name
 -- @return boolean
-function LoothingAnnouncerMixin:CanSendToChannel(channel)
+function AnnouncerMixin:CanSendToChannel(channel)
     if channel == "RAID" then
         return IsInRaid()
     elseif channel == "RAID_WARNING" then
@@ -370,7 +369,7 @@ function LoothingAnnouncerMixin:CanSendToChannel(channel)
 end
 
 --- Process any announcements that were queued during combat/encounter restrictions
-function LoothingAnnouncerMixin:ProcessQueuedAnnouncements()
+function AnnouncerMixin:ProcessQueuedAnnouncements()
     if not self.announcementQueue or #self.announcementQueue == 0 then
         return
     end
@@ -392,7 +391,7 @@ end
 
 --- Get list of available channels for current player
 -- @return table - Array of channel names
-function LoothingAnnouncerMixin:GetAvailableChannels()
+function AnnouncerMixin:GetAvailableChannels()
     local channels = {}
 
     if IsInRaid() then
@@ -420,8 +419,8 @@ end
     Factory
 ----------------------------------------------------------------------]]
 
-function CreateLoothingAnnouncer()
-    local announcer = CreateFromMixins(LoothingAnnouncerMixin)
+ns.CreateAnnouncer = ns.CreateAnnouncer or function()
+    local announcer = CreateFromMixins(AnnouncerMixin)
     announcer:Init()
     return announcer
 end

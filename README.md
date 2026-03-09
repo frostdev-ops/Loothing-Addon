@@ -2,7 +2,7 @@
 
 A loot council addon for World of Warcraft 12.0+ (Midnight). Built on [Loolib](https://github.com/frostdev-ops/Loolib).
 
-**Version**: 1.1.6 | **Interface**: 120000 | **License**: MIT
+**Version**: 1.2.0 | **Interface**: 120000 | **License**: MIT
 
 ---
 
@@ -42,12 +42,13 @@ A loot council addon for World of Warcraft 12.0+ (Midnight). Built on [Loolib](h
 Open the main window via the minimap button or `/lt`.
 
 | Command | Description |
-|---|---|
+| --- | --- |
 | `/lt` | Toggle main window |
 | `/lt test` | Open test mode menu |
 | `/lt version` | Print addon version |
 
 **Setting up a session:**
+
 1. Zone into a raid instance
 2. The Master Looter opens Loothing and items appear automatically when looted
 3. Start a session — candidates respond via the RollFrame or whisper

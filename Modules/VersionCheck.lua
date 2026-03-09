@@ -8,13 +8,27 @@
     Supports test versions (tVersion) that don't trigger outdated warnings.
 ----------------------------------------------------------------------]]
 
+local ADDON_NAME, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local Utils = ns.Utils
+local C_Timer = C_Timer
+local GetNumGroupMembers = GetNumGroupMembers
+local GetNumGuildMembers = GetNumGuildMembers
+local GetTime = GetTime
+local IsInGroup = IsInGroup
+local IsInGuild = IsInGuild
+local IsInRaid = IsInRaid
+local UnitExists = UnitExists
+local ipairs, pairs, time, type = ipairs, pairs, time, type
+local tconcat = table.concat
+local tsort = table.sort
 
 --[[--------------------------------------------------------------------
-    LoothingVersionCheckMixin
+    VersionCheckMixin
 ----------------------------------------------------------------------]]
 
-LoothingVersionCheckMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+local VersionCheckMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
 
 local VERSION_EVENTS = {
     "OnVersionReceived",
@@ -28,7 +42,7 @@ local ROSTER_CHECK_THROTTLE = 30
 local OUTDATED_WARN_THROTTLE = 60
 
 --- Initialize version check
-function LoothingVersionCheckMixin:Init()
+function VersionCheckMixin:Init()
     Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(VERSION_EVENTS)
 
@@ -50,7 +64,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Load version data from SavedVariables global scope
-function LoothingVersionCheckMixin:LoadPersistedVersions()
+function VersionCheckMixin:LoadPersistedVersions()
     if not Loothing.Settings then return end
 
     local stored = Loothing.Settings:GetGlobalValue("verTestCandidates", {})
@@ -65,7 +79,7 @@ function LoothingVersionCheckMixin:LoadPersistedVersions()
 end
 
 --- Save version data to SavedVariables global scope
-function LoothingVersionCheckMixin:SavePersistedVersions()
+function VersionCheckMixin:SavePersistedVersions()
     if not Loothing.Settings then return end
 
     -- Only persist entries with actual versions (not nil/"Not Installed")
@@ -96,20 +110,20 @@ end
 -- @param v1 string - Version string (e.g., "1.0.0")
 -- @param v2 string - Version string to compare against
 -- @return number - -1 if v1 < v2, 0 if equal, 1 if v1 > v2
-function LoothingVersionCheckMixin:CompareVersions(v1, v2)
-    return LoothingUtils.CompareVersions(v1, v2)
+function VersionCheckMixin:CompareVersions(v1, v2)
+    return Utils.CompareVersions(v1, v2)
 end
 
 --- Check if a version is outdated compared to current
 -- @param version string
 -- @return boolean
-function LoothingVersionCheckMixin:IsOutdated(version)
+function VersionCheckMixin:IsOutdated(version)
     return self:CompareVersions(version, Loothing.VERSION) < 0
 end
 
 --- Get highest version from cache
 -- @return string
-function LoothingVersionCheckMixin:GetHighestVersion()
+function VersionCheckMixin:GetHighestVersion()
     local highest = Loothing.VERSION
 
     for _, data in pairs(self.versionCache) do
@@ -128,7 +142,7 @@ end
 --- Check if all group members (with Loothing installed) meet a minimum version
 -- @param minVersion string - Minimum version required (e.g., "1.1.0")
 -- @return boolean - True if all group members meet the minimum version
-function LoothingVersionCheckMixin:GroupHasVersion(minVersion)
+function VersionCheckMixin:GroupHasVersion(minVersion)
     if not minVersion then return true end
 
     -- Our own version must meet the minimum
@@ -152,7 +166,7 @@ function LoothingVersionCheckMixin:GroupHasVersion(minVersion)
         end
 
         if name then
-            name = LoothingUtils.NormalizeName(name)
+            name = Utils.NormalizeName(name)
             local data = self.versionCache[name]
             if data and data.version and data.version ~= "Not Installed" then
                 -- Test versions are not gated (they're always considered up-to-date)
@@ -172,7 +186,7 @@ end
 --- Get list of group members below a minimum version
 -- @param minVersion string - Minimum version required
 -- @return table - Array of { name, version } for outdated members
-function LoothingVersionCheckMixin:GetOutdatedMembers(minVersion)
+function VersionCheckMixin:GetOutdatedMembers(minVersion)
     local outdated = {}
 
     if not IsInGroup() then return outdated end
@@ -191,7 +205,7 @@ function LoothingVersionCheckMixin:GetOutdatedMembers(minVersion)
         end
 
         if name then
-            name = LoothingUtils.NormalizeName(name)
+            name = Utils.NormalizeName(name)
             local data = self.versionCache[name]
             if data and data.version and data.version ~= "Not Installed" then
                 if not data.tVersion and self:CompareVersions(data.version, minVersion) < 0 then
@@ -209,16 +223,16 @@ end
 
 --- Get a set of current group member names (normalized)
 -- @return table - { [name] = true }
-function LoothingVersionCheckMixin:GetCurrentRosterNames()
+function VersionCheckMixin:GetCurrentRosterNames()
     local names = {}
     if not IsInGroup() then
         local pName = Loolib.SecretUtil.SafeUnitName("player")
         if pName then
-            names[LoothingUtils.NormalizeName(pName)] = true
+            names[Utils.NormalizeName(pName)] = true
         end
         return names
     end
-    local roster = LoothingUtils.GetRaidRoster()
+    local roster = Utils.GetRaidRoster()
     for _, member in ipairs(roster) do
         names[member.name] = true
     end
@@ -230,7 +244,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Called on GROUP_ROSTER_UPDATE - throttled version request
-function LoothingVersionCheckMixin:OnGroupRosterUpdate()
+function VersionCheckMixin:OnGroupRosterUpdate()
     if not IsInGroup() then return end
 
     local now = GetTime()
@@ -252,7 +266,7 @@ function LoothingVersionCheckMixin:OnGroupRosterUpdate()
 end
 
 --- Print a warning about outdated group members
-function LoothingVersionCheckMixin:WarnOutdatedMembers()
+function VersionCheckMixin:WarnOutdatedMembers()
     local rosterNames = self:GetCurrentRosterNames()
     local outdatedCount = 0
     local outdatedNames = {}
@@ -262,7 +276,7 @@ function LoothingVersionCheckMixin:WarnOutdatedMembers()
             if self:IsOutdated(data.version) then
                 outdatedCount = outdatedCount + 1
                 if outdatedCount <= 3 then
-                    local shortName = LoothingUtils.GetShortName(name)
+                    local shortName = Utils.GetShortName(name)
                     outdatedNames[#outdatedNames + 1] = string.format("%s (%s)", shortName, data.version)
                 end
             end
@@ -272,7 +286,7 @@ function LoothingVersionCheckMixin:WarnOutdatedMembers()
     if outdatedCount > 0 then
         local msg = string.format("|cffff9900%d group member(s) have outdated Loothing:|r %s",
             outdatedCount,
-            table.concat(outdatedNames, ", "))
+            tconcat(outdatedNames, ", "))
         if outdatedCount > 3 then
             msg = msg .. string.format(" and %d more", outdatedCount - 3)
         end
@@ -287,7 +301,7 @@ end
 
 --- Query versions from guild or raid
 -- @param target string - "guild" or "raid"
-function LoothingVersionCheckMixin:Query(target)
+function VersionCheckMixin:Query(target)
     if self.queryInProgress then
         Loothing:Print("Version check already in progress")
         return
@@ -327,7 +341,7 @@ function LoothingVersionCheckMixin:Query(target)
 end
 
 --- Query guild members
-function LoothingVersionCheckMixin:QueryGuild()
+function VersionCheckMixin:QueryGuild()
     if not IsInGuild() then
         Loothing:Print("You are not in a guild")
         self:CompleteQuery()
@@ -339,7 +353,7 @@ function LoothingVersionCheckMixin:QueryGuild()
     for i = 1, numMembers do
         local name, _, _, _, _, _, _, _, online = Loothing.GetGuildRosterInfo(i)
         if online and name then
-            name = LoothingUtils.NormalizeName(name)
+            name = Utils.NormalizeName(name)
             self.versionCache[name] = {
                 version = nil,
                 tVersion = nil,
@@ -354,7 +368,7 @@ function LoothingVersionCheckMixin:QueryGuild()
 end
 
 --- Query raid members
-function LoothingVersionCheckMixin:QueryRaid()
+function VersionCheckMixin:QueryRaid()
     if not IsInRaid() and not IsInGroup() then
         Loothing:Print("You are not in a raid or party")
         self:CompleteQuery()
@@ -362,7 +376,7 @@ function LoothingVersionCheckMixin:QueryRaid()
     end
 
     -- Pre-populate with group members
-    local roster = LoothingUtils.GetRaidRoster()
+    local roster = Utils.GetRaidRoster()
     for _, member in ipairs(roster) do
         if member.online and member.name then
             self.versionCache[member.name] = {
@@ -379,7 +393,7 @@ function LoothingVersionCheckMixin:QueryRaid()
 end
 
 --- Complete the query
-function LoothingVersionCheckMixin:CompleteQuery()
+function VersionCheckMixin:CompleteQuery()
     if not self.queryInProgress then return end
 
     self.queryInProgress = false
@@ -403,7 +417,7 @@ end
 
 --- Handle version request from another player
 -- @param sender string
-function LoothingVersionCheckMixin:HandleRequest(sender)
+function VersionCheckMixin:HandleRequest(sender)
     -- Send our version via Comm convenience method
     Loothing.Comm:SendVersionResponse(sender)
 end
@@ -412,8 +426,8 @@ end
 -- @param version string
 -- @param sender string
 -- @param tVersion string|nil - Test version identifier
-function LoothingVersionCheckMixin:HandleResponse(version, sender, tVersion)
-    sender = LoothingUtils.NormalizeName(sender)
+function VersionCheckMixin:HandleResponse(version, sender, tVersion)
+    sender = Utils.NormalizeName(sender)
     self:AddVersionEntry(sender, version, tVersion)
 
     self:TriggerEvent("OnVersionReceived", sender, version)
@@ -426,8 +440,8 @@ end
 -- @param name string
 -- @param version string
 -- @param tVersion string|nil - Test version identifier
-function LoothingVersionCheckMixin:AddVersionEntry(name, version, tVersion)
-    name = LoothingUtils.NormalizeName(name)
+function VersionCheckMixin:AddVersionEntry(name, version, tVersion)
+    name = Utils.NormalizeName(name)
 
     self.versionCache[name] = {
         version = version,
@@ -444,7 +458,7 @@ end
 
 --- Get version data sorted by name, scoped to current roster
 -- @return table - Array of { name, version, tVersion, isOutdated }
-function LoothingVersionCheckMixin:GetSortedVersions()
+function VersionCheckMixin:GetSortedVersions()
     local rosterNames = self:GetCurrentRosterNames()
     local versions = {}
 
@@ -459,7 +473,7 @@ function LoothingVersionCheckMixin:GetSortedVersions()
         end
     end
 
-    table.sort(versions, function(a, b)
+    tsort(versions, function(a, b)
         return a.name < b.name
     end)
 
@@ -468,7 +482,7 @@ end
 
 --- Get count of outdated versions, scoped to current roster
 -- @return number
-function LoothingVersionCheckMixin:GetOutdatedCount()
+function VersionCheckMixin:GetOutdatedCount()
     local rosterNames = self:GetCurrentRosterNames()
     local count = 0
 
@@ -483,7 +497,7 @@ end
 
 --- Get count of not installed, scoped to current roster
 -- @return number
-function LoothingVersionCheckMixin:GetNotInstalledCount()
+function VersionCheckMixin:GetNotInstalledCount()
     local rosterNames = self:GetCurrentRosterNames()
     local count = 0
 
@@ -497,7 +511,7 @@ function LoothingVersionCheckMixin:GetNotInstalledCount()
 end
 
 --- Print summary to chat, scoped to current roster
-function LoothingVersionCheckMixin:PrintSummary()
+function VersionCheckMixin:PrintSummary()
     local rosterNames = self:GetCurrentRosterNames()
     local total = 0
     local current = 0
@@ -540,19 +554,20 @@ function LoothingVersionCheckMixin:PrintSummary()
 end
 
 --[[--------------------------------------------------------------------
-    Singleton Instance
+    Namespace Instance
 ----------------------------------------------------------------------]]
 
-LoothingVersionCheck = Loolib.CreateFromMixins(LoothingVersionCheckMixin)
+local VersionCheck = ns.VersionCheck or Loolib.CreateFromMixins(VersionCheckMixin)
+ns.VersionCheck = VersionCheck
 -- Defer Init() - LoadPersistedVersions() requires Loothing.Settings which is
 -- not available until InitializeModules() has run. The PLAYER_LOGIN handler
--- in Init.lua calls LoothingVersionCheck:Init() after Settings is ready.
+-- in Init.lua calls ns.VersionCheck:Init() after Settings is ready.
 -- Only set up the callback registry and basic state here.
-Loolib.CallbackRegistryMixin.OnLoad(LoothingVersionCheck)
-LoothingVersionCheck:GenerateCallbackEvents(VERSION_EVENTS)
-LoothingVersionCheck.versionCache = {}
-LoothingVersionCheck.queryInProgress = false
-LoothingVersionCheck.queryStartTime = nil
-LoothingVersionCheck.lastRosterCheck = 0
-LoothingVersionCheck.lastOutdatedWarn = 0
-LoothingVersionCheck.tVersion = nil
+Loolib.CallbackRegistryMixin.OnLoad(VersionCheck)
+VersionCheck:GenerateCallbackEvents(VERSION_EVENTS)
+VersionCheck.versionCache = {}
+VersionCheck.queryInProgress = false
+VersionCheck.queryStartTime = nil
+VersionCheck.lastRosterCheck = 0
+VersionCheck.lastOutdatedWarn = 0
+VersionCheck.tVersion = nil

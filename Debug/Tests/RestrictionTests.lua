@@ -2,7 +2,7 @@
     Loothing - Loot Council Addon for WoW 12.0+
     RestrictionTests - Test suite for encounter addon restriction handling
 
-    Tests the LoothingRestrictionsMixin:
+    Tests the RestrictionsMixin:
     - Bitmask state management
     - Guaranteed message queueing during restrictions
     - Replay when restrictions lift
@@ -10,6 +10,9 @@
 
     Run: /lt test run restriction
 ----------------------------------------------------------------------]]
+
+local _, ns = ...
+local Loothing = ns.Addon
 
 local Loolib = LibStub("Loolib")
 
@@ -43,8 +46,8 @@ local function RunRestrictionTests()
 
     print("|cff00ccff========== Encounter Restriction Tests ==========|r")
 
-    if not LoothingRestrictionsMixin then
-        print("|cffff0000[SKIP]|r LoothingRestrictionsMixin not available")
+    if not RestrictionsMixin then
+        print("|cffff0000[SKIP]|r RestrictionsMixin not available")
         return passed, failed
     end
 
@@ -52,7 +55,7 @@ local function RunRestrictionTests()
         Create a fresh restrictions instance for testing
     ----------------------------------------------------------------------]]
 
-    local restrictions = Loolib.CreateFromMixins(LoothingRestrictionsMixin)
+    local restrictions = Loolib.CreateFromMixins(RestrictionsMixin)
 
     -- Minimal init (skip event registration which needs full Loolib setup)
     Loolib.CallbackRegistryMixin.OnLoad(restrictions)
@@ -164,7 +167,7 @@ local function RunRestrictionTests()
         local sentMessages = {}
         local origSend = Loothing.Comm and Loothing.Comm.Send
         if Loothing.Comm then
-            Loothing.Comm.Send = function(self, command, data, target)
+            Loothing.Comm.Send = function(self, command, data, target, _priority)
                 sentMessages[#sentMessages + 1] = { command = command, data = data }
             end
         end
@@ -194,6 +197,6 @@ local function RunRestrictionTests()
 end
 
 -- Register test
-if LoothingTestRunner then
-    LoothingTestRunner:RegisterTest("restriction", RunRestrictionTests)
+if TestRunner then
+    TestRunner:RegisterTest("restriction", RunRestrictionTests)
 end

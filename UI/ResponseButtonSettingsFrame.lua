@@ -3,7 +3,11 @@
     ResponseButtonSettingsFrame - Visual editor for response button sets
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local GlobalBridge = Loolib.Compat.GlobalBridge
+local Loothing = ns.Addon
+local Utils = ns.Utils
 
 local FRAME_W        = 760
 local FRAME_H        = 720
@@ -17,13 +21,14 @@ local SECTION_PAD    = 12
 local MAX_BUTTONS    = 10
 local TYPE_CODE_MIN_COL_W = 220
 
-LoothingResponseButtonSettingsMixin = {}
+local ResponseButtonSettingsMixin = ns.ResponseButtonSettingsMixin or {}
+ns.ResponseButtonSettingsMixin = ResponseButtonSettingsMixin
 
 --[[--------------------------------------------------------------------
     Public API
 ----------------------------------------------------------------------]]
 
-function LoothingResponseButtonSettingsMixin:Show()
+function ResponseButtonSettingsMixin:Show()
     self:BringToFront()
     self.frame:Show()
     self:BringToFront()
@@ -31,15 +36,15 @@ function LoothingResponseButtonSettingsMixin:Show()
     self:Refresh()
 end
 
-function LoothingResponseButtonSettingsMixin:Hide()
+function ResponseButtonSettingsMixin:Hide()
     self.frame:Hide()
 end
 
-function LoothingResponseButtonSettingsMixin:IsShown()
+function ResponseButtonSettingsMixin:IsShown()
     return self.frame:IsShown()
 end
 
-function LoothingResponseButtonSettingsMixin:Toggle()
+function ResponseButtonSettingsMixin:Toggle()
     if self:IsShown() then self:Hide() else self:Show() end
 end
 
@@ -47,13 +52,13 @@ end
     Initialization
 ----------------------------------------------------------------------]]
 
-function LoothingResponseButtonSettingsMixin:Init()
+function ResponseButtonSettingsMixin:Init()
     self.expandedRow = nil   -- btnId of currently expanded row (or nil)
     self.rowFrames   = {}    -- pool of row frames
     self:BuildFrame()
 end
 
-function LoothingResponseButtonSettingsMixin:BringToFront()
+function ResponseButtonSettingsMixin:BringToFront()
     if not self.frame then
         return
     end
@@ -61,7 +66,7 @@ function LoothingResponseButtonSettingsMixin:BringToFront()
     self.frame:Raise()
 end
 
-function LoothingResponseButtonSettingsMixin:UpdateLayout()
+function ResponseButtonSettingsMixin:UpdateLayout()
     if self.scrollFrame and self.scrollChild then
         local scrollWidth = math.max((self.scrollFrame:GetWidth() or 0) - 24, 1)
         self.scrollChild:SetWidth(scrollWidth)
@@ -70,8 +75,8 @@ function LoothingResponseButtonSettingsMixin:UpdateLayout()
     self:LayoutTypeCodeMap()
 end
 
-function LoothingResponseButtonSettingsMixin:BuildFrame()
-    local f = CreateFrame("Frame", "LoothingResponseButtonSettingsFrame", UIParent, "BackdropTemplate")
+function ResponseButtonSettingsMixin:BuildFrame()
+    local f = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
     f:SetSize(FRAME_W, FRAME_H)
     f:SetPoint("CENTER")
     f:SetFrameStrata("DIALOG")
@@ -110,6 +115,7 @@ function LoothingResponseButtonSettingsMixin:BuildFrame()
     f:SetBackdropBorderColor(0.7, 0.7, 0.7, 1)
     f:Hide()
     self.frame = f
+    ns.ResponseButtonSettingsFrame = f
 
     -- Title
     local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
@@ -199,7 +205,7 @@ function LoothingResponseButtonSettingsMixin:BuildFrame()
         local id  = self:GetActiveSetId()
         local set = Loothing.Settings:GetResponseSetById(id)
         if set then
-            local newId = Loothing.Settings:AddResponseSet(set.name .. " (Copy)", LoothingUtils.DeepCopy(set.buttons))
+            local newId = Loothing.Settings:AddResponseSet(set.name .. " (Copy)", Utils.DeepCopy(set.buttons))
             Loothing.Settings:SetActiveResponseSet(newId)
             self:Refresh()
         end
@@ -213,7 +219,7 @@ function LoothingResponseButtonSettingsMixin:BuildFrame()
     renameBtn:SetScript("OnClick", function()
         local id  = self:GetActiveSetId()
         local set = Loothing.Settings:GetResponseSetById(id)
-        Loolib.Compat.RegisterStaticPopup("LOOTHING_RENAME_SET", {
+        GlobalBridge:RegisterStaticPopup("Loothing", "LOOTHING_RENAME_SET", {
             text         = "Enter new name for set:",
             button1      = "OK",
             button2      = "Cancel",
@@ -230,7 +236,7 @@ function LoothingResponseButtonSettingsMixin:BuildFrame()
             whileDead    = true,
             hideOnEscape = true,
         })
-        local dialog = StaticPopup_Show("LOOTHING_RENAME_SET")
+        local dialog = GlobalBridge:ShowStaticPopup("Loothing", "LOOTHING_RENAME_SET")
         if dialog and set then
             dialog.EditBox:SetText(set.name)
             dialog.EditBox:HighlightText()
@@ -251,7 +257,7 @@ function LoothingResponseButtonSettingsMixin:BuildFrame()
             Loothing:Print("Cannot delete the last response set.")
             return
         end
-        Loolib.Compat.RegisterStaticPopup("LOOTHING_DEL_SET", {
+        GlobalBridge:RegisterStaticPopup("Loothing", "LOOTHING_DEL_SET", {
             text         = "Delete this response set? This cannot be undone.",
             button1      = "Delete",
             button2      = "Cancel",
@@ -263,7 +269,7 @@ function LoothingResponseButtonSettingsMixin:BuildFrame()
             whileDead    = true,
             hideOnEscape = true,
         })
-        StaticPopup_Show("LOOTHING_DEL_SET")
+        GlobalBridge:ShowStaticPopup("Loothing", "LOOTHING_DEL_SET")
     end)
 
     -- ----------------------------------------------------------------
@@ -280,7 +286,7 @@ function LoothingResponseButtonSettingsMixin:BuildFrame()
     resetBtn:SetPoint("BOTTOMLEFT", 12, 10)
     resetBtn:SetText("Reset to Defaults")
     resetBtn:SetScript("OnClick", function()
-        Loolib.Compat.RegisterStaticPopup("LOOTHING_RESET_SETS", {
+        GlobalBridge:RegisterStaticPopup("Loothing", "LOOTHING_RESET_SETS", {
             text         = "Reset ALL response sets to defaults? This cannot be undone.",
             button1      = "Reset",
             button2      = "Cancel",
@@ -294,7 +300,7 @@ function LoothingResponseButtonSettingsMixin:BuildFrame()
             whileDead    = true,
             hideOnEscape = true,
         })
-        StaticPopup_Show("LOOTHING_RESET_SETS")
+        GlobalBridge:ShowStaticPopup("Loothing", "LOOTHING_RESET_SETS")
     end)
 
     -- ----------------------------------------------------------------
@@ -362,7 +368,7 @@ end
 
 local TYPE_CODES = { "default", "WEAPON", "RARE", "TOKEN", "PETS", "MOUNTS", "RECIPE", "SPECIAL", "CATALYST" }
 
-function LoothingResponseButtonSettingsMixin:BuildTypeCodeMap(container)
+function ResponseButtonSettingsMixin:BuildTypeCodeMap(container)
     self.tcDropdowns = {}
     self.tcFields = {}
 
@@ -408,7 +414,7 @@ function LoothingResponseButtonSettingsMixin:BuildTypeCodeMap(container)
     end
 end
 
-function LoothingResponseButtonSettingsMixin:LayoutTypeCodeMap()
+function ResponseButtonSettingsMixin:LayoutTypeCodeMap()
     if not self.tcContainer or not self.tcFields then
         return
     end
@@ -449,7 +455,7 @@ function LoothingResponseButtonSettingsMixin:LayoutTypeCodeMap()
     container:SetHeight(rows * rowH + math.max(0, rows - 1) * rowGap)
 end
 
-function LoothingResponseButtonSettingsMixin:RefreshTypeCodeMap()
+function ResponseButtonSettingsMixin:RefreshTypeCodeMap()
     local tcMap = Loothing.Settings:GetTypeCodeMap()
     for tc, dd in pairs(self.tcDropdowns or {}) do
         local setId = tcMap[tc]
@@ -468,11 +474,11 @@ end
     Refresh / Rebuild Button Rows
 ----------------------------------------------------------------------]]
 
-function LoothingResponseButtonSettingsMixin:GetActiveSetId()
+function ResponseButtonSettingsMixin:GetActiveSetId()
     return Loothing.Settings:GetActiveResponseSet()
 end
 
-function LoothingResponseButtonSettingsMixin:Refresh()
+function ResponseButtonSettingsMixin:Refresh()
     -- Update set dropdown label
     local id  = self:GetActiveSetId()
     local set = Loothing.Settings:GetResponseSetById(id)
@@ -485,7 +491,7 @@ function LoothingResponseButtonSettingsMixin:Refresh()
     self:RefreshTypeCodeMap()
 end
 
-function LoothingResponseButtonSettingsMixin:RebuildRows()
+function ResponseButtonSettingsMixin:RebuildRows()
     if not self.scrollChild then return end
     -- Hide all existing rows
     for _, row in ipairs(self.rowFrames) do
@@ -530,7 +536,7 @@ end
     Row Creation
 ----------------------------------------------------------------------]]
 
-function LoothingResponseButtonSettingsMixin:CreateRow()
+function ResponseButtonSettingsMixin:CreateRow()
     local row = CreateFrame("Frame", nil, self.scrollChild, "BackdropTemplate")
     row:SetBackdrop({
         bgFile   = "Interface\\Buttons\\WHITE8x8",
@@ -666,7 +672,7 @@ function LoothingResponseButtonSettingsMixin:CreateRow()
     return row
 end
 
-function LoothingResponseButtonSettingsMixin:PopulateRow(row, setId, btnData, idx, total, isExpanded)
+function ResponseButtonSettingsMixin:PopulateRow(row, setId, btnData, idx, total, isExpanded)
     local rowH = ROW_H + (isExpanded and EXPANDED_H or 0)
     row:SetHeight(rowH)
 
@@ -738,7 +744,7 @@ function LoothingResponseButtonSettingsMixin:PopulateRow(row, setId, btnData, id
             Loothing:Print("Cannot delete the last button in a set.")
             return
         end
-        Loolib.Compat.RegisterStaticPopup("LOOTHING_DEL_BTN", {
+        GlobalBridge:RegisterStaticPopup("Loothing", "LOOTHING_DEL_BTN", {
             text         = "Delete this response button?",
             button1      = "Delete",
             button2      = "Cancel",
@@ -751,7 +757,7 @@ function LoothingResponseButtonSettingsMixin:PopulateRow(row, setId, btnData, id
             whileDead    = true,
             hideOnEscape = true,
         })
-        StaticPopup_Show("LOOTHING_DEL_BTN")
+        GlobalBridge:ShowStaticPopup("Loothing", "LOOTHING_DEL_BTN")
     end)
 
     -- ---- Expanded region ----
@@ -786,7 +792,7 @@ function LoothingResponseButtonSettingsMixin:PopulateRow(row, setId, btnData, id
         local iconLabel = btnData.icon and ("Icon: ✓") or "Pick Icon…"
         row.iconPickBtn:SetText(iconLabel)
         row.iconPickBtn:SetScript("OnClick", function(btn)
-            LoothingIconPicker_Open(btn, function(path)
+            ns.OpenIconPicker(btn, function(path)
                 Loothing.Settings:UpdateResponseButton(setId, btnData.id, { icon = path })
                 self:RebuildRows()
             end, btnData.icon)
@@ -797,12 +803,12 @@ function LoothingResponseButtonSettingsMixin:PopulateRow(row, setId, btnData, id
         row.whisperEB:SetText(keysStr)
         row.whisperEB:SetScript("OnEnterPressed", function(eb)
             eb:ClearFocus()
-            local parts = LoothingUtils.Split(eb:GetText():gsub("%s+", ""), ",")
+            local parts = Utils.Split(eb:GetText():gsub("%s+", ""), ",")
             Loothing.Settings:UpdateResponseButton(setId, btnData.id, { whisperKeys = parts })
             if Loothing.ResponseManager then Loothing.ResponseManager:LoadResponses() end
         end)
         row.whisperEB:SetScript("OnEditFocusLost", function(eb)
-            local parts = LoothingUtils.Split(eb:GetText():gsub("%s+", ""), ",")
+            local parts = Utils.Split(eb:GetText():gsub("%s+", ""), ",")
             Loothing.Settings:UpdateResponseButton(setId, btnData.id, { whisperKeys = parts })
             if Loothing.ResponseManager then Loothing.ResponseManager:LoadResponses() end
         end)
@@ -822,8 +828,10 @@ end
     Singleton factory
 ----------------------------------------------------------------------]]
 
-function CreateLoothingResponseButtonSettings()
-    local obj = Loolib.CreateFromMixins(LoothingResponseButtonSettingsMixin)
+local function CreateResponseButtonSettings()
+    local obj = Loolib.CreateFromMixins(ResponseButtonSettingsMixin)
     obj:Init()
     return obj
 end
+
+ns.CreateResponseButtonSettings = CreateResponseButtonSettings

@@ -3,9 +3,16 @@
     Column definitions, sort mappings, header creation, and DoCellUpdate
 ----------------------------------------------------------------------]]
 
-LoothingCouncilTableMixin = LoothingCouncilTableMixin or {}
+local _, ns = ...
+local Loothing = ns.Addon
+local Utils = ns.Utils
 
-LoothingCouncilTableMixin.COLUMNS = {
+local CouncilTableMixin = ns.CouncilTableMixin or {}
+ns.CouncilTableMixin = CouncilTableMixin
+
+local CELL_PADDING = 2
+
+CouncilTableMixin.COLUMNS = {
     { id = "priority",     name = "#",         width = 30,  maxWidth = 36,  flex = 0, sortable = true,  settingsKey = "priority" },
     { id = "class",        name = "",          width = 22,  maxWidth = 22,  flex = 0, sortable = true,  settingsKey = "class" },
     { id = "player",       name = "Player",    width = 100, maxWidth = 180, flex = 2, sortable = true,  settingsKey = "player" },
@@ -23,7 +30,7 @@ LoothingCouncilTableMixin.COLUMNS = {
     { id = "vote",         name = "Vote",      width = 55,  maxWidth = 70,  flex = 1, sortable = true,  settingsKey = "vote" },
 }
 
-LoothingCouncilTableMixin.COLUMN_SORT_MAP = {
+CouncilTableMixin.COLUMN_SORT_MAP = {
     priority = "priority",
     player = "name",
     class = "class",
@@ -38,7 +45,7 @@ LoothingCouncilTableMixin.COLUMN_SORT_MAP = {
     wonWeekly = "itemsWonWeekly",
 }
 
-LoothingCouncilTableMixin.COLUMN_TOOLTIPS = {
+CouncilTableMixin.COLUMN_TOOLTIPS = {
     wonSession = "Items won this session",
     wonInstance = "Items won in this instance + difficulty",
     wonWeekly = "Items won this week",
@@ -60,7 +67,7 @@ local ROLE_COORDS = {
     Column Visibility
 ----------------------------------------------------------------------]]
 
-function LoothingCouncilTableMixin:IsColumnVisible(columnId)
+function CouncilTableMixin:IsColumnVisible(columnId)
     if not Loothing.Settings then
         return true
     end
@@ -71,7 +78,7 @@ function LoothingCouncilTableMixin:IsColumnVisible(columnId)
     return columns[columnId]
 end
 
-function LoothingCouncilTableMixin:GetVisibleColumns()
+function CouncilTableMixin:GetVisibleColumns()
     local visible = {}
     for _, column in ipairs(self.COLUMNS) do
         if self:IsColumnVisible(column.id) then
@@ -81,7 +88,7 @@ function LoothingCouncilTableMixin:GetVisibleColumns()
     return visible
 end
 
-function LoothingCouncilTableMixin:ToggleColumnVisibility(columnId)
+function CouncilTableMixin:ToggleColumnVisibility(columnId)
     if not Loothing.Settings then return end
     local columns = Loothing.Settings:Get("councilTable.columns", {})
     local currentState = columns[columnId]
@@ -102,9 +109,9 @@ end
 -- space freed by capped columns is redistributed to uncapped ones.
 -- @param availableWidth number - Total width to fill
 -- @return table - Array of {col, computedWidth} matching visible column order
-function LoothingCouncilTableMixin:ComputeColumnWidths(availableWidth)
+function CouncilTableMixin:ComputeColumnWidths(availableWidth)
     local visible = self:GetVisibleColumns()
-    local padding = CELL_PADDING or 2
+    local padding = CELL_PADDING
     local totalPadding = math.max(0, #visible - 1) * padding
     local usable = availableWidth - totalPadding
 
@@ -121,7 +128,7 @@ function LoothingCouncilTableMixin:ComputeColumnWidths(availableWidth)
     -- Distribute extra space in passes (capped columns free space for others)
     if extra > 0 then
         local capped = {}
-        for pass = 1, 4 do
+        for _ = 1, 4 do
             local totalFlex = 0
             for i, col in ipairs(visible) do
                 if not capped[i] and (col.flex or 0) > 0 then
@@ -162,7 +169,7 @@ end
     Column Headers
 ----------------------------------------------------------------------]]
 
-function LoothingCouncilTableMixin:RebuildColumnHeaders()
+function CouncilTableMixin:RebuildColumnHeaders()
     -- Clear existing headers
     if self.headerButtons then
         for _, btn in pairs(self.headerButtons) do
@@ -175,7 +182,7 @@ function LoothingCouncilTableMixin:RebuildColumnHeaders()
 
     local containerWidth = self.headersContainer:GetWidth()
     if containerWidth < 1 then containerWidth = 600 end -- fallback before layout
-    local padding = CELL_PADDING or 2
+    local padding = CELL_PADDING
     local computed = self:ComputeColumnWidths(containerWidth)
 
     -- Cache computed widths for row creation
@@ -251,7 +258,7 @@ function LoothingCouncilTableMixin:RebuildColumnHeaders()
     self.headerSep:SetPoint("TOPRIGHT", self.headersContainer, "BOTTOMRIGHT", 0, -2)
 end
 
-function LoothingCouncilTableMixin:OnColumnHeaderClick(columnId)
+function CouncilTableMixin:OnColumnHeaderClick(columnId)
     if self.sortColumn == columnId then
         self.sortAscending = not self.sortAscending
     else
@@ -273,23 +280,23 @@ end
 -- @param col table - Column definition
 -- @param candidate table - Candidate data
 -- @param row Frame - Parent row frame
-function LoothingCouncilTableMixin:DoCellUpdate(cell, col, candidate, row)
+function CouncilTableMixin:DoCellUpdate(cell, col, candidate, row)
     local handler = self.CellUpdaters[col.id]
     if handler then
         handler(self, cell, candidate, row)
     end
 end
 
-LoothingCouncilTableMixin.CellUpdaters = {}
+CouncilTableMixin.CellUpdaters = {}
 
 -- Priority / row number
-LoothingCouncilTableMixin.CellUpdaters.priority = function(self, cell, candidate, row)
+CouncilTableMixin.CellUpdaters.priority = function(_, cell, _candidate, row)
     cell.text:SetText(tostring(row.rowIndex or ""))
     cell.text:SetTextColor(0.6, 0.6, 0.6)
 end
 
 -- Class icon
-LoothingCouncilTableMixin.CellUpdaters.class = function(self, cell, candidate)
+CouncilTableMixin.CellUpdaters.class = function(_, cell, candidate)
     local class = candidate.class
     if class and cell.icon then
         local coords = CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[class]
@@ -306,7 +313,7 @@ LoothingCouncilTableMixin.CellUpdaters.class = function(self, cell, candidate)
 end
 
 -- Player name (class-colored)
-LoothingCouncilTableMixin.CellUpdaters.player = function(self, cell, candidate)
+CouncilTableMixin.CellUpdaters.player = function(_, cell, candidate)
     local name = candidate.shortName or candidate.name or "Unknown"
     local class = candidate.class
 
@@ -321,7 +328,7 @@ LoothingCouncilTableMixin.CellUpdaters.player = function(self, cell, candidate)
 end
 
 -- Role icon
-LoothingCouncilTableMixin.CellUpdaters.role = function(self, cell, candidate)
+CouncilTableMixin.CellUpdaters.role = function(_, cell, candidate)
     local role = candidate.role
     if role and role ~= "NONE" and ROLE_COORDS[role] and cell.icon then
         cell.icon:SetTexture(ROLE_ICONS[role])
@@ -333,7 +340,7 @@ LoothingCouncilTableMixin.CellUpdaters.role = function(self, cell, candidate)
 end
 
 -- Response (color bar + text)
-LoothingCouncilTableMixin.CellUpdaters.response = function(self, cell, candidate)
+CouncilTableMixin.CellUpdaters.response = function(_, cell, candidate)
     local canSeeResponses = not Loothing.Observer or Loothing.Observer:CanPlayerSeeResponses()
     if not canSeeResponses then
         cell.text:SetText("?")
@@ -381,7 +388,7 @@ LoothingCouncilTableMixin.CellUpdaters.response = function(self, cell, candidate
 end
 
 -- Item level (equipped slot)
-LoothingCouncilTableMixin.CellUpdaters.ilvl = function(self, cell, candidate)
+CouncilTableMixin.CellUpdaters.ilvl = function(_, cell, candidate)
     local ilvl = candidate.equippedIlvl
     if ilvl and ilvl > 0 then
         cell.text:SetText(tostring(ilvl))
@@ -392,7 +399,7 @@ LoothingCouncilTableMixin.CellUpdaters.ilvl = function(self, cell, candidate)
 end
 
 -- Item level difference
-LoothingCouncilTableMixin.CellUpdaters.ilvlDiff = function(self, cell, candidate)
+CouncilTableMixin.CellUpdaters.ilvlDiff = function(_, cell, candidate)
     local diff = candidate.ilvlDiff
     if diff and diff ~= 0 then
         if diff > 0 then
@@ -408,7 +415,7 @@ LoothingCouncilTableMixin.CellUpdaters.ilvlDiff = function(self, cell, candidate
 end
 
 -- Items won this session
-LoothingCouncilTableMixin.CellUpdaters.wonSession = function(self, cell, candidate)
+CouncilTableMixin.CellUpdaters.wonSession = function(_, cell, candidate)
     local count = candidate.itemsWonThisSession or 0
     cell.text:SetText(tostring(count))
     if count > 0 then
@@ -419,7 +426,7 @@ LoothingCouncilTableMixin.CellUpdaters.wonSession = function(self, cell, candida
 end
 
 -- Items won this instance + difficulty
-LoothingCouncilTableMixin.CellUpdaters.wonInstance = function(self, cell, candidate)
+CouncilTableMixin.CellUpdaters.wonInstance = function(_, cell, candidate)
     local count = candidate.itemsWonInstance or 0
     cell.text:SetText(tostring(count))
     if count > 0 then
@@ -430,7 +437,7 @@ LoothingCouncilTableMixin.CellUpdaters.wonInstance = function(self, cell, candid
 end
 
 -- Items won this week
-LoothingCouncilTableMixin.CellUpdaters.wonWeekly = function(self, cell, candidate)
+CouncilTableMixin.CellUpdaters.wonWeekly = function(_, cell, candidate)
     local count = candidate.itemsWonWeekly or 0
     cell.text:SetText(tostring(count))
     if count > 0 then
@@ -441,7 +448,7 @@ LoothingCouncilTableMixin.CellUpdaters.wonWeekly = function(self, cell, candidat
 end
 
 -- Gear slot 1 icon
-LoothingCouncilTableMixin.CellUpdaters.gear1 = function(self, cell, candidate)
+CouncilTableMixin.CellUpdaters.gear1 = function(_, cell, candidate)
     if candidate.gear1Link and cell.icon then
         local texture = select(10, C_Item.GetItemInfo(candidate.gear1Link))
         cell.icon:SetTexture(texture or "Interface\\Icons\\INV_Misc_QuestionMark")
@@ -468,7 +475,7 @@ LoothingCouncilTableMixin.CellUpdaters.gear1 = function(self, cell, candidate)
 end
 
 -- Gear slot 2 icon
-LoothingCouncilTableMixin.CellUpdaters.gear2 = function(self, cell, candidate)
+CouncilTableMixin.CellUpdaters.gear2 = function(_, cell, candidate)
     if candidate.gear2Link and cell.icon then
         local texture = select(10, C_Item.GetItemInfo(candidate.gear2Link))
         cell.icon:SetTexture(texture or "Interface\\Icons\\INV_Misc_QuestionMark")
@@ -494,7 +501,7 @@ LoothingCouncilTableMixin.CellUpdaters.gear2 = function(self, cell, candidate)
 end
 
 -- Roll value
-LoothingCouncilTableMixin.CellUpdaters.roll = function(self, cell, candidate)
+CouncilTableMixin.CellUpdaters.roll = function(_, cell, candidate)
     if candidate.roll then
         cell.text:SetText(tostring(candidate.roll))
         cell.text:SetTextColor(1, 0.82, 0)
@@ -505,7 +512,7 @@ LoothingCouncilTableMixin.CellUpdaters.roll = function(self, cell, candidate)
 end
 
 -- Note icon (hover to see note)
-LoothingCouncilTableMixin.CellUpdaters.note = function(self, cell, candidate)
+CouncilTableMixin.CellUpdaters.note = function(_, cell, candidate)
     local canSeeNotes = not Loothing.Observer or Loothing.Observer:CanPlayerSeeNotes()
     if not canSeeNotes then
         if cell.icon then cell.icon:Hide() end
@@ -539,7 +546,7 @@ LoothingCouncilTableMixin.CellUpdaters.note = function(self, cell, candidate)
 end
 
 -- Vote button / vote count
-LoothingCouncilTableMixin.CellUpdaters.vote = function(self, cell, candidate)
+CouncilTableMixin.CellUpdaters.vote = function(_, cell, candidate)
     local voteCount = candidate.councilVotes or 0
     local isML = Loothing.Session and Loothing.Session:IsMasterLooter()
     local hideVotes = Loothing.Settings and Loothing.Settings:GetHideVotes() and not isML
@@ -588,7 +595,7 @@ LoothingCouncilTableMixin.CellUpdaters.vote = function(self, cell, candidate)
         if canVote then
             -- Check if this is a self-vote and selfVote is disabled
             local candidateName = candidate.playerName or candidate.name
-            local isSelf = candidateName and LoothingUtils.IsSamePlayer(candidateName, LoothingUtils.GetPlayerFullName())
+            local isSelf = candidateName and Utils.IsSamePlayer(candidateName, Utils.GetPlayerFullName())
             local selfVoteAllowed = not Loothing.Settings or Loothing.Settings:GetSelfVote()
             if isSelf and not selfVoteAllowed then
                 cell.voteButton:Show()

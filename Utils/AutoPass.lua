@@ -11,9 +11,14 @@
     - Bitwise class flag system
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local Utils = ns.Utils
+local TrinketData = ns.TrinketData
 
-LoothingAutoPass = {}
+local AutoPass = {}
+ns.AutoPass = AutoPass
 
 --[[--------------------------------------------------------------------
     Class ID Lookup
@@ -53,7 +58,7 @@ local ALL_CLASSES_FLAG = bit.lshift(1, #CLASS_ID_TO_NAME) - 1
     Lists classes that should auto-pass on each armor subtype
 ----------------------------------------------------------------------]]
 
-LoothingAutoPass.armorAutoPass = {
+AutoPass.armorAutoPass = {
     -- Cloth - Everyone except Cloth wearers (Priest, Mage, Warlock)
     [Enum.ItemArmorSubclass.Cloth] = {
         "WARRIOR", "DEATHKNIGHT", "PALADIN", "DRUID", "MONK", "ROGUE",
@@ -91,7 +96,7 @@ LoothingAutoPass.armorAutoPass = {
     Lists classes that should auto-pass on each weapon subtype
 ----------------------------------------------------------------------]]
 
-LoothingAutoPass.weaponAutoPass = {
+AutoPass.weaponAutoPass = {
     -- One-Hand Axes
     [Enum.ItemWeaponSubclass.Axe1H] = {
         "DRUID", "PRIEST", "MAGE", "WARLOCK"
@@ -181,7 +186,7 @@ LoothingAutoPass.weaponAutoPass = {
     Maps each class to the main stats they need on weapons
 ----------------------------------------------------------------------]]
 
-LoothingAutoPass.requiredWeaponStats = {
+AutoPass.requiredWeaponStats = {
     WARRIOR = { "ITEM_MOD_STRENGTH_SHORT" },
     PALADIN = { "ITEM_MOD_STRENGTH_SHORT", "ITEM_MOD_INTELLECT_SHORT" },
     HUNTER = { "ITEM_MOD_AGILITY_SHORT" },
@@ -201,7 +206,7 @@ LoothingAutoPass.requiredWeaponStats = {
     Autopass Override Slots (never auto-pass these equip locations)
 ----------------------------------------------------------------------]]
 
-LoothingAutoPass.autopassOverride = {
+AutoPass.autopassOverride = {
     "INVTYPE_CLOAK",
     "INVTYPE_FINGER",
     "INVTYPE_TRINKET",
@@ -219,7 +224,7 @@ LoothingAutoPass.autopassOverride = {
 -- Scans tooltip for "Classes: ..." line and returns a bitwise flag
 -- @param itemLink string - Item link
 -- @return number - Bitwise class flag (ALL_CLASSES_FLAG if no restriction)
-function LoothingAutoPass:GetItemClassesAllowedFlag(itemLink)
+function AutoPass:GetItemClassesAllowedFlag(itemLink)
     if not itemLink then return ALL_CLASSES_FLAG end
 
     -- Create a scanning tooltip
@@ -289,7 +294,7 @@ end
 -- @param classesFlag number - Bitwise class flag
 -- @param playerClass string - Class file name (e.g., "WARRIOR")
 -- @return boolean - True if class is allowed
-function LoothingAutoPass:IsClassAllowed(classesFlag, playerClass)
+function AutoPass:IsClassAllowed(classesFlag, playerClass)
     if not classesFlag or classesFlag == ALL_CLASSES_FLAG then
         return true
     end
@@ -311,10 +316,10 @@ end
 -- @param itemLink string - Item link
 -- @param itemID number|nil - Item ID (optional, extracted from link if nil)
 -- @return boolean - True if appearance is already collected
-function LoothingAutoPass:IsTransmogKnown(itemLink, itemID)
+function AutoPass:IsTransmogKnown(itemLink, itemID)
     if not C_TransmogCollection then return false end
 
-    itemID = itemID or LoothingUtils.GetItemID(itemLink)
+    itemID = itemID or Utils.GetItemID(itemLink)
     if not itemID then return false end
 
     -- Check via PlayerKnowsTransmogFromItem (most reliable)
@@ -340,10 +345,10 @@ end
 -- @param itemLink string - Item link
 -- @param itemID number|nil - Item ID
 -- @return boolean - True if the player can learn this appearance
-function LoothingAutoPass:IsTransmogLearnable(itemLink, itemID)
+function AutoPass:IsTransmogLearnable(itemLink, itemID)
     if not C_TransmogCollection then return false end
 
-    itemID = itemID or LoothingUtils.GetItemID(itemLink)
+    itemID = itemID or Utils.GetItemID(itemLink)
     if not itemID then return false end
 
     -- Check if item is dressable (can be transmogged)
@@ -372,7 +377,7 @@ end
 -- @param itemLink string - Item link to check
 -- @param playerClass string - Class file (e.g., "WARRIOR")
 -- @return boolean - True if should auto-pass
-function LoothingAutoPass:ShouldAutoPassWeapon(itemLink, playerClass)
+function AutoPass:ShouldAutoPassWeapon(itemLink, playerClass)
     if not itemLink or not playerClass then
         return false
     end
@@ -382,8 +387,7 @@ function LoothingAutoPass:ShouldAutoPassWeapon(itemLink, playerClass)
         return false
     end
 
-    -- Get item stats (handle both C_Item.GetItemStats and legacy GetItemStats)
-    local getItemStats = C_Item.GetItemStats or GetItemStats
+    local getItemStats = C_Item.GetItemStats
     if not getItemStats then return false end
     local stats = getItemStats(itemLink)
     if not stats then
@@ -418,7 +422,7 @@ end
 -- @param playerClass string - Optional class file (defaults to player's class)
 -- @param classesFlag number|nil - Bitwise class flag (optional, parsed from tooltip if nil)
 -- @return boolean, string|nil - shouldAutoPass, reason
-function LoothingAutoPass:ShouldAutoPass(itemLink, playerClass, classesFlag)
+function AutoPass:ShouldAutoPass(itemLink, playerClass, classesFlag)
     if not itemLink then
         return false, nil
     end
@@ -436,15 +440,15 @@ function LoothingAutoPass:ShouldAutoPass(itemLink, playerClass, classesFlag)
     end
 
     -- Get item info
-    local itemID = LoothingUtils.GetItemID(itemLink)
+    local itemID = Utils.GetItemID(itemLink)
     if not itemID then
         return false, nil
     end
 
     -- GetItemInfo returns: name, link, quality, ilvl, reqLevel, classStr, subclassStr,
     -- maxStack, equipSlot, texture, vendorPrice, typeID, subTypeID, bindType
-    local name, _, quality, itemLevel, reqLevel, _, _,
-          maxStack, equipSlot, texture, _, classID, subclassID, bindType = C_Item.GetItemInfo(itemLink)
+    local name, _, _, _, _, _, _,
+          _, equipSlot, _, _, classID, subclassID, _ = C_Item.GetItemInfo(itemLink)
 
     if not name then
         -- Item not cached yet, don't auto-pass
@@ -483,7 +487,7 @@ function LoothingAutoPass:ShouldAutoPass(itemLink, playerClass, classesFlag)
             if self:ShouldKeepForTransmog(itemLink, itemID) then
                 return false, nil
             end
-            local armorTypeName = GetItemSubClassInfo(classID, subclassID)
+            local armorTypeName = C_Item.GetItemSubClassInfo(classID, subclassID)
             return true, string.format("Cannot wear %s armor", armorTypeName or "this")
         end
     end
@@ -497,7 +501,7 @@ function LoothingAutoPass:ShouldAutoPass(itemLink, playerClass, classesFlag)
             if self:ShouldKeepForTransmog(itemLink, itemID) then
                 return false, nil
             end
-            local weaponTypeName = GetItemSubClassInfo(classID, subclassID)
+            local weaponTypeName = C_Item.GetItemSubClassInfo(classID, subclassID)
             return true, string.format("Cannot equip %s", weaponTypeName or "this weapon")
         end
 
@@ -519,9 +523,9 @@ function LoothingAutoPass:ShouldAutoPass(itemLink, playerClass, classesFlag)
 
     -- Check BoE items
     if Loothing.Settings and Loothing.Settings:GetAutoPassBoE() then
-        local bindType = select(14, C_Item.GetItemInfo(itemLink))
-        -- bindType 2 = Bind on Equip
-        if bindType == 2 then
+        local itemBindType = select(14, C_Item.GetItemInfo(itemLink))
+        -- itemBindType 2 = Bind on Equip
+        if itemBindType == 2 then
             return true, "Bind-on-Equip item (can be sold/traded)"
         end
     end
@@ -544,16 +548,16 @@ end
 -- @param itemID number - Item ID
 -- @param playerClass string - Class file (e.g., "WARRIOR")
 -- @return boolean, string|nil - shouldAutoPass, reason
-function LoothingAutoPass:ShouldAutoPassTrinket(itemID, playerClass)
+function AutoPass:ShouldAutoPassTrinket(itemID, _playerClass)
     if not Loothing.Settings or not Loothing.Settings:Get("autoPass.trinkets", false) then
         return false, nil
     end
 
-    if not LoothingTrinketData then
+    if not TrinketData then
         return false, nil
     end
 
-    local shouldPass, reason = LoothingTrinketData:ShouldAutoPass(itemID)
+    local shouldPass, reason = TrinketData:ShouldAutoPass(itemID)
     return shouldPass, reason
 end
 
@@ -568,7 +572,7 @@ end
 -- @param itemLink string
 -- @param itemID number|nil
 -- @return boolean - True if item should be kept for transmog collection
-function LoothingAutoPass:ShouldKeepForTransmog(itemLink, itemID)
+function AutoPass:ShouldKeepForTransmog(itemLink, itemID)
     if not Loothing.Settings then return false end
 
     -- Check if transmog source setting is enabled
@@ -576,7 +580,7 @@ function LoothingAutoPass:ShouldKeepForTransmog(itemLink, itemID)
         return false
     end
 
-    itemID = itemID or LoothingUtils.GetItemID(itemLink)
+    itemID = itemID or Utils.GetItemID(itemLink)
     if not itemID then return false end
 
     -- If appearance is unknown and learnable, keep it
@@ -597,8 +601,8 @@ end
 -- @param itemLink string - Item link to check
 -- @param playerClass string - Optional class file (defaults to player's class)
 -- @return string|nil - Reason text, or nil if shouldn't auto-pass
-function LoothingAutoPass:GetAutoPassReason(itemLink, playerClass)
-    local shouldPass, reason = self:ShouldAutoPass(itemLink, playerClass)
+function AutoPass:GetAutoPassReason(itemLink, playerClass)
+    local _, reason = self:ShouldAutoPass(itemLink, playerClass)
     return reason
 end
 
@@ -609,7 +613,7 @@ end
 --- Check if player should auto-pass on an item and optionally show reason
 -- @param item table - LoothingItem instance
 -- @return boolean - True if should auto-pass
-function LoothingAutoPass:CheckItem(item)
+function AutoPass:CheckItem(item)
     if not item or not item.itemLink then
         return false
     end
@@ -626,11 +630,11 @@ end
 --- Get the bitwise class flag for an item
 -- @param itemLink string
 -- @return number - Bitwise class flag
-function LoothingAutoPass:GetClassesFlag(itemLink)
+function AutoPass:GetClassesFlag(itemLink)
     return self:GetItemClassesAllowedFlag(itemLink)
 end
 
 -- Export constants
-LoothingAutoPass.ALL_CLASSES_FLAG = ALL_CLASSES_FLAG
-LoothingAutoPass.CLASS_NAME_TO_ID = CLASS_NAME_TO_ID
-LoothingAutoPass.CLASS_ID_TO_NAME = CLASS_ID_TO_NAME
+AutoPass.ALL_CLASSES_FLAG = ALL_CLASSES_FLAG
+AutoPass.CLASS_NAME_TO_ID = CLASS_NAME_TO_ID
+AutoPass.CLASS_ID_TO_NAME = CLASS_ID_TO_NAME

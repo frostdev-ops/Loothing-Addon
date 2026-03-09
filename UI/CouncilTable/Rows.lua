@@ -3,7 +3,12 @@
     Row creation, cell rendering, context menu, and "More Info" panel
 ----------------------------------------------------------------------]]
 
-LoothingCouncilTableMixin = LoothingCouncilTableMixin or {}
+local _, ns = ...
+local Loothing = ns.Addon
+local Utils = ns.Utils
+
+local CouncilTableMixin = ns.CouncilTableMixin or {}
+ns.CouncilTableMixin = CouncilTableMixin
 
 local ROW_HEIGHT = 24
 local CELL_PADDING = 2
@@ -16,7 +21,7 @@ local CELL_PADDING = 2
 -- @param parent Frame - Row frame
 -- @param col table - Column definition
 -- @return Frame
-function LoothingCouncilTableMixin:CreateCell(parent, col)
+function CouncilTableMixin:CreateCell(parent, col)
     local cell = CreateFrame("Button", nil, parent)
     cell:SetSize(col.width, ROW_HEIGHT)
     cell:SetMouseClickEnabled(false)
@@ -78,7 +83,7 @@ end
 --- Create a candidate row with all visible cells
 -- @param parent Frame - List content frame
 -- @return Frame
-function LoothingCouncilTableMixin:CreateCandidateRow(parent)
+function CouncilTableMixin:CreateCandidateRow(_parent)
     local row = self.rowPool:Acquire()
     row:SetHeight(ROW_HEIGHT)
     row:EnableMouse(true)
@@ -106,7 +111,7 @@ function LoothingCouncilTableMixin:CreateCandidateRow(parent)
     local xOffset = 0
 
     -- Reuse or create cells
-    for i, col in ipairs(visible) do
+    for _, col in ipairs(visible) do
         local w = widths[col.id] or col.width
         local cell = row.cells[col.id]
         if not cell then
@@ -153,7 +158,7 @@ end
 -- @param row Frame - Row frame
 -- @param candidate table - Candidate data
 -- @param index number - Row index
-function LoothingCouncilTableMixin:UpdateRow(row, candidate, index)
+function CouncilTableMixin:UpdateRow(row, candidate, index)
     row.candidate = candidate
     row.rowIndex = index
 
@@ -191,7 +196,7 @@ end
     Refresh Candidates
 ----------------------------------------------------------------------]]
 
-function LoothingCouncilTableMixin:RefreshCandidates()
+function CouncilTableMixin:RefreshCandidates()
     if not self.rowPool then return end
     self.rowPool:ReleaseAll()
 
@@ -240,8 +245,8 @@ end
     Enrich Candidates
 ----------------------------------------------------------------------]]
 
-function LoothingCouncilTableMixin:EnrichCandidates(candidates)
-    local roster = LoothingUtils.GetRaidRoster()
+function CouncilTableMixin:EnrichCandidates(candidates)
+    local roster = Utils.GetRaidRoster()
 
     -- Build name-keyed lookup
     local rosterByName = {}
@@ -279,8 +284,8 @@ function LoothingCouncilTableMixin:EnrichCandidates(candidates)
         candidate.equippedIlvl = math.max(g1, g2)
 
         -- Loot count enrichment from history cache
-        if countCache and not (LoothingTestMode and LoothingTestMode.enabled) then
-            local normalized = LoothingUtils.NormalizeName(candidate.playerName or candidate.name)
+        if countCache and not (TestMode and TestMode.enabled) then
+            local normalized = Utils.NormalizeName(candidate.playerName or candidate.name)
             local counts = normalized and countCache[normalized]
             if counts then
                 candidate.itemsWonInstance = counts.instance
@@ -297,7 +302,7 @@ end
     Sorting
 ----------------------------------------------------------------------]]
 
-function LoothingCouncilTableMixin:SortCandidates(candidates)
+function CouncilTableMixin:SortCandidates(candidates)
     if not self.sortColumn then return end
 
     local sortKey = self.COLUMN_SORT_MAP[self.sortColumn] or self.sortColumn
@@ -331,14 +336,14 @@ end
     Candidate Selection & "More Info"
 ----------------------------------------------------------------------]]
 
-function LoothingCouncilTableMixin:SelectCandidate(candidate)
+function CouncilTableMixin:SelectCandidate(candidate)
     self.selectedCandidate = candidate
     self:RefreshCandidates()
     self:UpdateMoreInfoPanel(candidate)
     self:TriggerEvent("OnCandidateSelected", candidate)
 end
 
-function LoothingCouncilTableMixin:UpdateMoreInfoPanel(candidate)
+function CouncilTableMixin:UpdateMoreInfoPanel(candidate)
     if not self.moreInfoPanel then return end
     if not candidate then
         self.moreInfoPanel:Hide()
@@ -437,11 +442,11 @@ end
     Context Menu
 ----------------------------------------------------------------------]]
 
-function LoothingCouncilTableMixin:ShowCandidateContextMenu(row, candidate)
+function CouncilTableMixin:ShowCandidateContextMenu(row, candidate)
     local L = Loothing.Locale or {}
     local isML = Loothing.Session and Loothing.Session:IsMasterLooter()
 
-    MenuUtil.CreateContextMenu(row, function(ownerRegion, rootDescription)
+    MenuUtil.CreateContextMenu(row, function(_, rootDescription)
         rootDescription:CreateTitle(candidate.name or "Unknown")
 
         -- ML-only actions
@@ -456,7 +461,7 @@ function LoothingCouncilTableMixin:ShowCandidateContextMenu(row, candidate)
             end)
 
             -- Award with response type
-            for id, info in pairs(Loothing.ResponseInfo) do
+            for _, info in pairs(Loothing.ResponseInfo) do
                 rootDescription:CreateButton(string.format("Award: %s", info.name), function()
                     if Loothing.Session then
                         Loothing.Session:AwardItem(itemGUID, candidate.name, info.name)
@@ -469,7 +474,7 @@ function LoothingCouncilTableMixin:ShowCandidateContextMenu(row, candidate)
             if Loothing.Settings then
                 local reasons = Loothing.Settings:GetAwardReasons()
                 if reasons and #reasons > 0 then
-                    local awardForMenu = rootDescription:CreateButton("Award For...")
+                    local awardForMenu = rootDescription:CreateButton("Award For...", nop)
                     for _, reason in ipairs(reasons) do
                         local r, g, b = 1, 1, 1
                         if reason.color then
@@ -509,7 +514,7 @@ function LoothingCouncilTableMixin:ShowCandidateContextMenu(row, candidate)
 
         -- Change response (ML only)
         if isML then
-            local responseSubmenu = rootDescription:CreateButton(L["CHANGE_RESPONSE"] or "Change Response")
+            local responseSubmenu = rootDescription:CreateButton(L["CHANGE_RESPONSE"] or "Change Response", nop)
             for id, info in pairs(Loothing.ResponseInfo) do
                 responseSubmenu:CreateButton(info.name, function()
                     if self.currentItem and self.currentItem.candidateManager then
@@ -525,7 +530,7 @@ function LoothingCouncilTableMixin:ShowCandidateContextMenu(row, candidate)
             local enchanters = Loothing.PlayerCache and Loothing.PlayerCache:GetEnchanters() or {}
             if #enchanters > 0 then
                 rootDescription:CreateDivider()
-                local deSubmenu = rootDescription:CreateButton(L["DISENCHANT"] or "Disenchant")
+                local deSubmenu = rootDescription:CreateButton(L["DISENCHANT"] or "Disenchant", nop)
                 for _, enc in ipairs(enchanters) do
                     local classColor = RAID_CLASS_COLORS and RAID_CLASS_COLORS[enc.class] or { r = 1, g = 1, b = 1 }
                     local coloredName = string.format("|cff%02x%02x%02x%s|r",
@@ -557,7 +562,7 @@ end
     Vote Handling
 ----------------------------------------------------------------------]]
 
-function LoothingCouncilTableMixin:OnVoteClick(candidate)
+function CouncilTableMixin:OnVoteClick(candidate)
     Loothing:Debug("OnVoteClick: candidate =", candidate and candidate.name, "item =", self.currentItem and self.currentItem.guid)
 
     if not Loothing.Session then
@@ -586,8 +591,8 @@ function LoothingCouncilTableMixin:OnVoteClick(candidate)
         -- Check self-vote setting
         local selfVote = Loothing.Settings and Loothing.Settings:GetSelfVote()
         if not selfVote then
-            local playerName = LoothingUtils.GetPlayerFullName()
-            if LoothingUtils.IsSamePlayer(candidate.name, playerName) then
+            local playerName = Utils.GetPlayerFullName()
+            if Utils.IsSamePlayer(candidate.name, playerName) then
                 Loothing:Print("Self-voting is disabled for this session.")
                 return
             end

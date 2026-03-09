@@ -9,7 +9,10 @@
     - Instance data snapshot per loot table entry
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local Utils = ns.Utils
 
 --[[--------------------------------------------------------------------
     Item Info Retry
@@ -34,7 +37,7 @@ local function GetItemInfoWithRetry(itemLink, callback, retryCount)
 
     if name then
         -- Data available, build info table
-        local itemID = LoothingUtils.GetItemID(itemLink)
+        local itemID = Utils.GetItemID(itemLink)
         callback({
             itemID = itemID,
             itemLink = link or itemLink,
@@ -60,12 +63,12 @@ local function GetItemInfoWithRetry(itemLink, callback, retryCount)
         end)
     else
         -- Gave up, return what we can parse from the link
-        local itemID = LoothingUtils.GetItemID(itemLink)
+        local itemID = Utils.GetItemID(itemLink)
         callback({
             itemID = itemID,
             itemLink = itemLink,
-            name = LoothingUtils.GetItemName(itemLink) or "Unknown",
-            quality = LoothingUtils.GetItemQuality(itemLink),
+            name = Utils.GetItemName(itemLink) or "Unknown",
+            quality = Utils.GetItemQuality(itemLink),
         })
     end
 end
@@ -223,10 +226,11 @@ local function CaptureInstanceData()
 end
 
 --[[--------------------------------------------------------------------
-    LoothingItemMixin
+    ItemMixin
 ----------------------------------------------------------------------]]
 
-LoothingItemMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+local ItemMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+ns.ItemMixin = ItemMixin
 
 local ITEM_EVENTS = {
     "OnStateChanged",
@@ -238,21 +242,21 @@ local ITEM_EVENTS = {
 }
 
 --- Initialize the item
-function LoothingItemMixin:Init(itemLink, looter, encounterID)
+function ItemMixin:Init(itemLink, looter, encounterID)
     Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(ITEM_EVENTS)
 
     -- Core properties
-    self.guid = LoothingUtils.GenerateGUID()
+    self.guid = Utils.GenerateGUID()
     self.itemLink = itemLink
-    self.looter = LoothingUtils.NormalizeName(looter)
+    self.looter = Utils.NormalizeName(looter)
     self.encounterID = encounterID
     self.timestamp = time()
 
     -- Item info (may be populated asynchronously)
-    self.itemID = LoothingUtils.GetItemID(itemLink)
-    self.name = LoothingUtils.GetItemName(itemLink) or "Unknown"
-    self.quality = LoothingUtils.GetItemQuality(itemLink)
+    self.itemID = Utils.GetItemID(itemLink)
+    self.name = Utils.GetItemName(itemLink) or "Unknown"
+    self.quality = Utils.GetItemQuality(itemLink)
     self.itemLevel = nil
     self.texture = nil
     self.equipSlot = nil
@@ -302,7 +306,7 @@ function LoothingItemMixin:Init(itemLink, looter, encounterID)
 end
 
 --- Load item info asynchronously with retry
-function LoothingItemMixin:LoadItemInfo()
+function ItemMixin:LoadItemInfo()
     GetItemInfoWithRetry(self.itemLink, function(itemInfo)
         if not itemInfo then return end
 
@@ -336,19 +340,19 @@ end
 
 --- Check if full item info has been loaded
 -- @return boolean
-function LoothingItemMixin:IsItemInfoLoaded()
+function ItemMixin:IsItemInfoLoaded()
     return self.itemInfoLoaded
 end
 
 --- Get the type code for this item
 -- @return string
-function LoothingItemMixin:GetTypeCode()
+function ItemMixin:GetTypeCode()
     return self.typeCode
 end
 
 --- Get the button/response set for this item's type code
 -- @return table - Buttons array for the resolved set
-function LoothingItemMixin:GetResponseSet()
+function ItemMixin:GetResponseSet()
     if not Loothing.Settings then return nil end
 
     -- Check typeCodeMap for a type-specific set
@@ -370,13 +374,13 @@ end
 
 --- Get the current state
 -- @return number - Loothing.ItemState value
-function LoothingItemMixin:GetState()
+function ItemMixin:GetState()
     return self.state
 end
 
 --- Set the state
 -- @param state number - Loothing.ItemState value
-function LoothingItemMixin:SetState(state)
+function ItemMixin:SetState(state)
     if self.state ~= state then
         local oldState = self.state
         self.state = state
@@ -386,37 +390,37 @@ end
 
 --- Check if item is pending
 -- @return boolean
-function LoothingItemMixin:IsPending()
+function ItemMixin:IsPending()
     return self.state == Loothing.ItemState.PENDING
 end
 
 --- Check if item is being voted on
 -- @return boolean
-function LoothingItemMixin:IsVoting()
+function ItemMixin:IsVoting()
     return self.state == Loothing.ItemState.VOTING
 end
 
 --- Check if item has been tallied
 -- @return boolean
-function LoothingItemMixin:IsTallied()
+function ItemMixin:IsTallied()
     return self.state == Loothing.ItemState.TALLIED
 end
 
 --- Check if item has been awarded
 -- @return boolean
-function LoothingItemMixin:IsAwarded()
+function ItemMixin:IsAwarded()
     return self.state == Loothing.ItemState.AWARDED
 end
 
 --- Check if item was skipped
 -- @return boolean
-function LoothingItemMixin:IsSkipped()
+function ItemMixin:IsSkipped()
     return self.state == Loothing.ItemState.SKIPPED
 end
 
 --- Check if item is complete (awarded or skipped)
 -- @return boolean
-function LoothingItemMixin:IsComplete()
+function ItemMixin:IsComplete()
     return self.state == Loothing.ItemState.AWARDED or
            self.state == Loothing.ItemState.SKIPPED
 end
@@ -427,7 +431,7 @@ end
 
 --- Start voting for this item
 -- @param timeout number - Seconds until voting closes (0 = no timeout)
-function LoothingItemMixin:StartVoting(timeout)
+function ItemMixin:StartVoting(timeout)
     if self.state ~= Loothing.ItemState.PENDING then
         return false
     end
@@ -445,7 +449,7 @@ function LoothingItemMixin:StartVoting(timeout)
 end
 
 --- End voting for this item
-function LoothingItemMixin:EndVoting()
+function ItemMixin:EndVoting()
     if self.state ~= Loothing.ItemState.VOTING then
         return false
     end
@@ -457,7 +461,7 @@ end
 
 --- Get time remaining for voting
 -- @return number - Seconds remaining, math.huge if no-timeout, or 0 if not voting
-function LoothingItemMixin:GetTimeRemaining()
+function ItemMixin:GetTimeRemaining()
     if self.state ~= Loothing.ItemState.VOTING then
         return 0
     end
@@ -476,7 +480,7 @@ end
 
 --- Check if voting has timed out
 -- @return boolean
-function LoothingItemMixin:IsVotingTimedOut()
+function ItemMixin:IsVotingTimedOut()
     if not self.voteEndTime then
         return false
     end
@@ -496,12 +500,12 @@ end
 -- @param voterClass string - Voter class
 -- @param responses table - Array of response values (ranked)
 -- @return boolean - True if vote was added
-function LoothingItemMixin:AddVote(voter, voterClass, responses)
+function ItemMixin:AddVote(voter, voterClass, responses)
     if self.state ~= Loothing.ItemState.VOTING then
         return false
     end
 
-    voter = LoothingUtils.NormalizeName(voter)
+    voter = Utils.NormalizeName(voter)
 
     -- Check for existing vote
     local existing = self:GetVoteByVoter(voter)
@@ -529,8 +533,8 @@ end
 --- Remove a vote
 -- @param voter string - Voter name
 -- @return boolean - True if vote was removed
-function LoothingItemMixin:RemoveVote(voter)
-    voter = LoothingUtils.NormalizeName(voter)
+function ItemMixin:RemoveVote(voter)
+    voter = Utils.NormalizeName(voter)
 
     local vote = self:GetVoteByVoter(voter)
     if vote then
@@ -545,8 +549,8 @@ end
 --- Get a vote by voter name
 -- @param voter string
 -- @return table|nil
-function LoothingItemMixin:GetVoteByVoter(voter)
-    voter = LoothingUtils.NormalizeName(voter)
+function ItemMixin:GetVoteByVoter(voter)
+    voter = Utils.NormalizeName(voter)
 
     -- self.votes is normally a DataProvider, but may be a plain table
     -- (from deserialized data or test fixtures) — handle both
@@ -566,26 +570,26 @@ end
 --- Check if a voter has voted
 -- @param voter string
 -- @return boolean
-function LoothingItemMixin:HasVoted(voter)
+function ItemMixin:HasVoted(voter)
     return self:GetVoteByVoter(voter) ~= nil
 end
 
 --- Get all votes
 -- @return DataProvider
-function LoothingItemMixin:GetVotes()
+function ItemMixin:GetVotes()
     return self.votes
 end
 
 --- Get vote count
 -- @return number
-function LoothingItemMixin:GetVoteCount()
+function ItemMixin:GetVoteCount()
     return self.votes:GetSize()
 end
 
 --- Get votes by response type
 -- @param responseType number - Loothing.Response value
 -- @return table - Array of votes with that first-choice response
-function LoothingItemMixin:GetVotesByResponse(responseType)
+function ItemMixin:GetVotesByResponse(responseType)
     local result = {}
 
     for _, vote in self.votes:Enumerate() do
@@ -604,8 +608,8 @@ end
 --- Set the winner for this item
 -- @param winner string - Winner name
 -- @param response number - Winning response type (optional)
-function LoothingItemMixin:SetWinner(winner, response)
-    self.winner = LoothingUtils.NormalizeName(winner)
+function ItemMixin:SetWinner(winner, response)
+    self.winner = Utils.NormalizeName(winner)
     self.winnerResponse = response
     self.awardedTime = time()
     self.awarded = true
@@ -615,14 +619,14 @@ function LoothingItemMixin:SetWinner(winner, response)
 end
 
 --- Skip this item (no award)
-function LoothingItemMixin:Skip()
+function ItemMixin:Skip()
     self.awardedTime = time()
     self:SetState(Loothing.ItemState.SKIPPED)
 end
 
 --- Get the winner
 -- @return string|nil
-function LoothingItemMixin:GetWinner()
+function ItemMixin:GetWinner()
     return self.winner
 end
 
@@ -632,7 +636,7 @@ end
 
 --- Serialize item for storage/transmission
 -- @return table
-function LoothingItemMixin:Serialize()
+function ItemMixin:Serialize()
     local serializedVotes = {}
     for _, vote in self.votes:Enumerate() do
         serializedVotes[#serializedVotes + 1] = {
@@ -670,7 +674,7 @@ end
 
 --- Serialize item for comm transmission (minimal payload)
 -- @return table
-function LoothingItemMixin:SerializeForComm()
+function ItemMixin:SerializeForComm()
     return {
         g = self.guid,
         s = self.transmitString,
@@ -686,7 +690,7 @@ end
 
 --- Deserialize item from storage
 -- @param data table
-function LoothingItemMixin:Deserialize(data)
+function ItemMixin:Deserialize(data)
     self.guid = data.guid
     self.itemLink = data.itemLink
     self.itemID = data.itemID
@@ -726,7 +730,7 @@ end
 -- Uses retry loop to ensure item data is fully loaded.
 -- @param entry table - Comm-received entry { g=guid, s=transmitString, ... }
 -- @param callback function - Called with enriched LoothingItem when ready
-function LoothingItemMixin.PrepareLootTableEntry(entry, callback)
+function ItemMixin.PrepareLootTableEntry(entry, callback)
     if not entry or not entry.s then
         callback(nil)
         return
@@ -742,7 +746,7 @@ function LoothingItemMixin.PrepareLootTableEntry(entry, callback)
     end
 
     -- Create item with data from comm
-    local item = Loolib.CreateFromMixins(LoothingItemMixin)
+    local item = Loolib.CreateFromMixins(ItemMixin)
     Loolib.CallbackRegistryMixin.OnLoad(item)
     item:GenerateCallbackEvents(ITEM_EVENTS)
 
@@ -783,7 +787,7 @@ function LoothingItemMixin.PrepareLootTableEntry(entry, callback)
             item.itemInfoLoaded = true
             item.neutralizedString = NeutralizeItemString(item.itemLink)
         else
-            item.itemID = LoothingUtils.GetItemID(itemLink)
+            item.itemID = Utils.GetItemID(itemLink)
             item.name = "Unknown"
             item.itemLink = itemLink
             item.itemInfoLoaded = false
@@ -799,9 +803,9 @@ end
 
 --- Get or create candidate manager for this item
 -- @return LoothingCandidateManager
-function LoothingItemMixin:GetCandidateManager()
+function ItemMixin:GetCandidateManager()
     if not self.candidateManager then
-        self.candidateManager = CreateLoothingCandidateManager()
+        self.candidateManager = ns.CreateCandidateManager()
     end
     return self.candidateManager
 end
@@ -810,7 +814,7 @@ end
 -- @param playerName string
 -- @param playerClass string
 -- @return LoothingCandidate
-function LoothingItemMixin:GetOrCreateCandidate(playerName, playerClass)
+function ItemMixin:GetOrCreateCandidate(playerName, playerClass)
     return self:GetCandidateManager():GetOrCreateCandidate(playerName, playerClass)
 end
 
@@ -820,7 +824,7 @@ end
 
 --- Get quality color
 -- @return table - { r, g, b }
-function LoothingItemMixin:GetQualityColor()
+function ItemMixin:GetQualityColor()
     local quality = self.quality or 0
     local r, g, b = C_Item.GetItemQualityColor(quality)
     return { r = r, g = g, b = b }
@@ -828,7 +832,7 @@ end
 
 --- Get status text
 -- @return string
-function LoothingItemMixin:GetStatusText()
+function ItemMixin:GetStatusText()
     local L = Loothing.Locale
 
     if self.state == Loothing.ItemState.PENDING then
@@ -850,13 +854,14 @@ end
     Module-Level Utilities (accessible via LoothingItemData namespace)
 ----------------------------------------------------------------------]]
 
-LoothingItemData = {
+local ItemData = {
     NeutralizeItemString = NeutralizeItemString,
     GetTransmittableItemString = GetTransmittableItemString,
     DetermineTypeCode = DetermineTypeCode,
     CaptureInstanceData = CaptureInstanceData,
     GetItemInfoWithRetry = GetItemInfoWithRetry,
 }
+ns.ItemData = ItemData
 
 --[[--------------------------------------------------------------------
     Factory
@@ -867,8 +872,10 @@ LoothingItemData = {
 -- @param looter string
 -- @param encounterID number
 -- @return table - LoothingItem instance
-function CreateLoothingItem(itemLink, looter, encounterID)
-    local item = Loolib.CreateFromMixins(LoothingItemMixin)
+local function CreateItem(itemLink, looter, encounterID)
+    local item = Loolib.CreateFromMixins(ItemMixin)
     item:Init(itemLink, looter, encounterID)
     return item
 end
+
+ns.CreateItem = CreateItem

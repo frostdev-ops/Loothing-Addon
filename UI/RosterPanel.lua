@@ -3,13 +3,19 @@
     RosterPanel - Group/raid roster overview with version, council, and history info
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local Utils = ns.Utils
+local Loothing = ns.Addon
+local VersionCheck = ns.VersionCheck
 
 --[[--------------------------------------------------------------------
-    LoothingRosterPanelMixin
+    RosterPanelMixin
 ----------------------------------------------------------------------]]
 
-LoothingRosterPanelMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+local RosterPanelMixin = ns.RosterPanelMixin or Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+ns.RosterPanelMixin = RosterPanelMixin
 
 local ROSTER_PANEL_EVENTS = {}
 
@@ -65,7 +71,7 @@ local SORT_COMPARATORS = {
 
 --- Initialize the roster panel
 -- @param parent Frame - Parent frame
-function LoothingRosterPanelMixin:Init(parent)
+function RosterPanelMixin:Init(parent)
     Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(ROSTER_PANEL_EVENTS)
 
@@ -80,14 +86,14 @@ function LoothingRosterPanelMixin:Init(parent)
 end
 
 --- Create the main frame
-function LoothingRosterPanelMixin:CreateFrame()
+function RosterPanelMixin:CreateFrame()
     local frame = CreateFrame("Frame", nil, self.parent)
     frame:SetAllPoints()
     self.frame = frame
 end
 
 --- Create UI elements
-function LoothingRosterPanelMixin:CreateElements()
+function RosterPanelMixin:CreateElements()
     self:CreateHeader()
     self:CreateColumnHeaders()
     self:CreateScrollList()
@@ -99,7 +105,7 @@ end
     Header
 ----------------------------------------------------------------------]]
 
-function LoothingRosterPanelMixin:CreateHeader()
+function RosterPanelMixin:CreateHeader()
     local header = CreateFrame("Frame", nil, self.frame)
     header:SetPoint("TOPLEFT", 8, -4)
     header:SetPoint("TOPRIGHT", -8, -4)
@@ -116,7 +122,7 @@ end
     Column Headers
 ----------------------------------------------------------------------]]
 
-function LoothingRosterPanelMixin:CreateColumnHeaders()
+function RosterPanelMixin:CreateColumnHeaders()
     -- Align with scroll content area: list container (8px inset) + scroll frame (2px left, 22px right)
     local container = CreateFrame("Frame", nil, self.frame)
     container:SetPoint("TOPLEFT", 10, -(4 + HEADER_HEIGHT))
@@ -138,7 +144,7 @@ function LoothingRosterPanelMixin:CreateColumnHeaders()
 end
 
 --- Create column header buttons (called once)
-function LoothingRosterPanelMixin:CreateColumnButtons()
+function RosterPanelMixin:CreateColumnButtons()
     for _, col in ipairs(COLUMNS) do
         local btn = CreateFrame("Button", nil, self.columnContainer)
         btn:SetHeight(COLUMN_HEADER_HEIGHT)
@@ -174,14 +180,14 @@ function LoothingRosterPanelMixin:CreateColumnButtons()
 end
 
 --- Get the usable content width (scroll frame is the single source of truth)
-function LoothingRosterPanelMixin:GetContentWidth()
+function RosterPanelMixin:GetContentWidth()
     local w = self.scrollFrame:GetWidth()
     if w <= 0 then w = 440 end
     return w
 end
 
 --- Layout column header buttons based on current container width
-function LoothingRosterPanelMixin:LayoutColumns()
+function RosterPanelMixin:LayoutColumns()
     -- Create buttons on first call
     if #self.columnButtons == 0 then
         self:CreateColumnButtons()
@@ -205,7 +211,7 @@ function LoothingRosterPanelMixin:LayoutColumns()
 end
 
 --- Update sort arrow indicators
-function LoothingRosterPanelMixin:UpdateSortArrows()
+function RosterPanelMixin:UpdateSortArrows()
     for _, btn in ipairs(self.columnButtons) do
         if btn.colId == self.sortColumn then
             btn.arrow:SetText(self.sortAscending and " v" or " ^")
@@ -217,7 +223,7 @@ function LoothingRosterPanelMixin:UpdateSortArrows()
 end
 
 --- Handle column header click
-function LoothingRosterPanelMixin:OnColumnClick(colId)
+function RosterPanelMixin:OnColumnClick(colId)
     if self.sortColumn == colId then
         self.sortAscending = not self.sortAscending
     else
@@ -233,7 +239,7 @@ end
     Scroll List
 ----------------------------------------------------------------------]]
 
-function LoothingRosterPanelMixin:CreateScrollList()
+function RosterPanelMixin:CreateScrollList()
     local listTop = 4 + HEADER_HEIGHT + COLUMN_HEADER_HEIGHT + 2
 
     local container = CreateFrame("Frame", nil, self.frame, "BackdropTemplate")
@@ -257,7 +263,7 @@ function LoothingRosterPanelMixin:CreateScrollList()
     content:SetSize(1, 1)
     scrollFrame:SetScrollChild(content)
 
-    scrollFrame:SetScript("OnSizeChanged", function(sf, w, h)
+    scrollFrame:SetScript("OnSizeChanged", function(_, w)
         content:SetWidth(w)
     end)
 
@@ -265,7 +271,7 @@ function LoothingRosterPanelMixin:CreateScrollList()
     self.scrollFrame = scrollFrame
     self.listContent = content
 
-    self.rowPool = CreateFramePool("Button", self.listContent, nil, function(pool, row)
+    self.rowPool = CreateFramePool("Button", self.listContent, nil, function(_, row)
         row:Hide()
         row:ClearAllPoints()
         row:SetScript("OnClick", nil)
@@ -278,7 +284,7 @@ end
     Footer
 ----------------------------------------------------------------------]]
 
-function LoothingRosterPanelMixin:CreateFooter()
+function RosterPanelMixin:CreateFooter()
     local L = Loothing.Locale
 
     local footer = CreateFrame("Frame", nil, self.frame)
@@ -312,7 +318,7 @@ end
     Empty State
 ----------------------------------------------------------------------]]
 
-function LoothingRosterPanelMixin:CreateEmptyState()
+function RosterPanelMixin:CreateEmptyState()
     local L = Loothing.Locale
 
     self.emptyText = self.listContainer:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -335,19 +341,19 @@ local function BuildUnitMap()
             local unit = "raid" .. i
             local name = Loolib.SecretUtil.SafeUnitName(unit)
             if name then
-                map[LoothingUtils.NormalizeName(name)] = unit
+                map[Utils.NormalizeName(name)] = unit
             end
         end
     elseif IsInGroup() then
         local playerName = Loolib.SecretUtil.SafeUnitName("player")
         if playerName then
-            map[LoothingUtils.NormalizeName(playerName)] = "player"
+            map[Utils.NormalizeName(playerName)] = "player"
         end
         for i = 1, GetNumSubgroupMembers() do
             local unit = "party" .. i
             local name = Loolib.SecretUtil.SafeUnitName(unit)
             if name then
-                map[LoothingUtils.NormalizeName(name)] = unit
+                map[Utils.NormalizeName(name)] = unit
             end
         end
     end
@@ -372,8 +378,8 @@ local function GetUnitItemLevel(unit)
 end
 
 --- Gather roster data from all sources
-function LoothingRosterPanelMixin:GatherRosterData()
-    local roster = LoothingUtils.GetRaidRoster()
+function RosterPanelMixin:GatherRosterData()
+    local roster = Utils.GetRaidRoster()
 
     if #roster == 0 then
         wipe(self.rosterData)
@@ -387,7 +393,7 @@ function LoothingRosterPanelMixin:GatherRosterData()
     local councilLookup = {}
     if Loothing.Council then
         for _, cName in ipairs(Loothing.Council:GetMembersInRaid()) do
-            councilLookup[LoothingUtils.NormalizeName(cName)] = true
+            councilLookup[Utils.NormalizeName(cName)] = true
         end
     end
 
@@ -399,8 +405,10 @@ function LoothingRosterPanelMixin:GatherRosterData()
     if Loothing.History then
         for _, entry in Loothing.History:GetEntries():Enumerate() do
             if entry.winner then
-                local name = LoothingUtils.NormalizeName(entry.winner)
-                playerCounts[name] = (playerCounts[name] or 0) + 1
+                local name = Utils.NormalizeName(entry.winner)
+                if name then
+                    playerCounts[name] = (playerCounts[name] or 0) + 1
+                end
             end
         end
     end
@@ -409,7 +417,7 @@ function LoothingRosterPanelMixin:GatherRosterData()
     for _, member in ipairs(roster) do
         local entry = {
             name = member.name,
-            shortName = member.shortName or LoothingUtils.GetShortName(member.name),
+            shortName = member.shortName or Utils.GetShortName(member.name),
             classFile = member.classFile,
             class = member.class,
             online = member.online,
@@ -439,8 +447,8 @@ function LoothingRosterPanelMixin:GatherRosterData()
         end
 
         -- Version data
-        if LoothingVersionCheck and LoothingVersionCheck.versionCache then
-            local vData = LoothingVersionCheck.versionCache[member.name]
+        if VersionCheck and VersionCheck.versionCache then
+            local vData = VersionCheck.versionCache[member.name]
             if vData then
                 entry.versionStr = vData.version
                 entry.tVersion = vData.tVersion
@@ -455,7 +463,7 @@ function LoothingRosterPanelMixin:GatherRosterData()
         entry.isObserver = Loothing.Observer and Loothing.Observer:IsObserver(member.name) or false
 
         -- Master Looter
-        entry.isMasterLooter = mlName and LoothingUtils.IsSamePlayer(member.name, mlName) or false
+        entry.isMasterLooter = mlName and Utils.IsSamePlayer(member.name, mlName) or false
 
         -- History
         entry.historyCount = playerCounts[member.name] or 0
@@ -471,7 +479,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Sort roster data and redisplay
-function LoothingRosterPanelMixin:SortAndDisplay()
+function RosterPanelMixin:SortAndDisplay()
     local comp = SORT_COMPARATORS[self.sortColumn]
     if not comp then return end
 
@@ -495,7 +503,7 @@ function LoothingRosterPanelMixin:SortAndDisplay()
 end
 
 --- Display rows from sorted rosterData
-function LoothingRosterPanelMixin:DisplayRows()
+function RosterPanelMixin:DisplayRows()
     self.rowPool:ReleaseAll()
 
     if #self.rosterData == 0 then
@@ -586,7 +594,7 @@ local function ClearRowChildPoints(row)
 end
 
 --- Setup a pooled row with entry data
-function LoothingRosterPanelMixin:SetupRow(row, entry, yOffset, fillWidth)
+function RosterPanelMixin:SetupRow(row, entry, yOffset, fillWidth)
     if not row._initialized then
         InitRowElements(row)
     else
@@ -757,7 +765,7 @@ end
     Tooltip
 ----------------------------------------------------------------------]]
 
-function LoothingRosterPanelMixin:ShowRowTooltip(row, entry)
+function RosterPanelMixin:ShowRowTooltip(row, entry)
     GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
 
     -- Class-colored name header
@@ -836,7 +844,7 @@ function LoothingRosterPanelMixin:ShowRowTooltip(row, entry)
         local responseCounts = {}
         for _, histEntry in Loothing.History:GetEntries():Enumerate() do
             if histEntry.winner then
-                local hName = LoothingUtils.NormalizeName(histEntry.winner)
+                local hName = Utils.NormalizeName(histEntry.winner)
                 if hName == entry.name and histEntry.winnerResponse then
                     local resp = histEntry.winnerResponse
                     responseCounts[resp] = (responseCounts[resp] or 0) + 1
@@ -858,15 +866,15 @@ end
     Right-Click Context Menu
 ----------------------------------------------------------------------]]
 
-function LoothingRosterPanelMixin:ShowRowContextMenu(row, entry)
+function RosterPanelMixin:ShowRowContextMenu(row, entry)
     local L = Loothing.Locale
-    local playerName = LoothingUtils.GetPlayerFullName()
+    local playerName = Utils.GetPlayerFullName()
     local isPlayerLeader = UnitIsGroupLeader("player")
     local isPlayerAssistant = IsInRaid() and UnitIsGroupAssistant("player")
     local canManageRaid = isPlayerLeader or isPlayerAssistant
-    local isSelf = LoothingUtils.IsSamePlayer(entry.name, playerName)
+    local isSelf = Utils.IsSamePlayer(entry.name, playerName)
 
-    MenuUtil.CreateContextMenu(row, function(ownerRegion, rootDescription)
+    MenuUtil.CreateContextMenu(row, function(_, rootDescription)
         -- Header: class-colored player name
         local classColor = RAID_CLASS_COLORS and entry.classFile and RAID_CLASS_COLORS[entry.classFile]
         if classColor then
@@ -910,7 +918,7 @@ function LoothingRosterPanelMixin:ShowRowContextMenu(row, entry)
         -- Master Looter assignment
         if Loothing.Settings then
             local explicitML = Loothing.Settings:GetMasterLooterName()
-            local isExplicitML = explicitML and LoothingUtils.IsSamePlayer(entry.name, explicitML)
+            local isExplicitML = explicitML and Utils.IsSamePlayer(entry.name, explicitML)
 
             if isExplicitML then
                 rootDescription:CreateButton(L["ROSTER_CLEAR_ML"] or "Remove as Master Looter", function()
@@ -970,24 +978,24 @@ end
     Version Query
 ----------------------------------------------------------------------]]
 
-function LoothingRosterPanelMixin:QueryVersions()
-    if not LoothingVersionCheck then return end
+function RosterPanelMixin:QueryVersions()
+    if not VersionCheck then return end
 
     -- Register for callbacks on first query
     if not self.versionCallbackRegistered then
-        LoothingVersionCheck:RegisterCallback("OnVersionReceived", function()
+        VersionCheck:RegisterCallback("OnVersionReceived", function()
             self:Refresh()
         end, self)
-        LoothingVersionCheck:RegisterCallback("OnQueryComplete", function()
+        VersionCheck:RegisterCallback("OnQueryComplete", function()
             self:Refresh()
         end, self)
         self.versionCallbackRegistered = true
     end
 
     if IsInRaid() or IsInGroup() then
-        LoothingVersionCheck:Query("raid")
+        VersionCheck:Query("raid")
     elseif IsInGuild() then
-        LoothingVersionCheck:Query("guild")
+        VersionCheck:Query("guild")
     end
 end
 
@@ -995,7 +1003,7 @@ end
     Summary
 ----------------------------------------------------------------------]]
 
-function LoothingRosterPanelMixin:UpdateSummary()
+function RosterPanelMixin:UpdateSummary()
     local L = Loothing.Locale
 
     if #self.rosterData == 0 then
@@ -1024,7 +1032,7 @@ end
     Refresh
 ----------------------------------------------------------------------]]
 
-function LoothingRosterPanelMixin:Refresh()
+function RosterPanelMixin:Refresh()
     if self.columnsNeedLayout then
         self:LayoutColumns()
     end
@@ -1045,7 +1053,7 @@ function LoothingRosterPanelMixin:Refresh()
 end
 
 --- OnResize - no-op, scroll frame handles layout
-function LoothingRosterPanelMixin:OnResize()
+function RosterPanelMixin:OnResize()
     self.columnsNeedLayout = true
     if self.frame:IsShown() then
         self:LayoutColumns()
@@ -1057,16 +1065,16 @@ end
     Frame Access
 ----------------------------------------------------------------------]]
 
-function LoothingRosterPanelMixin:GetFrame()
+function RosterPanelMixin:GetFrame()
     return self.frame
 end
 
-function LoothingRosterPanelMixin:Show()
+function RosterPanelMixin:Show()
     self.frame:Show()
     self:Refresh()
 end
 
-function LoothingRosterPanelMixin:Hide()
+function RosterPanelMixin:Hide()
     self.frame:Hide()
 end
 
@@ -1074,8 +1082,10 @@ end
     Factory
 ----------------------------------------------------------------------]]
 
-function CreateLoothingRosterPanel(parent)
-    local panel = Loolib.CreateFromMixins(LoothingRosterPanelMixin)
+local function CreateRosterPanel(parent)
+    local panel = Loolib.CreateFromMixins(RosterPanelMixin)
     panel:Init(parent)
     return panel
 end
+
+ns.CreateRosterPanel = CreateRosterPanel

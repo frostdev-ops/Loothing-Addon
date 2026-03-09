@@ -7,13 +7,17 @@
     uses the same configuration for voting, responses, etc.
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local Utils = ns.Utils
 
 --[[--------------------------------------------------------------------
-    LoothingMLDBMixin
+    MLDBMixin
 ----------------------------------------------------------------------]]
 
-LoothingMLDBMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+local MLDBMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+ns.MLDBMixin = MLDBMixin
 
 local MLDB_EVENTS = {
     "OnMLDBReceived",      -- Fired when ML settings are received
@@ -150,7 +154,7 @@ local LEAF_KEYS = {
 ----------------------------------------------------------------------]]
 
 --- Initialize MLDB handler
-function LoothingMLDBMixin:Init()
+function MLDBMixin:Init()
     Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(MLDB_EVENTS)
 
@@ -171,7 +175,7 @@ end
 
 --- Check if current player is Master Looter
 -- @return boolean
-function LoothingMLDBMixin:IsML()
+function MLDBMixin:IsML()
     if Loothing.Settings then
         return Loothing.Settings:IsMasterLooter()
     end
@@ -180,7 +184,7 @@ end
 
 --- Get current Master Looter name
 -- @return string|nil
-function LoothingMLDBMixin:GetML()
+function MLDBMixin:GetML()
     if Loothing.Settings then
         return Loothing.Settings:GetMasterLooter()
     end
@@ -195,7 +199,7 @@ end
 -- Includes all session-relevant settings so every raid member operates
 -- under the same rules as the Master Looter.
 -- @return table - Settings to sync
-function LoothingMLDBMixin:GatherSettings()
+function MLDBMixin:GatherSettings()
     if not Loothing.Settings then
         return {}
     end
@@ -285,7 +289,7 @@ end
 -- The Protocol layer handles serialization+compression automatically.
 -- @param settings table - Settings to compress
 -- @return table|nil - Key-compressed settings table
-function LoothingMLDBMixin:CompressForTransmit(settings)
+function MLDBMixin:CompressForTransmit(settings)
     if not settings then
         return nil
     end
@@ -299,7 +303,7 @@ end
 -- The Protocol layer has already handled deserialization.
 -- @param data table - Key-compressed settings table (already deserialized by Protocol)
 -- @return table|nil - Decompressed settings or nil on failure
-function LoothingMLDBMixin:DecompressFromTransmit(data)
+function MLDBMixin:DecompressFromTransmit(data)
     if not data or type(data) ~= "table" then
         return nil
     end
@@ -313,7 +317,7 @@ end
 -- @param replacements table - Key replacement map
 -- @param isLeaf boolean? - If true, skip key replacement (value table)
 -- @return table - New table with replaced keys
-function LoothingMLDBMixin:ReplaceKeys(tbl, replacements, isLeaf)
+function MLDBMixin:ReplaceKeys(tbl, replacements, isLeaf)
     local result = {}
 
     for key, value in pairs(tbl) do
@@ -338,7 +342,7 @@ end
 
 --- Broadcast settings to raid
 -- Only the ML should call this
-function LoothingMLDBMixin:BroadcastToRaid()
+function MLDBMixin:BroadcastToRaid()
     if not self:IsML() then
         Loothing:Debug("Only ML can broadcast MLDB")
         return
@@ -378,7 +382,7 @@ end
 
 --- Handle received MLDB broadcast
 -- @param data table - Message data
-function LoothingMLDBMixin:OnMLDBBroadcast(data)
+function MLDBMixin:OnMLDBBroadcast(data)
     local sender = data.sender
     local compressed = data.data
 
@@ -389,7 +393,7 @@ function LoothingMLDBMixin:OnMLDBBroadcast(data)
 
     -- Only accept from the current ML
     local currentML = self:GetML()
-    if not currentML or not LoothingUtils.IsSamePlayer(sender, currentML) then
+    if not currentML or not Utils.IsSamePlayer(sender, currentML) then
         Loothing:Debug("Ignoring MLDB from non-ML:", sender)
         return
     end
@@ -420,7 +424,7 @@ end
 --- Apply received ML settings locally
 -- @param settings table - Settings from ML
 -- @param sender string - ML name
-function LoothingMLDBMixin:ApplyFromML(settings, sender)
+function MLDBMixin:ApplyFromML(settings, sender)
     if not settings then
         return
     end
@@ -539,12 +543,12 @@ end
 
 --- Get current MLDB
 -- @return table|nil
-function LoothingMLDBMixin:Get()
+function MLDBMixin:Get()
     return self.mldb
 end
 
 --- Clear MLDB (called on session end)
-function LoothingMLDBMixin:Clear()
+function MLDBMixin:Clear()
     self.mldb = nil
 end
 
@@ -554,7 +558,7 @@ end
 
 --- Update MLDB from current settings and broadcast if ML
 -- Called when settings change during an active session
-function LoothingMLDBMixin:Update()
+function MLDBMixin:Update()
     if not self:IsML() then
         return
     end
@@ -568,9 +572,11 @@ end
 ----------------------------------------------------------------------]]
 
 --- Create MLDB instance
--- @return LoothingMLDBMixin
-function CreateLoothingMLDB()
-    local mldb = Loolib.CreateFromMixins(LoothingMLDBMixin)
+-- @return MLDBMixin
+local function CreateMLDB()
+    local mldb = Loolib.CreateFromMixins(MLDBMixin)
     mldb:Init()
     return mldb
 end
+
+ns.CreateMLDB = CreateMLDB

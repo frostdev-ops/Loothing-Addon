@@ -3,12 +3,13 @@
     Constants - Enums, defaults, and static values
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
 
-local Loothing = Loothing
+local Loothing = ns.Addon
 
 -- Addon info
-Loothing.VERSION = "1.1.8"
+Loothing.VERSION = "1.2.0"
 Loothing.PROTOCOL_VERSION = 3
 Loothing.ADDON_PREFIX = "LOOTHING"
 

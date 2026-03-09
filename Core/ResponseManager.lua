@@ -3,29 +3,33 @@
     ResponseManager - Unified response configuration from responseSets
 ----------------------------------------------------------------------]]
 
+local ADDON_NAME, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local Utils = ns.Utils
 
 --[[--------------------------------------------------------------------
-    LoothingResponseManagerMixin
+    ResponseManagerMixin
 ----------------------------------------------------------------------]]
 
-LoothingResponseManagerMixin = {}
+ns.ResponseManagerMixin = ns.ResponseManagerMixin or {}
+local ResponseManagerMixin = ns.ResponseManagerMixin
 
 --- Initialize response manager
-function LoothingResponseManagerMixin:Init()
+function ResponseManagerMixin:Init()
     -- Populated on LoadResponses(); kept as a reference to the active set's buttons
     self.buttons = nil
 end
 
 --- Load responses from the active responseSets set
-function LoothingResponseManagerMixin:LoadResponses()
+function ResponseManagerMixin:LoadResponses()
     if not Loothing.Settings then return end
 
     local rs = Loothing.Settings:GetResponseSets()
     local activeId = rs.activeSet or 1
     self.buttons = Loothing.Settings:GetResponseButtons(activeId)
     if #self.buttons == 0 then
-        self.buttons = LoothingUtils.DeepCopy(Loothing.DefaultSettings.responseSets.sets[1].buttons)
+        self.buttons = Utils.DeepCopy(Loothing.DefaultSettings.responseSets.sets[1].buttons)
     end
 
     self:UpdateGlobalResponseInfo()
@@ -33,7 +37,7 @@ end
 
 --- Update Loothing.ResponseInfo from the active set's buttons
 -- Numeric entries are cleared and rebuilt; string-keyed system entries are untouched.
-function LoothingResponseManagerMixin:UpdateGlobalResponseInfo()
+function ResponseManagerMixin:UpdateGlobalResponseInfo()
     -- Clear numeric response IDs
     for k in pairs(Loothing.ResponseInfo) do
         if type(k) == "number" then
@@ -43,7 +47,7 @@ function LoothingResponseManagerMixin:UpdateGlobalResponseInfo()
 
     for index, btn in ipairs(self.buttons or {}) do
         local responseId = btn.id or index
-        local color = LoothingUtils.ColorToNamed(btn.color)
+        local color = Utils.ColorToNamed(btn.color)
         Loothing.ResponseInfo[responseId] = {
             name  = btn.responseText or btn.text,
             color = color,
@@ -54,14 +58,14 @@ end
 
 --- Get all buttons in the active set (array)
 -- @return table - Array of button data
-function LoothingResponseManagerMixin:GetAllResponses()
+function ResponseManagerMixin:GetAllResponses()
     if not self.buttons then self:LoadResponses() end
     return self.buttons or {}
 end
 
 --- Get buttons sorted by sort order
 -- @return table - Sorted array of { id, name, color, icon, sort }
-function LoothingResponseManagerMixin:GetSortedResponses()
+function ResponseManagerMixin:GetSortedResponses()
     local buttons = self:GetAllResponses()
     local sorted = {}
 
@@ -82,7 +86,7 @@ end
 --- Get a button by numeric ID
 -- @param responseID number
 -- @return table|nil
-function LoothingResponseManagerMixin:GetResponse(responseID)
+function ResponseManagerMixin:GetResponse(responseID)
     for _, btn in ipairs(self:GetAllResponses()) do
         if btn.id == responseID then return btn end
     end
@@ -92,7 +96,7 @@ end
 --- Find a button by responseText or text (case-insensitive)
 -- @param name string
 -- @return table|nil
-function LoothingResponseManagerMixin:GetResponseByName(name)
+function ResponseManagerMixin:GetResponseByName(name)
     if type(name) ~= "string" then return nil end
     local lname = name:lower()
     for _, btn in ipairs(self:GetAllResponses()) do
@@ -104,14 +108,14 @@ end
 
 --- Serialize full responseSets for sync
 -- @return table
-function LoothingResponseManagerMixin:Serialize()
+function ResponseManagerMixin:Serialize()
     if not Loothing.Settings then return {} end
-    return LoothingUtils.DeepCopy(Loothing.Settings:GetResponseSets())
+    return Utils.DeepCopy(Loothing.Settings:GetResponseSets())
 end
 
 --- Deserialize responseSets received from sync
 -- @param data table
-function LoothingResponseManagerMixin:Deserialize(data)
+function ResponseManagerMixin:Deserialize(data)
     if not data then return end
     if Loothing.Settings then
         Loothing.Settings:Set("responseSets", data)
@@ -120,9 +124,9 @@ function LoothingResponseManagerMixin:Deserialize(data)
 end
 
 --- Reset the active set to defaults
-function LoothingResponseManagerMixin:ResetToDefaults()
+function ResponseManagerMixin:ResetToDefaults()
     if not Loothing.Settings then return end
-    local defaults = LoothingUtils.DeepCopy(Loothing.DefaultSettings.responseSets)
+    local defaults = Utils.DeepCopy(Loothing.DefaultSettings.responseSets)
     Loothing.Settings:Set("responseSets", defaults)
     self:LoadResponses()
 end
@@ -133,8 +137,8 @@ end
 
 --- Create the ResponseManager singleton
 -- @return table
-function CreateLoothingResponseManager()
-    local manager = Loolib.CreateFromMixins(LoothingResponseManagerMixin)
+ns.CreateResponseManager = ns.CreateResponseManager or function()
+    local manager = Loolib.CreateFromMixins(ResponseManagerMixin)
     manager:Init()
     return manager
 end

@@ -3,23 +3,17 @@
     Minimap - Addon Compartment + custom minimap button
 ----------------------------------------------------------------------]]
 
+local ADDON_NAME, ns = ...
 local Loolib = LibStub("Loolib")
 local Config = Loolib.Config
+local GlobalBridge = Loolib.Compat.GlobalBridge
 local CreateFromMixins = Loolib.CreateFromMixins
+local Loothing = ns.Addon
+local Utils = ns.Utils
 
 local LOGO_TEXTURE = "Interface\\AddOns\\Loothing\\Media\\logo"
 
---[[--------------------------------------------------------------------
-    Addon Compartment (WoW 10.0+ standard)
-
-    These globals are referenced by TOC metadata:
-      ## AddonCompartmentFunc
-      ## AddonCompartmentFuncOnEnter
-      ## AddonCompartmentFuncOnLeave
-    Blizzard calls them automatically. They must exist at file-load time.
-----------------------------------------------------------------------]]
-
-function Loothing_OnAddonCompartmentClick(addonName, mouseButton)
+local function OnAddonCompartmentClick(_, mouseButton)
     if mouseButton == "RightButton" then
         if Config then
             Config:Open("Loothing")
@@ -31,7 +25,7 @@ function Loothing_OnAddonCompartmentClick(addonName, mouseButton)
     end
 end
 
-function Loothing_OnAddonCompartmentEnter(addonName, menuButtonFrame)
+local function OnAddonCompartmentEnter(_, menuButtonFrame)
     GameTooltip:SetOwner(menuButtonFrame, "ANCHOR_LEFT")
     GameTooltip:AddLine("Loothing", 1, 0.82, 0)
     local version = (Loothing and Loothing.version) or Loothing.VERSION or "1.0.0"
@@ -45,9 +39,15 @@ function Loothing_OnAddonCompartmentEnter(addonName, menuButtonFrame)
     GameTooltip:Show()
 end
 
-function Loothing_OnAddonCompartmentLeave(addonName, menuButtonFrame)
+local function OnAddonCompartmentLeave()
     GameTooltip:Hide()
 end
+
+GlobalBridge:RegisterAddonCompartment(ADDON_NAME, {
+    OnClick = OnAddonCompartmentClick,
+    OnEnter = OnAddonCompartmentEnter,
+    OnLeave = OnAddonCompartmentLeave,
+})
 
 --[[--------------------------------------------------------------------
     Custom Minimap Button (traditional edge-of-minimap icon)
@@ -56,7 +56,8 @@ end
     positioning that works with round, square, and corner minimaps.
 ----------------------------------------------------------------------]]
 
-LoothingMinimapButtonMixin = {}
+local MinimapButtonMixin = ns.MinimapButtonMixin or {}
+ns.MinimapButtonMixin = MinimapButtonMixin
 
 local BUTTON_SIZE = 32
 local ICON_SIZE = 20
@@ -80,7 +81,7 @@ local minimapShapes = {
 }
 
 --- Initialize the minimap button
-function LoothingMinimapButtonMixin:Init()
+function MinimapButtonMixin:Init()
     self.angle = 225 -- Default position (degrees)
     self.isDragging = false
 
@@ -95,8 +96,8 @@ function LoothingMinimapButtonMixin:Init()
 end
 
 --- Create the minimap button frame
-function LoothingMinimapButtonMixin:CreateButton()
-    local button = CreateFrame("Button", "LoothingMinimapButton", Minimap)
+function MinimapButtonMixin:CreateButton()
+    local button = CreateFrame("Button", nil, Minimap)
     button:SetSize(BUTTON_SIZE, BUTTON_SIZE)
     button:SetFrameStrata("MEDIUM")
     button:SetFrameLevel(8)
@@ -119,7 +120,7 @@ function LoothingMinimapButtonMixin:CreateButton()
     button:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
 
     -- Scripts
-    button:RegisterForClicks("anyUp")
+    button:RegisterForClicks("AnyUp")
     button:RegisterForDrag("LeftButton")
 
     button:SetScript("OnMouseUp", function(_, btn)
@@ -149,7 +150,7 @@ function LoothingMinimapButtonMixin:CreateButton()
 end
 
 --- Update button position on minimap (shape-aware)
-function LoothingMinimapButtonMixin:UpdatePosition()
+function MinimapButtonMixin:UpdatePosition()
     if not self.button then return end
 
     local angle = math.rad(self.angle)
@@ -160,7 +161,8 @@ function LoothingMinimapButtonMixin:UpdatePosition()
     if x < 0 then q = q + 1 end
     if y > 0 then q = q + 2 end
 
-    local minimapShape = GetMinimapShape and GetMinimapShape() or "ROUND"
+    local getMinimapShape = _G["GetMinimapShape"]
+    local minimapShape = getMinimapShape and getMinimapShape() or "ROUND"
     local quadTable = minimapShapes[minimapShape]
 
     local w = (Minimap:GetWidth() / 2) + 5
@@ -181,7 +183,7 @@ end
 
 --- Handle click
 -- @param mouseButton string
-function LoothingMinimapButtonMixin:OnClick(mouseButton)
+function MinimapButtonMixin:OnClick(mouseButton)
     if self.isDragging then return end
 
     if mouseButton == "LeftButton" then
@@ -194,10 +196,10 @@ function LoothingMinimapButtonMixin:OnClick(mouseButton)
 end
 
 --- Show context menu
-function LoothingMinimapButtonMixin:ShowContextMenu()
+function MinimapButtonMixin:ShowContextMenu()
     local L = Loothing.Locale
 
-    MenuUtil.CreateContextMenu(self.button, function(ownerRegion, rootDescription)
+    MenuUtil.CreateContextMenu(self.button, function(_, rootDescription)
         rootDescription:CreateTitle("Loothing")
         rootDescription:CreateButton(L["OPEN_MAIN_WINDOW"] or "Open Main Window", function()
             if Loothing.UI and Loothing.UI.MainFrame then
@@ -220,7 +222,7 @@ function LoothingMinimapButtonMixin:ShowContextMenu()
 end
 
 --- Handle mouse enter
-function LoothingMinimapButtonMixin:OnEnter()
+function MinimapButtonMixin:OnEnter()
     local L = Loothing.Locale
 
     GameTooltip:SetOwner(self.button, "ANCHOR_LEFT")
@@ -242,7 +244,7 @@ function LoothingMinimapButtonMixin:OnEnter()
             local ml = Loothing.Session:GetMasterLooter()
             if ml then
                 GameTooltip:AddLine(" ")
-                GameTooltip:AddLine(string.format("ML: %s", LoothingUtils.GetShortName(ml)), 0.7, 0.7, 0.7)
+                GameTooltip:AddLine(string.format("ML: %s", Utils.GetShortName(ml)), 0.7, 0.7, 0.7)
             end
         end
 
@@ -276,12 +278,12 @@ function LoothingMinimapButtonMixin:OnEnter()
 end
 
 --- Handle mouse leave
-function LoothingMinimapButtonMixin:OnLeave()
+function MinimapButtonMixin:OnLeave()
     GameTooltip:Hide()
 end
 
 --- Handle drag start
-function LoothingMinimapButtonMixin:OnDragStart()
+function MinimapButtonMixin:OnDragStart()
     self.isDragging = true
     self.button:LockHighlight()
     self.button:SetScript("OnUpdate", function()
@@ -291,7 +293,7 @@ function LoothingMinimapButtonMixin:OnDragStart()
 end
 
 --- Handle drag update (shape-aware)
-function LoothingMinimapButtonMixin:OnDragUpdate()
+function MinimapButtonMixin:OnDragUpdate()
     local mx, my = Minimap:GetCenter()
     local cx, cy = GetCursorPosition()
     local scale = Minimap:GetEffectiveScale()
@@ -306,7 +308,7 @@ function LoothingMinimapButtonMixin:OnDragUpdate()
 end
 
 --- Handle drag stop
-function LoothingMinimapButtonMixin:OnDragStop()
+function MinimapButtonMixin:OnDragStop()
     self.button:UnlockHighlight()
     self.button:SetScript("OnUpdate", nil)
     self:SavePosition()
@@ -320,19 +322,19 @@ end
     Visibility
 ----------------------------------------------------------------------]]
 
-function LoothingMinimapButtonMixin:Show()
+function MinimapButtonMixin:Show()
     if self.button then
         self.button:Show()
     end
 end
 
-function LoothingMinimapButtonMixin:Hide()
+function MinimapButtonMixin:Hide()
     if self.button then
         self.button:Hide()
     end
 end
 
-function LoothingMinimapButtonMixin:Toggle()
+function MinimapButtonMixin:Toggle()
     if self.button then
         if self.button:IsShown() then
             self:Hide()
@@ -342,7 +344,7 @@ function LoothingMinimapButtonMixin:Toggle()
     end
 end
 
-function LoothingMinimapButtonMixin:UpdateVisibility()
+function MinimapButtonMixin:UpdateVisibility()
     local show = true
     if Loothing.Settings then
         show = Loothing.Settings:Get("ui.showMinimapButton")
@@ -362,7 +364,7 @@ end
     Persistence
 ----------------------------------------------------------------------]]
 
-function LoothingMinimapButtonMixin:LoadPosition()
+function MinimapButtonMixin:LoadPosition()
     if not Loothing.Settings then return end
 
     local angle = Loothing.Settings:Get("ui.minimapButtonAngle")
@@ -371,7 +373,7 @@ function LoothingMinimapButtonMixin:LoadPosition()
     end
 end
 
-function LoothingMinimapButtonMixin:SavePosition()
+function MinimapButtonMixin:SavePosition()
     if not Loothing.Settings then return end
 
     Loothing.Settings:Set("ui.minimapButtonAngle", self.angle)
@@ -381,7 +383,7 @@ end
     Status Indicator
 ----------------------------------------------------------------------]]
 
-function LoothingMinimapButtonMixin:SetActiveIndicator(active)
+function MinimapButtonMixin:SetActiveIndicator(active)
     if not self.button then return end
 
     if active then
@@ -429,8 +431,10 @@ end
     Factory
 ----------------------------------------------------------------------]]
 
-function CreateLoothingMinimapButton()
-    local button = CreateFromMixins(LoothingMinimapButtonMixin)
+local function CreateMinimapButton()
+    local button = CreateFromMixins(MinimapButtonMixin)
     button:Init()
     return button
 end
+
+ns.CreateMinimapButton = CreateMinimapButton

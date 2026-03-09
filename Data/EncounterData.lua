@@ -7,13 +7,16 @@
     dynamically and caches results for performance.
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
 
 --[[--------------------------------------------------------------------
-    LoothingEncounterData (Singleton)
+    EncounterData (Singleton)
 ----------------------------------------------------------------------]]
 
-LoothingEncounterData = {}
+local EncounterData = {}
+ns.EncounterData = EncounterData
 
 -- Cache structures
 local encounterCache = {}      -- [encounterID] = { name, items, instanceID, instanceName }
@@ -38,7 +41,7 @@ local DIFFICULTY_IDS = {
 ----------------------------------------------------------------------]]
 
 --- Initialize the encounter data system
-function LoothingEncounterData:Init()
+function EncounterData:Init()
     if initialized then return end
 
     -- Load Encounter Journal addon if needed
@@ -47,7 +50,7 @@ function LoothingEncounterData:Init()
     end
 
     initialized = true
-    Loothing:Debug("LoothingEncounterData initialized")
+    Loothing:Debug("EncounterData initialized")
 end
 
 --[[--------------------------------------------------------------------
@@ -57,7 +60,7 @@ end
 --- Get all instances for the current raid tier
 -- @param isRaid boolean - True for raids, false for dungeons
 -- @return table - Array of { instanceID, name, isRaid }
-function LoothingEncounterData:GetCurrentTierInstances(isRaid)
+function EncounterData:GetCurrentTierInstances(isRaid)
     self:Init()
 
     local instances = {}
@@ -91,13 +94,13 @@ end
 
 --- Get all current tier raids
 -- @return table - Array of raid instance data
-function LoothingEncounterData:GetCurrentRaids()
+function EncounterData:GetCurrentRaids()
     return self:GetCurrentTierInstances(true)
 end
 
 --- Get all current tier dungeons
 -- @return table - Array of dungeon instance data
-function LoothingEncounterData:GetCurrentDungeons()
+function EncounterData:GetCurrentDungeons()
     return self:GetCurrentTierInstances(false)
 end
 
@@ -108,7 +111,7 @@ end
 --- Get all encounters (bosses) for an instance
 -- @param instanceID number - Instance ID
 -- @return table - Array of { encounterID, name, description }
-function LoothingEncounterData:GetEncountersForInstance(instanceID)
+function EncounterData:GetEncountersForInstance(instanceID)
     self:Init()
 
     -- Check cache
@@ -158,7 +161,7 @@ end
 --- Get encounter info by ID
 -- @param encounterID number - Encounter Journal encounter ID
 -- @return table|nil - { name, instanceID, instanceName, items }
-function LoothingEncounterData:GetEncounterInfo(encounterID)
+function EncounterData:GetEncounterInfo(encounterID)
     self:Init()
 
     -- Check cache
@@ -181,7 +184,7 @@ end
 --- Get boss name for an encounter ID
 -- @param encounterID number - Encounter ID
 -- @return string|nil - Boss name
-function LoothingEncounterData:GetBossName(encounterID)
+function EncounterData:GetBossName(encounterID)
     local info = self:GetEncounterInfo(encounterID)
     return info and info.name or nil
 end
@@ -194,7 +197,7 @@ end
 -- @param encounterID number - Encounter ID
 -- @param difficultyID number|nil - Difficulty ID (default: current difficulty)
 -- @return table - Array of item info { itemID, link, name, icon, slot, armorType, encounterID }
-function LoothingEncounterData:GetEncounterLoot(encounterID, difficultyID)
+function EncounterData:GetEncounterLoot(encounterID, difficultyID)
     self:Init()
 
     local items = {}
@@ -254,7 +257,7 @@ end
 --- Get all items for a boss (alias for GetEncounterLoot)
 -- @param encounterID number - Encounter ID
 -- @return table - Array of item IDs
-function LoothingEncounterData:GetBossItems(encounterID)
+function EncounterData:GetBossItems(encounterID)
     local items = self:GetEncounterLoot(encounterID)
     local itemIDs = {}
     for _, item in ipairs(items) do
@@ -266,7 +269,7 @@ end
 --- Find the encounter that drops an item
 -- @param itemID number - Item ID
 -- @return number|nil - Encounter ID
-function LoothingEncounterData:FindEncounterForItem(itemID)
+function EncounterData:FindEncounterForItem(itemID)
     -- Check cache first
     if itemToEncounter[itemID] then
         return itemToEncounter[itemID]
@@ -307,7 +310,7 @@ end
 --- Get the boss that drops an item
 -- @param itemID number - Item ID
 -- @return string|nil, number|nil - Boss name, encounter ID
-function LoothingEncounterData:GetBossForItem(itemID)
+function EncounterData:GetBossForItem(itemID)
     local encounterID = self:FindEncounterForItem(itemID)
     if encounterID then
         return self:GetBossName(encounterID), encounterID
@@ -323,7 +326,7 @@ end
 -- @param instanceID number - Instance ID
 -- @param difficultyID number|nil - Difficulty ID
 -- @return table - Array of item info
-function LoothingEncounterData:GetInstanceLoot(instanceID, difficultyID)
+function EncounterData:GetInstanceLoot(instanceID, difficultyID)
     self:Init()
 
     local allItems = {}
@@ -344,7 +347,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Preload current raid data (call early for performance)
-function LoothingEncounterData:PreloadCurrentRaid()
+function EncounterData:PreloadCurrentRaid()
     self:Init()
 
     if currentRaidCache then
@@ -385,7 +388,7 @@ end
 
 --- Get current raid info
 -- @return table|nil - { instanceID, name, encounters }
-function LoothingEncounterData:GetCurrentRaid()
+function EncounterData:GetCurrentRaid()
     if not currentRaidCache then
         self:PreloadCurrentRaid()
     end
@@ -399,30 +402,30 @@ end
 --- Check if an item is from the Encounter Journal
 -- @param itemID number - Item ID
 -- @return boolean
-function LoothingEncounterData:IsEJItem(itemID)
+function EncounterData:IsEJItem(itemID)
     return itemToEncounter[itemID] ~= nil or self:FindEncounterForItem(itemID) ~= nil
 end
 
 --- Get difficulty name
 -- @param difficultyID number - Difficulty ID
 -- @return string
-function LoothingEncounterData:GetDifficultyName(difficultyID)
+function EncounterData:GetDifficultyName(difficultyID)
     local name = GetDifficultyInfo(difficultyID)
     return name or "Unknown"
 end
 
 --- Clear all cached data
-function LoothingEncounterData:ClearCache()
+function EncounterData:ClearCache()
     wipe(encounterCache)
     wipe(itemToEncounter)
     wipe(instanceCache)
     currentRaidCache = nil
-    Loothing:Debug("LoothingEncounterData cache cleared")
+    Loothing:Debug("EncounterData cache cleared")
 end
 
 --- Get cache statistics
 -- @return table - { encounters, items, instances }
-function LoothingEncounterData:GetCacheStats()
+function EncounterData:GetCacheStats()
     local encounterCount = 0
     local itemCount = 0
     local instanceCount = 0
@@ -447,7 +450,7 @@ end
 Loothing.Encounters = Loothing.Encounters or {}
 
 --- Populate common encounter IDs from the journal
-function LoothingEncounterData:PopulateEncounterIDs()
+function EncounterData:PopulateEncounterIDs()
     self:Init()
 
     local raids = self:GetCurrentRaids()
@@ -470,7 +473,7 @@ end
 -- @param encounterID number - Encounter ID
 -- @param difficultyID number|nil - Difficulty ID
 -- @return table - Array of rare item info
-function LoothingEncounterData:GetRareItems(encounterID, difficultyID)
+function EncounterData:GetRareItems(encounterID, difficultyID)
     local allItems = self:GetEncounterLoot(encounterID, difficultyID)
     local rareItems = {}
 

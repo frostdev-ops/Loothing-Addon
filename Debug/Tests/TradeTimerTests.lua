@@ -2,7 +2,7 @@
     Loothing - Loot Council Addon for WoW 12.0+
     TradeTimerTests - Test suite for trade queue and timer tracking
 
-    Tests the LoothingTradeQueueMixin:
+    Tests the TradeQueueMixin:
     - Queuing items for trade
     - Trade window expiry detection
     - Warning thresholds (20min, 5min)
@@ -52,8 +52,8 @@ local function RunTradeTimerTests()
 
     print("|cff00ccff========== Trade Timer Tests ==========|r")
 
-    if not LoothingTradeQueueMixin then
-        print("|cffff0000[SKIP]|r LoothingTradeQueueMixin not available")
+    if not TradeQueueMixin then
+        print("|cffff0000[SKIP]|r TradeQueueMixin not available")
         return passed, failed
     end
 
@@ -237,6 +237,6 @@ local function RunTradeTimerTests()
 end
 
 -- Register test
-if LoothingTestRunner then
-    LoothingTestRunner:RegisterTest("tradetimer", RunTradeTimerTests)
+if TestRunner then
+    TestRunner:RegisterTest("tradetimer", RunTradeTimerTests)
 end

@@ -3,23 +3,27 @@
     AutoAward - Automatically award items below quality threshold
 ----------------------------------------------------------------------]]
 
+local ADDON_NAME, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local Utils = ns.Utils
 
 --[[--------------------------------------------------------------------
-    LoothingAutoAwardMixin
+    AutoAwardMixin
 ----------------------------------------------------------------------]]
 
-LoothingAutoAwardMixin = {}
+ns.AutoAwardMixin = ns.AutoAwardMixin or {}
+local AutoAwardMixin = ns.AutoAwardMixin
 
 --- Initialize the auto-award system
-function LoothingAutoAwardMixin:Init()
+function AutoAwardMixin:Init()
     self.pendingAwards = {}
 end
 
 --- Check if an item should be auto-awarded based on settings
 -- @param itemLink string - Full item link
 -- @return boolean - True if item qualifies for auto-award
-function LoothingAutoAwardMixin:ShouldAutoAward(itemLink)
+function AutoAwardMixin:ShouldAutoAward(itemLink)
     if not Loothing.Settings then return false end
 
     -- Check if auto-award is enabled
@@ -35,7 +39,7 @@ function LoothingAutoAwardMixin:ShouldAutoAward(itemLink)
     end
 
     -- Get item info
-    local itemInfo = LoothingUtils.GetItemInfo(itemLink)
+    local itemInfo = Utils.GetItemInfo(itemLink)
     if not itemInfo then return false end
 
     local quality = itemInfo.quality
@@ -60,7 +64,7 @@ end
 
 --- Get the player to auto-award items to
 -- @return string|nil - Player name or nil
-function LoothingAutoAwardMixin:GetAutoAwardTarget()
+function AutoAwardMixin:GetAutoAwardTarget()
     if not Loothing.Settings then return nil end
 
     local target = Loothing.Settings:GetAutoAwardTo()
@@ -75,7 +79,7 @@ function LoothingAutoAwardMixin:GetAutoAwardTarget()
     end
 
     -- Normalize the player name
-    return LoothingUtils.NormalizeName(target)
+    return Utils.NormalizeName(target)
 end
 
 --- Find the designated disenchanter in the raid
@@ -84,13 +88,13 @@ end
 --   2. Scan raid for players with "DE" or "Disenchanter" in their notes
 --   3. Query online guild members with Enchanting profession
 -- @return string|nil - Disenchanter name or nil
-function LoothingAutoAwardMixin:FindDisenchanter()
+function AutoAwardMixin:FindDisenchanter()
     -- 1. Check if there's a specific disenchanter set in settings
     local settings = Loothing.Settings:Get("autoAward")
     if settings and settings.disenchanter and settings.disenchanter ~= "" then
         -- Verify they're in the raid
         if self:IsPlayerInRaid(settings.disenchanter) then
-            return LoothingUtils.NormalizeName(settings.disenchanter)
+            return Utils.NormalizeName(settings.disenchanter)
         end
     end
 
@@ -115,7 +119,7 @@ function LoothingAutoAwardMixin:FindDisenchanter()
                     local lowerNote = note:lower()
                     if lowerNote:find("disenchant") or lowerNote:find(" de ") or
                        lowerNote:find("^de ") or lowerNote:find(" de$") or lowerNote == "de" then
-                        return LoothingUtils.NormalizeName(name)
+                        return Utils.NormalizeName(name)
                     end
                 end
             end
@@ -132,7 +136,7 @@ function LoothingAutoAwardMixin:FindDisenchanter()
                 if lowerNote:find("enchant") or lowerNote:find(" de ") or lowerNote == "de" then
                     -- Verify they're in our raid
                     if self:IsPlayerInRaid(name) then
-                        return LoothingUtils.NormalizeName(name)
+                        return Utils.NormalizeName(name)
                     end
                 end
             end
@@ -147,17 +151,17 @@ end
 --- Check if a player is in the current raid/party
 -- @param playerName string - Player name (with or without realm)
 -- @return boolean - True if player is in group
-function LoothingAutoAwardMixin:IsPlayerInRaid(playerName)
+function AutoAwardMixin:IsPlayerInRaid(playerName)
     if not playerName then return false end
 
-    local normalized = LoothingUtils.NormalizeName(playerName)
+    local normalized = Utils.NormalizeName(playerName)
     local numMembers = GetNumGroupMembers()
 
     if numMembers == 0 then
         -- Solo, check if it's us
         local myName = Loolib.SecretUtil.SafeUnitName("player")
         if not myName then return false end
-        return normalized == LoothingUtils.NormalizeName(myName)
+        return normalized == Utils.NormalizeName(myName)
     end
 
     local isRaid = IsInRaid()
@@ -165,7 +169,7 @@ function LoothingAutoAwardMixin:IsPlayerInRaid(playerName)
         local unit = isRaid and ("raid" .. i) or ("party" .. i)
         if UnitExists(unit) then
             local name = Loolib.SecretUtil.SafeUnitName(unit, true)
-            if name and LoothingUtils.NormalizeName(name) == normalized then
+            if name and Utils.NormalizeName(name) == normalized then
                 return true
             end
         end
@@ -180,7 +184,7 @@ local scanTooltip
 --- Check if an item is Bind on Equip
 -- @param itemLink string - Full item link
 -- @return boolean - True if item is BoE
-function LoothingAutoAwardMixin:IsBindOnEquip(itemLink)
+function AutoAwardMixin:IsBindOnEquip(itemLink)
     if not itemLink then return false end
 
     -- Use Blizzard's localized constant (works on all locales)
@@ -215,7 +219,7 @@ end
 -- @param itemLink string - Full item link
 -- @param itemGUID string - Item GUID
 -- @return boolean - True if item was auto-awarded
-function LoothingAutoAwardMixin:ProcessItem(itemLink, itemGUID)
+function AutoAwardMixin:ProcessItem(itemLink, itemGUID)
     if not self:ShouldAutoAward(itemLink) then
         return false
     end
@@ -241,7 +245,7 @@ end
 -- @param itemGUID string - Item GUID
 -- @param targetPlayer string - Player name
 -- @return boolean - True if award was successful
-function LoothingAutoAwardMixin:AwardItem(itemLink, itemGUID, targetPlayer)
+function AutoAwardMixin:AwardItem(itemLink, itemGUID, targetPlayer)
     if not Loothing.Session then return false end
 
     -- Get the reason from settings
@@ -273,7 +277,7 @@ end
 --- Get quality name from quality level
 -- @param quality number - Quality level (0-7)
 -- @return string - Quality name
-function LoothingAutoAwardMixin:GetQualityName(quality)
+function AutoAwardMixin:GetQualityName(quality)
     local names = {
         [0] = "Poor",
         [1] = "Common",
@@ -291,8 +295,8 @@ end
     Factory
 ----------------------------------------------------------------------]]
 
-function CreateLoothingAutoAward()
-    local autoAward = Loolib.CreateFromMixins(LoothingAutoAwardMixin)
+ns.CreateAutoAward = ns.CreateAutoAward or function()
+    local autoAward = Loolib.CreateFromMixins(AutoAwardMixin)
     autoAward:Init()
     return autoAward
 end

@@ -3,14 +3,18 @@
     History - Loot history storage and retrieval
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local Utils = ns.Utils
 local ipairs, pairs, time = ipairs, pairs, time
 
 --[[--------------------------------------------------------------------
-    LoothingHistoryMixin
+    HistoryMixin
 ----------------------------------------------------------------------]]
 
-LoothingHistoryMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+local HistoryMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+ns.HistoryMixin = HistoryMixin
 
 local HISTORY_EVENTS = {
     "OnEntryAdded",
@@ -21,7 +25,7 @@ local HISTORY_EVENTS = {
 }
 
 --- Initialize history manager
-function LoothingHistoryMixin:Init()
+function HistoryMixin:Init()
     Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(HISTORY_EVENTS)
 
@@ -51,14 +55,14 @@ end
 
 --- Add a history entry
 -- @param entry table - History entry table (see complete schema in Loothing docs)
-function LoothingHistoryMixin:AddEntry(entry)
+function HistoryMixin:AddEntry(entry)
     -- Ensure required fields
     entry.timestamp = entry.timestamp or time()
-    entry.guid = entry.guid or LoothingUtils.GenerateGUID()
+    entry.guid = entry.guid or Utils.GenerateGUID()
 
     -- Parse item info if not present
     if entry.itemLink and not entry.itemName then
-        local itemInfo = LoothingUtils.GetItemInfo(entry.itemLink)
+        local itemInfo = Utils.GetItemInfo(entry.itemLink)
         if itemInfo then
             entry.itemName = itemInfo.name
             entry.itemID = itemInfo.itemID
@@ -83,7 +87,7 @@ end
 --- Remove a history entry
 -- @param guid string
 -- @return boolean
-function LoothingHistoryMixin:RemoveEntry(guid)
+function HistoryMixin:RemoveEntry(guid)
     local entry = self:GetEntryByGUID(guid)
     if not entry then
         return false
@@ -104,7 +108,7 @@ end
 --- Get entry by GUID
 -- @param guid string
 -- @return table|nil
-function LoothingHistoryMixin:GetEntryByGUID(guid)
+function HistoryMixin:GetEntryByGUID(guid)
     for _, entry in self.entries:Enumerate() do
         if entry.guid == guid then
             return entry
@@ -115,30 +119,30 @@ end
 
 --- Get all entries
 -- @return DataProvider
-function LoothingHistoryMixin:GetEntries()
+function HistoryMixin:GetEntries()
     return self.entries
 end
 
 --- Get filtered entries
 -- @return DataProvider
-function LoothingHistoryMixin:GetFilteredEntries()
+function HistoryMixin:GetFilteredEntries()
     return self.filteredEntries
 end
 
 --- Get entry count
 -- @return number
-function LoothingHistoryMixin:GetCount()
+function HistoryMixin:GetCount()
     return self.entries:GetSize()
 end
 
 --- Get filtered count
 -- @return number
-function LoothingHistoryMixin:GetFilteredCount()
+function HistoryMixin:GetFilteredCount()
     return self.filteredEntries:GetSize()
 end
 
 --- Clear all history
-function LoothingHistoryMixin:ClearHistory()
+function HistoryMixin:ClearHistory()
     self.entries:Flush()
     self.filteredEntries:Flush()
 
@@ -157,12 +161,12 @@ end
 --- Delete all entries for a specific player
 -- @param playerName string - Player name to delete entries for
 -- @return number - Number of entries deleted
-function LoothingHistoryMixin:DeleteByPlayer(playerName)
+function HistoryMixin:DeleteByPlayer(playerName)
     if not playerName or playerName == "" then
         return 0
     end
 
-    playerName = LoothingUtils.NormalizeName(playerName)
+    playerName = Utils.NormalizeName(playerName)
     if not playerName then
         return 0
     end
@@ -194,7 +198,7 @@ end
 --- Delete entries older than a specified number of days
 -- @param days number - Delete entries older than this many days
 -- @return number - Number of entries deleted
-function LoothingHistoryMixin:DeleteByAge(days)
+function HistoryMixin:DeleteByAge(days)
     if not days or days <= 0 then
         return 0
     end
@@ -227,7 +231,7 @@ end
 --- Delete entries for a specific encounter/raid
 -- @param encounterName string - Encounter name to delete entries for
 -- @return number - Number of entries deleted
-function LoothingHistoryMixin:DeleteByEncounter(encounterName)
+function HistoryMixin:DeleteByEncounter(encounterName)
     if not encounterName or encounterName == "" then
         return 0
     end
@@ -260,7 +264,7 @@ end
 -- @param minQuality number - Minimum quality to delete (inclusive)
 -- @param maxQuality number - Maximum quality to delete (inclusive, optional)
 -- @return number - Number of entries deleted
-function LoothingHistoryMixin:DeleteByQuality(minQuality, maxQuality)
+function HistoryMixin:DeleteByQuality(minQuality, maxQuality)
     if not minQuality then
         return 0
     end
@@ -295,7 +299,7 @@ end
 -- @param startTime number - Start timestamp (inclusive)
 -- @param endTime number - End timestamp (inclusive)
 -- @return number - Number of entries deleted
-function LoothingHistoryMixin:DeleteByDateRange(startTime, endTime)
+function HistoryMixin:DeleteByDateRange(startTime, endTime)
     if not startTime or not endTime then
         return 0
     end
@@ -327,7 +331,7 @@ end
 
 --- Get age presets for UI dropdown
 -- @return table - Array of { days, label } presets
-function LoothingHistoryMixin:GetAgePresets()
+function HistoryMixin:GetAgePresets()
     return {
         { days = 7, label = "7 days" },
         { days = 14, label = "14 days" },
@@ -346,21 +350,21 @@ end
 
 --- Set filter criteria
 -- @param filter table - { searchText, winner, encounterName, startDate, endDate }
-function LoothingHistoryMixin:SetFilter(filter)
+function HistoryMixin:SetFilter(filter)
     self.filter = filter or {}
     self:ApplyFilter()
     self:TriggerEvent("OnFilterChanged", self.filter)
 end
 
 --- Clear all filters
-function LoothingHistoryMixin:ClearFilter()
+function HistoryMixin:ClearFilter()
     self.filter = {}
     self:ApplyFilter()
     self:TriggerEvent("OnFilterChanged", self.filter)
 end
 
 --- Apply current filter to entries
-function LoothingHistoryMixin:ApplyFilter()
+function HistoryMixin:ApplyFilter()
     self.filteredEntries:Flush()
 
     for _, entry in self.entries:Enumerate() do
@@ -378,7 +382,7 @@ end
 --- Check if entry matches current filter
 -- @param entry table
 -- @return boolean
-function LoothingHistoryMixin:MatchesFilter(entry)
+function HistoryMixin:MatchesFilter(entry)
     -- Search text (matches item name or winner)
     if self.filter.searchText and self.filter.searchText ~= "" then
         local search = self.filter.searchText:lower()
@@ -426,7 +430,7 @@ end
 
 --- Get the timestamp of the last weekly reset
 -- @return number - Unix timestamp of the most recent weekly reset
-function LoothingHistoryMixin:GetLastWeeklyResetTime()
+function HistoryMixin:GetLastWeeklyResetTime()
     local secondsUntil = C_DateAndTime.GetSecondsUntilWeeklyReset()
     return time() + secondsUntil - (7 * 86400)
 end
@@ -437,13 +441,13 @@ end
 -- @param difficultyID number|nil - Difficulty ID to match
 -- @param weeklyResetTime number - Timestamp of the last weekly reset
 -- @return table - { [normalizedPlayerName] = { instance = N, weekly = N } }
-function LoothingHistoryMixin:BuildPlayerCountCache(instanceName, difficultyID, weeklyResetTime)
+function HistoryMixin:BuildPlayerCountCache(instanceName, difficultyID, weeklyResetTime)
     local cache = {}
 
     for _, entry in self.entries:Enumerate() do
         local winner = entry.winner
         if winner then
-            local normalized = LoothingUtils.NormalizeName(winner)
+            local normalized = Utils.NormalizeName(winner)
             if normalized then
                 if not cache[normalized] then
                     cache[normalized] = { instance = 0, weekly = 0 }
@@ -476,8 +480,8 @@ end
 --- Get statistics for a player
 -- @param playerName string
 -- @return table - { total, byResponse, byQuality }
-function LoothingHistoryMixin:GetPlayerStats(playerName)
-    playerName = LoothingUtils.NormalizeName(playerName)
+function HistoryMixin:GetPlayerStats(playerName)
+    playerName = Utils.NormalizeName(playerName)
 
     local stats = {
         total = 0,
@@ -516,7 +520,7 @@ end
 
 --- Get unique winners
 -- @return table - Array of winner names
-function LoothingHistoryMixin:GetUniqueWinners()
+function HistoryMixin:GetUniqueWinners()
     local winners = {}
     local seen = {}
 
@@ -533,7 +537,7 @@ end
 
 --- Get unique encounter names
 -- @return table - Array of encounter names
-function LoothingHistoryMixin:GetUniqueEncounters()
+function HistoryMixin:GetUniqueEncounters()
     local encounters = {}
     local seen = {}
 
@@ -553,7 +557,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Load history from SavedVariables
-function LoothingHistoryMixin:LoadFromSaved()
+function HistoryMixin:LoadFromSaved()
     if not Loothing.Settings then
         return
     end
@@ -568,7 +572,7 @@ function LoothingHistoryMixin:LoadFromSaved()
         for k, v in pairs(entryData) do
             entry[k] = v
         end
-        entry.guid = entry.guid or LoothingUtils.GenerateGUID()
+        entry.guid = entry.guid or Utils.GenerateGUID()
         self.entries:Insert(entry)
     end
 
@@ -582,7 +586,7 @@ end
 
 --- Save a single entry to SavedVariables
 -- @param entry table
-function LoothingHistoryMixin:SaveEntry(entry)
+function HistoryMixin:SaveEntry(entry)
     if not Loothing.Settings then
         return
     end
@@ -596,7 +600,7 @@ end
 
 --- Remove a saved entry
 -- @param guid string
-function LoothingHistoryMixin:RemoveSavedEntry(guid)
+function HistoryMixin:RemoveSavedEntry(guid)
     if not Loothing.Settings then
         return
     end
@@ -606,7 +610,7 @@ end
 
 --- Remove multiple saved entries efficiently (O(n) single pass)
 -- @param guids table - Set of GUIDs to remove: { [guid] = true }
-function LoothingHistoryMixin:RemoveSavedEntries(guids)
+function HistoryMixin:RemoveSavedEntries(guids)
     if not Loothing.Settings or not guids then
         return
     end
@@ -615,7 +619,7 @@ function LoothingHistoryMixin:RemoveSavedEntries(guids)
 end
 
 --- Enforce the configured shared history cap in memory and SavedVariables.
-function LoothingHistoryMixin:PruneSavedHistory()
+function HistoryMixin:PruneSavedHistory()
     if not Loothing.Settings then
         return
     end
@@ -654,7 +658,7 @@ end
 
 --- Get metadata for export headers
 -- @return table - Metadata fields
-function LoothingHistoryMixin:GetExportMetadata()
+function HistoryMixin:GetExportMetadata()
     local guildName, guildRank = GetGuildInfo("player")
     return {
         addonName = "Loothing",
@@ -674,7 +678,7 @@ end
 -- @param meta table - From GetExportMetadata()
 -- @param prefix string - Line prefix ("# " for CSV/TSV, "-- " for Lua)
 -- @return string - Multi-line header (no trailing newline)
-function LoothingHistoryMixin:FormatCommentHeader(meta, prefix)
+function HistoryMixin:FormatCommentHeader(meta, prefix)
     local guildDisplay = (meta.guildName ~= "") and meta.guildName or "N/A"
     local rankDisplay = (meta.guildRank ~= "") and meta.guildRank or "N/A"
     return table.concat({
@@ -692,7 +696,7 @@ end
 
 --- Export history to CSV format (23 columns, RCLootCouncil-compatible)
 -- @return string
-function LoothingHistoryMixin:ExportCSV()
+function HistoryMixin:ExportCSV()
     local meta = self:GetExportMetadata()
     local lines = {}
 
@@ -718,7 +722,7 @@ function LoothingHistoryMixin:ExportCSV()
         local isAwardReason = (entry.awardReasonId and entry.awardReasonId ~= 0) and 1 or 0
 
         lines[#lines + 1] = table.concat({
-            csv(LoothingUtils.GetShortName(entry.winner) or ""),
+            csv(Utils.GetShortName(entry.winner) or ""),
             csv(dateStr),
             csv(timeStr),
             csv(entry.guid or ""),
@@ -749,7 +753,7 @@ end
 
 --- Export history to TSV format (tab-separated, same columns as CSV)
 -- @return string
-function LoothingHistoryMixin:ExportTSV()
+function HistoryMixin:ExportTSV()
     local meta = self:GetExportMetadata()
     local lines = {}
 
@@ -774,7 +778,7 @@ function LoothingHistoryMixin:ExportTSV()
         local isAwardReason = (entry.awardReasonId and entry.awardReasonId ~= 0) and 1 or 0
 
         lines[#lines + 1] = table.concat({
-            tsv(LoothingUtils.GetShortName(entry.winner) or ""),
+            tsv(Utils.GetShortName(entry.winner) or ""),
             tsv(dateStr),
             tsv(timeStr),
             tsv(entry.guid or ""),
@@ -805,7 +809,7 @@ end
 
 --- Export history to Lua table format
 -- @return string
-function LoothingHistoryMixin:ExportLua()
+function HistoryMixin:ExportLua()
     local meta = self:GetExportMetadata()
     local parts = { "return {" }
 
@@ -843,7 +847,7 @@ end
 
 --- Export history to BBCode format for forums
 -- @return string
-function LoothingHistoryMixin:ExportBBCode()
+function HistoryMixin:ExportBBCode()
     local meta = self:GetExportMetadata()
     local guildDisplay = (meta.guildName ~= "") and meta.guildName or "N/A"
     local rankDisplay = (meta.guildRank ~= "") and meta.guildRank or "N/A"
@@ -876,7 +880,7 @@ function LoothingHistoryMixin:ExportBBCode()
 
     -- Format output
     for _, winner in ipairs(sortedWinners) do
-        local shortName = LoothingUtils.GetShortName(winner)
+        local shortName = Utils.GetShortName(winner)
         local winnerEntries = winners[winner]
         local winnerClass = winnerEntries[1].winnerClass or ""
         local classTag = winnerClass ~= "" and string.format(" [%s]", winnerClass) or ""
@@ -910,7 +914,7 @@ end
 
 --- Export history to Discord markdown format
 -- @return string
-function LoothingHistoryMixin:ExportDiscord()
+function HistoryMixin:ExportDiscord()
     local meta = self:GetExportMetadata()
     local guildDisplay = (meta.guildName ~= "") and meta.guildName or "N/A"
     local rankDisplay = (meta.guildRank ~= "") and meta.guildRank or "N/A"
@@ -943,7 +947,7 @@ function LoothingHistoryMixin:ExportDiscord()
 
     -- Format output
     for _, winner in ipairs(sortedWinners) do
-        local shortName = LoothingUtils.GetShortName(winner)
+        local shortName = Utils.GetShortName(winner)
         local winnerEntries = winners[winner]
         local winnerClass = winnerEntries[1].winnerClass or ""
         local classTag = winnerClass ~= "" and string.format(" (%s)", winnerClass) or ""
@@ -975,7 +979,7 @@ end
 
 --- Export history to JSON format (all fields, including candidates and councilVotes arrays)
 -- @return string
-function LoothingHistoryMixin:ExportJSON()
+function HistoryMixin:ExportJSON()
     -- Recursive JSON serializer
     local function toJSON(value, indent)
         indent = indent or ""
@@ -1092,7 +1096,7 @@ end
 
 --- Export history to EQdkp-Plus XML format
 -- @return string
-function LoothingHistoryMixin:ExportEQdkp()
+function HistoryMixin:ExportEQdkp()
     local lines = {}
 
     -- Collect unique zones, bosses, and members
@@ -1183,7 +1187,7 @@ function LoothingHistoryMixin:ExportEQdkp()
     -- Members
     lines[#lines + 1] = '        <members>'
     for _, member in ipairs(members) do
-        local shortName = LoothingUtils.GetShortName(member)
+        local shortName = Utils.GetShortName(member)
         lines[#lines + 1] = string.format('            <member name="%s"/>', self:EscapeXML(shortName))
     end
     lines[#lines + 1] = '        </members>'
@@ -1193,7 +1197,7 @@ function LoothingHistoryMixin:ExportEQdkp()
     for _, entry in self.filteredEntries:Enumerate() do
         local itemID = entry.itemID or 0
         local itemName = entry.itemName or "Unknown"
-        local winner = LoothingUtils.GetShortName(entry.winner) or "Unknown"
+        local winner = Utils.GetShortName(entry.winner) or "Unknown"
         local timestamp = entry.timestamp or 0
         local votes = entry.votes or 0
         local boss = entry.encounterName or "Unknown"
@@ -1228,7 +1232,7 @@ end
 --- Export history as compact string for web import
 -- Format: LOOTHING:1:<base64(zlib(json))>
 -- @return string
-function LoothingHistoryMixin:ExportCompact()
+function HistoryMixin:ExportCompact()
     local jsonStr = self:ExportJSON()
     local compressed = Loolib.Compressor:CompressZlib(jsonStr, 9)
     local encoded = Loolib.Compressor:EncodeForPrint(compressed)
@@ -1238,7 +1242,7 @@ end
 --- Escape special characters for XML
 -- @param str string
 -- @return string
-function LoothingHistoryMixin:EscapeXML(str)
+function HistoryMixin:EscapeXML(str)
     if not str then return "" end
 
     str = tostring(str)

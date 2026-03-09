@@ -3,31 +3,37 @@
     Filters - Filter system for candidate display
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local Utils = ns.Utils
 
 -- Reusable tooltip for item scanning - created once, reused via ClearLines()
-local filterTooltip
+local FILTER_TOOLTIP_NAME = "LTFilterTooltip"
+local filterTooltip = ns.FilterTooltip
 
 local function GetFilterTooltip()
     if not filterTooltip then
-        filterTooltip = CreateFrame("GameTooltip", "LoothingFilterTooltip", UIParent, "GameTooltipTemplate")
+        filterTooltip = CreateFrame("GameTooltip", FILTER_TOOLTIP_NAME, UIParent, "GameTooltipTemplate")
         filterTooltip:SetOwner(UIParent, "ANCHOR_NONE")
+        ns.FilterTooltip = filterTooltip
     end
     return filterTooltip
 end
 
 --[[--------------------------------------------------------------------
-    LoothingFiltersMixin
+    FiltersMixin
 ----------------------------------------------------------------------]]
 
-LoothingFiltersMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+local FiltersMixin = ns.FiltersMixin or Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+ns.FiltersMixin = FiltersMixin
 
 local FILTER_EVENTS = {
     "OnFiltersChanged",
 }
 
 --- Initialize the filters module
-function LoothingFiltersMixin:Init()
+function FiltersMixin:Init()
     Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(FILTER_EVENTS)
 end
@@ -40,7 +46,7 @@ end
 -- @param candidateData table - Candidate data { name, class, response, guildRank, ... }
 -- @param itemData table - Item data { itemLink, ... }
 -- @return boolean - True if candidate passes all filters
-function LoothingFiltersMixin:ShouldShowCandidate(candidateData, itemData)
+function FiltersMixin:ShouldShowCandidate(candidateData, itemData)
     if not candidateData then
         return false
     end
@@ -97,13 +103,13 @@ end
 -- @param candidateData table - Candidate data (needs classID field)
 -- @param itemData table - Item data (needs itemLink field)
 -- @return boolean
-function LoothingFiltersMixin:CanEquipItem(candidateData, itemData)
+function FiltersMixin:CanEquipItem(candidateData, itemData)
     if not candidateData or not itemData or not itemData.itemLink then
         return true  -- Default to true if we can't determine
     end
 
     -- Get item info
-    local itemInfo = LoothingUtils.GetItemInfo(itemData.itemLink)
+    local itemInfo = Utils.GetItemInfo(itemData.itemLink)
     if not itemInfo then
         return true
     end
@@ -143,8 +149,8 @@ function LoothingFiltersMixin:CanEquipItem(candidateData, itemData)
     end
 
     -- Check trinket spec restrictions using TrinketData
-    if itemInfo.itemEquipLoc == "INVTYPE_TRINKET" and LoothingTrinketData then
-        if not LoothingTrinketData:CanClassUse(itemInfo.itemID, candidateClassID) then
+    if itemInfo.itemEquipLoc == "INVTYPE_TRINKET" and TrinketData then
+        if not TrinketData:CanClassUse(itemInfo.itemID, candidateClassID) then
             return false
         end
     end
@@ -155,7 +161,7 @@ end
 --- Get class restrictions from item tooltip
 -- @param itemLink string - Item link
 -- @return table|nil - Array of class IDs that can use the item, or nil if unrestricted
-function LoothingFiltersMixin:GetItemClassRestrictions(itemLink)
+function FiltersMixin:GetItemClassRestrictions(itemLink)
     if not itemLink then return nil end
 
     -- Reuse the file-scope tooltip; clear previous content before scanning
@@ -166,7 +172,7 @@ function LoothingFiltersMixin:GetItemClassRestrictions(itemLink)
     local restrictions = nil
 
     for i = 1, tooltip:NumLines() do
-        local line = _G["LoothingFilterTooltipTextLeft" .. i]
+        local line = _G[FILTER_TOOLTIP_NAME .. "TextLeft" .. i]
         if line then
             local text = line:GetText()
             if text and text:find("^Classes:") then
@@ -192,7 +198,7 @@ end
 --- Get class ID by localized class name
 -- @param className string - Localized class name
 -- @return number|nil - Class ID or nil
-function LoothingFiltersMixin:GetClassIDByName(className)
+function FiltersMixin:GetClassIDByName(className)
     if not className then return nil end
     local upperName = className:upper()
 
@@ -209,7 +215,7 @@ end
 -- @param classID number - Class ID (1-13)
 -- @param armorSubClass number - Armor sub-class from itemInfo
 -- @return boolean
-function LoothingFiltersMixin:CanClassWearArmorType(classID, armorSubClass)
+function FiltersMixin:CanClassWearArmorType(classID, armorSubClass)
     -- Armor sub-classes: 0=Generic, 1=Cloth, 2=Leather, 3=Mail, 4=Plate, 5=Cosmetic, 6=Shield
     -- Skip generic, cosmetic, and shields (handled separately)
     if armorSubClass == 0 or armorSubClass == 5 then
@@ -256,7 +262,7 @@ end
 -- @param classID number - Class ID (1-13)
 -- @param weaponSubClass number - Weapon sub-class from itemInfo
 -- @return boolean
-function LoothingFiltersMixin:CanClassUseWeaponType(classID, weaponSubClass)
+function FiltersMixin:CanClassUseWeaponType(classID, weaponSubClass)
     -- Weapon sub-classes:
     -- 0=1H Axe, 1=2H Axe, 2=Bows, 3=Guns, 4=1H Mace, 5=2H Mace
     -- 6=Polearm, 7=1H Sword, 8=2H Sword, 9=Warglaives, 10=Staves
@@ -281,7 +287,7 @@ end
 -- @param allCandidates table - Array of all candidates
 -- @param itemData table - Item data (optional)
 -- @return table - Filtered array of candidates
-function LoothingFiltersMixin:GetFilteredCandidates(allCandidates, itemData)
+function FiltersMixin:GetFilteredCandidates(allCandidates, itemData)
     if not allCandidates then
         return {}
     end
@@ -298,7 +304,7 @@ end
 
 --- Get count of active filters
 -- @return number - Number of active filters
-function LoothingFiltersMixin:GetActiveFilterCount()
+function FiltersMixin:GetActiveFilterCount()
     local settings = Loothing.Settings
     if not settings:GetFiltersEnabled() then
         return 0
@@ -339,7 +345,7 @@ end
 --- Create filter bar UI
 -- @param parent Frame - Parent frame
 -- @return Frame - Filter bar frame
-function LoothingFiltersMixin:CreateFilterBar(parent)
+function FiltersMixin:CreateFilterBar(parent)
     local L = Loothing.Locale
 
     local filterBar = CreateFrame("Frame", nil, parent, "BackdropTemplate")
@@ -422,10 +428,10 @@ function LoothingFiltersMixin:CreateFilterBar(parent)
     equippableCheck.text:SetPoint("LEFT", equippableCheck, "RIGHT", 5, 0)
     equippableCheck.text:SetText(L["SHOW_EQUIPPABLE_ONLY"])
     equippableCheck:SetChecked(Loothing.Settings:GetShowOnlyEquippable())
-    equippableCheck:SetScript("OnClick", function(self)
-        Loothing.Settings:SetShowOnlyEquippable(self:GetChecked())
-        LoothingFiltersMixin:TriggerEvent("OnFiltersChanged")
-        LoothingFiltersMixin:UpdateFilterBar(filterBar)
+    equippableCheck:SetScript("OnClick", function(cb)
+        Loothing.Settings:SetShowOnlyEquippable(cb:GetChecked())
+        FiltersMixin:TriggerEvent("OnFiltersChanged")
+        FiltersMixin:UpdateFilterBar(filterBar)
     end)
     filterBar.equippableCheck = equippableCheck
 
@@ -437,10 +443,10 @@ function LoothingFiltersMixin:CreateFilterBar(parent)
     passedCheck.text:SetPoint("LEFT", passedCheck, "RIGHT", 5, 0)
     passedCheck.text:SetText(L["HIDE_PASSED_ITEMS"])
     passedCheck:SetChecked(Loothing.Settings:GetHidePassedItems())
-    passedCheck:SetScript("OnClick", function(self)
-        Loothing.Settings:SetHidePassedItems(self:GetChecked())
-        LoothingFiltersMixin:TriggerEvent("OnFiltersChanged")
-        LoothingFiltersMixin:UpdateFilterBar(filterBar)
+    passedCheck:SetScript("OnClick", function(cb)
+        Loothing.Settings:SetHidePassedItems(cb:GetChecked())
+        FiltersMixin:TriggerEvent("OnFiltersChanged")
+        FiltersMixin:UpdateFilterBar(filterBar)
     end)
     filterBar.passedCheck = passedCheck
 
@@ -452,7 +458,7 @@ end
 
 --- Update filter bar display
 -- @param filterBar Frame - Filter bar frame
-function LoothingFiltersMixin:UpdateFilterBar(filterBar)
+function FiltersMixin:UpdateFilterBar(filterBar)
     if not filterBar then return end
 
     local L = Loothing.Locale
@@ -481,12 +487,12 @@ end
 
 --- Show class filter menu
 -- @param anchor Frame - Anchor frame for menu
-function LoothingFiltersMixin:ShowClassFilterMenu(anchor)
+function FiltersMixin:ShowClassFilterMenu(anchor)
     local L = Loothing.Locale
     local settings = Loothing.Settings
     local classFilters = settings:GetClassFilters()
 
-    MenuUtil.CreateContextMenu(anchor, function(ownerRegion, rootDescription)
+    MenuUtil.CreateContextMenu(anchor, function(_, rootDescription)
         -- Add "All Classes" option
         rootDescription:CreateCheckbox(L["ALL_CLASSES"],
             function() return not next(classFilters) end,
@@ -526,12 +532,12 @@ end
 
 --- Show response filter menu
 -- @param anchor Frame - Anchor frame for menu
-function LoothingFiltersMixin:ShowResponseFilterMenu(anchor)
+function FiltersMixin:ShowResponseFilterMenu(anchor)
     local L = Loothing.Locale
     local settings = Loothing.Settings
     local responseFilters = settings:GetResponseFilters()
 
-    MenuUtil.CreateContextMenu(anchor, function(ownerRegion, rootDescription)
+    MenuUtil.CreateContextMenu(anchor, function(_, rootDescription)
         -- Add "All Responses" option
         rootDescription:CreateCheckbox(L["ALL_RESPONSES"],
             function() return not next(responseFilters) end,
@@ -564,12 +570,12 @@ end
 
 --- Show guild rank filter menu
 -- @param anchor Frame - Anchor frame for menu
-function LoothingFiltersMixin:ShowRankFilterMenu(anchor)
+function FiltersMixin:ShowRankFilterMenu(anchor)
     local L = Loothing.Locale
     local settings = Loothing.Settings
     local rankFilters = settings:GetGuildRankFilters()
 
-    MenuUtil.CreateContextMenu(anchor, function(ownerRegion, rootDescription)
+    MenuUtil.CreateContextMenu(anchor, function(_, rootDescription)
         -- Add "All Ranks" option
         rootDescription:CreateCheckbox(L["ALL_RANKS"],
             function() return not next(rankFilters) end,
@@ -603,7 +609,7 @@ function LoothingFiltersMixin:ShowRankFilterMenu(anchor)
                 end
             end
         else
-            local btn = rootDescription:CreateButton("Not in guild")
+            local btn = rootDescription:CreateButton("Not in guild", nop)
             btn:SetEnabled(false)
         end
     end)

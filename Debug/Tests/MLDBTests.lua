@@ -2,7 +2,7 @@
     Loothing - Loot Council Addon for WoW 12.0+
     MLDBTests - Test suite for MLDB compression round-trip
 
-    Tests LoothingMLDBMixin:
+    Tests MLDBMixin:
     - CompressForTransmit / DecompressFromTransmit round-trip
     - Key compression maps (COMPRESSION_KEYS ↔ DECOMPRESSION_KEYS)
     - Nested table compression (responses with sub-keys)
@@ -11,6 +11,9 @@
 
     Run: /lt test run mldb
 ----------------------------------------------------------------------]]
+
+local _, ns = ...
+local Loothing = ns.Addon
 
 local Loolib = LibStub("Loolib")
 
@@ -64,14 +67,14 @@ local function RunMLDBTests()
 
     print("|cff00ccff========== MLDB Compression Tests ==========|r")
 
-    if not LoothingMLDBMixin then
-        print("|cffff0000[SKIP]|r LoothingMLDBMixin not available")
+    if not MLDBMixin then
+        print("|cffff0000[SKIP]|r MLDBMixin not available")
         return passed, failed
     end
 
     -- Create a test instance (no Init, just direct method calls)
     local mldb = {}
-    for k, v in pairs(LoothingMLDBMixin) do
+    for k, v in pairs(MLDBMixin) do
         mldb[k] = v
     end
 
@@ -202,7 +205,7 @@ local function RunMLDBTests()
     ----------------------------------------------------------------------]]
     printGroup("Full Protocol Round-Trip")
 
-    if LoothingProtocol then
+    if Protocol then
         local settings = {
             selfVote = true,
             multiVote = false,
@@ -220,12 +223,12 @@ local function RunMLDBTests()
         assertNotNil(txData, "Protocol: compressed data")
 
         -- Encode via Protocol
-        local encoded = LoothingProtocol:Encode(Loothing.MsgType.MLDB_BROADCAST, txData)
+        local encoded = Protocol:Encode(Loothing.MsgType.MLDB_BROADCAST, txData)
         assertNotNil(encoded, "Protocol: encoded message")
         assert(type(encoded) == "string", "Protocol: encoded is string")
 
         -- Decode
-        local ver, cmd, rxData = LoothingProtocol:Decode(encoded)
+        local ver, cmd, rxData = Protocol:Decode(encoded)
         assertEqual(cmd, Loothing.MsgType.MLDB_BROADCAST, "Protocol: command is MLDB_BROADCAST")
         assertNotNil(rxData, "Protocol: decoded data")
 
@@ -253,7 +256,7 @@ local function RunMLDBTests()
             end
         end
     else
-        print("|cffffcc00[SKIP]|r LoothingProtocol not available for full round-trip test")
+        print("|cffffcc00[SKIP]|r Protocol not available for full round-trip test")
     end
 
     --[[--------------------------------------------------------------------
@@ -297,6 +300,6 @@ local function RunMLDBTests()
 end
 
 -- Register test
-if LoothingTestRunner then
-    LoothingTestRunner:RegisterTest("mldb", RunMLDBTests)
+if TestRunner then
+    TestRunner:RegisterTest("mldb", RunMLDBTests)
 end

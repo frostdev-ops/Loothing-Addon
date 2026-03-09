@@ -3,10 +3,13 @@
     Utils - Helper functions
 ----------------------------------------------------------------------]]
 
+local ADDON_NAME, ns = ...
 local Loolib = LibStub("Loolib")
-local ipairs, pairs, select, time = ipairs, pairs, select, time
+local Loothing = ns.Addon
+local date, ipairs, pairs, select, time, tonumber = date, ipairs, pairs, select, time, tonumber
 
-LoothingUtils = {}
+local Utils = ns.Utils or {}
+ns.Utils = Utils
 
 --[[--------------------------------------------------------------------
     Secret Value Guards (WoW 12.0+)
@@ -19,7 +22,7 @@ LoothingUtils = {}
 -- Delegates to Loolib.SecretUtil for backward compatibility.
 -- @param ... - Values to check
 -- @return boolean - True if any value is secret
-function LoothingUtils.IsSecretValue(...)
+function Utils.IsSecretValue(...)
     return Loolib.SecretUtil.IsSecretValue(...)
 end
 
@@ -27,13 +30,13 @@ end
 -- Delegates to Loolib.SecretUtil for backward compatibility.
 -- @param ... - Values to sanitize
 -- @return ... - Sanitized values
-function LoothingUtils.SecretsForPrint(...)
+function Utils.SecretsForPrint(...)
     return Loolib.SecretUtil.SecretsForPrint(...)
 end
 
 local function IsTestModeEnabled()
-    return (Loothing and Loothing.TestMode and Loothing.TestMode:IsActive())
-        or (LoothingTestMode and LoothingTestMode:IsEnabled())
+    local TestMode = ns.TestModeState
+    return TestMode and TestMode:IsActive()
 end
 
 --[[--------------------------------------------------------------------
@@ -44,7 +47,7 @@ end
 -- @param v1 string
 -- @param v2 string
 -- @return number - -1 if v1 < v2, 0 if equal, 1 if v1 > v2
-function LoothingUtils.CompareVersions(v1, v2)
+function Utils.CompareVersions(v1, v2)
     if not v1 or not v2 then return 0 end
 
     local major1, minor1, patch1 = v1:match("^(%d+)%.(%d+)%.(%d+)")
@@ -69,7 +72,7 @@ local guidSalt = math.random(0, 0xFFFF)  -- Random per-session salt to prevent c
 
 --- Generate a unique identifier
 -- @return string - Unique ID in format "timestamp-salt-counter"
-function LoothingUtils.GenerateGUID()
+function Utils.GenerateGUID()
     guidCounter = guidCounter + 1
     return string.format("%d-%04x-%d", time(), guidSalt, guidCounter)
 end
@@ -81,7 +84,7 @@ end
 --- Extract item ID from an item link
 -- @param itemLink string - Full item link
 -- @return number|nil - Item ID or nil if invalid
-function LoothingUtils.GetItemID(itemLink)
+function Utils.GetItemID(itemLink)
     if not itemLink then return nil end
     local itemID = itemLink:match("item:(%d+)")
     return itemID and tonumber(itemID)
@@ -90,7 +93,7 @@ end
 --- Extract item name from an item link
 -- @param itemLink string - Full item link
 -- @return string|nil - Item name or nil if invalid
-function LoothingUtils.GetItemName(itemLink)
+function Utils.GetItemName(itemLink)
     if not itemLink then return nil end
     return itemLink:match("%[(.-)%]")
 end
@@ -98,7 +101,7 @@ end
 --- Get item quality from link color
 -- @param itemLink string - Full item link
 -- @return number - Quality (0-7)
-function LoothingUtils.GetItemQuality(itemLink)
+function Utils.GetItemQuality(itemLink)
     if not itemLink then return 0 end
 
     local colorCode = itemLink:match("|c(%x%x%x%x%x%x%x%x)")
@@ -122,10 +125,10 @@ end
 --- Get detailed item info
 -- @param itemLink string - Full item link
 -- @return table|nil - Item info table or nil
-function LoothingUtils.GetItemInfo(itemLink)
+function Utils.GetItemInfo(itemLink)
     if not itemLink then return nil end
 
-    local itemID = LoothingUtils.GetItemID(itemLink)
+    local itemID = Utils.GetItemID(itemLink)
     if not itemID then return nil end
 
     local name, link, quality, itemLevel, reqLevel, class, subclass,
@@ -136,8 +139,8 @@ function LoothingUtils.GetItemInfo(itemLink)
         return {
             itemID = itemID,
             itemLink = itemLink,
-            name = LoothingUtils.GetItemName(itemLink) or "Unknown",
-            quality = LoothingUtils.GetItemQuality(itemLink),
+            name = Utils.GetItemName(itemLink) or "Unknown",
+            quality = Utils.GetItemQuality(itemLink),
         }
     end
 
@@ -161,7 +164,7 @@ end
 
 --- Get the player's full name including realm
 -- @return string - "Name-Realm" format
-function LoothingUtils.GetPlayerFullName()
+function Utils.GetPlayerFullName()
     local name = Loolib.SecretUtil.SafeUnitName("player")
     if not name then return nil end
     local realm = GetNormalizedRealmName() or GetRealmName() or ""
@@ -174,7 +177,7 @@ end
 --- Normalize a player name to "Name-Realm" format
 -- @param name string - Player name (may or may not include realm)
 -- @return string - Normalized "Name-Realm" format
-function LoothingUtils.NormalizeName(name)
+function Utils.NormalizeName(name)
     if not name or Loolib.SecretUtil.IsSecretValue(name) then return nil end
 
     -- Already has realm
@@ -193,7 +196,7 @@ end
 --- Get short name (without realm)
 -- @param fullName string - "Name-Realm" format
 -- @return string - Just the name portion
-function LoothingUtils.GetShortName(fullName)
+function Utils.GetShortName(fullName)
     if not fullName or Loolib.SecretUtil.IsSecretValue(fullName) then return nil end
     return fullName:match("^([^-]+)") or fullName
 end
@@ -202,10 +205,10 @@ end
 -- @param name1 string - First name
 -- @param name2 string - Second name
 -- @return boolean
-function LoothingUtils.IsSamePlayer(name1, name2)
+function Utils.IsSamePlayer(name1, name2)
     if not name1 or not name2 then return false end
     if Loolib.SecretUtil.IsSecretValue(name1, name2) then return false end
-    return LoothingUtils.NormalizeName(name1) == LoothingUtils.NormalizeName(name2)
+    return Utils.NormalizeName(name1) == Utils.NormalizeName(name2)
 end
 
 --[[--------------------------------------------------------------------
@@ -215,7 +218,7 @@ end
 --- Get class color for a player
 -- @param classFile string - Class file name (e.g., "WARRIOR")
 -- @return table - { r, g, b } color values
-function LoothingUtils.GetClassColor(classFile)
+function Utils.GetClassColor(classFile)
     if not classFile then
         return { r = 1, g = 1, b = 1 }
     end
@@ -234,8 +237,8 @@ end
 -- @param text string - Text to color
 -- @param classFile string - Class file name
 -- @return string - Color-coded text
-function LoothingUtils.ColorByClass(text, classFile)
-    local color = LoothingUtils.GetClassColor(classFile)
+function Utils.ColorByClass(text, classFile)
+    local color = Utils.GetClassColor(classFile)
     return string.format("|cff%02x%02x%02x%s|r",
         math.floor(color.r * 255),
         math.floor(color.g * 255),
@@ -249,7 +252,7 @@ end
 
 --- Check if player is raid leader or assistant
 -- @return boolean
-function LoothingUtils.IsRaidLeaderOrAssistant()
+function Utils.IsRaidLeaderOrAssistant()
     -- Test mode bypasses raid requirements
     if IsTestModeEnabled() then
         return true
@@ -264,7 +267,7 @@ end
 
 --- Check if player is raid/party leader
 -- @return boolean
-function LoothingUtils.IsRaidLeader()
+function Utils.IsRaidLeader()
     -- Test mode bypasses raid requirements
     if IsTestModeEnabled() then
         return true
@@ -276,7 +279,7 @@ end
 --- Check if player is the master looter
 -- In WoW 12.0+ Master Loot is removed; falls back to group leader check
 -- @return boolean
-function LoothingUtils.IsMasterLooter()
+function Utils.IsMasterLooter()
     -- Test mode bypasses raid requirements
     if IsTestModeEnabled() then
         return true
@@ -308,7 +311,7 @@ end
 -- @return string instanceType - "none", "party", "raid", "pvp", "arena", "scenario"
 -- @return string difficultyName - e.g. "Normal", "Heroic", "Mythic"
 -- @return number difficultyID
-function LoothingUtils.GetInstanceInfo()
+function Utils.GetInstanceInfo()
     local name, instanceType, difficultyID, difficultyName = GetInstanceInfo()
     return instanceType or "none", difficultyName or "", difficultyID or 0
 end
@@ -316,28 +319,28 @@ end
 --- Check if current instance is a PvP, arena, or scenario zone
 -- These instance types should never trigger ML detection
 -- @return boolean
-function LoothingUtils.IsInPvPOrScenario()
-    local instanceType = LoothingUtils.GetInstanceInfo()
+function Utils.IsInPvPOrScenario()
+    local instanceType = Utils.GetInstanceInfo()
     return instanceType == "pvp" or instanceType == "arena" or instanceType == "scenario"
 end
 
 --- Check if currently in a raid instance
 -- @return boolean
-function LoothingUtils.IsInRaidInstance()
-    local instanceType = LoothingUtils.GetInstanceInfo()
+function Utils.IsInRaidInstance()
+    local instanceType = Utils.GetInstanceInfo()
     return instanceType == "raid"
 end
 
 --- Check if currently in a dungeon instance
 -- @return boolean
-function LoothingUtils.IsInDungeonInstance()
-    local instanceType = LoothingUtils.GetInstanceInfo()
+function Utils.IsInDungeonInstance()
+    local instanceType = Utils.GetInstanceInfo()
     return instanceType == "party"
 end
 
 --- Check if the group is a guild group (leader is in our guild)
 -- @return boolean
-function LoothingUtils.IsGuildGroup()
+function Utils.IsGuildGroup()
     if not IsInGuild() then
         return false
     end
@@ -348,7 +351,7 @@ function LoothingUtils.IsGuildGroup()
             local name, rank = Loolib.SecretUtil.SafeGetRaidRosterInfo(i)
             if rank == 2 and name then
                 -- Raid leader found, check if in guild
-                return LoothingUtils.IsPlayerInGuild(name)
+                return Utils.IsPlayerInGuild(name)
             end
         end
     elseif IsInGroup() then
@@ -370,7 +373,7 @@ end
 --- Check if a player is in our guild
 -- @param name string - Player name
 -- @return boolean
-function LoothingUtils.IsPlayerInGuild(name)
+function Utils.IsPlayerInGuild(name)
     if not name or not IsInGuild() then
         return false
     end
@@ -393,10 +396,11 @@ end
 
 --- Get raid roster as a table
 -- @return table - Array of { name, rank, class, online, role }
-function LoothingUtils.GetRaidRoster()
+function Utils.GetRaidRoster()
     -- Test mode returns fake roster
-    if IsTestModeEnabled() and LoothingTestMode then
-        return LoothingTestMode:GetFakeRaidRoster()
+    local TestMode = ns.TestModeState
+    if IsTestModeEnabled() and TestMode then
+        return TestMode:GetFakeRaidRoster()
     end
 
     local roster = {}
@@ -409,7 +413,7 @@ function LoothingUtils.GetRaidRoster()
 
             if name then
                 roster[#roster + 1] = {
-                    name = LoothingUtils.NormalizeName(name),
+                    name = Utils.NormalizeName(name),
                     shortName = name,
                     rank = rank,
                     subgroup = subgroup,
@@ -436,7 +440,7 @@ function LoothingUtils.GetRaidRoster()
                 local isLeader = UnitIsGroupLeader(unit)
                 local isAssistant = UnitIsGroupAssistant(unit)
                 roster[#roster + 1] = {
-                    name = LoothingUtils.NormalizeName(name),
+                    name = Utils.NormalizeName(name),
                     shortName = name,
                     rank = isLeader and 2 or (isAssistant and 1 or 0),
                     class = localizedClass,
@@ -457,9 +461,9 @@ end
 
 --- Get officers from raid (rank >= 1)
 -- @return table - Array of officer names
-function LoothingUtils.GetRaidOfficers()
+function Utils.GetRaidOfficers()
     local officers = {}
-    local roster = LoothingUtils.GetRaidRoster()
+    local roster = Utils.GetRaidRoster()
 
     for _, member in ipairs(roster) do
         if member.rank and member.rank >= 1 then
@@ -472,8 +476,8 @@ end
 
 --- Get raid leader name
 -- @return string|nil - Leader name or nil
-function LoothingUtils.GetRaidLeader()
-    local roster = LoothingUtils.GetRaidRoster()
+function Utils.GetRaidLeader()
+    local roster = Utils.GetRaidRoster()
 
     for _, member in ipairs(roster) do
         if member.rank == 2 then
@@ -491,7 +495,7 @@ end
 --- Format seconds as MM:SS
 -- @param seconds number
 -- @return string
-function LoothingUtils.FormatTime(seconds)
+function Utils.FormatTime(seconds)
     if not seconds or seconds < 0 then
         return "0:00"
     end
@@ -504,7 +508,7 @@ end
 --- Format timestamp as date string
 -- @param timestamp number - Unix timestamp
 -- @return string - Formatted date
-function LoothingUtils.FormatDate(timestamp)
+function Utils.FormatDate(timestamp)
     return date("%Y-%m-%d %H:%M", timestamp)
 end
 
@@ -516,7 +520,7 @@ end
 -- Delegates to Loolib.TableUtil.DeepCopy (handles circular references).
 -- @param orig table
 -- @return table
-function LoothingUtils.DeepCopy(orig)
+function Utils.DeepCopy(orig)
     return Loolib.TableUtil.DeepCopy(orig)
 end
 
@@ -525,7 +529,7 @@ end
 -- @param tbl table - Table to search
 -- @param value any - Value to find
 -- @return boolean
-function LoothingUtils.Contains(tbl, value)
+function Utils.Contains(tbl, value)
     return Loolib.TableUtil.Contains(tbl, value)
 end
 
@@ -534,7 +538,7 @@ end
 -- @param tbl table - Array to modify
 -- @param value any - Value to remove
 -- @return boolean - True if removed
-function LoothingUtils.RemoveValue(tbl, value)
+function Utils.RemoveValue(tbl, value)
     return Loolib.TableUtil.RemoveByValue(tbl, value)
 end
 
@@ -546,7 +550,7 @@ end
 -- @param str string - String to split
 -- @param delimiter string - Delimiter character
 -- @return table - Array of parts
-function LoothingUtils.Split(str, delimiter)
+function Utils.Split(str, delimiter)
     local result = {}
     local pattern = string.format("([^%s]+)", delimiter)
     for match in str:gmatch(pattern) do
@@ -559,14 +563,14 @@ end
 -- @param tbl table - Array to join
 -- @param delimiter string - Delimiter
 -- @return string
-function LoothingUtils.Join(tbl, delimiter)
+function Utils.Join(tbl, delimiter)
     return table.concat(tbl, delimiter)
 end
 
 --- Escape special characters for pattern matching
 -- @param str string
 -- @return string
-function LoothingUtils.EscapePattern(str)
+function Utils.EscapePattern(str)
     return str:gsub("([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
 end
 
@@ -578,7 +582,7 @@ end
 -- Accepts either format; if already named, returns as-is.
 -- @param color table
 -- @return table - Named format {r=, g=, b=, a=}
-function LoothingUtils.ColorToNamed(color)
+function Utils.ColorToNamed(color)
     if not color then return { r = 1, g = 1, b = 1, a = 1 } end
     if color.r ~= nil then return color end
     return { r = color[1] or 1, g = color[2] or 1, b = color[3] or 1, a = color[4] or 1 }
@@ -588,7 +592,7 @@ end
 -- Accepts either format; if already array, returns as-is.
 -- @param color table
 -- @return table - Array format {r, g, b, a}
-function LoothingUtils.ColorToArray(color)
+function Utils.ColorToArray(color)
     if not color then return { 1, 1, 1, 1 } end
     if color.r ~= nil then
         return { color.r, color.g or 1, color.b or 1, color.a or 1 }

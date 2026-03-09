@@ -1,32 +1,39 @@
+local _, ns = ...
+local Loothing = ns.Addon
+local Utils = ns.Utils
+local TestMode = ns.TestMode
+
+ns.CouncilMixin = ns.CouncilMixin or {}
+
+local CouncilMixin = ns.CouncilMixin
+
 --[[--------------------------------------------------------------------
     Loothing - Council Settings & Roster Helpers
 ----------------------------------------------------------------------]]
 
-LoothingCouncilMixin = LoothingCouncilMixin or {}
-
 -- Settings toggles
-function LoothingCouncilMixin:SetAutoIncludeOfficers(enabled)
+function CouncilMixin:SetAutoIncludeOfficers(enabled)
     self.autoIncludeOfficers = enabled
     self:SaveToSettings()
     self:TriggerEvent("OnRosterChanged")
 end
 
-function LoothingCouncilMixin:GetAutoIncludeOfficers()
+function CouncilMixin:GetAutoIncludeOfficers()
     return self.autoIncludeOfficers
 end
 
-function LoothingCouncilMixin:SetAutoIncludeRaidLeader(enabled)
+function CouncilMixin:SetAutoIncludeRaidLeader(enabled)
     self.autoIncludeRaidLeader = enabled
     self:SaveToSettings()
     self:TriggerEvent("OnRosterChanged")
 end
 
-function LoothingCouncilMixin:GetAutoIncludeRaidLeader()
+function CouncilMixin:GetAutoIncludeRaidLeader()
     return self.autoIncludeRaidLeader
 end
 
 -- Persistence
-function LoothingCouncilMixin:LoadFromSettings()
+function CouncilMixin:LoadFromSettings()
     if not Loothing.Settings then
         return
     end
@@ -57,7 +64,7 @@ function LoothingCouncilMixin:LoadFromSettings()
     end
 end
 
-function LoothingCouncilMixin:SaveToSettings()
+function CouncilMixin:SaveToSettings()
     if not Loothing.Settings then
         return
     end
@@ -73,9 +80,9 @@ function LoothingCouncilMixin:SaveToSettings()
 end
 
 -- Raid integration
-function LoothingCouncilMixin:GetMembersInRaid()
-    if LoothingTestMode and LoothingTestMode:IsEnabled() then
-        local fakeMembers = LoothingTestMode:GetFakeCouncilMembers()
+function CouncilMixin:GetMembersInRaid()
+    if TestMode and TestMode:IsEnabled() then
+        local fakeMembers = TestMode:GetFakeCouncilMembers()
         local result = {}
         for _, member in ipairs(fakeMembers) do
             result[#result + 1] = member.name
@@ -89,11 +96,11 @@ function LoothingCouncilMixin:GetMembersInRaid()
 
     local result = {}
     local allMembers = self:GetAllMembers()
-    local roster = LoothingUtils.GetRaidRoster()
+    local roster = Utils.GetRaidRoster()
 
     for _, memberName in ipairs(allMembers) do
         for _, rosterEntry in ipairs(roster) do
-            if LoothingUtils.IsSamePlayer(memberName, rosterEntry.name) then
+            if Utils.IsSamePlayer(memberName, rosterEntry.name) then
                 result[#result + 1] = memberName
                 break
             end
@@ -103,17 +110,17 @@ function LoothingCouncilMixin:GetMembersInRaid()
     return result
 end
 
-function LoothingCouncilMixin:IsPlayerCouncilMember()
-    if LoothingTestMode and LoothingTestMode:IsEnabled() then
+function CouncilMixin:IsPlayerCouncilMember()
+    if TestMode and TestMode:IsEnabled() then
         return true
     end
-    local playerName = LoothingUtils.GetPlayerFullName()
+    local playerName = Utils.GetPlayerFullName()
     return self:IsMember(playerName)
 end
 
 --- Check if the current player can vote (council member AND not ML-observer)
 -- @return boolean
-function LoothingCouncilMixin:CanPlayerVote()
+function CouncilMixin:CanPlayerVote()
     if not self:IsPlayerCouncilMember() then
         return false
     end
@@ -125,7 +132,7 @@ end
 
 --- Get council members in the raid who are eligible to vote (excludes ML if in observer mode)
 -- @return table - Array of player names
-function LoothingCouncilMixin:GetVotingEligibleMembers()
+function CouncilMixin:GetVotingEligibleMembers()
     local members = self:GetMembersInRaid()
     if not (Loothing.Observer and Loothing.Observer:IsMLObserver()) then
         return members
@@ -134,7 +141,7 @@ function LoothingCouncilMixin:GetVotingEligibleMembers()
     if not ml then return members end
     local result = {}
     for _, name in ipairs(members) do
-        if not LoothingUtils.IsSamePlayer(name, ml) then
+        if not Utils.IsSamePlayer(name, ml) then
             result[#result + 1] = name
         end
     end
@@ -142,8 +149,8 @@ function LoothingCouncilMixin:GetVotingEligibleMembers()
 end
 
 -- Display helper
-function LoothingCouncilMixin:GetMemberInfo(name)
-    name = LoothingUtils.NormalizeName(name)
+function CouncilMixin:GetMemberInfo(name)
+    name = Utils.NormalizeName(name)
 
     if not self:IsMember(name) then
         return nil
@@ -151,17 +158,17 @@ function LoothingCouncilMixin:GetMemberInfo(name)
 
     local className = nil
     if IsInRaid() then
-        local roster = LoothingUtils.GetRaidRoster()
+        local roster = Utils.GetRaidRoster()
         for _, entry in ipairs(roster) do
-            if LoothingUtils.IsSamePlayer(name, entry.name) then
+            if Utils.IsSamePlayer(name, entry.name) then
                 className = entry.classFile
                 break
             end
         end
     end
 
-    local shortName = LoothingUtils.GetShortName(name)
-    local coloredName = className and LoothingUtils.ColorByClass(shortName, className) or shortName
+    local shortName = Utils.GetShortName(name)
+    local coloredName = className and Utils.ColorByClass(shortName, className) or shortName
 
     return {
         name = name,
@@ -172,4 +179,3 @@ function LoothingCouncilMixin:GetMemberInfo(name)
         isExplicit = self.members[name] ~= nil,
     }
 end
-

@@ -3,16 +3,20 @@
     TradePanel - Panel showing items pending trade
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local Utils = ns.Utils
 
 --[[--------------------------------------------------------------------
-    LoothingTradePanelMixin
+    TradePanelMixin
 
     Displays a list of items that need to be traded to winners.
     Shows item, winner, and time remaining. Click to initiate trade.
 ----------------------------------------------------------------------]]
 
-LoothingTradePanelMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+local TradePanelMixin = ns.TradePanelMixin or Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+ns.TradePanelMixin = TradePanelMixin
 
 local TRADE_PANEL_EVENTS = {
     "OnInitiateTrade",
@@ -21,7 +25,7 @@ local TRADE_PANEL_EVENTS = {
 
 --- Initialize the trade panel
 -- @param parent Frame - Parent frame (usually a tab content area)
-function LoothingTradePanelMixin:Init(parent)
+function TradePanelMixin:Init(parent)
     Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(TRADE_PANEL_EVENTS)
 
@@ -40,7 +44,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Create the main frame
-function LoothingTradePanelMixin:CreateFrame()
+function TradePanelMixin:CreateFrame()
     local frame = CreateFrame("Frame", nil, self.parent)
     frame:SetAllPoints()
 
@@ -48,7 +52,7 @@ function LoothingTradePanelMixin:CreateFrame()
 end
 
 --- Create UI elements
-function LoothingTradePanelMixin:CreateElements()
+function TradePanelMixin:CreateElements()
     local L = Loothing.Locale
 
     -- Header
@@ -62,7 +66,7 @@ function LoothingTradePanelMixin:CreateElements()
 end
 
 --- Create header
-function LoothingTradePanelMixin:CreateHeader()
+function TradePanelMixin:CreateHeader()
     local L = Loothing.Locale
 
     local header = CreateFrame("Frame", nil, self.frame)
@@ -90,7 +94,7 @@ function LoothingTradePanelMixin:CreateHeader()
 end
 
 --- Create list
-function LoothingTradePanelMixin:CreateList()
+function TradePanelMixin:CreateList()
     local L = Loothing.Locale
 
     -- List container
@@ -160,7 +164,7 @@ function LoothingTradePanelMixin:CreateList()
 end
 
 --- Create footer
-function LoothingTradePanelMixin:CreateFooter()
+function TradePanelMixin:CreateFooter()
     local L = Loothing.Locale
 
     local footer = CreateFrame("Frame", nil, self.frame)
@@ -209,7 +213,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Register for trade queue events
-function LoothingTradePanelMixin:RegisterEvents()
+function TradePanelMixin:RegisterEvents()
     if not Loothing.TradeQueue then return end
 
     Loothing.TradeQueue:RegisterCallback("OnItemQueued", function()
@@ -230,14 +234,14 @@ end
 ----------------------------------------------------------------------]]
 
 --- Refresh the display
-function LoothingTradePanelMixin:Refresh()
+function TradePanelMixin:Refresh()
     self:UpdateHeader()
     self:UpdateFooter()
     self:RefreshList()
 end
 
 --- Update header display
-function LoothingTradePanelMixin:UpdateHeader()
+function TradePanelMixin:UpdateHeader()
     local L = Loothing.Locale
 
     if not Loothing.TradeQueue then
@@ -258,7 +262,7 @@ function LoothingTradePanelMixin:UpdateHeader()
 end
 
 --- Update footer
-function LoothingTradePanelMixin:UpdateFooter()
+function TradePanelMixin:UpdateFooter()
     -- Update auto-trade checkbox
     if Loothing.Settings then
         local autoTrade = Loothing.Settings:GetAutoTrade()
@@ -267,7 +271,7 @@ function LoothingTradePanelMixin:UpdateFooter()
 end
 
 --- Refresh the list
-function LoothingTradePanelMixin:RefreshList()
+function TradePanelMixin:RefreshList()
     -- Return active rows to the pool
     for _, row in ipairs(self.rows) do
         if row.flashTicker then
@@ -329,7 +333,7 @@ function LoothingTradePanelMixin:RefreshList()
 end
 
 --- Update time remaining on rows (with flash warnings at 20min and 5min)
-function LoothingTradePanelMixin:UpdateTimers()
+function TradePanelMixin:UpdateTimers()
     for _, row in ipairs(self.rows) do
         if row:IsShown() then
             row:UpdateTimeRemaining()
@@ -344,8 +348,8 @@ function LoothingTradePanelMixin:UpdateTimers()
                 -- 20-minute warning
                 if remaining <= 1200 and remaining > 1195 and not self.warningsSent[entryKey .. "_20m"] then
                     self.warningsSent[entryKey .. "_20m"] = true
-                    local name = LoothingUtils.GetItemName(row.entry.itemLink) or "Item"
-                    local winner = LoothingUtils.GetShortName(row.entry.winner)
+                    local name = Utils.GetItemName(row.entry.itemLink) or "Item"
+                    local winner = Utils.GetShortName(row.entry.winner)
                     Loothing:Warn(string.format("Trade window for %s -> %s expires in 20 minutes!", name, winner))
                     self:FlashRow(row)
                 end
@@ -353,8 +357,8 @@ function LoothingTradePanelMixin:UpdateTimers()
                 -- 5-minute warning
                 if remaining <= 300 and remaining > 295 and not self.warningsSent[entryKey .. "_5m"] then
                     self.warningsSent[entryKey .. "_5m"] = true
-                    local name = LoothingUtils.GetItemName(row.entry.itemLink) or "Item"
-                    local winner = LoothingUtils.GetShortName(row.entry.winner)
+                    local name = Utils.GetItemName(row.entry.itemLink) or "Item"
+                    local winner = Utils.GetShortName(row.entry.winner)
                     Loothing:Warn(string.format("URGENT: Trade window for %s -> %s expires in 5 minutes!", name, winner))
                     self:FlashRow(row)
                 end
@@ -365,7 +369,7 @@ end
 
 --- Flash a row to draw attention
 -- @param row Frame
-function LoothingTradePanelMixin:FlashRow(row)
+function TradePanelMixin:FlashRow(row)
     if not row or not row.bg then return end
 
     -- Cancel any in-progress flash for this row
@@ -399,7 +403,7 @@ end
 
 --- Get or create a row frame
 -- @return Frame - Trade row
-function LoothingTradePanelMixin:GetOrCreateRow()
+function TradePanelMixin:GetOrCreateRow()
     -- Reuse a pooled row
     if #self.rowPool > 0 then
         return table.remove(self.rowPool)
@@ -411,7 +415,7 @@ end
 
 --- Create a trade row
 -- @return Frame - Trade row
-function LoothingTradePanelMixin:CreateRow()
+function TradePanelMixin:CreateRow()
     local row = CreateFrame("Frame", nil, self.listContent)
     row:SetHeight(40)
 
@@ -485,14 +489,14 @@ function LoothingTradePanelMixin:CreateRow()
         self.icon:SetNormalTexture(texture)
 
         -- Item text
-        local quality = LoothingUtils.GetItemQuality(entry.itemLink)
+        local quality = Utils.GetItemQuality(entry.itemLink)
         local r, g, b = C_Item.GetItemQualityColor(quality or 0)
-        local name = LoothingUtils.GetItemName(entry.itemLink) or "Unknown"
+        local name = Utils.GetItemName(entry.itemLink) or "Unknown"
         self.itemText:SetText(name)
         self.itemText:SetTextColor(r, g, b)
 
         -- Winner
-        local shortName = LoothingUtils.GetShortName(entry.winner)
+        local shortName = Utils.GetShortName(entry.winner)
         self.winnerButton:SetText(shortName)
 
         -- Icon tooltip
@@ -536,7 +540,7 @@ function LoothingTradePanelMixin:CreateRow()
                 if unitId and CheckInteractDistance(unitId, 2) then
                     InitiateTrade(unitId)
                 else
-                    local shortName = LoothingUtils.GetShortName(entry.winner)
+                    local shortName = Utils.GetShortName(entry.winner)
                     Loothing:Print(string.format("%s is not in range to trade", shortName))
                 end
             end
@@ -548,7 +552,7 @@ function LoothingTradePanelMixin:CreateRow()
             if unitId and CheckInteractDistance(unitId, 2) then
                 InitiateTrade(unitId)
             else
-                local shortName = LoothingUtils.GetShortName(entry.winner)
+                local shortName = Utils.GetShortName(entry.winner)
                 Loothing:Print(string.format("%s is not in range to trade", shortName))
             end
         end)
@@ -609,7 +613,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Clear completed (traded) items from the queue
-function LoothingTradePanelMixin:ClearCompleted()
+function TradePanelMixin:ClearCompleted()
     if not Loothing.TradeQueue then return end
 
     local queue = Loothing.TradeQueue:GetQueue()
@@ -643,16 +647,16 @@ end
     Frame Access
 ----------------------------------------------------------------------]]
 
-function LoothingTradePanelMixin:GetFrame()
+function TradePanelMixin:GetFrame()
     return self.frame
 end
 
-function LoothingTradePanelMixin:Show()
+function TradePanelMixin:Show()
     self.frame:Show()
     self:Refresh()
 end
 
-function LoothingTradePanelMixin:Hide()
+function TradePanelMixin:Hide()
     self.frame:Hide()
 
     -- Stop update timer
@@ -666,8 +670,10 @@ end
     Factory
 ----------------------------------------------------------------------]]
 
-function CreateLoothingTradePanel(parent)
-    local panel = Loolib.CreateFromMixins(LoothingTradePanelMixin)
+local function CreateTradePanel(parent)
+    local panel = Loolib.CreateFromMixins(TradePanelMixin)
     panel:Init(parent)
     return panel
 end
+
+ns.CreateTradePanel = CreateTradePanel

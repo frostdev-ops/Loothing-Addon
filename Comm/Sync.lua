@@ -6,13 +6,23 @@
     The Protocol layer handles serialization/compression automatically.
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local CreateFromMixins = Loolib.CreateFromMixins
+local Utils = ns.Utils
+
+ns.SyncMixin = CreateFromMixins(Loolib.CallbackRegistryMixin, ns.SyncMixin or {})
+
+local function GetPopups()
+    return ns.Popups
+end
 
 --[[--------------------------------------------------------------------
-    LoothingSyncMixin
+    SyncMixin
 ----------------------------------------------------------------------]]
 
-LoothingSyncMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+local SyncMixin = ns.SyncMixin
 
 local SYNC_EVENTS = {
     "OnSyncComplete",
@@ -21,7 +31,7 @@ local SYNC_EVENTS = {
 }
 
 --- Initialize sync handler
-function LoothingSyncMixin:Init()
+function SyncMixin:Init()
     Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(SYNC_EVENTS)
 
@@ -36,7 +46,7 @@ function LoothingSyncMixin:Init()
 end
 
 --- Register for communication events
-function LoothingSyncMixin:RegisterCommEvents()
+function SyncMixin:RegisterCommEvents()
     if not Loothing.Comm then return end
 
     Loothing.Comm:RegisterCallback("OnSyncRequest", function(_, data)
@@ -59,7 +69,7 @@ end
 --- Request sync from the master looter, with up to 3 automatic retries on timeout
 -- @param masterLooter string - Name of the ML to sync from
 -- @param retryCount number - Internal: current retry attempt (0-indexed)
-function LoothingSyncMixin:RequestSync(masterLooter, retryCount)
+function SyncMixin:RequestSync(masterLooter, retryCount)
     retryCount = retryCount or 0
     local MAX_RETRIES = 3
 
@@ -118,7 +128,7 @@ end
 
 --- Cancel an in-progress sync
 -- @param reason string
-function LoothingSyncMixin:CancelSync(reason)
+function SyncMixin:CancelSync(reason)
     if self.syncTimeout then
         self.syncTimeout:Cancel()
         self.syncTimeout = nil
@@ -134,7 +144,7 @@ end
 
 --- Handle received sync data
 -- @param data table - Sync data from ML
-function LoothingSyncMixin:HandleSyncData(data)
+function SyncMixin:HandleSyncData(data)
     if not self.syncInProgress then
         Loothing:Debug("Received sync data but no sync in progress")
         return
@@ -164,7 +174,7 @@ end
 
 --- Apply sync data to current session
 -- @param data table
-function LoothingSyncMixin:ApplySyncData(data)
+function SyncMixin:ApplySyncData(data)
     -- Restore MLDB from sync packet (before session, so candidates see correct config)
     if data.mldb and Loothing.MLDB then
         Loothing.MLDB:ApplyFromML(data.mldb, data.masterLooter or "")
@@ -209,7 +219,7 @@ end
 
 --- Handle sync request from another player
 -- @param data table - Request data
-function LoothingSyncMixin:HandleSyncRequest(data)
+function SyncMixin:HandleSyncRequest(data)
     -- Only ML should respond to sync requests
     if not Loothing.Session or not Loothing.Session:IsMasterLooter() then
         return
@@ -229,7 +239,7 @@ end
 --- Gather current session state for sync (full reconnect packet)
 -- Includes session, items with candidates/votes, MLDB, and council roster
 -- @return table
-function LoothingSyncMixin:GatherSyncData()
+function SyncMixin:GatherSyncData()
     local session = Loothing.Session
 
     if not session or session:GetState() == Loothing.SessionState.INACTIVE then
@@ -333,7 +343,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Check if we need to sync (called on roster update)
-function LoothingSyncMixin:CheckNeedSync()
+function SyncMixin:CheckNeedSync()
     if not IsInGroup() then return end
 
     -- Don't sync if we're the ML (we own the session)
@@ -345,7 +355,7 @@ function LoothingSyncMixin:CheckNeedSync()
     end
 
     -- Prefer known ML, fall back to raid leader
-    local syncTarget = Loothing.masterLooter or LoothingUtils.GetRaidLeader()
+    local syncTarget = Loothing.masterLooter or Utils.GetRaidLeader()
     if syncTarget then
         -- Cancel any pending sync-check timer to avoid unbounded timer spawns
         if self.pendingSyncCheckTimer then
@@ -364,7 +374,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Broadcast observer roster to raid (ML-only)
-function LoothingSyncMixin:BroadcastObserverRoster()
+function SyncMixin:BroadcastObserverRoster()
     if not Loothing.Session or not Loothing.Session:IsMasterLooter() then return end
     if not Loothing.Observer then return end
 
@@ -379,7 +389,7 @@ end
 
 --- Handle received observer roster (non-ML players)
 -- @param data table - { list, permissions, openObservation, mlIsObserver }
-function LoothingSyncMixin:HandleObserverRoster(data)
+function SyncMixin:HandleObserverRoster(data)
     if not Loothing.Observer then return end
     if not data.masterLooter then return end
 
@@ -394,7 +404,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Sync council roster to raid
-function LoothingSyncMixin:BroadcastCouncilRoster()
+function SyncMixin:BroadcastCouncilRoster()
     if not (Loothing.Session and Loothing.Session:IsMasterLooter()) then return end
     if not Loothing.Council then return end
 
@@ -404,7 +414,7 @@ end
 
 --- Handle received council roster
 -- @param data table
-function LoothingSyncMixin:HandleCouncilRoster(data)
+function SyncMixin:HandleCouncilRoster(data)
     if not Loothing.Council then return end
 
     -- Only accept roster from ML
@@ -422,7 +432,7 @@ end
 
 --- Request to sync settings to target (guild or player)
 -- @param target string - "guild" or player name
-function LoothingSyncMixin:RequestSettingsSync(target)
+function SyncMixin:RequestSettingsSync(target)
     if self.settingsSyncInProgress then
         Loothing:Print("Settings sync already in progress")
         return
@@ -460,7 +470,7 @@ end
 
 --- Gather current settings for sync
 -- @return table
-function LoothingSyncMixin:GatherSettings()
+function SyncMixin:GatherSettings()
     local settings = {}
 
     if Loothing.ResponseManager then
@@ -479,8 +489,11 @@ end
 
 --- Handle incoming settings sync request
 -- @param sender string
-function LoothingSyncMixin:HandleSettingsSyncRequest(sender)
-    LoothingPopups:Show("LOOTHING_SYNC_REQUEST", {
+function SyncMixin:HandleSettingsSyncRequest(sender)
+    local Popups = GetPopups()
+    if not Popups then return end
+
+    Popups:Show("LOOTHING_SYNC_REQUEST", {
         player = sender,
         type = "settings",
         onAccept = function()
@@ -491,7 +504,7 @@ end
 
 --- Accept settings sync from sender
 -- @param sender string
-function LoothingSyncMixin:AcceptSettingsSync(sender)
+function SyncMixin:AcceptSettingsSync(sender)
     Loothing.Comm:SendSettingsSyncAck(sender)
 
     self.awaitingSettingsFrom = sender
@@ -500,7 +513,7 @@ end
 
 --- Handle settings sync acknowledgment
 -- @param sender string
-function LoothingSyncMixin:HandleSettingsSyncAck(sender)
+function SyncMixin:HandleSettingsSyncAck(sender)
     if not self.settingsSyncInProgress or not self.pendingSettingsSync then
         return
     end
@@ -519,7 +532,7 @@ end
 -- Settings data is already deserialized by the Protocol layer.
 -- @param data table - Settings table
 -- @param sender string
-function LoothingSyncMixin:HandleSettingsData(data, sender)
+function SyncMixin:HandleSettingsData(data, sender)
     if self.awaitingSettingsFrom ~= sender then
         return
     end
@@ -540,7 +553,7 @@ end
 
 --- Apply received settings
 -- @param settings table
-function LoothingSyncMixin:ApplySettings(settings)
+function SyncMixin:ApplySettings(settings)
     if settings.responseSets and Loothing.ResponseManager then
         Loothing.ResponseManager:Deserialize(settings.responseSets)
     end
@@ -562,7 +575,7 @@ end
 --- Request to sync history to target
 -- @param target string - "guild" or player name
 -- @param days number - Number of days of history to sync (default: 7)
-function LoothingSyncMixin:RequestHistorySync(target, days)
+function SyncMixin:RequestHistorySync(target, days)
     days = days or 7
 
     if self.historySyncInProgress then
@@ -603,7 +616,7 @@ end
 --- Gather recent history entries
 -- @param days number
 -- @return table
-function LoothingSyncMixin:GatherHistory(days)
+function SyncMixin:GatherHistory(days)
     if not Loothing.History then return {} end
 
     local cutoff = time() - (days * 24 * 60 * 60)
@@ -627,8 +640,11 @@ end
 --- Handle history sync request
 -- @param sender string
 -- @param days number
-function LoothingSyncMixin:HandleHistorySyncRequest(sender, days)
-    LoothingPopups:Show("LOOTHING_SYNC_REQUEST", {
+function SyncMixin:HandleHistorySyncRequest(sender, days)
+    local Popups = GetPopups()
+    if not Popups then return end
+
+    Popups:Show("LOOTHING_SYNC_REQUEST", {
         player = sender,
         type = "history",
         days = days,
@@ -640,7 +656,7 @@ end
 
 --- Accept history sync
 -- @param sender string
-function LoothingSyncMixin:AcceptHistorySync(sender)
+function SyncMixin:AcceptHistorySync(sender)
     Loothing.Comm:SendHistorySyncAck(sender)
 
     self.awaitingHistoryFrom = sender
@@ -649,7 +665,7 @@ end
 
 --- Handle history sync acknowledgment
 -- @param sender string
-function LoothingSyncMixin:HandleHistorySyncAck(sender)
+function SyncMixin:HandleHistorySyncAck(sender)
     if not self.historySyncInProgress or not self.pendingHistorySync then
         return
     end
@@ -668,7 +684,7 @@ end
 -- History data is already deserialized by the Protocol layer.
 -- @param data table - History entries
 -- @param sender string
-function LoothingSyncMixin:HandleHistoryData(data, sender)
+function SyncMixin:HandleHistoryData(data, sender)
     if self.awaitingHistoryFrom ~= sender then return end
 
     if not data or type(data) ~= "table" then
@@ -708,8 +724,10 @@ end
     Factory
 ----------------------------------------------------------------------]]
 
-function CreateLoothingSync()
-    local sync = Loolib.CreateFromMixins(LoothingSyncMixin)
+function ns.CreateSync()
+    local sync = CreateFromMixins(SyncMixin)
     sync:Init()
     return sync
 end
+
+-- ns.SyncMixin and ns.CreateSync exported above

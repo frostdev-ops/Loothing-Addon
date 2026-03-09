@@ -3,14 +3,18 @@
     SyncPanel - Data synchronization dialog for settings and history
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local Utils = ns.Utils
 local L = Loothing.Locale
 
 --[[--------------------------------------------------------------------
-    LoothingSyncPanelMixin
+    SyncPanelMixin
 ----------------------------------------------------------------------]]
 
-LoothingSyncPanelMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+local SyncPanelMixin = ns.SyncPanelMixin or Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+ns.SyncPanelMixin = SyncPanelMixin
 
 local SYNC_EVENTS = {
     "OnSyncStarted",
@@ -22,7 +26,7 @@ local PANEL_WIDTH = 350
 local PANEL_HEIGHT = 280
 
 --- Initialize the sync panel
-function LoothingSyncPanelMixin:Init()
+function SyncPanelMixin:Init()
     Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(SYNC_EVENTS)
 
@@ -35,8 +39,8 @@ function LoothingSyncPanelMixin:Init()
 end
 
 --- Create the main frame
-function LoothingSyncPanelMixin:CreateFrame()
-    local frame = CreateFrame("Frame", "LoothingSyncPanel", UIParent, "BackdropTemplate")
+function SyncPanelMixin:CreateFrame()
+    local frame = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
     frame:SetSize(PANEL_WIDTH, PANEL_HEIGHT)
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("DIALOG")
@@ -69,10 +73,11 @@ function LoothingSyncPanelMixin:CreateFrame()
     end)
 
     self.frame = frame
+    ns.SyncPanelFrame = frame
 end
 
 --- Create UI elements
-function LoothingSyncPanelMixin:CreateElements()
+function SyncPanelMixin:CreateElements()
     -- Title
     self.title = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     self.title:SetPoint("TOP", 0, -20)
@@ -115,7 +120,7 @@ function LoothingSyncPanelMixin:CreateElements()
 end
 
 --- Create sync type toggle buttons
-function LoothingSyncPanelMixin:CreateSyncTypeButtons()
+function SyncPanelMixin:CreateSyncTypeButtons()
     self.settingsBtn = CreateFrame("Button", nil, self.frame, "UIPanelButtonTemplate")
     self.settingsBtn:SetSize(120, 24)
     self.settingsBtn:SetPoint("TOPLEFT", 30, -50)
@@ -136,7 +141,7 @@ function LoothingSyncPanelMixin:CreateSyncTypeButtons()
 end
 
 --- Create target player dropdown using MenuUtil
-function LoothingSyncPanelMixin:CreateTargetDropdown()
+function SyncPanelMixin:CreateTargetDropdown()
     local targetLabel = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     targetLabel:SetPoint("TOPLEFT", 30, -86)
     targetLabel:SetText(L["SEND_TO"] or "Send To:")
@@ -151,7 +156,7 @@ function LoothingSyncPanelMixin:CreateTargetDropdown()
 end
 
 --- Show target selection context menu
-function LoothingSyncPanelMixin:ShowTargetMenu()
+function SyncPanelMixin:ShowTargetMenu()
     local members = self:GetOnlineMembers()
 
     MenuUtil.CreateContextMenu(self.targetBtn, function(ownerRegion, rootDescription)
@@ -180,7 +185,7 @@ function LoothingSyncPanelMixin:ShowTargetMenu()
 end
 
 --- Create date range dropdown (history sync only)
-function LoothingSyncPanelMixin:CreateDateRangeDropdown()
+function SyncPanelMixin:CreateDateRangeDropdown()
     self.dateLabel = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     self.dateLabel:SetPoint("TOPLEFT", 30, -118)
     self.dateLabel:SetText(L["DATE_RANGE"] or "Date Range:")
@@ -195,7 +200,7 @@ function LoothingSyncPanelMixin:CreateDateRangeDropdown()
 end
 
 --- Show date range context menu
-function LoothingSyncPanelMixin:ShowDateRangeMenu()
+function SyncPanelMixin:ShowDateRangeMenu()
     local ranges = {
         { value = "7", label = L["LAST_7_DAYS"] or "Last 7 Days" },
         { value = "30", label = L["LAST_30_DAYS"] or "Last 30 Days" },
@@ -213,7 +218,7 @@ function LoothingSyncPanelMixin:ShowDateRangeMenu()
 end
 
 --- Create progress bar
-function LoothingSyncPanelMixin:CreateProgressBar()
+function SyncPanelMixin:CreateProgressBar()
     local progressBg = CreateFrame("Frame", nil, self.frame, "BackdropTemplate")
     progressBg:SetSize(310, 20)
     progressBg:SetPoint("BOTTOM", 0, 60)
@@ -246,7 +251,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Update UI based on current sync type selection
-function LoothingSyncPanelMixin:UpdateUI()
+function SyncPanelMixin:UpdateUI()
     local isHistory = self.syncType == "history"
     self.dateLabel:SetShown(isHistory)
     self.dateBtn:SetShown(isHistory)
@@ -263,13 +268,13 @@ end
 
 --- Get online group/guild members
 -- @return table - Sorted array of player names
-function LoothingSyncPanelMixin:GetOnlineMembers()
+function SyncPanelMixin:GetOnlineMembers()
     local members = {}
     local seen = {}
     local playerName = Loolib.SecretUtil.SafeUnitName("player")
 
     -- Check raid/party
-    local roster = LoothingUtils.GetRaidRoster()
+    local roster = Utils.GetRaidRoster()
     for _, member in ipairs(roster) do
         if member.name and member.name ~= playerName and not seen[member.name] then
             seen[member.name] = true
@@ -302,7 +307,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Start the sync operation
-function LoothingSyncPanelMixin:StartSync()
+function SyncPanelMixin:StartSync()
     if not self.targetPlayer then
         self.statusText:SetText("|cffff0000" .. (L["SELECT_TARGET_FIRST"] or "Select a target player") .. "|r")
         return
@@ -340,7 +345,7 @@ end
 
 --- Set progress bar percentage
 -- @param pct number - 0.0 to 1.0
-function LoothingSyncPanelMixin:SetProgress(pct)
+function SyncPanelMixin:SetProgress(pct)
     pct = math.max(0, math.min(1, pct))
     local maxWidth = self.progressBg:GetWidth() - 2
     self.progressBar:SetWidth(math.max(1, maxWidth * pct))
@@ -356,15 +361,15 @@ end
     Visibility
 ----------------------------------------------------------------------]]
 
-function LoothingSyncPanelMixin:Show()
+function SyncPanelMixin:Show()
     self.frame:Show()
 end
 
-function LoothingSyncPanelMixin:Hide()
+function SyncPanelMixin:Hide()
     self.frame:Hide()
 end
 
-function LoothingSyncPanelMixin:Toggle()
+function SyncPanelMixin:Toggle()
     if self.frame:IsShown() then
         self:Hide()
     else
@@ -372,7 +377,7 @@ function LoothingSyncPanelMixin:Toggle()
     end
 end
 
-function LoothingSyncPanelMixin:IsShown()
+function SyncPanelMixin:IsShown()
     return self.frame:IsShown()
 end
 
@@ -380,8 +385,10 @@ end
     Factory
 ----------------------------------------------------------------------]]
 
-function CreateLoothingSyncPanel()
-    local panel = Loolib.CreateFromMixins(LoothingSyncPanelMixin)
+local function CreateSyncPanel()
+    local panel = Loolib.CreateFromMixins(SyncPanelMixin)
     panel:Init()
     return panel
 end
+
+ns.CreateSyncPanel = CreateSyncPanel

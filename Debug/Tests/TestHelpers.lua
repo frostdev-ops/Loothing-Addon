@@ -13,14 +13,18 @@
     - Data cleanup and state management
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
+local Loothing = ns.Addon
+local Utils = ns.Utils
+
 local Loolib = LibStub("Loolib")
 
 --[[--------------------------------------------------------------------
     TestHelpers Singleton
 ----------------------------------------------------------------------]]
 
-LoothingTestHelpers = {}
-local TestHelpers = LoothingTestHelpers
+TestHelpers = {}
+local TestHelpers = TestHelpers
 
 --[[--------------------------------------------------------------------
     Class and Spec Data (WoW 12.0 / The War Within)
@@ -447,7 +451,7 @@ function TestHelpers:CreateFakeRaid(count, options)
         local _, playerClass = UnitClass("player")
 
         table.insert(roster, {
-            name = LoothingUtils.GetPlayerFullName(),
+            name = Utils.GetPlayerFullName(),
             shortName = playerName,
             realm = GetNormalizedRealmName() or "TestRealm",
             class = playerClass,
@@ -501,7 +505,7 @@ function TestHelpers:CreateFakeCouncil(count)
     local _, playerClass = UnitClass("player")
 
     table.insert(council, {
-        name = LoothingUtils.GetPlayerFullName(),
+        name = Utils.GetPlayerFullName(),
         shortName = playerName,
         class = playerClass,
         classID = select(3, UnitClass("player")),
@@ -560,9 +564,9 @@ function TestHelpers:CreateFakeItemLink(itemID)
     return string.format("|cffa335ee|Hitem:%d::::::::80:::::|h[Test Item %d]|h|r", itemID, itemID)
 end
 
---- Create a fake LoothingItemMixin object
+--- Create a fake ItemMixin object
 -- @param overrides table - Optional { itemLink, itemID, looter, encounterID, state }
--- @return LoothingItemMixin|nil
+-- @return ItemMixin|nil
 function TestHelpers:CreateFakeItem(overrides)
     if not Loothing or not Loothing.Session then
         error("Loothing.Session not available")
@@ -588,7 +592,7 @@ function TestHelpers:CreateFakeItem(overrides)
     local encounterID = overrides.encounterID or 0
 
     -- Create item using mixin
-    local item = Loolib.CreateFromMixins(LoothingItemMixin)
+    local item = Loolib.CreateFromMixins(ItemMixin)
     item:Init(itemLink, looter, encounterID)
 
     -- Apply state override if provided
@@ -630,7 +634,7 @@ function TestHelpers:CreateFakeVote(voter, responses)
 end
 
 --- Create multiple fake votes with distribution
--- @param item LoothingItemMixin - Item to vote on
+-- @param item ItemMixin - Item to vote on
 -- @param distribution table - { NEED = 3, GREED = 2, PASS = 1 } or table of voters
 -- @return table - Array of votes created
 function TestHelpers:CreateFakeVotes(item, distribution)
@@ -640,7 +644,7 @@ function TestHelpers:CreateFakeVotes(item, distribution)
     end
 
     local votes = {}
-    local council = LoothingTestMode and LoothingTestMode:GetFakeCouncilMembers() or self:CreateFakeCouncil()
+    local council = TestMode and TestMode:GetFakeCouncilMembers() or self:CreateFakeCouncil()
 
     -- If distribution is a simple count table
     if distribution[Loothing.Response.NEED] or distribution[Loothing.Response.GREED] then
@@ -674,7 +678,7 @@ function TestHelpers:CreateFakeVotes(item, distribution)
 end
 
 --- Create a tied vote scenario
--- @param item LoothingItemMixin - Item to vote on
+-- @param item ItemMixin - Item to vote on
 -- @param response1 number - First response type
 -- @param response2 number - Second response type
 -- @param count number - Number of votes for each (default 2)
@@ -690,7 +694,7 @@ function TestHelpers:CreateTiedVotes(item, response1, response2, count)
 end
 
 --- Create unanimous votes
--- @param item LoothingItemMixin - Item to vote on
+-- @param item ItemMixin - Item to vote on
 -- @param response number - Response type
 -- @param count number - Number of unanimous votes (default 5)
 -- @return table - Vote distribution
@@ -826,7 +830,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Assert that an item is in the expected state
--- @param item LoothingItemMixin
+-- @param item ItemMixin
 -- @param expectedState number - Loothing.ItemState value
 -- @param errorMsg string - Optional custom error message
 function TestHelpers:AssertItemState(item, expectedState, errorMsg)
@@ -874,7 +878,7 @@ function TestHelpers:AssertSessionState(session, expectedState, errorMsg)
 end
 
 --- Assert vote tally for a specific response
--- @param item LoothingItemMixin
+-- @param item ItemMixin
 -- @param response number - Loothing.Response value
 -- @param expectedCount number
 function TestHelpers:AssertVoteTally(item, response, expectedCount)
@@ -901,7 +905,7 @@ function TestHelpers:AssertVoteTally(item, response, expectedCount)
 end
 
 --- Assert that the item has the expected winner
--- @param item LoothingItemMixin
+-- @param item ItemMixin
 -- @param expectedWinner string - Expected winner name
 function TestHelpers:AssertWinner(item, expectedWinner)
     if not item then
@@ -959,7 +963,7 @@ function TestHelpers:WaitFrames(count, callback)
 end
 
 --- Simulate timeout on an item (fast-forward to timeout state)
--- @param item LoothingItemMixin
+-- @param item ItemMixin
 function TestHelpers:SimulateTimeout(item)
     if not item then
         error("Item is nil")
@@ -1092,8 +1096,8 @@ function TestHelpers:CleanupSession()
     end
 
     -- Clear test mode data if available
-    if LoothingTestMode then
-        LoothingTestMode.fakeItems = {}
+    if TestMode then
+        TestMode.fakeItems = {}
     end
 end
 
@@ -1126,7 +1130,7 @@ function TestHelpers:SaveState(snapshotName)
 
     local snapshot = {
         sessionActive = Loothing and Loothing.Session and Loothing.Session:IsActive() or false,
-        testModeEnabled = LoothingTestMode and LoothingTestMode.enabled or false,
+        testModeEnabled = TestMode and TestMode.enabled or false,
         timestamp = time(),
     }
 
@@ -1153,8 +1157,8 @@ function TestHelpers:RestoreState(snapshotName)
     self:CleanupAll()
 
     -- Restore test mode
-    if LoothingTestMode then
-        LoothingTestMode:SetEnabled(snapshot.testModeEnabled)
+    if TestMode then
+        TestMode:SetEnabled(snapshot.testModeEnabled)
     end
 
     -- Restore session if it was active
@@ -1181,7 +1185,7 @@ function TestHelpers:PrintInfo()
     print("  |cffffffffMocking:|r MockFunction, RestoreMock, SpyOn, GetSpyCalls")
     print("  |cffffffffCleanup:|r CleanupSession, CleanupAll, SaveState, RestoreState")
     print(" ")
-    print("  Use |cffffffff/dump LoothingTestHelpers|r to see all methods")
+    print("  Use |cffffffff/dump TestHelpers|r to see all methods")
 end
 
 --[[--------------------------------------------------------------------
@@ -1189,4 +1193,4 @@ end
 ----------------------------------------------------------------------]]
 
 -- Print initialization message
-print("|cff00ff00[Loothing]|r TestHelpers loaded. Use |cffffffffLoothingTestHelpers:PrintInfo()|r for help.")
+print("|cff00ff00[Loothing]|r TestHelpers loaded. Use |cffffffffTestHelpers:PrintInfo()|r for help.")

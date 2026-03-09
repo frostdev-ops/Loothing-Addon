@@ -3,20 +3,24 @@
     VoteData - Vote storage, representation, and utilities
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local Utils = ns.Utils
 
 --[[--------------------------------------------------------------------
-    LoothingVoteMixin - Individual vote representation
+    VoteMixin - Individual vote representation
 ----------------------------------------------------------------------]]
 
-LoothingVoteMixin = {}
+local VoteMixin = {}
+ns.VoteMixin = VoteMixin
 
 --- Create a new vote
 -- @param voter string - Voter name
 -- @param voterClass string - Voter class file
 -- @param responses table - Array of response values (ranked by preference)
-function LoothingVoteMixin:Init(voter, voterClass, responses)
-    self.voter = LoothingUtils.NormalizeName(voter)
+function VoteMixin:Init(voter, voterClass, responses)
+    self.voter = Utils.NormalizeName(voter)
     self.voterClass = voterClass
     self.responses = responses or {}
     self.timestamp = time()
@@ -36,52 +40,52 @@ end
 
 --- Get the first choice response
 -- @return number - Loothing.Response value
-function LoothingVoteMixin:GetFirstChoice()
+function VoteMixin:GetFirstChoice()
     return self.responses[1]
 end
 
 --- Get all responses (for ranked choice)
 -- @return table
-function LoothingVoteMixin:GetResponses()
+function VoteMixin:GetResponses()
     return self.responses
 end
 
 --- Get response at a specific rank
 -- @param rank number - 1-based rank
 -- @return number|nil
-function LoothingVoteMixin:GetResponseAtRank(rank)
+function VoteMixin:GetResponseAtRank(rank)
     return self.responses[rank]
 end
 
 --- Set a note on this vote
 -- @param note string
-function LoothingVoteMixin:SetNote(note)
+function VoteMixin:SetNote(note)
     self.note = note
 end
 
 --- Get the note
 -- @return string|nil
-function LoothingVoteMixin:GetNote()
+function VoteMixin:GetNote()
     return self.note
 end
 
 --- Get voter's class color
 -- @return table - { r, g, b }
-function LoothingVoteMixin:GetClassColor()
-    return LoothingUtils.GetClassColor(self.voterClass)
+function VoteMixin:GetClassColor()
+    return Utils.GetClassColor(self.voterClass)
 end
 
 --- Get colored voter name
 -- @return string
-function LoothingVoteMixin:GetColoredVoterName()
-    local shortName = LoothingUtils.GetShortName(self.voter)
-    return LoothingUtils.ColorByClass(shortName, self.voterClass)
+function VoteMixin:GetColoredVoterName()
+    local shortName = Utils.GetShortName(self.voter)
+    return Utils.ColorByClass(shortName, self.voterClass)
 end
 
 --- Get response info for display
 -- @param rank number - Optional rank (default 1)
 -- @return table - { name, color, icon }
-function LoothingVoteMixin:GetResponseInfo(rank)
+function VoteMixin:GetResponseInfo(rank)
     rank = rank or 1
     local response = self.responses[rank]
 
@@ -97,7 +101,7 @@ end
 -- @param gear2Link string|nil - Second equipped item
 -- @param gear1ilvl number - Item level of first item
 -- @param gear2ilvl number - Item level of second item
-function LoothingVoteMixin:SetGearData(gear1Link, gear2Link, gear1ilvl, gear2ilvl)
+function VoteMixin:SetGearData(gear1Link, gear2Link, gear1ilvl, gear2ilvl)
     self.gear1Link = gear1Link
     self.gear2Link = gear2Link
     self.gear1ilvl = gear1ilvl or 0
@@ -106,7 +110,7 @@ end
 
 --- Calculate item level difference from candidate item
 -- @param candidateIlvl number - Item level of the candidate item
-function LoothingVoteMixin:CalculateIlvlDiff(candidateIlvl)
+function VoteMixin:CalculateIlvlDiff(candidateIlvl)
     if not candidateIlvl or candidateIlvl == 0 then
         self.ilvlDiff = 0
         return
@@ -126,13 +130,13 @@ end
 
 --- Get item level difference
 -- @return number - Positive means upgrade, negative means downgrade
-function LoothingVoteMixin:GetIlvlDiff()
+function VoteMixin:GetIlvlDiff()
     return self.ilvlDiff
 end
 
 --- Check if candidate is an upgrade
 -- @return boolean
-function LoothingVoteMixin:IsUpgrade()
+function VoteMixin:IsUpgrade()
     return self.ilvlDiff > 0
 end
 
@@ -140,32 +144,32 @@ end
 -- @param roll number - The roll value
 -- @param minRoll number - Minimum roll range (default 1)
 -- @param maxRoll number - Maximum roll range (default 100)
-function LoothingVoteMixin:SetRoll(roll, minRoll, maxRoll)
+function VoteMixin:SetRoll(roll, minRoll, maxRoll)
     self.roll = roll
     self.rollRange = { min = minRoll or 1, max = maxRoll or 100 }
 end
 
 --- Get roll value
 -- @return number|nil - Roll value or nil if not rolled
-function LoothingVoteMixin:GetRoll()
+function VoteMixin:GetRoll()
     return self.roll
 end
 
 --- Check if voter has rolled
 -- @return boolean
-function LoothingVoteMixin:HasRolled()
+function VoteMixin:HasRolled()
     return self.roll ~= nil
 end
 
 --- Get roll range
 -- @return table|nil - { min, max } or nil
-function LoothingVoteMixin:GetRollRange()
+function VoteMixin:GetRollRange()
     return self.rollRange
 end
 
 --- Get gear info for display
 -- @return string - Formatted gear info text
-function LoothingVoteMixin:GetGearInfo()
+function VoteMixin:GetGearInfo()
     if not self.gear1Link then
         return "No gear equipped"
     end
@@ -186,7 +190,7 @@ end
 
 --- Serialize vote
 -- @return table
-function LoothingVoteMixin:Serialize()
+function VoteMixin:Serialize()
     return {
         voter = self.voter,
         voterClass = self.voterClass,
@@ -205,7 +209,7 @@ end
 
 --- Deserialize vote
 -- @param data table
-function LoothingVoteMixin:Deserialize(data)
+function VoteMixin:Deserialize(data)
     self.voter = data.voter
     self.voterClass = data.voterClass
     self.responses = data.responses or {}
@@ -229,17 +233,20 @@ end
 -- @param voterClass string
 -- @param responses table
 -- @return table
-function CreateLoothingVote(voter, voterClass, responses)
-    local vote = Loolib.CreateFromMixins(LoothingVoteMixin)
+local function CreateVote(voter, voterClass, responses)
+    local vote = Loolib.CreateFromMixins(VoteMixin)
     vote:Init(voter, voterClass, responses)
     return vote
 end
 
+ns.CreateVote = CreateVote
+
 --[[--------------------------------------------------------------------
-    LoothingVoteCollectionMixin - Collection of votes for an item
+    VoteCollectionMixin - Collection of votes for an item
 ----------------------------------------------------------------------]]
 
-LoothingVoteCollectionMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+local VoteCollectionMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+ns.VoteCollectionMixin = VoteCollectionMixin
 
 local VOTE_COLLECTION_EVENTS = {
     "OnVoteAdded",
@@ -248,7 +255,7 @@ local VOTE_COLLECTION_EVENTS = {
 }
 
 --- Initialize the vote collection
-function LoothingVoteCollectionMixin:Init()
+function VoteCollectionMixin:Init()
     Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(VOTE_COLLECTION_EVENTS)
 
@@ -258,9 +265,9 @@ function LoothingVoteCollectionMixin:Init()
 end
 
 --- Add a vote
--- @param vote table - Vote data or LoothingVoteMixin
+-- @param vote table - Vote data or VoteMixin
 -- @return boolean, boolean - success, isUpdate
-function LoothingVoteCollectionMixin:AddVote(vote)
+function VoteCollectionMixin:AddVote(vote)
     local voter = vote.voter
 
     -- Check for existing vote from this voter
@@ -284,8 +291,9 @@ end
 --- Remove a vote by voter
 -- @param voter string
 -- @return boolean
-function LoothingVoteCollectionMixin:RemoveVote(voter)
-    voter = LoothingUtils.NormalizeName(voter)
+function VoteCollectionMixin:RemoveVote(voter)
+    voter = Utils.NormalizeName(voter)
+    if not voter then return false end
 
     local vote = self.votesByVoter[voter]
     if vote then
@@ -301,33 +309,33 @@ end
 --- Get vote by voter
 -- @param voter string
 -- @return table|nil
-function LoothingVoteCollectionMixin:GetVote(voter)
-    voter = LoothingUtils.NormalizeName(voter)
+function VoteCollectionMixin:GetVote(voter)
+    voter = Utils.NormalizeName(voter)
     return self.votesByVoter[voter]
 end
 
 --- Check if voter has voted
 -- @param voter string
 -- @return boolean
-function LoothingVoteCollectionMixin:HasVoted(voter)
-    voter = LoothingUtils.NormalizeName(voter)
+function VoteCollectionMixin:HasVoted(voter)
+    voter = Utils.NormalizeName(voter)
     return self.votesByVoter[voter] ~= nil
 end
 
 --- Get all votes
 -- @return DataProvider
-function LoothingVoteCollectionMixin:GetVotes()
+function VoteCollectionMixin:GetVotes()
     return self.votes
 end
 
 --- Get vote count
 -- @return number
-function LoothingVoteCollectionMixin:GetCount()
+function VoteCollectionMixin:GetCount()
     return self.votes:GetSize()
 end
 
 --- Clear all votes
-function LoothingVoteCollectionMixin:Clear()
+function VoteCollectionMixin:Clear()
     self.votes:Flush()
     wipe(self.votesByVoter)
     self:TriggerEvent("OnVotesCleared")
@@ -335,13 +343,13 @@ end
 
 --- Enumerate votes
 -- @return iterator
-function LoothingVoteCollectionMixin:Enumerate()
+function VoteCollectionMixin:Enumerate()
     return self.votes:Enumerate()
 end
 
 --- Get votes grouped by first-choice response
 -- @return table - { [responseType] = { votes } }
-function LoothingVoteCollectionMixin:GetVotesByResponse()
+function VoteCollectionMixin:GetVotesByResponse()
     local grouped = {}
 
     for _, response in pairs(Loothing.Response) do
@@ -364,7 +372,7 @@ end
 
 --- Get response counts
 -- @return table - { [responseType] = count }
-function LoothingVoteCollectionMixin:GetResponseCounts()
+function VoteCollectionMixin:GetResponseCounts()
     local counts = {}
 
     for _, response in pairs(Loothing.Response) do
@@ -387,7 +395,7 @@ end
 
 --- Get voters list
 -- @return table - Array of voter names
-function LoothingVoteCollectionMixin:GetVoters()
+function VoteCollectionMixin:GetVoters()
     local voters = {}
     for voter in pairs(self.votesByVoter) do
         voters[#voters + 1] = voter
@@ -397,7 +405,7 @@ end
 
 --- Serialize votes
 -- @return table
-function LoothingVoteCollectionMixin:Serialize()
+function VoteCollectionMixin:Serialize()
     local serialized = {}
     for _, vote in self.votes:Enumerate() do
         if vote.Serialize then
@@ -417,11 +425,11 @@ end
 
 --- Deserialize votes
 -- @param data table
-function LoothingVoteCollectionMixin:Deserialize(data)
+function VoteCollectionMixin:Deserialize(data)
     self:Clear()
 
     for _, voteData in ipairs(data) do
-        local vote = CreateLoothingVote(
+        local vote = ns.CreateVote(
             voteData.voter,
             voteData.voterClass,
             voteData.responses
@@ -439,22 +447,25 @@ end
 
 --- Create a new vote collection
 -- @return table
-function CreateLoothingVoteCollection()
-    local collection = Loolib.CreateFromMixins(LoothingVoteCollectionMixin)
+local function CreateVoteCollection()
+    local collection = Loolib.CreateFromMixins(VoteCollectionMixin)
     collection:Init()
     return collection
 end
+
+ns.CreateVoteCollection = CreateVoteCollection
 
 --[[--------------------------------------------------------------------
     Vote Analysis Utilities
 ----------------------------------------------------------------------]]
 
-LoothingVoteAnalysis = {}
+local VoteAnalysis = {}
+ns.VoteAnalysis = VoteAnalysis
 
 --- Get the leading response type
 -- @param votes table - Vote collection or array
 -- @return number, number - Response type, count
-function LoothingVoteAnalysis.GetLeadingResponse(votes)
+function VoteAnalysis.GetLeadingResponse(votes)
     local counts = {}
 
     for _, response in pairs(Loothing.Response) do
@@ -485,7 +496,7 @@ end
 --- Check if there's a tie for first place
 -- @param votes table - Vote collection or array
 -- @return boolean, table - isTie, tiedResponses
-function LoothingVoteAnalysis.IsTied(votes)
+function VoteAnalysis.IsTied(votes)
     local counts = {}
 
     for _, response in pairs(Loothing.Response) do
@@ -521,7 +532,7 @@ end
 -- @param votes table - Vote collection or array
 -- @param responseType number
 -- @return table - Array of voter names
-function LoothingVoteAnalysis.GetVotersForResponse(votes, responseType)
+function VoteAnalysis.GetVotersForResponse(votes, responseType)
     local voters = {}
 
     local enumerate = votes.Enumerate and function() return votes:Enumerate() end or function() return ipairs(votes) end

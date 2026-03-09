@@ -6,20 +6,26 @@
     Uses Loolib's Dialog system for modal/non-modal dialogs with callbacks.
 ----------------------------------------------------------------------]]
 
+local ADDON_NAME, ns = ...
 local Loolib = LibStub("Loolib")
-local L = Loothing.Locale
+local Loothing = ns.Addon
+local Utils = ns.Utils
+local L = ns.Locale
+local C_Item = C_Item
+local ipairs, tostring, type = ipairs, tostring, type
+local tinsert = table.insert
 
 --[[--------------------------------------------------------------------
     Popup Registry
 
     All popups are registered here and can be shown via:
-    LoothingPopups:Show(dialogName, data, onAccept, onCancel)
+    ns.Popups:Show(dialogName, data, onAccept, onCancel)
 ----------------------------------------------------------------------]]
 
-LoothingPopups = {
-    dialogs = {},
-    activeDialogs = {},
-}
+local Popups = ns.Popups or {}
+Popups.dialogs = Popups.dialogs or {}
+Popups.activeDialogs = Popups.activeDialogs or {}
+ns.Popups = Popups
 
 --[[--------------------------------------------------------------------
     Helper Functions
@@ -61,7 +67,7 @@ end
 local function GetItemIcon(itemLink)
     if not itemLink then return nil end
 
-    local itemID = LoothingUtils.GetItemID(itemLink)
+    local itemID = Utils.GetItemID(itemLink)
     if not itemID then return nil end
 
     local _, _, _, _, icon = C_Item.GetItemInfoInstant(itemID)
@@ -75,7 +81,7 @@ end
 --- Register a dialog template
 -- @param name string - Dialog name
 -- @param config table - Dialog configuration
-function LoothingPopups:Register(name, config)
+function Popups:Register(name, config)
     self.dialogs[name] = config
 end
 
@@ -85,7 +91,7 @@ end
 -- @param onAccept function - Accept callback (optional)
 -- @param onCancel function - Cancel callback (optional)
 -- @return Frame - The dialog frame
-function LoothingPopups:Show(name, data, onAccept, onCancel)
+function Popups:Show(name, data, onAccept, onCancel)
     local config = self.dialogs[name]
     if not config then
         Loothing:Error("Dialog not found:", name)
@@ -152,7 +158,7 @@ function LoothingPopups:Show(name, data, onAccept, onCancel)
             end,
             closes = buttonConfig.closes ~= false,
         }
-        table.insert(buttons, button)
+        tinsert(buttons, button)
     end
 
     dialog:SetButtons(buttons)
@@ -182,7 +188,7 @@ end
 
 --- Hide a dialog by name
 -- @param name string - Dialog name
-function LoothingPopups:Hide(name)
+function Popups:Hide(name)
     local dialog = self.activeDialogs[name]
     if dialog then
         dialog:Hide()
@@ -193,7 +199,7 @@ end
 --- Check if a dialog is showing
 -- @param name string - Dialog name
 -- @return boolean
-function LoothingPopups:IsShowing(name)
+function Popups:IsShowing(name)
     local dialog = self.activeDialogs[name]
     return dialog and dialog:IsShown() or false
 end
@@ -203,7 +209,7 @@ end
 ----------------------------------------------------------------------]]
 
 -- 0. ML Usage Prompt - "You are ML, use Loothing?"
-LoothingPopups:Register("LOOTHING_ML_USAGE_PROMPT", {
+Popups:Register("LOOTHING_ML_USAGE_PROMPT", {
     title = L["ADDON_NAME"],
     text = L["ML_USAGE_PROMPT_TEXT"] or "You are the raid leader. Use Loothing for loot distribution?",
     modal = true,
@@ -230,7 +236,7 @@ LoothingPopups:Register("LOOTHING_ML_USAGE_PROMPT", {
 })
 
 -- 1. Confirm Usage - "Use Loothing for this session?"
-LoothingPopups:Register("LOOTHING_CONFIRM_USAGE", {
+Popups:Register("LOOTHING_CONFIRM_USAGE", {
     title = L["ADDON_NAME"],
     text = "Do you want to use Loothing for loot distribution in this raid?",
     modal = true,
@@ -257,7 +263,7 @@ LoothingPopups:Register("LOOTHING_CONFIRM_USAGE", {
 })
 
 -- 2. Confirm Abort - "Abort current session?"
-LoothingPopups:Register("LOOTHING_CONFIRM_ABORT", {
+Popups:Register("LOOTHING_CONFIRM_ABORT", {
     title = L["END_SESSION"],
     text = "Are you sure you want to end the current loot session? All pending items will be closed.",
     modal = true,
@@ -285,7 +291,7 @@ LoothingPopups:Register("LOOTHING_CONFIRM_ABORT", {
 })
 
 -- 3. Confirm Award - "Award {item} to {player}?"
-LoothingPopups:Register("LOOTHING_CONFIRM_AWARD", {
+Popups:Register("LOOTHING_CONFIRM_AWARD", {
     title = L["AWARD_ITEM"],
     text = L["CONFIRM_AWARD"],
     modal = true,
@@ -325,7 +331,7 @@ LoothingPopups:Register("LOOTHING_CONFIRM_AWARD", {
 })
 
 -- 4. Confirm Award Later - "Bag {item} for later?"
-LoothingPopups:Register("LOOTHING_CONFIRM_AWARD_LATER", {
+Popups:Register("LOOTHING_CONFIRM_AWARD_LATER", {
     title = L["AWARD_ITEM"],
     text = "Award {item} to yourself to distribute later?",
     modal = true,
@@ -355,7 +361,7 @@ LoothingPopups:Register("LOOTHING_CONFIRM_AWARD_LATER", {
 })
 
 -- 5. Trade Add Item - "Add {count} items to trade with {player}?"
-LoothingPopups:Register("LOOTHING_TRADE_ADD_ITEM", {
+Popups:Register("LOOTHING_TRADE_ADD_ITEM", {
     title = L["TRADE_QUEUE"],
     text = "Add {count} awarded items to trade with {player}?",
     modal = true,
@@ -392,7 +398,7 @@ LoothingPopups:Register("LOOTHING_TRADE_ADD_ITEM", {
 })
 
 -- 6. Keep Item - "Keep {item} or trade?"
-LoothingPopups:Register("LOOTHING_KEEP_ITEM", {
+Popups:Register("LOOTHING_KEEP_ITEM", {
     title = L["AWARD_ITEM"],
     text = "What would you like to do with {item}?",
     modal = true,
@@ -429,7 +435,7 @@ LoothingPopups:Register("LOOTHING_KEEP_ITEM", {
 })
 
 -- 7. Sync Request - "{player} wants to sync {type}"
-LoothingPopups:Register("LOOTHING_SYNC_REQUEST", {
+Popups:Register("LOOTHING_SYNC_REQUEST", {
     title = "Sync Request",
     text = "{player} wants to sync their {type} to you. Accept?",
     modal = true,
@@ -472,7 +478,7 @@ LoothingPopups:Register("LOOTHING_SYNC_REQUEST", {
 })
 
 -- 8. Import Overwrite - "Import will overwrite {count} entries"
-LoothingPopups:Register("LOOTHING_IMPORT_OVERWRITE", {
+Popups:Register("LOOTHING_IMPORT_OVERWRITE", {
     title = L["HISTORY"],
     text = "This import will overwrite {count} existing history entries. Continue?",
     modal = true,
@@ -510,7 +516,7 @@ LoothingPopups:Register("LOOTHING_IMPORT_OVERWRITE", {
 })
 
 -- 9. Confirm Delete History - "Delete {count} history entries?"
-LoothingPopups:Register("LOOTHING_CONFIRM_DELETE_HISTORY", {
+Popups:Register("LOOTHING_CONFIRM_DELETE_HISTORY", {
     title = L["CLEAR_HISTORY"],
     text = L["CONFIRM_CLEAR_HISTORY"],
     modal = true,
@@ -550,7 +556,7 @@ LoothingPopups:Register("LOOTHING_CONFIRM_DELETE_HISTORY", {
 })
 
 -- 10. Confirm Clear Council - "Clear all council members?"
-LoothingPopups:Register("LOOTHING_CONFIRM_CLEAR_COUNCIL", {
+Popups:Register("LOOTHING_CONFIRM_CLEAR_COUNCIL", {
     title = L["COUNCIL"],
     text = L["CONFIG_COUNCIL_REMOVEALL_CONFIRM"],
     modal = true,
@@ -584,7 +590,7 @@ LoothingPopups:Register("LOOTHING_CONFIRM_CLEAR_COUNCIL", {
 })
 
 -- 11. Confirm Skip Item - "Skip this item?"
-LoothingPopups:Register("LOOTHING_CONFIRM_SKIP", {
+Popups:Register("LOOTHING_CONFIRM_SKIP", {
     title = L["SKIP_ITEM"],
     text = "Skip {item} without awarding it?",
     modal = true,
@@ -620,7 +626,7 @@ LoothingPopups:Register("LOOTHING_CONFIRM_SKIP", {
 })
 
 -- 12. Confirm Re-vote - "Clear all votes and restart voting?"
-LoothingPopups:Register("LOOTHING_CONFIRM_REVOTE", {
+Popups:Register("LOOTHING_CONFIRM_REVOTE", {
     title = L["RE_VOTE"],
     text = "Clear all votes and restart voting for {item}?",
     modal = true,
@@ -656,7 +662,7 @@ LoothingPopups:Register("LOOTHING_CONFIRM_REVOTE", {
 })
 
 -- 13. Confirm Delete Ignored Items - "Clear all ignored items?"
-LoothingPopups:Register("LOOTHING_CONFIRM_CLEAR_IGNORED", {
+Popups:Register("LOOTHING_CONFIRM_CLEAR_IGNORED", {
     title = L["IGNORED_ITEMS"],
     text = L["CONFIRM_CLEAR_IGNORED"],
     modal = true,
@@ -690,7 +696,7 @@ LoothingPopups:Register("LOOTHING_CONFIRM_CLEAR_IGNORED", {
 })
 
 -- 14. Confirm Reset Award Reasons - "Reset all award reasons to defaults?"
-LoothingPopups:Register("LOOTHING_CONFIRM_RESET_REASONS", {
+Popups:Register("LOOTHING_CONFIRM_RESET_REASONS", {
     title = L["AWARD_REASONS"],
     text = L["CONFIG_REASON_RESET_CONFIRM"],
     modal = true,
@@ -718,7 +724,7 @@ LoothingPopups:Register("LOOTHING_CONFIRM_RESET_REASONS", {
 })
 
 -- 15. Confirm Delete Button Set - "Delete button set {name}?"
-LoothingPopups:Register("LOOTHING_CONFIRM_DELETE_SET", {
+Popups:Register("LOOTHING_CONFIRM_DELETE_SET", {
     title = L["BUTTON_SETS"],
     text = "Delete button set '{name}'?",
     modal = true,
@@ -752,7 +758,7 @@ LoothingPopups:Register("LOOTHING_CONFIRM_DELETE_SET", {
 })
 
 -- 16. Confirm Re-announce - "Re-announce all items?"
-LoothingPopups:Register("LOOTHING_CONFIRM_REANNOUNCE", {
+Popups:Register("LOOTHING_CONFIRM_REANNOUNCE", {
     title = "Re-announce Items",
     text = "Re-announce all items to the group?",
     modal = true,
@@ -774,7 +780,7 @@ LoothingPopups:Register("LOOTHING_CONFIRM_REANNOUNCE", {
 })
 
 -- 17. Confirm Start Session - "Start loot session for {boss}?"
-LoothingPopups:Register("LOOTHING_CONFIRM_START_SESSION", {
+Popups:Register("LOOTHING_CONFIRM_START_SESSION", {
     title = L["START_SESSION"],
     text = "Start loot session for {boss}?",
     modal = true,
@@ -807,7 +813,7 @@ LoothingPopups:Register("LOOTHING_CONFIRM_START_SESSION", {
 })
 
 -- 18. Confirm Profile Overwrite - "Overwrite current profile?"
-LoothingPopups:Register("LOOTHING_CONFIRM_PROFILE_OVERWRITE", {
+Popups:Register("LOOTHING_CONFIRM_PROFILE_OVERWRITE", {
     title = "Overwrite Profile",
     text = "This will overwrite your current profile settings. Continue?",
     modal = true,
@@ -838,7 +844,7 @@ LoothingPopups:Register("LOOTHING_CONFIRM_PROFILE_OVERWRITE", {
 -- @param message string - Dialog message
 -- @param onYes function - Callback when yes is clicked
 -- @param onNo function - Callback when no is clicked (optional)
-function LoothingPopups:Confirm(title, message, onYes, onNo)
+function Popups:Confirm(title, message, onYes, onNo)
     local dialog = Loolib.UI.Dialog.Create()
     dialog:SetTitle(title)
     dialog:SetMessage(message)
@@ -872,7 +878,7 @@ end
 -- @param title string - Dialog title
 -- @param message string - Dialog message
 -- @param onOK function - Callback when OK is clicked (optional)
-function LoothingPopups:Alert(title, message, onOK)
+function Popups:Alert(title, message, onOK)
     local dialog = Loolib.UI.Dialog.Create()
     dialog:SetTitle(title)
     dialog:SetMessage(message)
@@ -900,7 +906,7 @@ end
 -- @param defaultValue string - Default input value (optional)
 -- @param onAccept function - Callback with input value when accepted
 -- @param onCancel function - Callback when cancelled (optional)
-function LoothingPopups:Input(title, prompt, defaultValue, onAccept, onCancel)
+function Popups:Input(title, prompt, defaultValue, onAccept, onCancel)
     local dialog = Loolib.UI.Dialog.CreateInput()
     dialog:SetTitle(title)
     dialog:SetPrompt(prompt)
@@ -927,7 +933,4 @@ end
     Export
 ----------------------------------------------------------------------]]
 
--- Make globally available for easy access
-_G.LoothingPopups = LoothingPopups
-
-return LoothingPopups
+return Popups

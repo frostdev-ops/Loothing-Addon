@@ -2,24 +2,28 @@
     Loothing - Settings (Voting & Session Control)
 ----------------------------------------------------------------------]]
 
+local ADDON_NAME, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local Utils = ns.Utils
 
-LoothingSettingsMixin = LoothingSettingsMixin or {}
+local SettingsMixin = ns.SettingsMixin or {}
+ns.SettingsMixin = SettingsMixin
 
 -- Voting mode and timing
-function LoothingSettingsMixin:GetVotingMode()
+function SettingsMixin:GetVotingMode()
     return self:Get("settings.votingMode", Loothing.VotingMode.SIMPLE)
 end
 
-function LoothingSettingsMixin:SetVotingMode(mode)
+function SettingsMixin:SetVotingMode(mode)
     self:Set("settings.votingMode", mode)
 end
 
-function LoothingSettingsMixin:GetVotingTimeout()
+function SettingsMixin:GetVotingTimeout()
     return self:Get("settings.votingTimeout", Loothing.Timing.DEFAULT_VOTE_TIMEOUT)
 end
 
-function LoothingSettingsMixin:SetVotingTimeout(seconds)
+function SettingsMixin:SetVotingTimeout(seconds)
     if seconds == Loothing.Timing.NO_TIMEOUT then
         self:Set("settings.votingTimeout", 0)
     else
@@ -29,11 +33,11 @@ function LoothingSettingsMixin:SetVotingTimeout(seconds)
 end
 
 -- Session triggers (legacy helper included)
-function LoothingSettingsMixin:GetAutoStartSession()
+function SettingsMixin:GetAutoStartSession()
     return self:GetSessionTriggerMode() == "auto"
 end
 
-function LoothingSettingsMixin:SetAutoStartSession(enabled)
+function SettingsMixin:SetAutoStartSession(enabled)
     if enabled then
         self:SetSessionTriggerMode("auto")
     else
@@ -41,11 +45,11 @@ function LoothingSettingsMixin:SetAutoStartSession(enabled)
     end
 end
 
-function LoothingSettingsMixin:GetSessionTriggerMode()
+function SettingsMixin:GetSessionTriggerMode()
     return self:Get("settings.sessionTriggerMode", "prompt")
 end
 
-function LoothingSettingsMixin:SetSessionTriggerMode(mode)
+function SettingsMixin:SetSessionTriggerMode(mode)
     local valid = { manual = true, auto = true, prompt = true, afterRolls = true }
     if valid[mode] then
         self:Set("settings.sessionTriggerMode", mode)
@@ -53,23 +57,23 @@ function LoothingSettingsMixin:SetSessionTriggerMode(mode)
 end
 
 -- Master Looter controls
-function LoothingSettingsMixin:GetMasterLooterName()
+function SettingsMixin:GetMasterLooterName()
     return self:Get("settings.masterLooter", nil)
 end
 
-function LoothingSettingsMixin:SetMasterLooterName(name)
+function SettingsMixin:SetMasterLooterName(name)
     if name and name ~= "" then
-        self:Set("settings.masterLooter", LoothingUtils.NormalizeName(name))
+        self:Set("settings.masterLooter", Utils.NormalizeName(name))
     else
         self:Set("settings.masterLooter", nil)
     end
 end
 
-function LoothingSettingsMixin:ClearMasterLooter()
+function SettingsMixin:ClearMasterLooter()
     self:Set("settings.masterLooter", nil)
 end
 
-function LoothingSettingsMixin:GetMasterLooter()
+function SettingsMixin:GetMasterLooter()
     local explicit = self:GetMasterLooterName()
     if explicit then
         return explicit
@@ -84,7 +88,7 @@ function LoothingSettingsMixin:GetMasterLooter()
         end
     elseif IsInGroup() then
         if UnitIsGroupLeader("player") then
-            return LoothingUtils.GetPlayerFullName()
+            return Utils.GetPlayerFullName()
         end
         for i = 1, 4 do
             local unit = "party" .. i
@@ -103,12 +107,11 @@ function LoothingSettingsMixin:GetMasterLooter()
     return nil
 end
 
-function LoothingSettingsMixin:IsMasterLooter()
+function SettingsMixin:IsMasterLooter()
     local ml = self:GetMasterLooter()
     if not ml then
         return false
     end
-    local playerName = LoothingUtils.GetPlayerFullName()
-    return LoothingUtils.NormalizeName(ml) == LoothingUtils.NormalizeName(playerName)
+    local playerName = Utils.GetPlayerFullName()
+    return Utils.NormalizeName(ml) == Utils.NormalizeName(playerName)
 end
-

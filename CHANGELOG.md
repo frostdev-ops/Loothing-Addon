@@ -2,6 +2,83 @@
 
 All notable changes to Loothing will be documented in this file.
 
+## [1.2.0] - 2026-03-09
+
+### Changed
+
+#### Complete Namespace Migration to Loolib Interface Model
+Loothing no longer creates any `Loothing*`, `CreateLoothing*`, or `Loothing_*` runtime globals. All addon code now resolves shared state through the `ns` (addon namespace) table, with Loolib owning all Blizzard-facing integration points.
+
+##### Bootstrap Shim Removed
+- **`Core/Bootstrap.lua`**: Removed the 77-line `_G` metatable proxy that intercepted reads/writes to `Loothing*` globals. Bootstrap now contains only the 9-line namespace setup: `ns.Locale`, `ns.Addon`, and `Addon.Locale`/`Addon.ns`.
+- **`ns.GlobalSymbols`** table eliminated — no code references it.
+
+##### Core Namespace Conversions (16 files)
+- `LoothingUtils` → `ns.Utils` (local alias `Utils`) — 49 consumer files migrated
+- `LoothingSettingsMixin` → `ns.SettingsMixin` (~250 refs in Settings.lua)
+- `LoothingSessionMixin` → `ns.SessionMixin` (~71 refs in Session.lua)
+- `LoothingMLDBMixin` → `ns.MLDBMixin`, `CreateLoothingMLDB` → `ns.CreateMLDB`
+- `LoothingClassColors` → `ns.ClassColors`
+- `LoothingResponseManager` → `ns.ResponseManager`
+- `LoothingItemFilter` → `ns.ItemFilter`
+- `LoothingAutoAward` → `ns.AutoAward`
+- `LoothingAnnouncer` → `ns.Announcer`
+- `LoothingOptionsTable` → `ns.OptionsTable`
+
+##### Data Layer Conversions (17 files)
+- `LoothingItemDataMixin` → `ns.ItemDataMixin` (~64 refs)
+- `LoothingCandidateDataMixin` → `ns.CandidateDataMixin` (~73 refs)
+- `LoothingVoteDataMixin` → `ns.VoteDataMixin` (~61 refs)
+- `LoothingCandidateMixin` → `ns.CandidateMixin`
+- `LoothingCandidateCollectionMixin` → `ns.CandidateCollectionMixin`
+- `LoothingVoteMixin` → `ns.VoteMixin`
+- `LoothingHistoryMixin` → `ns.HistoryMixin`
+- `LoothingTradeQueueMixin` → `ns.TradeQueueMixin`
+- `LoothingItemStorageMixin` → `ns.ItemStorageMixin`
+- `LoothingPlayerCacheMixin` → `ns.PlayerCacheMixin`
+- `LoothingRollTrackerMixin` → `ns.RollTrackerMixin`
+- `LoothingEncounterData` → `ns.EncounterData`
+- `LoothingTrinketData` → `ns.TrinketData`
+- `_G.LoothingTokenTable` → `ns.TokenTable`, `_G.LoothingTokenIlvls` → `ns.TokenIlvls`
+
+##### Communication Layer Conversions (7 files)
+- `LoothingCommMixin` → `ns.CommMixin`
+- `LoothingProtocolMixin` → `ns.Protocol`
+- `LoothingWhisperHandlerMixin` → `ns.WhisperHandlerMixin`
+- `LoothingAckTrackerMixin` → `ns.AckTrackerMixin`
+- `LoothingSyncMixin` → `ns.SyncMixin`
+- `LoothingRestrictionsMixin` → `ns.RestrictionsMixin`
+
+##### Council & Loot Conversions (6 files)
+- `LoothingVotingEngine` → `ns.VotingEngine`
+- `LoothingVotingSessionMixin` → `ns.VotingSessionMixin`
+- `LoothingAutoPass` → `ns.AutoPass`
+
+##### UI Layer Conversions (28 files)
+- All UI mixin/factory exports moved to `ns.*` (SessionPanel, RollFrame, CouncilTable, TradePanel, RosterPanel, HistoryPanel, MainFrame, VotePanel, Skinning, Filters, etc.)
+- All `CreateLoothing*` factory functions renamed to `Create*` on `ns`
+- `LoothingUI_*` helper functions renamed (e.g., `CreateCandidateResultRow`, `CreateResponseRow`)
+
+##### Debug & Test Conversions (15 files)
+- `LoothingTestMode` → `ns.TestMode` (dev-only export; production uses `ns.TestModeState`)
+- `LoothingTestRunner` → `TestRunner` (global, no `Loothing` prefix)
+- `LoothingTestHelpers` → `TestHelpers` (global)
+- `LoothingAssert` → `Assert` (global)
+- Updated user-facing print messages to reference new API names
+
+##### Compat.lua Cleanup
+- `function Loothing.GetLootMethod()` → `function Addon.GetLootMethod()` (uses `local Addon = ns.Addon`)
+- `function Loothing.GetLootRollItemData()` → `function Addon.GetLootRollItemData()`
+
+##### Validation
+- All 104 Lua files pass `luac -p` syntax validation
+- `lint.sh` passes with 0 new errors, 0 new warnings
+- Static grep confirms zero `Loothing[A-Z]` identifiers in executable code (only in comments, string literals, and intentional `LoothingDB` migration code)
+
+### Migration Notes
+- **SavedVariables**: Still uses transitional dual-root (`LoolibDB, LoothingDB`) for one more release cycle. Existing user data migrates automatically on first load.
+- **WoW frame names**: String literals like `"LoothingMainFrame"`, `"LoothingRollFrame"`, `"LoothingCouncilTable"`, `"LoothingAutoAwardTooltip"`, `"LoothingAutoPassTooltip"` are intentionally preserved — these are WoW UI frame names that must remain stable.
+
 ## [1.1.8] - 2026-03-09
 
 ### Added

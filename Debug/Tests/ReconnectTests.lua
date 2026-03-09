@@ -11,6 +11,9 @@
     Run: /lt test run reconnect
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
+local Loothing = ns.Addon
+
 local function RunReconnectTests()
     local passed = 0
     local failed = 0
@@ -166,6 +169,6 @@ local function RunReconnectTests()
 end
 
 -- Register test
-if LoothingTestRunner then
-    LoothingTestRunner:RegisterTest("reconnect", RunReconnectTests)
+if TestRunner then
+    TestRunner:RegisterTest("reconnect", RunReconnectTests)
 end

@@ -3,13 +3,17 @@
     RollFrame - Popup UI for raid members to respond to loot
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local Protocol = ns.Protocol
 
 --[[--------------------------------------------------------------------
-    LoothingRollFrameMixin
+    RollFrameMixin
 ----------------------------------------------------------------------]]
 
-LoothingRollFrameMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+local RollFrameMixin = ns.RollFrameMixin or Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
+ns.RollFrameMixin = RollFrameMixin
 
 local ROLLFRAME_EVENTS = {
     "OnResponseSubmitted",
@@ -22,7 +26,7 @@ local ROLLFRAME_EVENTS = {
 ----------------------------------------------------------------------]]
 
 --- Initialize the roll frame
-function LoothingRollFrameMixin:Init()
+function RollFrameMixin:Init()
     Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(ROLLFRAME_EVENTS)
 
@@ -93,21 +97,21 @@ end
 -- @param roll number
 -- @param minRoll number
 -- @param maxRoll number
-function LoothingRollFrameMixin:SetItemRoll(itemGUID, roll, minRoll, maxRoll)
+function RollFrameMixin:SetItemRoll(itemGUID, roll, minRoll, maxRoll)
     self.itemRolls[itemGUID] = { roll = roll, min = minRoll or 1, max = maxRoll or 100 }
 end
 
 --- Get stored roll for an item
 -- @param itemGUID string
 -- @return number|nil, number|nil, number|nil - roll, min, max
-function LoothingRollFrameMixin:GetItemRoll(itemGUID)
+function RollFrameMixin:GetItemRoll(itemGUID)
     local data = self.itemRolls[itemGUID]
     if data then return data.roll, data.min, data.max end
     return nil, nil, nil
 end
 
 --- Update the roll display text for the current item
-function LoothingRollFrameMixin:UpdateRollDisplay()
+function RollFrameMixin:UpdateRollDisplay()
     if not self.rollText then return end
     local itemGUID = self.item and self.item.guid
     if itemGUID then
@@ -119,7 +123,7 @@ function LoothingRollFrameMixin:UpdateRollDisplay()
 end
 
 --- Trigger auto-roll for the current item if settings allow it
-function LoothingRollFrameMixin:TriggerAutoRoll()
+function RollFrameMixin:TriggerAutoRoll()
     local autoRoll = Loothing.Settings and Loothing.Settings:Get("rollFrame.autoRollOnSubmit")
     if not autoRoll then return end
     if not self.item then return end
@@ -129,7 +133,7 @@ function LoothingRollFrameMixin:TriggerAutoRoll()
 end
 
 --- Execute a /roll command for the current item
-function LoothingRollFrameMixin:DoRoll()
+function RollFrameMixin:DoRoll()
     if not self.item then return end
     local rollSettings = Loothing.Settings and Loothing.Settings:Get("rollFrame.rollRange")
     local minRoll = rollSettings and rollSettings.min or 1
@@ -145,7 +149,7 @@ end
 
 --- Set multiple items for the session
 -- @param items table - Array of LoothingItem instances
-function LoothingRollFrameMixin:SetItems(items)
+function RollFrameMixin:SetItems(items)
     self.items = items or {}
     self.currentItemIndex = 1
 
@@ -170,7 +174,7 @@ end
 
 --- Add an item to the current session
 -- @param item table - LoothingItem instance
-function LoothingRollFrameMixin:AddItem(item)
+function RollFrameMixin:AddItem(item)
     table.insert(self.items, item)
     self:UpdateSessionButtons()
 
@@ -183,13 +187,13 @@ end
 
 --- Get the currently displayed item
 -- @return table|nil
-function LoothingRollFrameMixin:GetCurrentItem()
+function RollFrameMixin:GetCurrentItem()
     return self.items[self.currentItemIndex]
 end
 
 --- Set a single item (backward compatible, wraps SetItems)
 -- @param item table - LoothingItem instance
-function LoothingRollFrameMixin:SetItem(item)
+function RollFrameMixin:SetItem(item)
     if item then
         self:SetItems({ item })
     else
@@ -199,7 +203,7 @@ end
 
 --- Display a specific item (internal, called by SwitchToItem and SetItems)
 -- @param item table - LoothingItem to display
-function LoothingRollFrameMixin:DisplayItem(item)
+function RollFrameMixin:DisplayItem(item)
     self.item = item
     self.selectedResponse = nil
     self.note = ""
@@ -212,7 +216,7 @@ function LoothingRollFrameMixin:DisplayItem(item)
     local alreadyResponded = previousResponse and previousResponse.submitted
 
     -- Update item display
-    local texture = item.texture or GetItemIcon(item.itemID or 0)
+    local texture = item.texture or C_Item.GetItemIconByID(item.itemID or 0)
     self.itemIcon:SetTexture(texture or "Interface\\Icons\\INV_Misc_QuestionMark")
 
     local quality = item.quality or 1
@@ -271,7 +275,7 @@ end
 
 --- Reset UI state
 -- @param previousResponse table|nil - Previous response data if item was already responded to
-function LoothingRollFrameMixin:ResetUIState(previousResponse)
+function RollFrameMixin:ResetUIState(previousResponse)
     local alreadyResponded = previousResponse and previousResponse.submitted
     local isPending = previousResponse and previousResponse.pending
 
@@ -318,7 +322,7 @@ function LoothingRollFrameMixin:ResetUIState(previousResponse)
 end
 
 --- Update gear comparison display
-function LoothingRollFrameMixin:UpdateGearComparison()
+function RollFrameMixin:UpdateGearComparison()
     if not self.item then
         self.gearContainer:Hide()
         return
@@ -415,7 +419,7 @@ end
 
 --- Get inventory slot IDs for item's equip slot
 -- @return number, number|nil - Primary slot, secondary slot (for rings/trinkets/weapons)
-function LoothingRollFrameMixin:GetEquipSlotsForItem()
+function RollFrameMixin:GetEquipSlotsForItem()
     if not self.item or not self.item.equipSlot then
         return nil, nil
     end
@@ -458,7 +462,7 @@ end
 --- Update upgrade indicator text
 -- @param slot1 number
 -- @param slot2 number|nil
-function LoothingRollFrameMixin:UpdateUpgradeIndicator(slot1, slot2)
+function RollFrameMixin:UpdateUpgradeIndicator(slot1, slot2)
     if not self.item or not self.item.itemLevel then
         self.upgradeText:SetText("")
         return
@@ -528,7 +532,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Start the timer display
-function LoothingRollFrameMixin:StartTimer()
+function RollFrameMixin:StartTimer()
     if self.ticker then
         self.ticker:Cancel()
     end
@@ -566,7 +570,7 @@ function LoothingRollFrameMixin:StartTimer()
 end
 
 --- Stop the timer
-function LoothingRollFrameMixin:StopTimer()
+function RollFrameMixin:StopTimer()
     if self.ticker then
         self.ticker:Cancel()
         self.ticker = nil
@@ -575,7 +579,7 @@ function LoothingRollFrameMixin:StopTimer()
 end
 
 --- Update timer display
-function LoothingRollFrameMixin:UpdateTimer()
+function RollFrameMixin:UpdateTimer()
     if not self.item then
         self.timerText:SetText("")
         return
@@ -661,7 +665,7 @@ function LoothingRollFrameMixin:UpdateTimer()
 end
 
 --- Start flashing the timer bar when <5s remaining
-function LoothingRollFrameMixin:StartTimerFlash()
+function RollFrameMixin:StartTimerFlash()
     if self.flashAnim then return end
     if not self.timerContainer then return end
 
@@ -685,7 +689,7 @@ function LoothingRollFrameMixin:StartTimerFlash()
 end
 
 --- Stop flashing
-function LoothingRollFrameMixin:StopTimerFlash()
+function RollFrameMixin:StopTimerFlash()
     self.timerFlashing = false
     if self.flashAnim then
         self.flashAnim:Stop()
@@ -701,7 +705,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Update submit button enabled state
-function LoothingRollFrameMixin:UpdateSubmitButton()
+function RollFrameMixin:UpdateSubmitButton()
     local canSubmit = self.selectedResponse ~= nil
     local current = self.item and self:GetItemResponse(self.item.guid) or nil
     if current and current.pending then
@@ -771,7 +775,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Submit the player's response
-function LoothingRollFrameMixin:Submit()
+function RollFrameMixin:Submit()
     if not self.selectedResponse then return end
     if not self.item then return end
     -- Prevent double-submit while pending
@@ -795,7 +799,7 @@ end
 
 --- Send the response to master looter
 -- @param note string
-function LoothingRollFrameMixin:SendResponse(note)
+function RollFrameMixin:SendResponse(note)
     if not self.item or not self.selectedResponse then return end
 
     -- Build response message
@@ -818,7 +822,7 @@ function LoothingRollFrameMixin:SendResponse(note)
 
     -- Send via Comm system first (requires ML target)
     local ml = Loothing.Session and Loothing.Session:GetMasterLooter()
-    if not (Loothing.Comm and LoothingProtocol and ml) then
+    if not (Loothing.Comm and Protocol and ml) then
         Loothing:Error("Cannot send response: master looter unavailable or comm offline")
         return
     end
@@ -858,7 +862,7 @@ end
 -- @param item table
 -- @param response any
 -- @param note string
-function LoothingRollFrameMixin:PrintResponseToChat(item, response, note)
+function RollFrameMixin:PrintResponseToChat(item, response, note)
     if not Loothing.Settings then return end
     if not Loothing.Settings:Get("rollFrame.printResponseToChat", false) then return end
 
@@ -877,14 +881,14 @@ end
 --- Check if an item has been responded to
 -- @param itemGUID string
 -- @return boolean
-function LoothingRollFrameMixin:HasRespondedToItem(itemGUID)
+function RollFrameMixin:HasRespondedToItem(itemGUID)
     return self.itemResponses[itemGUID] and self.itemResponses[itemGUID].submitted
 end
 
 --- Get the response for an item
 -- @param itemGUID string
 -- @return table|nil - { response, note, submitted }
-function LoothingRollFrameMixin:GetItemResponse(itemGUID)
+function RollFrameMixin:GetItemResponse(itemGUID)
     return self.itemResponses[itemGUID]
 end
 
@@ -892,7 +896,7 @@ end
 -- @param itemGUID string
 -- @param response any - Response ID
 -- @param note string
-function LoothingRollFrameMixin:SetItemResponse(itemGUID, response, note, submitted, pending)
+function RollFrameMixin:SetItemResponse(itemGUID, response, note, submitted, pending)
     self.itemResponses[itemGUID] = {
         response = response,
         note = note or "",
@@ -909,7 +913,7 @@ end
 
 --- Start an ack timeout to prevent stuck pending states
 -- @param itemGUID string
-function LoothingRollFrameMixin:StartAckTimeout(itemGUID)
+function RollFrameMixin:StartAckTimeout(itemGUID)
     if not itemGUID then return end
 
     self:ClearAckTimeout(itemGUID)
@@ -936,7 +940,7 @@ end
 
 --- Clear pending ack timer
 -- @param itemGUID string
-function LoothingRollFrameMixin:ClearAckTimeout(itemGUID)
+function RollFrameMixin:ClearAckTimeout(itemGUID)
     local timer = itemGUID and self.responseAckTimers[itemGUID]
     if timer then
         timer:Cancel()
@@ -947,7 +951,7 @@ end
 --- Handle ack from master looter for a submitted response
 -- @param itemGUID string
 -- @param success boolean
-function LoothingRollFrameMixin:OnPlayerResponseAck(itemGUID, success, sessionID)
+function RollFrameMixin:OnPlayerResponseAck(itemGUID, success, sessionID)
     if not itemGUID then
         return
     end
@@ -996,7 +1000,7 @@ end
 --- Switch to the next item matching a filter function (wraps around)
 -- @param filterFn function - Called with item, returns true if item is a valid target
 -- @return boolean - True if switched to a matching item, false if none found
-function LoothingRollFrameMixin:SwitchToNextItem(filterFn)
+function RollFrameMixin:SwitchToNextItem(filterFn)
     for i = self.currentItemIndex + 1, #self.items do
         local item = self.items[i]
         if item and filterFn(item) then
@@ -1018,14 +1022,14 @@ end
 
 --- Switch to the next item the player has not yet responded to
 -- @return boolean - True if switched, false if all items responded
-function LoothingRollFrameMixin:SwitchToNextUnrespondedItem()
+function RollFrameMixin:SwitchToNextUnrespondedItem()
     return self:SwitchToNextItem(function(item)
         return not self:HasRespondedToItem(item.guid)
     end)
 end
 
 --- Switch to the next non-awarded item, or close the frame if none remain
-function LoothingRollFrameMixin:SwitchToNextPendingItem()
+function RollFrameMixin:SwitchToNextPendingItem()
     if not self:SwitchToNextItem(function(item)
         return item.state ~= Loothing.ItemState.AWARDED
     end) then
@@ -1035,7 +1039,7 @@ end
 
 --- Get count of unresponded items
 -- @return number
-function LoothingRollFrameMixin:GetUnrespondedCount()
+function RollFrameMixin:GetUnrespondedCount()
     local count = 0
     for _, item in ipairs(self.items) do
         if not self:HasRespondedToItem(item.guid) then
@@ -1051,7 +1055,7 @@ end
 
 --- Handle voting ended event
 -- @param itemGUID string
-function LoothingRollFrameMixin:OnVotingEnded(itemGUID)
+function RollFrameMixin:OnVotingEnded(itemGUID)
     if self.item and self.item.guid == itemGUID then
         self:Close(false)
     end
@@ -1062,20 +1066,20 @@ end
 ----------------------------------------------------------------------]]
 
 --- Show the frame
-function LoothingRollFrameMixin:Show()
+function RollFrameMixin:Show()
     self:RestorePosition()
     self.frame:Show()
 end
 
 --- Hide the frame
-function LoothingRollFrameMixin:Hide()
+function RollFrameMixin:Hide()
     self:StopTimer()
     self:UnregisterRollCapture()
     self.frame:Hide()
 end
 
 --- Toggle visibility
-function LoothingRollFrameMixin:Toggle()
+function RollFrameMixin:Toggle()
     if self.frame:IsShown() then
         self:Hide()
     else
@@ -1085,13 +1089,13 @@ end
 
 --- Check if shown
 -- @return boolean
-function LoothingRollFrameMixin:IsShown()
+function RollFrameMixin:IsShown()
     return self.frame:IsShown()
 end
 
 --- Close the frame
 -- @param submitted boolean - True if response was submitted
-function LoothingRollFrameMixin:Close(submitted)
+function RollFrameMixin:Close(submitted)
     self:StopTimer()
     self:SavePosition()
     self.frame:Hide()
@@ -1123,7 +1127,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Save current position
-function LoothingRollFrameMixin:SavePosition()
+function RollFrameMixin:SavePosition()
     if not Loothing.Settings then return end
 
     local point, _, _, x, y = self.frame:GetPoint()
@@ -1135,7 +1139,7 @@ function LoothingRollFrameMixin:SavePosition()
 end
 
 --- Restore saved position
-function LoothingRollFrameMixin:RestorePosition()
+function RollFrameMixin:RestorePosition()
     if not Loothing.Settings then return end
 
     local pos = Loothing.Settings:Get("rollFrame.position")
@@ -1150,12 +1154,14 @@ end
 ----------------------------------------------------------------------]]
 
 --- Create a new RollFrame instance
--- @return table - LoothingRollFrameMixin instance
-function CreateLoothingRollFrame()
-    local frame = Loolib.CreateFromMixins(LoothingRollFrameMixin)
+-- @return table - RollFrameMixin instance
+local function CreateRollFrame()
+    local frame = Loolib.CreateFromMixins(RollFrameMixin)
     if not frame then
         return nil
     end
     frame:Init()
     return frame
 end
+
+ns.CreateRollFrame = CreateRollFrame

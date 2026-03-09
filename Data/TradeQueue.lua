@@ -3,20 +3,25 @@
     TradeQueue - Manages items awaiting trade to winners
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local Utils = ns.Utils
 local CallbackRegistryMixin = Loolib.CallbackRegistryMixin
 local CreateFromMixins = Loolib.CreateFromMixins
 local Data = Loolib.Data
 local Events = Loolib.Events
+local SavedVariables = Loolib.Data.SavedVariables
 
 --[[--------------------------------------------------------------------
-    LoothingTradeQueueMixin
+    TradeQueueMixin
 
     Manages the queue of items that need to be traded to winners.
     Tracks 2-hour trade window and persists to SavedVariables.
 ----------------------------------------------------------------------]]
 
-LoothingTradeQueueMixin = CreateFromMixins(CallbackRegistryMixin)
+local TradeQueueMixin = CreateFromMixins(CallbackRegistryMixin)
+ns.TradeQueueMixin = TradeQueueMixin
 
 local TRADE_QUEUE_EVENTS = {
     "OnItemQueued",
@@ -36,7 +41,7 @@ local TRADE_WARNING_5MIN = 5 * 60
 local TRADE_TIMER_CHECK_INTERVAL = 60
 
 --- Initialize the trade queue
-function LoothingTradeQueueMixin:Init()
+function TradeQueueMixin:Init()
     CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(TRADE_QUEUE_EVENTS)
 
@@ -63,7 +68,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Register for trade-related events
-function LoothingTradeQueueMixin:RegisterEvents()
+function TradeQueueMixin:RegisterEvents()
     if not Events or not Events.Registry then return end
 
     -- Trade window events
@@ -79,8 +84,8 @@ function LoothingTradeQueueMixin:RegisterEvents()
         self:OnTradeAcceptUpdate(playerAccepted, targetAccepted)
     end, self)
 
-    Events.Registry:RegisterEventCallback("UI_INFO_MESSAGE", function(messageType, message)
-        self:OnUIInfoMessage(messageType, message)
+    Events.Registry:RegisterEventCallback("UI_INFO_MESSAGE", function(messageType, _message)
+        self:OnUIInfoMessage(messageType)
     end, self)
 end
 
@@ -94,8 +99,8 @@ end
 -- @param winner string - Winner's name (full name with realm)
 -- @param awardTime number - Timestamp when awarded
 -- @return table - The queue entry
-function LoothingTradeQueueMixin:AddToQueue(itemGUID, itemLink, winner, awardTime)
-    winner = LoothingUtils.NormalizeName(winner)
+function TradeQueueMixin:AddToQueue(itemGUID, itemLink, winner, awardTime)
+    winner = Utils.NormalizeName(winner)
     awardTime = awardTime or time()
 
     -- Check if already queued
@@ -132,7 +137,7 @@ end
 --- Remove an item from the queue
 -- @param itemGUID string - Item GUID
 -- @return boolean - True if removed
-function LoothingTradeQueueMixin:RemoveFromQueue(itemGUID)
+function TradeQueueMixin:RemoveFromQueue(itemGUID)
     local entry = self:GetQueuedItem(itemGUID)
     if not entry then
         return false
@@ -149,7 +154,7 @@ end
 --- Get a queued item by GUID
 -- @param itemGUID string - Item GUID
 -- @return table|nil - Queue entry or nil
-function LoothingTradeQueueMixin:GetQueuedItem(itemGUID)
+function TradeQueueMixin:GetQueuedItem(itemGUID)
     for _, entry in self.queue:Enumerate() do
         if entry.itemGUID == itemGUID then
             return entry
@@ -161,8 +166,8 @@ end
 --- Get all items queued for a specific player
 -- @param playerName string - Player name (will be normalized)
 -- @return table - Array of queue entries
-function LoothingTradeQueueMixin:GetPendingForPlayer(playerName)
-    playerName = LoothingUtils.NormalizeName(playerName)
+function TradeQueueMixin:GetPendingForPlayer(playerName)
+    playerName = Utils.NormalizeName(playerName)
 
     local pending = {}
     for _, entry in self.queue:Enumerate() do
@@ -182,7 +187,7 @@ end
 
 --- Get all pending items (not yet traded)
 -- @return table - Array of queue entries
-function LoothingTradeQueueMixin:GetAllPending()
+function TradeQueueMixin:GetAllPending()
     local pending = {}
     for _, entry in self.queue:Enumerate() do
         if not entry.traded and self:IsWithinTradeWindow(entry) then
@@ -194,14 +199,14 @@ end
 
 --- Get all queue entries (for display)
 -- @return DataProvider
-function LoothingTradeQueueMixin:GetQueue()
+function TradeQueueMixin:GetQueue()
     return self.queue
 end
 
 --- Check if an item is within the 2-hour trade window
 -- @param entry table - Queue entry
 -- @return boolean - True if still tradable
-function LoothingTradeQueueMixin:IsWithinTradeWindow(entry)
+function TradeQueueMixin:IsWithinTradeWindow(entry)
     local elapsed = time() - entry.awardTime
     return elapsed < TRADE_WINDOW_SECONDS
 end
@@ -209,7 +214,7 @@ end
 --- Get time remaining for an item's trade window
 -- @param entry table - Queue entry
 -- @return number - Seconds remaining, or 0 if expired
-function LoothingTradeQueueMixin:GetTimeRemaining(entry)
+function TradeQueueMixin:GetTimeRemaining(entry)
     local elapsed = time() - entry.awardTime
     local remaining = TRADE_WINDOW_SECONDS - elapsed
     return math.max(0, remaining)
@@ -217,7 +222,7 @@ end
 
 --- Clear expired entries from the queue
 -- @return number - Number of entries removed
-function LoothingTradeQueueMixin:CleanupExpired()
+function TradeQueueMixin:CleanupExpired()
     local removed = self.queue:RemoveByPredicate(function(entry)
         return not self:IsWithinTradeWindow(entry)
     end)
@@ -235,7 +240,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Handle TRADE_SHOW event
-function LoothingTradeQueueMixin:OnTradeShow()
+function TradeQueueMixin:OnTradeShow()
     -- Get trade target from Blizzard UI
     local target = TradeFrameRecipientNameText:GetText()
     if not target or target == "" then
@@ -247,7 +252,7 @@ function LoothingTradeQueueMixin:OnTradeShow()
         target = target:gsub(" ?%(%*%)", "")
     end
 
-    self.tradeTarget = LoothingUtils.NormalizeName(target)
+    self.tradeTarget = Utils.NormalizeName(target)
     self.isTrading = true
     wipe(self.itemsInTradeWindow)
 
@@ -266,7 +271,7 @@ function LoothingTradeQueueMixin:OnTradeShow()
             self:AddItemsToTradeWindow(pending)
         else
             -- Show confirmation
-            Loothing:Print(string.format("You have %d item(s) to trade to %s. Click items to add them to the trade window.", count, LoothingUtils.GetShortName(self.tradeTarget)))
+            Loothing:Print(string.format("You have %d item(s) to trade to %s. Click items to add them to the trade window.", count, Utils.GetShortName(self.tradeTarget)))
         end
 
         -- Trigger event for UI updates
@@ -275,7 +280,7 @@ function LoothingTradeQueueMixin:OnTradeShow()
 end
 
 --- Handle TRADE_CLOSED event
-function LoothingTradeQueueMixin:OnTradeClosed()
+function TradeQueueMixin:OnTradeClosed()
     Loothing:Debug("Trade closed")
     self.isTrading = false
     self.tradeTarget = nil
@@ -285,7 +290,7 @@ end
 --- Handle TRADE_ACCEPT_UPDATE event (record items being traded)
 -- @param playerAccepted boolean - Has player accepted
 -- @param targetAccepted boolean - Has target accepted
-function LoothingTradeQueueMixin:OnTradeAcceptUpdate(playerAccepted, targetAccepted)
+function TradeQueueMixin:OnTradeAcceptUpdate(playerAccepted, targetAccepted)
     if playerAccepted or targetAccepted then
         -- Record what we're trading
         wipe(self.itemsInTradeWindow)
@@ -302,8 +307,7 @@ end
 
 --- Handle UI_INFO_MESSAGE event (trade complete)
 -- @param messageType number - Message type
--- @param message string - Message text
-function LoothingTradeQueueMixin:OnUIInfoMessage(messageType, message)
+function TradeQueueMixin:OnUIInfoMessage(messageType)
     -- Handle both legacy LE_ and modern Enum.GameError constants
     local TRADE_COMPLETE = LE_GAME_ERR_TRADE_COMPLETE
         or (Enum.GameError and Enum.GameError.TradeComplete)
@@ -321,7 +325,7 @@ end
 
 --- Add items to the trade window automatically
 -- @param items table - Array of queue entries
-function LoothingTradeQueueMixin:AddItemsToTradeWindow(items)
+function TradeQueueMixin:AddItemsToTradeWindow(items)
     if not self.isTrading then
         Loothing:Debug("Cannot add items - trade window not open")
         return
@@ -345,7 +349,7 @@ end
 
 --- Add a single item to the trade window
 -- @param entry table - Queue entry
-function LoothingTradeQueueMixin:AddSingleItemToTrade(entry)
+function TradeQueueMixin:AddSingleItemToTrade(entry)
     if not self.isTrading then return end
 
     -- Find the item in bags
@@ -379,15 +383,15 @@ end
 --- Find an item in the player's bags
 -- @param itemLink string - Item link to find
 -- @return number, number - Bag and slot, or nil if not found
-function LoothingTradeQueueMixin:FindItemInBags(itemLink)
+function TradeQueueMixin:FindItemInBags(itemLink)
     for bag = 0, NUM_BAG_SLOTS do
         local numSlots = C_Container.GetContainerNumSlots(bag)
         for slot = 1, numSlots do
             local info = C_Container.GetContainerItemInfo(bag, slot)
             if info and info.hyperlink then
                 -- Compare item IDs (links may have different bonus IDs)
-                local targetID = LoothingUtils.GetItemID(itemLink)
-                local foundID = LoothingUtils.GetItemID(info.hyperlink)
+                local targetID = Utils.GetItemID(itemLink)
+                local foundID = Utils.GetItemID(info.hyperlink)
 
                 if targetID == foundID then
                     return bag, slot
@@ -405,16 +409,16 @@ end
 --- Mark an item as traded
 -- @param itemLink string - Item that was traded
 -- @param tradedTo string - Who it was traded to
-function LoothingTradeQueueMixin:MarkItemTraded(itemLink, tradedTo)
-    tradedTo = LoothingUtils.NormalizeName(tradedTo)
+function TradeQueueMixin:MarkItemTraded(itemLink, tradedTo)
+    tradedTo = Utils.NormalizeName(tradedTo)
 
     -- Find matching queue entry
-    local itemID = LoothingUtils.GetItemID(itemLink)
+    local itemID = Utils.GetItemID(itemLink)
     local entry = nil
 
     for _, queueEntry in self.queue:Enumerate() do
         if not queueEntry.traded then
-            local queueItemID = LoothingUtils.GetItemID(queueEntry.itemLink)
+            local queueItemID = Utils.GetItemID(queueEntry.itemLink)
             if queueItemID == itemID then
                 -- Prefer exact winner match
                 if queueEntry.winner == tradedTo then
@@ -438,9 +442,9 @@ function LoothingTradeQueueMixin:MarkItemTraded(itemLink, tradedTo)
 
         -- Check if traded to correct winner
         if entry.winner == tradedTo then
-            Loothing:Print(string.format("Traded %s to %s", entry.itemLink, LoothingUtils.GetShortName(tradedTo)))
+            Loothing:Print(string.format("Traded %s to %s", entry.itemLink, Utils.GetShortName(tradedTo)))
         else
-            Loothing:Print(string.format("Warning: Traded %s to %s (was awarded to %s)", entry.itemLink, LoothingUtils.GetShortName(tradedTo), LoothingUtils.GetShortName(entry.winner)))
+            Loothing:Print(string.format("Warning: Traded %s to %s (was awarded to %s)", entry.itemLink, Utils.GetShortName(tradedTo), Utils.GetShortName(entry.winner)))
         end
     end
 end
@@ -454,7 +458,7 @@ end
 -- @param container number - Bag index
 -- @param slot number - Slot index
 -- @return number - Seconds remaining: math.huge for unbound, 0 for soulbound, >0 for tradeable
-function LoothingTradeQueueMixin:GetContainerItemTradeTimeRemaining(container, slot)
+function TradeQueueMixin:GetContainerItemTradeTimeRemaining(container, slot)
     if not container or not slot then
         return 0
     end
@@ -552,7 +556,7 @@ end
 -- @param onFound function(bag, slot, timeRemaining) - Called when found
 -- @param onFail function() - Called when max attempts exceeded
 -- @param maxAttempts number|nil - Max attempts (default: 20, at 0.5s intervals)
-function LoothingTradeQueueMixin:WatchForItemInBags(itemLink, onFound, onFail, maxAttempts)
+function TradeQueueMixin:WatchForItemInBags(itemLink, onFound, onFail, maxAttempts)
     maxAttempts = maxAttempts or 20
     local attempt = 0
     local delay = 0.5
@@ -566,8 +570,8 @@ function LoothingTradeQueueMixin:WatchForItemInBags(itemLink, onFound, onFail, m
             for slot = 1, numSlots do
                 local bagItemLink = C_Container.GetContainerItemLink(bag, slot)
                 if bagItemLink then
-                    local targetID = LoothingUtils.GetItemID(itemLink)
-                    local foundID = LoothingUtils.GetItemID(bagItemLink)
+                    local targetID = Utils.GetItemID(itemLink)
+                    local foundID = Utils.GetItemID(bagItemLink)
 
                     if targetID and foundID and targetID == foundID then
                         local timeRemaining = self:GetContainerItemTradeTimeRemaining(bag, slot)
@@ -604,7 +608,7 @@ end
 -- Called when the player loots an item that has a trade window
 -- @param itemLink string - Item link
 -- @param timeRemaining number - Seconds remaining in trade window
-function LoothingTradeQueueMixin:SendTradableComm(itemLink, timeRemaining)
+function TradeQueueMixin:SendTradableComm(itemLink, timeRemaining)
     if not Loothing.Comm or not Loothing.Comm.Send then return end
 
     Loothing.Comm:Send(Loothing.MsgType.TRADABLE, {
@@ -618,7 +622,7 @@ end
 --- Send non-tradable item notification to group
 -- Called when the player loots an item that is soulbound
 -- @param itemLink string - Item link
-function LoothingTradeQueueMixin:SendNonTradableComm(itemLink)
+function TradeQueueMixin:SendNonTradableComm(itemLink)
     if not Loothing.Comm or not Loothing.Comm.Send then return end
 
     Loothing.Comm:Send(Loothing.MsgType.NON_TRADABLE, {
@@ -630,9 +634,9 @@ end
 
 --- Handle a recently looted item - determine if tradable and broadcast
 -- @param itemLink string - Item link that was just looted
-function LoothingTradeQueueMixin:UpdateAndSendRecentTradableItem(itemLink)
+function TradeQueueMixin:UpdateAndSendRecentTradableItem(itemLink)
     self:WatchForItemInBags(itemLink,
-        function(bag, slot, timeRemaining)
+        function(_bag, _slot, timeRemaining)
             if timeRemaining and timeRemaining > 0 then
                 self:SendTradableComm(itemLink, timeRemaining)
             else
@@ -652,14 +656,14 @@ end
 
 --- Start periodic trade timer checking
 -- Checks all queued items for approaching trade window expiry
-function LoothingTradeQueueMixin:StartTimerCheck()
+function TradeQueueMixin:StartTimerCheck()
     C_Timer.NewTicker(TRADE_TIMER_CHECK_INTERVAL, function()
         self:CheckTradeTimers()
     end)
 end
 
 --- Check all pending items and warn if trade window is expiring
-function LoothingTradeQueueMixin:CheckTradeTimers()
+function TradeQueueMixin:CheckTradeTimers()
     for _, entry in self.queue:Enumerate() do
         if not entry.traded then
             local remaining = self:GetTimeRemaining(entry)
@@ -680,7 +684,7 @@ function LoothingTradeQueueMixin:CheckTradeTimers()
                     Loothing:Print(string.format(
                         "|cffff9900Warning:|r Trade window for %s (awarded to %s) expires in %d minutes!",
                         entry.itemLink,
-                        LoothingUtils.GetShortName(entry.winner),
+                        Utils.GetShortName(entry.winner),
                         minutesLeft
                     ))
                 end
@@ -692,7 +696,7 @@ function LoothingTradeQueueMixin:CheckTradeTimers()
                     Loothing:Print(string.format(
                         "|cffff0000URGENT:|r Trade window for %s (awarded to %s) expires in %d minutes!",
                         entry.itemLink,
-                        LoothingUtils.GetShortName(entry.winner),
+                        Utils.GetShortName(entry.winner),
                         minutesLeft
                     ))
                 end
@@ -713,12 +717,13 @@ end
 ----------------------------------------------------------------------]]
 
 --- Load queue from SavedVariables (uses global scope for cross-profile persistence)
-function LoothingTradeQueueMixin:LoadFromDatabase()
+function TradeQueueMixin:LoadFromDatabase()
     local stored
     if Loothing.Settings and Loothing.Settings.GetGlobalValue then
         stored = Loothing.Settings:GetGlobalValue("tradeQueue", {})
-    elseif LoothingDB and LoothingDB.tradeQueue then
-        stored = LoothingDB.tradeQueue
+    else
+        local store = SavedVariables.GetAddonData("Loothing", false)
+        stored = store and store.global and store.global.tradeQueue
     end
 
     if not stored or type(stored) ~= "table" then
@@ -726,7 +731,7 @@ function LoothingTradeQueueMixin:LoadFromDatabase()
     end
 
     -- FIX(Area4-2): Discard entries owned by a different character
-    local currentOwner = LoothingUtils and LoothingUtils.GetPlayerFullName and LoothingUtils.GetPlayerFullName()
+    local currentOwner = Utils and Utils.GetPlayerFullName and Utils.GetPlayerFullName()
     if stored._owner and currentOwner and stored._owner ~= currentOwner then
         Loothing:Debug("TradeQueue: discarding stale entries from", tostring(stored._owner))
         return
@@ -745,7 +750,7 @@ function LoothingTradeQueueMixin:LoadFromDatabase()
 end
 
 --- Save queue to SavedVariables (uses global scope)
-function LoothingTradeQueueMixin:SaveToDatabase()
+function TradeQueueMixin:SaveToDatabase()
     local entries = {}
 
     for _, entry in self.queue:Enumerate() do
@@ -763,15 +768,17 @@ function LoothingTradeQueueMixin:SaveToDatabase()
     end
 
     -- FIX(Area4-2): Persist owner key so other characters discard stale entries
-    local currentOwner = LoothingUtils and LoothingUtils.GetPlayerFullName and LoothingUtils.GetPlayerFullName()
+    local currentOwner = Utils and Utils.GetPlayerFullName and Utils.GetPlayerFullName()
     if currentOwner then
         entries._owner = currentOwner
     end
 
     if Loothing.Settings and Loothing.Settings.SetGlobalValue then
         Loothing.Settings:SetGlobalValue("tradeQueue", entries)
-    elseif LoothingDB then
-        LoothingDB.tradeQueue = entries
+    else
+        local store = SavedVariables.GetAddonData("Loothing", true)
+        store.global = store.global or {}
+        store.global.tradeQueue = entries
     end
 
     Loothing:Debug("Saved", #entries, "items to trade queue")
@@ -783,8 +790,10 @@ end
 
 --- Create a new trade queue
 -- @return table - TradeQueue instance
-function CreateLoothingTradeQueue()
-    local queue = CreateFromMixins(LoothingTradeQueueMixin)
+local function CreateTradeQueue()
+    local queue = CreateFromMixins(TradeQueueMixin)
     queue:Init()
     return queue
 end
+
+ns.CreateTradeQueue = CreateTradeQueue

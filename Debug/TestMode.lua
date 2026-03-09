@@ -3,19 +3,22 @@
     TestMode - Development testing utilities
 ----------------------------------------------------------------------]]
 
-local Loolib = LibStub("Loolib")
 
-local L = Loothing.Locale
+local _, ns = ...
+local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+local Utils = ns.Utils
 
 --[[--------------------------------------------------------------------
     Test Mode State
 ----------------------------------------------------------------------]]
 
-LoothingTestMode = {
+TestMode = {
     enabled = false,
     fakeCouncilMembers = {},
     fakeItems = {},
 }
+ns.TestMode = TestMode
 
 -- Class data for fake players
 local CLASS_DATA = {
@@ -51,7 +54,7 @@ local TEST_ITEM_IDS = {
 
 --- Enable or disable test mode
 -- @param enabled boolean
-function LoothingTestMode:SetEnabled(enabled)
+function TestMode:SetEnabled(enabled)
     self.enabled = enabled
 
     if Loothing and Loothing.TestMode and Loothing.TestMode.OnSimulatorToggled then
@@ -91,25 +94,25 @@ function LoothingTestMode:SetEnabled(enabled)
 end
 
 --- Register event handlers for test mode
-function LoothingTestMode:RegisterEventHandlers()
+function TestMode:RegisterEventHandlers()
     -- Listen for response submissions from RollFrame
     -- Use "TestMode_Events" owner key to avoid overwriting the full-workflow callback
     if Loothing.UI and Loothing.UI.RollFrame and Loothing.UI.RollFrame.RegisterCallback then
-        Loothing.UI.RollFrame:RegisterCallback("OnResponseSubmitted", function(owner, item, response, note)
-            LoothingTestMode:OnResponseSubmitted(item, response, note)
+        Loothing.UI.RollFrame:RegisterCallback("OnResponseSubmitted", function(_, item, response, _note)
+            TestMode:OnResponseSubmitted(item, response)
         end, "TestMode_Events")
     end
 
     -- Listen for revote clicks
     if Loothing.UI and Loothing.UI.ResultsPanel and Loothing.UI.ResultsPanel.RegisterCallback then
-        Loothing.UI.ResultsPanel:RegisterCallback("OnRevoteClicked", function(owner, item)
-            LoothingTestMode:OnRevoteClicked(item)
+        Loothing.UI.ResultsPanel:RegisterCallback("OnRevoteClicked", function(_, item)
+            TestMode:OnRevoteClicked(item)
         end, "TestMode_Events")
     end
 end
 
 --- Unregister event handlers
-function LoothingTestMode:UnregisterEventHandlers()
+function TestMode:UnregisterEventHandlers()
     if Loothing.UI and Loothing.UI.RollFrame and Loothing.UI.RollFrame.UnregisterCallback then
         Loothing.UI.RollFrame:UnregisterCallback("OnResponseSubmitted", "TestMode_Events")
     end
@@ -119,7 +122,7 @@ function LoothingTestMode:UnregisterEventHandlers()
 end
 
 --- Handle response submission in test mode (from RollFrame)
-function LoothingTestMode:OnResponseSubmitted(item, response, note)
+function TestMode:OnResponseSubmitted(item, response)
     if not self.enabled or not item then return end
 
     local responseInfo = Loothing.ResponseInfo and Loothing.ResponseInfo[response]
@@ -144,13 +147,13 @@ function LoothingTestMode:OnResponseSubmitted(item, response, note)
 end
 
 --- Handle vote submission in test mode (deprecated, use OnResponseSubmitted)
-function LoothingTestMode:OnVoteSubmitted(item, responses)
+function TestMode:OnVoteSubmitted(item, responses)
     -- Redirect to new handler
-    self:OnResponseSubmitted(item, responses and responses[1], nil)
+    self:OnResponseSubmitted(item, responses and responses[1])
 end
 
 --- Handle revote click in test mode
-function LoothingTestMode:OnRevoteClicked(item)
+function TestMode:OnRevoteClicked(item)
     if not self.enabled or not item then return end
 
     print("|cff00ff00[Loothing Test]|r Re-vote requested for " .. (item.name or "item"))
@@ -180,7 +183,7 @@ function LoothingTestMode:OnRevoteClicked(item)
 end
 
 --- Tally actual votes from an item
-function LoothingTestMode:TallyActualVotes(item)
+function TestMode:TallyActualVotes(item)
     local results = {
         counts = {},
         winner = nil,
@@ -233,7 +236,7 @@ end
 
 --- Populate an item's candidateManager from its legacy vote data
 -- Used in the quick-test flow so the new candidate-centric ResultsPanel has data to display
-function LoothingTestMode:PopulateCandidateManagerFromVotes(item)
+function TestMode:PopulateCandidateManagerFromVotes(item)
     if not item then return end
 
     local cm = item:GetCandidateManager()
@@ -249,23 +252,23 @@ function LoothingTestMode:PopulateCandidateManagerFromVotes(item)
 end
 
 --- Enable test mode
-function LoothingTestMode:Enable()
+function TestMode:Enable()
     self:SetEnabled(true)
 end
 
 --- Disable test mode
-function LoothingTestMode:Disable()
+function TestMode:Disable()
     self:SetEnabled(false)
 end
 
 --- Check if test mode is enabled
 -- @return boolean
-function LoothingTestMode:IsEnabled()
+function TestMode:IsEnabled()
     return self.enabled
 end
 
 --- Toggle test mode
-function LoothingTestMode:Toggle()
+function TestMode:Toggle()
     self:SetEnabled(not self.enabled)
 end
 
@@ -275,7 +278,7 @@ end
 
 --- Generate fake council members
 -- @param count number - Number of members to generate (default 5)
-function LoothingTestMode:GenerateFakeCouncil(count)
+function TestMode:GenerateFakeCouncil(count)
     count = count or 5
     self.fakeCouncilMembers = {}
 
@@ -305,7 +308,7 @@ function LoothingTestMode:GenerateFakeCouncil(count)
     end
 
     -- Add the real player as first member
-    local playerName = LoothingUtils.GetPlayerFullName()
+    local playerName = Utils.GetPlayerFullName()
     local _, playerClass = UnitClass("player")
     table.insert(self.fakeCouncilMembers, 1, {
         name = playerName,
@@ -319,8 +322,8 @@ function LoothingTestMode:GenerateFakeCouncil(count)
     -- so fake names never persist to SavedVariables across sessions/crashes)
     if Loothing and Loothing.Council then
         for _, member in ipairs(self.fakeCouncilMembers) do
-            local normalized = LoothingUtils.NormalizeName(member.name)
-            if not Loothing.Council.members[normalized] then
+            local normalized = Utils.NormalizeName(member.name)
+            if normalized and not Loothing.Council.members[normalized] then
                 Loothing.Council.members[normalized] = {
                     name = normalized,
                     addedTime = time(),
@@ -335,13 +338,13 @@ end
 
 --- Get fake council members
 -- @return table - Array of fake council member data
-function LoothingTestMode:GetFakeCouncilMembers()
+function TestMode:GetFakeCouncilMembers()
     return self.fakeCouncilMembers
 end
 
 --- Get fake raid roster (for testing)
 -- @return table - Array formatted like GetRaidRoster()
-function LoothingTestMode:GetFakeRaidRoster()
+function TestMode:GetFakeRaidRoster()
     local roster = {}
 
     for i, member in ipairs(self.fakeCouncilMembers) do
@@ -370,12 +373,12 @@ end
 --- Generate a fake item link
 -- @param itemID number - Optional specific item ID
 -- @return string - Item link
-function LoothingTestMode:GenerateFakeItemLink(itemID)
+function TestMode:GenerateFakeItemLink(itemID)
     itemID = itemID or TEST_ITEM_IDS[math.random(#TEST_ITEM_IDS)]
 
     -- Create a basic item link format
     -- |cff<color>|Hitem:<itemID>::::::::80:::::|h[<name>]|h|r
-    local name, link = C_Item.GetItemInfo(itemID)
+    local _, link = C_Item.GetItemInfo(itemID)
 
     if link then
         return link
@@ -386,8 +389,8 @@ function LoothingTestMode:GenerateFakeItemLink(itemID)
 end
 
 --- Create a fake item for testing UI components
--- @return LoothingItemMixin - Fake item object
-function LoothingTestMode:CreateFakeItem()
+-- @return ItemMixin - Fake item object
+function TestMode:CreateFakeItem()
     if not Loothing or not Loothing.Session then
         print("|cffff0000[Loothing Test]|r Session module not loaded.")
         return nil
@@ -407,22 +410,22 @@ function LoothingTestMode:CreateFakeItem()
     local looterName
     if #self.fakeCouncilMembers >= 2 then
         local looter = self.fakeCouncilMembers[math.random(2, #self.fakeCouncilMembers)]
-        looterName = looter and looter.name or LoothingUtils.GetPlayerFullName()
+        looterName = looter and looter.name or Utils.GetPlayerFullName()
     else
-        looterName = LoothingUtils.GetPlayerFullName()
+        looterName = Utils.GetPlayerFullName()
     end
 
-    -- Create item using the LoothingItemMixin
-    local item = Loolib.CreateFromMixins(LoothingItemMixin)
+    -- Create item using the ItemMixin
+    local item = Loolib.CreateFromMixins(ItemMixin)
     item:Init(itemLink, looterName, 0)
 
     return item
 end
 
 --- Create fake vote results for testing
--- @param item LoothingItemMixin - The item to create results for
+-- @param item ItemMixin - The item to create results for
 -- @return table - Fake results data
-function LoothingTestMode:CreateFakeResults(item)
+function TestMode:CreateFakeResults(_item)
     local results = {
         counts = {},
         winner = nil,
@@ -443,7 +446,7 @@ function LoothingTestMode:CreateFakeResults(item)
         local voters = {}
         local count = math.random(0, 4) -- 0-4 voters per response
 
-        for i = 1, count do
+        for _ = 1, count do
             local member = self.fakeCouncilMembers[math.random(2, #self.fakeCouncilMembers)]
             if member then
                 -- Store voter names as plain strings (GetShortName expects strings)
@@ -478,7 +481,7 @@ end
 
 --- Add fake items to the current session
 -- @param count number - Number of items to add (default 3)
-function LoothingTestMode:AddFakeItems(count)
+function TestMode:AddFakeItems(count)
     count = count or 3
 
     if not self.enabled then
@@ -499,7 +502,7 @@ function LoothingTestMode:AddFakeItems(count)
     local addedCount = 0
     local usedIDs = {}
 
-    for i = 1, count do
+    for _ = 1, count do
         -- Pick a random item ID not already used
         local itemID
         local attempts = 0
@@ -514,7 +517,7 @@ function LoothingTestMode:AddFakeItems(count)
 
         -- Pick a random fake council member as looter
         local looter = self.fakeCouncilMembers[math.random(2, #self.fakeCouncilMembers)]
-        local looterName = looter and looter.name or LoothingUtils.GetPlayerFullName()
+        local looterName = looter and looter.name or Utils.GetPlayerFullName()
 
         local item = Loothing.Session:AddItem(itemLink, looterName)
         if item then
@@ -539,7 +542,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Simulate votes on the current voting item
-function LoothingTestMode:SimulateVotes()
+function TestMode:SimulateVotes()
     if not self.enabled then
         print("|cffff0000[Loothing]|r Test mode is not enabled. Use '/lt test' to enable.")
         return
@@ -592,7 +595,7 @@ end
 
 --- Generate random vote responses
 -- @return table - Array of Loothing.Response values
-function LoothingTestMode:GenerateRandomResponses()
+function TestMode:GenerateRandomResponses()
     local responses = {}
     local allResponses = {
         Loothing.Response.NEED,
@@ -640,7 +643,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Start a test session
-function LoothingTestMode:StartTestSession()
+function TestMode:StartTestSession()
     if not self.enabled then
         print("|cffff0000[Loothing]|r Test mode is not enabled. Use '/lt test' to enable.")
         return
@@ -669,7 +672,7 @@ function LoothingTestMode:StartTestSession()
 end
 
 --- End the current test session
-function LoothingTestMode:EndTestSession()
+function TestMode:EndTestSession()
     if not Loothing or not Loothing.Session then
         return
     end
@@ -688,14 +691,14 @@ end
 ----------------------------------------------------------------------]]
 
 --- Show VotePanel with a fake item for testing (redirects to RollFrame)
-function LoothingTestMode:ShowVotePanel()
+function TestMode:ShowVotePanel()
     -- VotePanel is deprecated, redirect to RollFrame
     print("|cffff9900[Loothing Test]|r VotePanel is deprecated, using RollFrame instead")
     self:ShowRollFrame()
 end
 
 --- Show RollFrame (what raid members see to respond to loot)
-function LoothingTestMode:ShowRollFrame()
+function TestMode:ShowRollFrame()
     if not Loothing.UI or not Loothing.UI.RollFrame then
         print("|cffff0000[Loothing Test]|r RollFrame not initialized")
         return
@@ -720,7 +723,7 @@ function LoothingTestMode:ShowRollFrame()
 end
 
 --- Show ResultsPanel with fake results for testing
-function LoothingTestMode:ShowResultsPanel()
+function TestMode:ShowResultsPanel()
     if not Loothing.UI or not Loothing.UI.ResultsPanel then
         print("|cffff0000[Loothing Test]|r ResultsPanel not initialized")
         return
@@ -752,7 +755,7 @@ function LoothingTestMode:ShowResultsPanel()
 end
 
 --- Show CouncilTable (where council sees all candidates and awards items)
-function LoothingTestMode:ShowCouncilTable()
+function TestMode:ShowCouncilTable()
     if not Loothing.UI or not Loothing.UI.CouncilTable then
         print("|cffff0000[Loothing Test]|r CouncilTable not initialized")
         return
@@ -793,7 +796,7 @@ function LoothingTestMode:ShowCouncilTable()
 end
 
 --- Add fake candidates to an item for testing
-function LoothingTestMode:AddFakeCandidatesToItem(item)
+function TestMode:AddFakeCandidatesToItem(item)
     if not item or not item.GetCandidateManager then return end
 
     local candidateManager = item:GetCandidateManager()
@@ -856,7 +859,7 @@ function LoothingTestMode:AddFakeCandidatesToItem(item)
 end
 
 --- Start voting on the first pending item
-function LoothingTestMode:StartVoteOnPending()
+function TestMode:StartVoteOnPending()
     if not self.enabled then
         print("|cffff0000[Loothing Test]|r Test mode is not enabled. Use '/lt test' to enable.")
         return
@@ -914,7 +917,7 @@ function LoothingTestMode:StartVoteOnPending()
 end
 
 --- Run full workflow test
-function LoothingTestMode:RunFullWorkflow()
+function TestMode:RunFullWorkflow()
     print("|cff00ff00[Loothing Test]|r Starting full workflow test...")
 
     -- Step 1: Enable test mode if not already enabled
@@ -967,7 +970,7 @@ function LoothingTestMode:RunFullWorkflow()
 end
 
 --- Register callbacks for full workflow test
-function LoothingTestMode:RegisterFullWorkflowCallbacks()
+function TestMode:RegisterFullWorkflowCallbacks()
     -- Unregister previous callbacks if any
     if self.fullWorkflowCallbackRegistered then
         return
@@ -984,7 +987,7 @@ function LoothingTestMode:RegisterFullWorkflowCallbacks()
     -- When RollFrame response is submitted, add candidate and check if all items done
     -- Use "TestMode_Workflow" owner key to avoid overwriting the event handler callback
     -- RollFrame fires: TriggerEvent("OnResponseSubmitted", self.item, response, note, roll)
-    rollFrame:RegisterCallback("OnResponseSubmitted", function(owner, item, response, note, roll)
+    rollFrame:RegisterCallback("OnResponseSubmitted", function(_, item, response, note, roll)
         -- Add player as a candidate with their response
         if item and item.GetCandidateManager then
             local playerName = UnitName("player")
@@ -1008,8 +1011,8 @@ function LoothingTestMode:RegisterFullWorkflowCallbacks()
             -- All items responded - now show CouncilTable
             print("|cff00ff00[Loothing Test]|r All items responded! Opening CouncilTable...")
             C_Timer.After(0.3, function()
-                LoothingTestMode.inFullWorkflowMode = false  -- Exit full workflow mode
-                LoothingTestMode:ShowCouncilTableForSession()
+                TestMode.inFullWorkflowMode = false  -- Exit full workflow mode
+                TestMode:ShowCouncilTableForSession()
             end)
         else
             -- Still have items to respond to - RollFrame handles switching automatically
@@ -1021,12 +1024,12 @@ function LoothingTestMode:RegisterFullWorkflowCallbacks()
 end
 
 --- Run auto-award scenario (stub)
-function LoothingTestMode:RunAutoAwardScenario()
+function TestMode:RunAutoAwardScenario()
     print("|cffff9900[Loothing Test]|r RunAutoAwardScenario not yet implemented")
 end
 
 --- Show CouncilTable with current session
-function LoothingTestMode:ShowCouncilTableForSession()
+function TestMode:ShowCouncilTableForSession()
     if not Loothing.UI or not Loothing.UI.CouncilTable then
         print("|cffff0000[Loothing Test]|r CouncilTable not initialized")
         return
@@ -1046,7 +1049,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Update test mode indicator on MainFrame
-function LoothingTestMode:UpdateTestModeIndicator()
+function TestMode:UpdateTestModeIndicator()
     if not Loothing or not Loothing.UI or not Loothing.UI.MainFrame then
         return
     end
@@ -1099,12 +1102,14 @@ end
 ----------------------------------------------------------------------]]
 
 --- Clear all fake data
-function LoothingTestMode:ClearFakeData()
+function TestMode:ClearFakeData()
     -- Remove fake council members from in-memory council (no SaveToSettings)
     if Loothing and Loothing.Council then
         for _, member in ipairs(self.fakeCouncilMembers) do
-            local normalized = LoothingUtils.NormalizeName(member.name)
-            Loothing.Council.members[normalized] = nil
+            local normalized = Utils.NormalizeName(member.name)
+            if normalized then
+                Loothing.Council.members[normalized] = nil
+            end
         end
         Loothing.Council:TriggerEvent("OnRosterChanged")
     end
@@ -1126,7 +1131,7 @@ end
 
 --- Handle test mode slash commands
 -- @param args string - Command arguments
-function LoothingTestMode:HandleCommand(args)
+function TestMode:HandleCommand(args)
     local state = Loothing and Loothing.TestMode
     local cmd, param = args:match("^(%S*)%s*(.*)$")
     cmd = cmd and cmd:lower() or ""
@@ -1227,35 +1232,35 @@ end
 
 --- Run a specific test suite (Describe/It or standalone)
 -- @param suiteName string - Name of the suite to run
-function LoothingTestMode:RunTestSuite(suiteName)
+function TestMode:RunTestSuite(suiteName)
     if not suiteName or suiteName == "" then
         print("|cffff0000[Loothing Test]|r Please specify a suite name.")
         print("  Use |cffffffff/lt test list|r to see available suites.")
         return
     end
 
-    if not LoothingTestRunner then
+    if not TestRunner then
         print("|cffff0000[Loothing Test]|r TestRunner not loaded.")
         return
     end
 
     -- Check Describe/It suites first
-    local suites = LoothingTestRunner:GetSuites()
+    local suites = TestRunner:GetSuites()
     for _, suite in ipairs(suites) do
         if suite.name == suiteName then
             print("|cff00ccff[Loothing Test]|r Running suite: " .. suiteName)
-            LoothingTestRunner:RunSuite(suiteName)
+            TestRunner:RunSuite(suiteName)
             return
         end
     end
 
     -- Fall back to standalone registered tests
-    LoothingTestRunner:RunRegisteredTest(suiteName)
+    TestRunner:RunRegisteredTest(suiteName)
 end
 
 --- Run all registered test suites (Describe/It + standalone)
-function LoothingTestMode:RunAllTests()
-    if not LoothingTestRunner then
+function TestMode:RunAllTests()
+    if not TestRunner then
         print("|cffff0000[Loothing Test]|r TestRunner not loaded.")
         return
     end
@@ -1264,11 +1269,11 @@ function LoothingTestMode:RunAllTests()
     local startTime = debugprofilestop()
 
     -- Run Describe/It suites
-    local results = LoothingTestRunner:RunAll()
+    local results = TestRunner:RunAll()
     self:DisplayTestResults(results)
 
     -- Run standalone registered tests
-    LoothingTestRunner:RunAllRegistered()
+    TestRunner:RunAllRegistered()
 
     local elapsed = debugprofilestop() - startTime
     print(string.format("|cff888888Total time: %.2f ms|r", elapsed))
@@ -1276,25 +1281,25 @@ end
 
 --- Run tests in a specific category
 -- @param category string - "unit", "integration", or "stress"
-function LoothingTestMode:RunTestCategory(category)
-    if not LoothingTestRunner then
+function TestMode:RunTestCategory(category)
+    if not TestRunner then
         print("|cffff0000[Loothing Test]|r TestRunner not loaded.")
         return
     end
 
     print("|cff00ccff[Loothing Test]|r Running " .. category .. " tests...")
-    local results = LoothingTestRunner:RunCategory(category)
+    local results = TestRunner:RunCategory(category)
     self:DisplayTestResults(results)
 end
 
 --- List all available test suites (Describe/It + standalone)
-function LoothingTestMode:ListTestSuites()
-    if not LoothingTestRunner then
+function TestMode:ListTestSuites()
+    if not TestRunner then
         print("|cffff0000[Loothing Test]|r TestRunner not loaded.")
         return
     end
 
-    local suites = LoothingTestRunner:GetSuites()
+    local suites = TestRunner:GetSuites()
     print("|cff00ccff[Loothing Test]|r Available test suites:")
 
     if #suites > 0 then
@@ -1306,12 +1311,12 @@ function LoothingTestMode:ListTestSuites()
     end
 
     -- Also list standalone registered tests
-    LoothingTestRunner:ListRegisteredTests()
+    TestRunner:ListRegisteredTests()
 end
 
 --- Display test results
 -- @param results table - Test results from TestRunner
-function LoothingTestMode:DisplayTestResults(results)
+function TestMode:DisplayTestResults(results)
     if not results then
         print("|cffff0000[Loothing Test]|r No results to display.")
         return
@@ -1323,8 +1328,6 @@ function LoothingTestMode:DisplayTestResults(results)
     local passed = results.passed or 0
     local failed = results.failed or 0
     local skipped = results.skipped or 0
-    local total = passed + failed + skipped
-
     -- Summary line
     local passColor = passed > 0 and "00ff00" or "888888"
     local failColor = failed > 0 and "ff0000" or "888888"
@@ -1375,7 +1378,7 @@ function LoothingTestMode:DisplayTestResults(results)
 end
 
 --- Show the last test report
-function LoothingTestMode:ShowLastReport()
+function TestMode:ShowLastReport()
     if not self.lastTestResults then
         print("|cff888888[Loothing Test]|r No test results available. Run tests first.")
         return
@@ -1443,7 +1446,7 @@ local TEST_SCENARIOS = {
 }
 
 --- List available test scenarios
-function LoothingTestMode:ListScenarios()
+function TestMode:ListScenarios()
     print("|cff00ccff[Loothing Test]|r Available scenarios:")
     print(" ")
     for id, scenario in pairs(TEST_SCENARIOS) do
@@ -1456,7 +1459,7 @@ end
 
 --- Run a specific scenario
 -- @param scenarioName string - Scenario ID
-function LoothingTestMode:RunScenario(scenarioName)
+function TestMode:RunScenario(scenarioName)
     if not scenarioName or scenarioName == "" then
         self:ListScenarios()
         return
@@ -1488,7 +1491,7 @@ function LoothingTestMode:RunScenario(scenarioName)
 end
 
 --- Simple vote workflow scenario
-function LoothingTestMode:RunSimpleVoteScenario()
+function TestMode:RunSimpleVoteScenario()
     print("|cff00ccff[Step 1]|r Creating 5 council members...")
     self:GenerateFakeCouncil(5)
 
@@ -1508,7 +1511,7 @@ function LoothingTestMode:RunSimpleVoteScenario()
 end
 
 --- Ranked choice voting scenario
-function LoothingTestMode:RunRankedChoiceScenario()
+function TestMode:RunRankedChoiceScenario()
     -- Set voting mode to ranked choice
     if Loothing.Settings then
         Loothing.Settings:SetVotingMode(Loothing.VotingMode.RANKED_CHOICE)
@@ -1532,7 +1535,7 @@ function LoothingTestMode:RunRankedChoiceScenario()
 end
 
 --- Tie breaker scenario
-function LoothingTestMode:RunTieBreakerScenario()
+function TestMode:RunTieBreakerScenario()
     self:GenerateFakeCouncil(4)
     self:StartTestSession()
     self:AddFakeItems(1)
@@ -1562,7 +1565,7 @@ function LoothingTestMode:RunTieBreakerScenario()
 end
 
 --- Auto-pass scenario
-function LoothingTestMode:RunAutoPassScenario()
+function TestMode:RunAutoPassScenario()
     print("|cff00ccff[Auto-Pass Test]|r")
     print(" ")
 
@@ -1583,7 +1586,7 @@ function LoothingTestMode:RunAutoPassScenario()
 end
 
 --- Large raid scenario
-function LoothingTestMode:RunLargeRaidScenario()
+function TestMode:RunLargeRaidScenario()
     print("|cff00ccff[Large Raid Stress Test]|r")
     print(" ")
 
@@ -1607,7 +1610,7 @@ function LoothingTestMode:RunLargeRaidScenario()
 end
 
 --- Many items scenario
-function LoothingTestMode:RunManyItemsScenario()
+function TestMode:RunManyItemsScenario()
     print("|cff00ccff[Many Items Stress Test]|r")
     print(" ")
 
@@ -1636,7 +1639,7 @@ function LoothingTestMode:RunManyItemsScenario()
 end
 
 --- Timeout scenario
-function LoothingTestMode:RunTimeoutScenario()
+function TestMode:RunTimeoutScenario()
     self:GenerateFakeCouncil(5)
     self:StartTestSession()
     self:AddFakeItems(1)
@@ -1663,7 +1666,7 @@ function LoothingTestMode:RunTimeoutScenario()
 end
 
 --- Sync scenario
-function LoothingTestMode:RunSyncScenario()
+function TestMode:RunSyncScenario()
     print("|cff00ccff[Sync Test]|r Testing MLDB broadcast...")
 
     if Loothing.MLDB then
@@ -1684,7 +1687,7 @@ function LoothingTestMode:RunSyncScenario()
 end
 
 --- History scenario
-function LoothingTestMode:RunHistoryScenario()
+function TestMode:RunHistoryScenario()
     print("|cff00ccff[History Test]|r")
 
     -- Create a quick session and award
@@ -1744,7 +1747,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Run performance benchmarks
-function LoothingTestMode:RunBenchmarks()
+function TestMode:RunBenchmarks()
     print("|cff00ccff[Loothing Test]|r Running benchmarks...")
     print(" ")
 
@@ -1752,14 +1755,14 @@ function LoothingTestMode:RunBenchmarks()
 
     -- Benchmark: Item creation
     local startTime = debugprofilestop()
-    for i = 1, 100 do
+    for _ = 1, 100 do
         self:CreateFakeItem()
     end
     results.itemCreation = (debugprofilestop() - startTime) / 100
     print(string.format("  Item creation: %.3fms avg", results.itemCreation))
 
     -- Benchmark: Vote tallying
-    if LoothingVotingEngine then
+    if VotingEngine then
         local fakeVotes = {}
         for i = 1, 40 do
             fakeVotes[i] = {
@@ -1769,18 +1772,18 @@ function LoothingTestMode:RunBenchmarks()
         end
 
         startTime = debugprofilestop()
-        for i = 1, 100 do
-            LoothingVotingEngine:TallySimple(fakeVotes)
+        for _ = 1, 100 do
+            VotingEngine:TallySimple(fakeVotes)
         end
         results.voteTally = (debugprofilestop() - startTime) / 100
         print(string.format("  Vote tallying (40 votes): %.3fms avg", results.voteTally))
     end
 
     -- Benchmark: Protocol encoding (Serialize → Compress → EncodeForAddonChannel)
-    if LoothingProtocol then
+    if Protocol then
         startTime = debugprofilestop()
-        for i = 1, 100 do
-            LoothingProtocol:Encode(Loothing.MsgType.VOTE_COMMIT, { itemGUID = "guid123", responses = { 1, 2, 3 } })
+        for _ = 1, 100 do
+            Protocol:Encode(Loothing.MsgType.VOTE_COMMIT, { itemGUID = "guid123", responses = { 1, 2, 3 } })
         end
         results.protocolEncode = (debugprofilestop() - startTime) / 100
         print(string.format("  Protocol encoding: %.3fms avg", results.protocolEncode))
@@ -1789,7 +1792,7 @@ function LoothingTestMode:RunBenchmarks()
     -- Benchmark: Council lookup
     self:GenerateFakeCouncil(40)
     startTime = debugprofilestop()
-    for i = 1, 1000 do
+    for _ = 1, 1000 do
         local _ = self.fakeCouncilMembers[math.random(1, 40)]
     end
     results.councilLookup = (debugprofilestop() - startTime) / 1000
@@ -1806,7 +1809,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Print comprehensive help
-function LoothingTestMode:PrintHelp()
+function TestMode:PrintHelp()
     print("|cffff9900========== LOOTHING TEST MODE ==========|r")
     print(" ")
     print("|cff00ccffBasic Commands:|r")

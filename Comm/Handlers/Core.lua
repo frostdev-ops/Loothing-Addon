@@ -1,14 +1,26 @@
 --[[--------------------------------------------------------------------
     Loothing - Comm Handlers (Core/Voting/Sync)
-    Message handlers for LoothingCommMixin.
+    Message handlers for ns.CommMixin.
 
     All handlers receive structured table data (from Serializer),
     not string arrays. Security validation is applied per-handler.
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
 local Loolib = LibStub("Loolib")
+local GetNumGroupMembers = GetNumGroupMembers
+local GetNumSubgroupMembers = GetNumSubgroupMembers
+local IsInGroup = IsInGroup
+local IsInRaid = IsInRaid
+local UnitIsGroupAssistant = UnitIsGroupAssistant
+local UnitIsGroupLeader = UnitIsGroupLeader
+local Loothing = ns.Addon
+local Utils = ns.Utils
+local TestMode = ns.TestMode
 
-LoothingCommMixin = LoothingCommMixin or {}
+ns.CommMixin = ns.CommMixin or {}
+
+local CommMixin = ns.CommMixin
 
 --[[--------------------------------------------------------------------
     Security Helpers
@@ -27,7 +39,7 @@ local function isMasterLooter(sender)
         ml = Loothing.Settings:GetMasterLooter()
     end
     if not ml then return false end
-    return LoothingUtils.IsSamePlayer(ml, sender)
+    return Utils.IsSamePlayer(ml, sender)
 end
 
 --- Check if sender is a council member
@@ -42,15 +54,15 @@ end
 -- @param sender string
 -- @return boolean
 local function isGroupLeaderOrAssistant(sender)
-    if LoothingTestMode and LoothingTestMode:IsEnabled() then
+    if TestMode and TestMode:IsEnabled() then
         return true
     end
-    local normalizedSender = LoothingUtils.NormalizeName(sender)
+    local normalizedSender = Utils.NormalizeName(sender)
     if IsInRaid() then
         local numMembers = GetNumGroupMembers()
         for i = 1, numMembers do
             local name, rank = Loolib.SecretUtil.SafeGetRaidRosterInfo(i)
-            if name and LoothingUtils.IsSamePlayer(name, normalizedSender) then
+            if name and Utils.IsSamePlayer(name, normalizedSender) then
                 -- rank: 0 = member, 1 = assistant, 2 = leader
                 return rank == 1 or rank == 2
             end
@@ -62,7 +74,7 @@ local function isGroupLeaderOrAssistant(sender)
         end
         for _, unit in ipairs(units) do
             local name = Loolib.SecretUtil.SafeUnitName(unit)
-            if name and LoothingUtils.IsSamePlayer(name, normalizedSender) then
+            if name and Utils.IsSamePlayer(name, normalizedSender) then
                 return UnitIsGroupLeader(unit) or UnitIsGroupAssistant(unit)
             end
         end
@@ -75,14 +87,14 @@ end
 -- @return boolean
 local function isGroupMember(sender)
     -- Allow in test mode
-    if LoothingTestMode and LoothingTestMode:IsEnabled() then
+    if TestMode and TestMode:IsEnabled() then
         return true
     end
     -- If we can't check, fail closed (reject)
-    if not LoothingUtils or not LoothingUtils.GetRaidRoster then return false end
-    local roster = LoothingUtils.GetRaidRoster()
+    if not Utils or not Utils.GetRaidRoster then return false end
+    local roster = Utils.GetRaidRoster()
     for _, member in ipairs(roster) do
-        if LoothingUtils.IsSamePlayer(member.name, sender) then
+        if Utils.IsSamePlayer(member.name, sender) then
             return true
         end
     end
@@ -93,7 +105,7 @@ end
     Session Handlers (ML → Group)
 ----------------------------------------------------------------------]]
 
-function LoothingCommMixin:HandleSessionStart(data, sender)
+function CommMixin:HandleSessionStart(data, sender)
     if not data then return end
     -- Validate sender is at least a raid leader/assistant
     if not isGroupLeaderOrAssistant(sender) then
@@ -109,7 +121,7 @@ function LoothingCommMixin:HandleSessionStart(data, sender)
     self:TriggerEvent("OnSessionStart", data)
 end
 
-function LoothingCommMixin:HandleStopHandleLoot(data, sender)
+function CommMixin:HandleStopHandleLoot(data, sender)
     -- Only the current ML can broadcast stop
     if not isMasterLooter(sender) then
         Loothing:Debug("Rejected STOP_HANDLE_LOOT from non-ML:", sender)
@@ -118,7 +130,7 @@ function LoothingCommMixin:HandleStopHandleLoot(data, sender)
     self:TriggerEvent("OnStopHandleLoot", { masterLooter = sender })
 end
 
-function LoothingCommMixin:HandleSessionEnd(data, sender)
+function CommMixin:HandleSessionEnd(data, sender)
     -- Only the ML who started the session can end it
     if not isMasterLooter(sender) then
         Loothing:Debug("Rejected SESSION_END from non-ML:", sender)
@@ -133,7 +145,7 @@ end
     Item Handlers (ML → Group)
 ----------------------------------------------------------------------]]
 
-function LoothingCommMixin:HandleItemAdd(data, sender)
+function CommMixin:HandleItemAdd(data, sender)
     if not data then return end
     if not isMasterLooter(sender) then
         Loothing:Debug("Rejected ITEM_ADD from non-ML:", sender)
@@ -143,7 +155,7 @@ function LoothingCommMixin:HandleItemAdd(data, sender)
     self:TriggerEvent("OnItemAdd", data)
 end
 
-function LoothingCommMixin:HandleItemRemove(data, sender)
+function CommMixin:HandleItemRemove(data, sender)
     if not data then return end
     if not isMasterLooter(sender) then
         Loothing:Debug("Rejected ITEM_REMOVE from non-ML:", sender)
@@ -157,7 +169,7 @@ end
     Vote Handlers
 ----------------------------------------------------------------------]]
 
-function LoothingCommMixin:HandleVoteRequest(data, sender)
+function CommMixin:HandleVoteRequest(data, sender)
     if not data then return end
     -- Only ML can request votes
     if not isMasterLooter(sender) then
@@ -168,7 +180,7 @@ function LoothingCommMixin:HandleVoteRequest(data, sender)
     self:TriggerEvent("OnVoteRequest", data)
 end
 
-function LoothingCommMixin:HandleVoteCommit(data, sender)
+function CommMixin:HandleVoteCommit(data, sender)
     if not data then return end
     -- Only council members can vote
     if not isCouncilMember(sender) then
@@ -179,7 +191,7 @@ function LoothingCommMixin:HandleVoteCommit(data, sender)
     self:TriggerEvent("OnVoteCommit", data)
 end
 
-function LoothingCommMixin:HandleVoteCancel(data, sender)
+function CommMixin:HandleVoteCancel(data, sender)
     if not data then return end
     if not isMasterLooter(sender) then
         Loothing:Debug("Rejected VOTE_CANCEL from non-ML:", sender)
@@ -189,7 +201,7 @@ function LoothingCommMixin:HandleVoteCancel(data, sender)
     self:TriggerEvent("OnVoteCancel", data)
 end
 
-function LoothingCommMixin:HandleVoteResults(data, sender)
+function CommMixin:HandleVoteResults(data, sender)
     if not data then return end
     if not isMasterLooter(sender) then
         Loothing:Debug("Rejected VOTE_RESULTS from non-ML:", sender)
@@ -199,7 +211,7 @@ function LoothingCommMixin:HandleVoteResults(data, sender)
     self:TriggerEvent("OnVoteResults", data)
 end
 
-function LoothingCommMixin:HandleVoteAward(data, sender)
+function CommMixin:HandleVoteAward(data, sender)
     if not data then return end
     if not isMasterLooter(sender) then
         Loothing:Debug("Rejected VOTE_AWARD from non-ML:", sender)
@@ -209,7 +221,7 @@ function LoothingCommMixin:HandleVoteAward(data, sender)
     self:TriggerEvent("OnVoteAward", data)
 end
 
-function LoothingCommMixin:HandleVoteSkip(data, sender)
+function CommMixin:HandleVoteSkip(data, sender)
     if not data then return end
     if not isMasterLooter(sender) then
         Loothing:Debug("Rejected VOTE_SKIP from non-ML:", sender)
@@ -223,7 +235,7 @@ end
     Sync Handlers
 ----------------------------------------------------------------------]]
 
-function LoothingCommMixin:HandleSyncRequest(data, sender)
+function CommMixin:HandleSyncRequest(data, sender)
     if not data then return end
     if not isGroupMember(sender) then
         Loothing:Debug("Rejected SYNC_REQUEST from non-group member:", sender)
@@ -233,7 +245,7 @@ function LoothingCommMixin:HandleSyncRequest(data, sender)
     self:TriggerEvent("OnSyncRequest", data)
 end
 
-function LoothingCommMixin:HandleSyncData(data, sender)
+function CommMixin:HandleSyncData(data, sender)
     if not data then return end
     -- Only accept sync data from the ML or a group leader/assistant
     if not isMasterLooter(sender) and not isGroupLeaderOrAssistant(sender) then
@@ -253,7 +265,7 @@ end
     Council Roster Handler
 ----------------------------------------------------------------------]]
 
-function LoothingCommMixin:HandleCouncilRoster(data, sender)
+function CommMixin:HandleCouncilRoster(data, sender)
     if not data then return end
     if not isMasterLooter(sender) then
         Loothing:Debug("Rejected COUNCIL_ROSTER from non-ML:", sender)
@@ -267,7 +279,7 @@ end
     Observer Roster Handler
 ----------------------------------------------------------------------]]
 
-function LoothingCommMixin:HandleObserverRoster(data, sender)
+function CommMixin:HandleObserverRoster(data, sender)
     if not data then return end
     if not isMasterLooter(sender) then
         Loothing:Debug("Rejected OBSERVER_ROSTER from non-ML:", sender)
@@ -281,7 +293,7 @@ end
     Player Info Handlers
 ----------------------------------------------------------------------]]
 
-function LoothingCommMixin:HandlePlayerInfoRequest(data, sender)
+function CommMixin:HandlePlayerInfoRequest(data, sender)
     if not data then return end
     if not isMasterLooter(sender) then
         Loothing:Debug("Rejected PLAYER_INFO_REQUEST from non-ML:", sender)
@@ -291,7 +303,7 @@ function LoothingCommMixin:HandlePlayerInfoRequest(data, sender)
     self:TriggerEvent("OnPlayerInfoRequest", data)
 end
 
-function LoothingCommMixin:HandlePlayerInfoResponse(data, sender)
+function CommMixin:HandlePlayerInfoResponse(data, sender)
     if not data then return end
     if not isGroupMember(sender) then
         Loothing:Debug("Rejected PLAYER_INFO_RESPONSE from non-group member:", sender)
@@ -308,13 +320,13 @@ end
     Version Handlers
 ----------------------------------------------------------------------]]
 
-function LoothingCommMixin:HandleVersionRequest(data, sender)
+function CommMixin:HandleVersionRequest(data, sender)
     self:TriggerEvent("OnVersionRequest", {
         requester = sender,
     })
 end
 
-function LoothingCommMixin:HandleVersionResponse(data, sender)
+function CommMixin:HandleVersionResponse(data, sender)
     if not data then return end
     data.sender = sender
     self:TriggerEvent("OnVersionResponse", data)
@@ -324,7 +336,7 @@ end
     Player Response Handlers
 ----------------------------------------------------------------------]]
 
-function LoothingCommMixin:HandlePlayerResponse(data, sender)
+function CommMixin:HandlePlayerResponse(data, sender)
     if not data then return end
 
     -- Only ML processes player responses
@@ -333,7 +345,7 @@ function LoothingCommMixin:HandlePlayerResponse(data, sender)
     end
 
     -- Validate sender is in the group (bypass in test mode)
-    local isTestMode = LoothingTestMode and LoothingTestMode:IsEnabled()
+    local isTestMode = TestMode and TestMode:IsEnabled()
     local isMember = isGroupMember(sender)
     Loothing:Debug("PLAYER_RESPONSE from", sender, "isGroupMember:", isMember)
     if not isMember and not isTestMode then
@@ -348,7 +360,7 @@ function LoothingCommMixin:HandlePlayerResponse(data, sender)
     self:TriggerEvent("OnPlayerResponse", data)
 end
 
-function LoothingCommMixin:HandlePlayerResponseAck(data, sender)
+function CommMixin:HandlePlayerResponseAck(data, sender)
     if not data then return end
     if not isMasterLooter(sender) then
         Loothing:Debug("Rejected PLAYER_RESPONSE_ACK from non-ML:", sender)
@@ -362,7 +374,7 @@ end
     MLDB Handler
 ----------------------------------------------------------------------]]
 
-function LoothingCommMixin:HandleMLDBBroadcast(data, sender)
+function CommMixin:HandleMLDBBroadcast(data, sender)
     if not data then return end
     if not isMasterLooter(sender) then
         Loothing:Debug("Rejected MLDB_BROADCAST from non-ML:", sender)
@@ -376,7 +388,7 @@ end
     Candidate & Vote Update Handlers
 ----------------------------------------------------------------------]]
 
-function LoothingCommMixin:HandleCandidateUpdate(data, sender)
+function CommMixin:HandleCandidateUpdate(data, sender)
     if not data then return end
     if not isMasterLooter(sender) then
         Loothing:Debug("Rejected CANDIDATE_UPDATE from non-ML:", sender)
@@ -386,7 +398,7 @@ function LoothingCommMixin:HandleCandidateUpdate(data, sender)
     self:TriggerEvent("OnCandidateUpdate", data)
 end
 
-function LoothingCommMixin:HandleVoteUpdate(data, sender)
+function CommMixin:HandleVoteUpdate(data, sender)
     if not data then return end
     if not isMasterLooter(sender) then
         Loothing:Debug("Rejected VOTE_UPDATE from non-ML:", sender)
@@ -400,7 +412,7 @@ end
     Trade Tracking Handlers
 ----------------------------------------------------------------------]]
 
-function LoothingCommMixin:HandleTradable(data, sender)
+function CommMixin:HandleTradable(data, sender)
     if not data then return end
     -- Any group member can send tradability status for their own looted items
     if not isGroupMember(sender) then
@@ -411,7 +423,7 @@ function LoothingCommMixin:HandleTradable(data, sender)
     self:TriggerEvent("OnTradable", data)
 end
 
-function LoothingCommMixin:HandleNonTradable(data, sender)
+function CommMixin:HandleNonTradable(data, sender)
     if not data then return end
     if not isGroupMember(sender) then
         Loothing:Debug("Rejected NON_TRADABLE from non-group member:", sender)
@@ -430,7 +442,7 @@ end
 -- @param data table - { messages = { {command, data}, ... } }
 -- @param sender string
 -- @param distribution string
-function LoothingCommMixin:HandleBatch(data, sender, distribution)
+function CommMixin:HandleBatch(data, sender, distribution)
     if not data or type(data.messages) ~= "table" then return end
 
     for _, inner in ipairs(data.messages) do
@@ -445,7 +457,7 @@ end
 --- Handle HEARTBEAT message — delegate to AckTracker for state comparison
 -- @param data table - Heartbeat digest { sessionID, state, itemCount, itemStates, councilHash, mldbHash }
 -- @param sender string
-function LoothingCommMixin:HandleHeartbeat(data, sender, distribution)
+function CommMixin:HandleHeartbeat(data, sender, distribution)
     if not data then return end
     -- AckTracker handles the comparison and potential auto-sync trigger
     if Loothing.AckTracker then
@@ -457,7 +469,7 @@ end
 --- Handle ACK message — reserved for point-to-point acknowledgment tracking
 -- @param data table - { command, msgID, success }
 -- @param sender string
-function LoothingCommMixin:HandleAck(data, sender, distribution)
+function CommMixin:HandleAck(data, sender, distribution)
     if not data then return end
     -- Forward to AckTracker if available
     if Loothing.AckTracker and Loothing.AckTracker.HandleAck then
@@ -470,7 +482,7 @@ end
     Settings/History Sync Handlers (delegated to Sync module)
 ----------------------------------------------------------------------]]
 
-function LoothingCommMixin:HandleSettingsSyncRequest(data, sender)
+function CommMixin:HandleSettingsSyncRequest(data, sender)
     if not isGroupMember(sender) then
         Loothing:Debug("Rejected SETTINGS_SYNC_REQUEST from non-group member:", sender)
         return
@@ -480,7 +492,7 @@ function LoothingCommMixin:HandleSettingsSyncRequest(data, sender)
     end
 end
 
-function LoothingCommMixin:HandleSettingsSyncAck(data, sender)
+function CommMixin:HandleSettingsSyncAck(data, sender)
     if not isGroupMember(sender) then
         Loothing:Debug("Rejected SETTINGS_SYNC_ACK from non-group member:", sender)
         return
@@ -490,7 +502,7 @@ function LoothingCommMixin:HandleSettingsSyncAck(data, sender)
     end
 end
 
-function LoothingCommMixin:HandleSettingsData(data, sender)
+function CommMixin:HandleSettingsData(data, sender)
     if not isGroupMember(sender) then
         Loothing:Debug("Rejected SETTINGS_DATA from non-group member:", sender)
         return
@@ -500,7 +512,7 @@ function LoothingCommMixin:HandleSettingsData(data, sender)
     end
 end
 
-function LoothingCommMixin:HandleHistorySyncRequest(data, sender)
+function CommMixin:HandleHistorySyncRequest(data, sender)
     if not isGroupMember(sender) then
         Loothing:Debug("Rejected HISTORY_SYNC_REQUEST from non-group member:", sender)
         return
@@ -511,7 +523,7 @@ function LoothingCommMixin:HandleHistorySyncRequest(data, sender)
     end
 end
 
-function LoothingCommMixin:HandleHistorySyncAck(data, sender)
+function CommMixin:HandleHistorySyncAck(data, sender)
     if not isGroupMember(sender) then
         Loothing:Debug("Rejected HISTORY_SYNC_ACK from non-group member:", sender)
         return
@@ -521,7 +533,7 @@ function LoothingCommMixin:HandleHistorySyncAck(data, sender)
     end
 end
 
-function LoothingCommMixin:HandleHistoryData(data, sender)
+function CommMixin:HandleHistoryData(data, sender)
     if not isGroupMember(sender) then
         Loothing:Debug("Rejected HISTORY_DATA from non-group member:", sender)
         return
