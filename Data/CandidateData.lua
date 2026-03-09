@@ -38,7 +38,7 @@ function LoothingCandidateMixin:Init(playerName, playerClass)
 end
 
 --- Set candidate's response
--- @param response number - LOOTHING_RESPONSE value
+-- @param response number - Loothing.Response value
 -- @param note string|nil - Optional note from player
 function LoothingCandidateMixin:SetResponse(response, note)
     self.response = response
@@ -143,7 +143,7 @@ function LoothingCandidateMixin:GetResponseInfo()
         return nil
     end
 
-    return LOOTHING_RESPONSE_INFO[self.response]
+    return Loothing.ResponseInfo[self.response]
 end
 
 --- Get response name
@@ -271,7 +271,7 @@ end
 -- @param playerClass string - Class file name
 -- @return table
 function CreateLoothingCandidate(playerName, playerClass)
-    local candidate = LoolibCreateFromMixins(LoothingCandidateMixin)
+    local candidate = Loolib.CreateFromMixins(LoothingCandidateMixin)
     candidate:Init(playerName, playerClass)
     return candidate
 end
@@ -280,7 +280,7 @@ end
     LoothingCandidateCollectionMixin - Collection of candidates for an item
 ----------------------------------------------------------------------]]
 
-LoothingCandidateCollectionMixin = LoolibCreateFromMixins(LoolibCallbackRegistryMixin)
+LoothingCandidateCollectionMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
 
 local CANDIDATE_COLLECTION_EVENTS = {
     "OnCandidateAdded",
@@ -291,10 +291,10 @@ local CANDIDATE_COLLECTION_EVENTS = {
 
 --- Initialize the candidate collection
 function LoothingCandidateCollectionMixin:Init()
-    LoolibCallbackRegistryMixin.OnLoad(self)
+    Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(CANDIDATE_COLLECTION_EVENTS)
 
-    local Data = Loolib:GetModule("Data")
+    local Data = Loolib.Data
     self.candidates = Data.CreateDataProvider()
     self.candidatesByName = {}  -- Quick lookup by player name
 end
@@ -393,7 +393,7 @@ end
 function LoothingCandidateCollectionMixin:GetCandidatesByResponse()
     local grouped = {}
 
-    for _, response in pairs(LOOTHING_RESPONSE) do
+    for _, response in pairs(Loothing.Response) do
         grouped[response] = {}
     end
 
@@ -411,7 +411,7 @@ end
 function LoothingCandidateCollectionMixin:GetResponseCounts()
     local counts = {}
 
-    for _, response in pairs(LOOTHING_RESPONSE) do
+    for _, response in pairs(Loothing.Response) do
         counts[response] = 0
     end
 
@@ -510,7 +510,7 @@ end
 --- Create a new candidate collection
 -- @return table
 function CreateLoothingCandidateCollection()
-    local collection = LoolibCreateFromMixins(LoothingCandidateCollectionMixin)
+    local collection = Loolib.CreateFromMixins(LoothingCandidateCollectionMixin)
     collection:Init()
     return collection
 end

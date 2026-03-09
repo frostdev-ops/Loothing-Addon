@@ -3,16 +3,20 @@
     Constants - Enums, defaults, and static values
 ----------------------------------------------------------------------]]
 
+local Loolib = LibStub("Loolib")
+
+local Loothing = Loothing
+
 -- Addon info
-LOOTHING_VERSION = "1.1.8"
-LOOTHING_PROTOCOL_VERSION = 3
-LOOTHING_ADDON_PREFIX = "LOOTHING"
+Loothing.VERSION = "1.1.8"
+Loothing.PROTOCOL_VERSION = 3
+Loothing.ADDON_PREFIX = "LOOTHING"
 
 --[[--------------------------------------------------------------------
     Response Types (for voting)
 ----------------------------------------------------------------------]]
 
-LOOTHING_RESPONSE = {
+Loothing.Response = {
     NEED = 1,
     GREED = 2,
     OFFSPEC = 3,
@@ -21,37 +25,37 @@ LOOTHING_RESPONSE = {
 }
 
 -- Response priority order (highest to lowest)
-LOOTHING_RESPONSE_PRIORITY = {
-    LOOTHING_RESPONSE.NEED,
-    LOOTHING_RESPONSE.GREED,
-    LOOTHING_RESPONSE.OFFSPEC,
-    LOOTHING_RESPONSE.TRANSMOG,
-    LOOTHING_RESPONSE.PASS,
+Loothing.ResponsePriority = {
+    Loothing.Response.NEED,
+    Loothing.Response.GREED,
+    Loothing.Response.OFFSPEC,
+    Loothing.Response.TRANSMOG,
+    Loothing.Response.PASS,
 }
 
 -- Response display info
-LOOTHING_RESPONSE_INFO = {
-    [LOOTHING_RESPONSE.NEED] = {
+Loothing.ResponseInfo = {
+    [Loothing.Response.NEED] = {
         name = "NEED",
         color = { r = 0.0, g = 1.0, b = 0.0, a = 1.0 },       -- Green
         icon = "Interface\\Buttons\\UI-GroupLoot-Dice-Up",
     },
-    [LOOTHING_RESPONSE.GREED] = {
+    [Loothing.Response.GREED] = {
         name = "GREED",
         color = { r = 1.0, g = 1.0, b = 0.0, a = 1.0 },       -- Yellow
         icon = "Interface\\Buttons\\UI-GroupLoot-Coin-Up",
     },
-    [LOOTHING_RESPONSE.OFFSPEC] = {
+    [Loothing.Response.OFFSPEC] = {
         name = "OFFSPEC",
         color = { r = 1.0, g = 0.5, b = 0.0, a = 1.0 },       -- Orange
         icon = "Interface\\Icons\\Ability_DualWield",
     },
-    [LOOTHING_RESPONSE.TRANSMOG] = {
+    [Loothing.Response.TRANSMOG] = {
         name = "TRANSMOG",
         color = { r = 1.0, g = 0.0, b = 1.0, a = 1.0 },       -- Magenta
         icon = "Interface\\Icons\\INV_Arcane_Orb",
     },
-    [LOOTHING_RESPONSE.PASS] = {
+    [Loothing.Response.PASS] = {
         name = "PASS",
         color = { r = 0.5, g = 0.5, b = 0.5, a = 1.0 },       -- Gray
         icon = "Interface\\Buttons\\UI-GroupLoot-Pass-Up",
@@ -62,7 +66,7 @@ LOOTHING_RESPONSE_INFO = {
     System Responses (non-editable, string-keyed)
 ----------------------------------------------------------------------]]
 
-LOOTHING_SYSTEM_RESPONSE = {
+Loothing.SystemResponse = {
     AUTOPASS    = "AUTOPASS",
     WAIT        = "WAIT",
     TIMEOUT     = "TIMEOUT",
@@ -70,28 +74,28 @@ LOOTHING_SYSTEM_RESPONSE = {
     AWARDED     = "AWARDED",
 }
 
-LOOTHING_SYSTEM_RESPONSE_INFO = {
-    [LOOTHING_SYSTEM_RESPONSE.AUTOPASS] = {
+Loothing.SystemResponseInfo = {
+    [Loothing.SystemResponse.AUTOPASS] = {
         name  = "Auto Pass",
         color = { r = 0.5, g = 0.5, b = 0.5, a = 0.7 },
         icon  = "Interface\\Buttons\\UI-GroupLoot-Pass-Up",
     },
-    [LOOTHING_SYSTEM_RESPONSE.WAIT] = {
+    [Loothing.SystemResponse.WAIT] = {
         name  = "Waiting",
         color = { r = 1.0, g = 1.0, b = 0.5, a = 1.0 },
         icon  = nil,
     },
-    [LOOTHING_SYSTEM_RESPONSE.TIMEOUT] = {
+    [Loothing.SystemResponse.TIMEOUT] = {
         name  = "Timeout",
         color = { r = 0.7, g = 0.3, b = 0.3, a = 1.0 },
         icon  = nil,
     },
-    [LOOTHING_SYSTEM_RESPONSE.NOTANNOUNCED] = {
+    [Loothing.SystemResponse.NOTANNOUNCED] = {
         name  = "Not Announced",
         color = { r = 0.5, g = 0.5, b = 0.5, a = 1.0 },
         icon  = nil,
     },
-    [LOOTHING_SYSTEM_RESPONSE.AWARDED] = {
+    [Loothing.SystemResponse.AWARDED] = {
         name  = "Awarded",
         color = { r = 1.0, g = 0.84, b = 0.0, a = 1.0 },
         icon  = "Interface\\Buttons\\UI-GroupLoot-Coin-Up",
@@ -102,7 +106,7 @@ LOOTHING_SYSTEM_RESPONSE_INFO = {
     Session State
 ----------------------------------------------------------------------]]
 
-LOOTHING_SESSION_STATE = {
+Loothing.SessionState = {
     INACTIVE = 1,   -- No active session
     ACTIVE = 2,     -- Session in progress, items can be added
     CLOSED = 3,     -- No more items, finishing remaining votes
@@ -112,7 +116,7 @@ LOOTHING_SESSION_STATE = {
     Item State
 ----------------------------------------------------------------------]]
 
-LOOTHING_ITEM_STATE = {
+Loothing.ItemState = {
     PENDING = 1,    -- Item received, not yet voting
     VOTING = 2,     -- Votes being collected
     TALLIED = 3,    -- Votes counted, awaiting ML decision
@@ -124,7 +128,7 @@ LOOTHING_ITEM_STATE = {
     Voting Mode
 ----------------------------------------------------------------------]]
 
-LOOTHING_VOTING_MODE = {
+Loothing.VotingMode = {
     SIMPLE = "SIMPLE",           -- Most votes for response type wins
     RANKED_CHOICE = "RANKED",    -- Instant runoff elimination
 }
@@ -133,7 +137,7 @@ LOOTHING_VOTING_MODE = {
     Session Trigger Mode
 ----------------------------------------------------------------------]]
 
-LOOTHING_SESSION_TRIGGER = {
+Loothing.SessionTrigger = {
     MANUAL = "manual",
     AUTO = "auto",
     PROMPT = "prompt",
@@ -144,7 +148,7 @@ LOOTHING_SESSION_TRIGGER = {
     Message Types (Communication Protocol)
 ----------------------------------------------------------------------]]
 
-LOOTHING_MSG_TYPE = {
+Loothing.MsgType = {
     -- Session management
     SESSION_START = "SS",       -- ML -> Raid: Start session
     SESSION_END = "SE",         -- ML -> Raid: End session
@@ -218,7 +222,7 @@ LOOTHING_MSG_TYPE = {
     Default Settings
 ----------------------------------------------------------------------]]
 
-LOOTHING_DEFAULT_SETTINGS = {
+Loothing.DefaultSettings = {
     version = 1,
 
     council = {
@@ -228,7 +232,7 @@ LOOTHING_DEFAULT_SETTINGS = {
     },
 
     settings = {
-        votingMode = LOOTHING_VOTING_MODE.SIMPLE,
+        votingMode = Loothing.VotingMode.SIMPLE,
         votingTimeout = 30,
         sessionTriggerMode = "prompt",
         showMinimapButton = true,
@@ -327,31 +331,31 @@ LOOTHING_DEFAULT_SETTINGS = {
     },
 
     responses = {
-        [LOOTHING_RESPONSE.NEED] = {
+        [Loothing.Response.NEED] = {
             name = "NEED",
             color = { 0.0, 1.0, 0.0, 1.0 },
             icon = "Interface\\Buttons\\UI-GroupLoot-Dice-Up",
             sort = 1,
         },
-        [LOOTHING_RESPONSE.GREED] = {
+        [Loothing.Response.GREED] = {
             name = "GREED",
             color = { 1.0, 1.0, 0.0, 1.0 },
             icon = "Interface\\Buttons\\UI-GroupLoot-Coin-Up",
             sort = 2,
         },
-        [LOOTHING_RESPONSE.OFFSPEC] = {
+        [Loothing.Response.OFFSPEC] = {
             name = "OFFSPEC",
             color = { 1.0, 0.5, 0.0, 1.0 },
             icon = "Interface\\Icons\\Ability_DualWield",
             sort = 3,
         },
-        [LOOTHING_RESPONSE.TRANSMOG] = {
+        [Loothing.Response.TRANSMOG] = {
             name = "TRANSMOG",
             color = { 1.0, 0.0, 1.0, 1.0 },
             icon = "Interface\\Icons\\INV_Arcane_Orb",
             sort = 4,
         },
-        [LOOTHING_RESPONSE.PASS] = {
+        [Loothing.Response.PASS] = {
             name = "PASS",
             color = { 0.5, 0.5, 0.5, 1.0 },
             icon = "Interface\\Buttons\\UI-GroupLoot-Pass-Up",
@@ -402,6 +406,7 @@ LOOTHING_DEFAULT_SETTINGS = {
         sendHistory = false,        -- Send to group members
         sendToGuild = false,        -- Send to guild instead
         savePersonalLoot = false,   -- Log personal loot items
+        maxEntries = 500,           -- Hard cap for the shared history table
     },
 
     history = {},  -- Actual history data (array of entries)
@@ -539,7 +544,7 @@ LOOTHING_DEFAULT_SETTINGS = {
     Item Quality Thresholds
 ----------------------------------------------------------------------]]
 
-LOOTHING_QUALITY = {
+Loothing.Quality = {
     POOR = 0,
     COMMON = 1,
     UNCOMMON = 2,
@@ -551,13 +556,13 @@ LOOTHING_QUALITY = {
 }
 
 -- Minimum quality to track (Epic+)
-LOOTHING_MIN_QUALITY = LOOTHING_QUALITY.EPIC
+Loothing.MinQuality = Loothing.Quality.EPIC
 
 --[[--------------------------------------------------------------------
     UI Constants
 ----------------------------------------------------------------------]]
 
-LOOTHING_UI = {
+Loothing.UIConstants = {
     MAIN_FRAME_WIDTH = 600,
     MAIN_FRAME_HEIGHT = 450,
     ITEM_ROW_HEIGHT = 40,
@@ -571,7 +576,7 @@ LOOTHING_UI = {
     Timing Constants
 ----------------------------------------------------------------------]]
 
-LOOTHING_TIMING = {
+Loothing.Timing = {
     NO_TIMEOUT = 0,             -- Sentinel: voting runs until ML manually ends it
     DEFAULT_VOTE_TIMEOUT = 30,
     VOTING_DEFAULT = 30,        -- Alias used in VotingSession / VotePanel
@@ -579,7 +584,7 @@ LOOTHING_TIMING = {
     MAX_VOTE_TIMEOUT = 120,
     SYNC_TIMEOUT = 10,
     MESSAGE_THROTTLE = 0.1,     -- Seconds between messages
-    -- CHUNK_SIZE removed: LoolibComm handles message chunking internally
+    -- CHUNK_SIZE removed: Loolib.Comm handles message chunking internally
 
     -- RollFrame timeout
     DEFAULT_ROLL_TIMEOUT = 30,
@@ -596,7 +601,7 @@ LOOTHING_TIMING = {
     Class Colors (backup if RAID_CLASS_COLORS unavailable)
 ----------------------------------------------------------------------]]
 
-LOOTHING_CLASS_COLORS = {
+Loothing.ClassColors = {
     WARRIOR = { r = 0.78, g = 0.61, b = 0.43 },
     PALADIN = { r = 0.96, g = 0.55, b = 0.73 },
     HUNTER = { r = 0.67, g = 0.83, b = 0.45 },

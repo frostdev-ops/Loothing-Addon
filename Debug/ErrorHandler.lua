@@ -118,7 +118,7 @@ end
 -- @param stack string|nil - Optional pre-captured stack trace
 function LoothingErrorHandlerMixin:CaptureError(msg, stack)
     if not msg then return end
-    if LoolibSecretUtil and LoolibSecretUtil.IsSecretValue and LoolibSecretUtil.IsSecretValue(msg) then
+    if Loolib.SecretUtil and Loolib.SecretUtil.IsSecretValue and Loolib.SecretUtil.IsSecretValue(msg) then
         msg = "<secret error>"
     else
         msg = tostring(msg)
@@ -500,7 +500,7 @@ end
 --- Create a new error handler instance
 -- @return LoothingErrorHandlerMixin
 function CreateLoothingErrorHandler()
-    local handler = LoolibCreateFromMixins(LoothingErrorHandlerMixin)
+    local handler = Loolib.CreateFromMixins(LoothingErrorHandlerMixin)
     handler:Init()
     return handler
 end
@@ -509,4 +509,4 @@ end
     Expose Constants
 ----------------------------------------------------------------------]]
 
-LOOTHING_LOG_LEVEL = LOG_LEVEL
+Loothing.LogLevel = LOG_LEVEL

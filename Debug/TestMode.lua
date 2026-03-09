@@ -3,7 +3,9 @@
     TestMode - Development testing utilities
 ----------------------------------------------------------------------]]
 
-local L = LOOTHING_LOCALE
+local Loolib = LibStub("Loolib")
+
+local L = Loothing.Locale
 
 --[[--------------------------------------------------------------------
     Test Mode State
@@ -120,7 +122,7 @@ end
 function LoothingTestMode:OnResponseSubmitted(item, response, note)
     if not self.enabled or not item then return end
 
-    local responseInfo = LOOTHING_RESPONSE_INFO and LOOTHING_RESPONSE_INFO[response]
+    local responseInfo = Loothing.ResponseInfo and Loothing.ResponseInfo[response]
     local responseName = responseInfo and responseInfo.name or tostring(response)
     print("|cff00ff00[Loothing Test]|r Response submitted: " .. responseName .. " for " .. (item.name or "item"))
 
@@ -162,9 +164,9 @@ function LoothingTestMode:OnRevoteClicked(item)
 
     -- Reset item state to voting
     if item.SetState then
-        item:SetState(LOOTHING_ITEM_STATE.VOTING)
+        item:SetState(Loothing.ItemState.VOTING)
     elseif item.state then
-        item.state = LOOTHING_ITEM_STATE.VOTING
+        item.state = Loothing.ItemState.VOTING
     end
 
     -- Hide results panel and show RollFrame for new response
@@ -411,7 +413,7 @@ function LoothingTestMode:CreateFakeItem()
     end
 
     -- Create item using the LoothingItemMixin
-    local item = LoolibCreateFromMixins(LoothingItemMixin)
+    local item = Loolib.CreateFromMixins(LoothingItemMixin)
     item:Init(itemLink, looterName, 0)
 
     return item
@@ -430,11 +432,11 @@ function LoothingTestMode:CreateFakeResults(item)
 
     -- Simulate vote tallies
     local allResponses = {
-        LOOTHING_RESPONSE.NEED,
-        LOOTHING_RESPONSE.GREED,
-        LOOTHING_RESPONSE.OFFSPEC,
-        LOOTHING_RESPONSE.TRANSMOG,
-        LOOTHING_RESPONSE.PASS,
+        Loothing.Response.NEED,
+        Loothing.Response.GREED,
+        Loothing.Response.OFFSPEC,
+        Loothing.Response.TRANSMOG,
+        Loothing.Response.PASS,
     }
 
     for _, response in ipairs(allResponses) do
@@ -589,15 +591,15 @@ function LoothingTestMode:SimulateVotes()
 end
 
 --- Generate random vote responses
--- @return table - Array of LOOTHING_RESPONSE values
+-- @return table - Array of Loothing.Response values
 function LoothingTestMode:GenerateRandomResponses()
     local responses = {}
     local allResponses = {
-        LOOTHING_RESPONSE.NEED,
-        LOOTHING_RESPONSE.GREED,
-        LOOTHING_RESPONSE.OFFSPEC,
-        LOOTHING_RESPONSE.TRANSMOG,
-        LOOTHING_RESPONSE.PASS,
+        Loothing.Response.NEED,
+        Loothing.Response.GREED,
+        Loothing.Response.OFFSPEC,
+        Loothing.Response.TRANSMOG,
+        Loothing.Response.PASS,
     }
 
     -- Weight towards NEED and GREED for more interesting results
@@ -705,10 +707,10 @@ function LoothingTestMode:ShowRollFrame()
         return
     end
 
-    fakeItem:SetState(LOOTHING_ITEM_STATE.VOTING)
+    fakeItem:SetState(Loothing.ItemState.VOTING)
     fakeItem.voteStartTime = GetTime()
     local timeout = Loothing.Settings and Loothing.Settings:GetVotingTimeout()
-                    or LOOTHING_TIMING.DEFAULT_VOTE_TIMEOUT
+                    or Loothing.Timing.DEFAULT_VOTE_TIMEOUT
     fakeItem.voteTimeout = timeout
     fakeItem.voteEndTime = GetTime() + timeout
 
@@ -730,7 +732,7 @@ function LoothingTestMode:ShowResultsPanel()
         return
     end
 
-    fakeItem:SetState(LOOTHING_ITEM_STATE.TALLIED)
+    fakeItem:SetState(Loothing.ItemState.TALLIED)
 
     -- Populate candidateManager with fake candidates and council votes
     self:AddFakeCandidatesToItem(fakeItem)
@@ -802,19 +804,19 @@ function LoothingTestMode:AddFakeCandidatesToItem(item)
     local roles = {"TANK", "HEALER", "DAMAGER", "DAMAGER", "DAMAGER"}
     local ranks = {"Officer", "Officer", "Member", "Member", "Member"}
 
-    -- Use actual LOOTHING_RESPONSE enum values
+    -- Use actual Loothing.Response enum values
     local responseTypes = {
-        LOOTHING_RESPONSE.NEED,
-        LOOTHING_RESPONSE.GREED,
-        LOOTHING_RESPONSE.OFFSPEC,
-        LOOTHING_RESPONSE.TRANSMOG,
-        LOOTHING_RESPONSE.PASS,
+        Loothing.Response.NEED,
+        Loothing.Response.GREED,
+        Loothing.Response.OFFSPEC,
+        Loothing.Response.TRANSMOG,
+        Loothing.Response.PASS,
     }
 
     for i, name in ipairs(fakeNames) do
         local candidate = candidateManager:GetOrCreateCandidate(name, classes[i] or "WARRIOR")
         if candidate then
-            -- Set response as enum value (renderer will look up LOOTHING_RESPONSE_INFO)
+            -- Set response as enum value (renderer will look up Loothing.ResponseInfo)
             candidate.response = responseTypes[math.random(#responseTypes)]
 
             -- Roll
@@ -1509,7 +1511,7 @@ end
 function LoothingTestMode:RunRankedChoiceScenario()
     -- Set voting mode to ranked choice
     if Loothing.Settings then
-        Loothing.Settings:SetVotingMode(LOOTHING_VOTING_MODE.RANKED_CHOICE)
+        Loothing.Settings:SetVotingMode(Loothing.VotingMode.RANKED_CHOICE)
     end
 
     print("|cff00ccff[Step 1]|r Set voting mode to RANKED_CHOICE")
@@ -1542,16 +1544,16 @@ function LoothingTestMode:RunTieBreakerScenario()
         local members = self.fakeCouncilMembers
         -- 2 votes for NEED, 2 for GREED = tie
         if members[2] then
-            item:AddVote(members[2].name, members[2].class, { LOOTHING_RESPONSE.NEED })
+            item:AddVote(members[2].name, members[2].class, { Loothing.Response.NEED })
         end
         if members[3] then
-            item:AddVote(members[3].name, members[3].class, { LOOTHING_RESPONSE.NEED })
+            item:AddVote(members[3].name, members[3].class, { Loothing.Response.NEED })
         end
         if members[4] then
-            item:AddVote(members[4].name, members[4].class, { LOOTHING_RESPONSE.GREED })
+            item:AddVote(members[4].name, members[4].class, { Loothing.Response.GREED })
         end
         if members[5] then
-            item:AddVote(members[5].name, members[5].class, { LOOTHING_RESPONSE.GREED })
+            item:AddVote(members[5].name, members[5].class, { Loothing.Response.GREED })
         end
 
         print("|cff00ff00Tie created!|r NEED: 2, GREED: 2")
@@ -1702,7 +1704,7 @@ function LoothingTestMode:RunHistoryScenario()
                     itemName = item.name or "Test Item",
                     itemID = item.itemID or 0,
                     itemLink = item.link,
-                    winnerResponse = LOOTHING_RESPONSE.NEED,
+                    winnerResponse = Loothing.Response.NEED,
                     votes = 5,
                     winnerClass = winner.class,
                     encounterID = 0,
@@ -1716,10 +1718,10 @@ function LoothingTestMode:RunHistoryScenario()
                     typeCode = "default",
                     subType = "Plate",
                     candidates = {
-                        { playerName = winner.name, playerClass = winner.class, response = LOOTHING_RESPONSE.NEED, note = "", roll = 0, gear1Link = nil, gear2Link = nil, gear1ilvl = 0, gear2ilvl = 0, ilvlDiff = 0, councilVotes = 3 },
+                        { playerName = winner.name, playerClass = winner.class, response = Loothing.Response.NEED, note = "", roll = 0, gear1Link = nil, gear2Link = nil, gear1ilvl = 0, gear2ilvl = 0, ilvlDiff = 0, councilVotes = 3 },
                     },
                     councilVotes = {
-                        { voter = "Council1-Realm", voterClass = "PALADIN", responses = { LOOTHING_RESPONSE.NEED }, note = "" },
+                        { voter = "Council1-Realm", voterClass = "PALADIN", responses = { Loothing.Response.NEED }, note = "" },
                     },
                 })
                 print("  Added history entry for: " .. (item.name or "Unknown"))
@@ -1778,7 +1780,7 @@ function LoothingTestMode:RunBenchmarks()
     if LoothingProtocol then
         startTime = debugprofilestop()
         for i = 1, 100 do
-            LoothingProtocol:Encode(LOOTHING_MSG_TYPE.VOTE_COMMIT, { itemGUID = "guid123", responses = { 1, 2, 3 } })
+            LoothingProtocol:Encode(Loothing.MsgType.VOTE_COMMIT, { itemGUID = "guid123", responses = { 1, 2, 3 } })
         end
         results.protocolEncode = (debugprofilestop() - startTime) / 100
         print(string.format("  Protocol encoding: %.3fms avg", results.protocolEncode))

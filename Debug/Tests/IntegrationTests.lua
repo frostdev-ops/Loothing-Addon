@@ -124,7 +124,7 @@ end
 
 --- Simulate council votes for an item
 local function SimulateVotes(item, voteDistribution)
-    -- voteDistribution: { [LOOTHING_RESPONSE.NEED] = 3, [LOOTHING_RESPONSE.GREED] = 2, ... }
+    -- voteDistribution: { [Loothing.Response.NEED] = 3, [Loothing.Response.GREED] = 2, ... }
     local councilMembers = LoothingTestMode:GetFakeCouncilMembers()
     local memberIndex = 2  -- Skip player at index 1
 
@@ -154,16 +154,16 @@ local function Test_FullSessionWorkflow()
     local sessionID = Loothing.Session:StartSession(0, "Test Boss")
     AssertNotNil(sessionID, "Session should be created")
     Assert(Loothing.Session:IsActive(), "Session should be active")
-    AssertEqual(Loothing.Session.state, LOOTHING_SESSION_STATE.ACTIVE, "Session state should be ACTIVE")
+    AssertEqual(Loothing.Session.state, Loothing.SessionState.ACTIVE, "Session state should be ACTIVE")
 
     -- Add item
     local item = CreateTestItem(19019)
     AssertNotNil(item, "Item should be added")
-    AssertEqual(item:GetState(), LOOTHING_ITEM_STATE.PENDING, "Item should be PENDING")
+    AssertEqual(item:GetState(), Loothing.ItemState.PENDING, "Item should be PENDING")
 
     -- Start voting
     Loothing.Session:StartVoting(item.guid)
-    AssertEqual(item:GetState(), LOOTHING_ITEM_STATE.VOTING, "Item should be VOTING")
+    AssertEqual(item:GetState(), Loothing.ItemState.VOTING, "Item should be VOTING")
 
     -- Verify item is in voting items list (multi-item support)
     local votingItems = Loothing.Session:GetVotingItems()
@@ -179,20 +179,20 @@ local function Test_FullSessionWorkflow()
 
     -- Simulate votes
     SimulateVotes(item, {
-        [LOOTHING_RESPONSE.NEED] = 3,
-        [LOOTHING_RESPONSE.GREED] = 2,
-        [LOOTHING_RESPONSE.PASS] = 1,
+        [Loothing.Response.NEED] = 3,
+        [Loothing.Response.GREED] = 2,
+        [Loothing.Response.PASS] = 1,
     })
 
     -- Tally votes
     local results = item:TallyVotes()
     AssertNotNil(results, "Results should be created")
-    AssertEqual(item:GetState(), LOOTHING_ITEM_STATE.TALLIED, "Item should be TALLIED")
+    AssertEqual(item:GetState(), Loothing.ItemState.TALLIED, "Item should be TALLIED")
 
     -- Award item
     local winner = results.winner or "TestPlayer-Realm"
     Loothing.Session:AwardItem(item.guid, winner, "Main Spec")
-    AssertEqual(item:GetState(), LOOTHING_ITEM_STATE.AWARDED, "Item should be AWARDED")
+    AssertEqual(item:GetState(), Loothing.ItemState.AWARDED, "Item should be AWARDED")
 
     -- Verify history
     local historyEntries = Loothing.History:GetAllEntries()
@@ -225,16 +225,16 @@ local function Test_MultipleItemsInSequence()
     for i, item in ipairs(items) do
         -- Start voting
         Loothing.Session:StartVoting(item.guid)
-        AssertEqual(item:GetState(), LOOTHING_ITEM_STATE.VOTING, "Item " .. i .. " should be VOTING")
+        AssertEqual(item:GetState(), Loothing.ItemState.VOTING, "Item " .. i .. " should be VOTING")
 
         -- Vote and tally
-        SimulateVotes(item, { [LOOTHING_RESPONSE.NEED] = 2, [LOOTHING_RESPONSE.GREED] = 1 })
+        SimulateVotes(item, { [Loothing.Response.NEED] = 2, [Loothing.Response.GREED] = 1 })
         local results = item:TallyVotes()
 
         -- Award
         local winner = results.winner or "TestPlayer-Realm"
         Loothing.Session:AwardItem(item.guid, winner, "Main Spec")
-        AssertEqual(item:GetState(), LOOTHING_ITEM_STATE.AWARDED, "Item " .. i .. " should be AWARDED")
+        AssertEqual(item:GetState(), Loothing.ItemState.AWARDED, "Item " .. i .. " should be AWARDED")
     end
 
     -- Verify all items processed
@@ -253,18 +253,18 @@ local function Test_StateTransitions()
     local item = CreateTestItem()
 
     -- PENDING → VOTING
-    AssertEqual(item:GetState(), LOOTHING_ITEM_STATE.PENDING)
+    AssertEqual(item:GetState(), Loothing.ItemState.PENDING)
     Loothing.Session:StartVoting(item.guid)
-    AssertEqual(item:GetState(), LOOTHING_ITEM_STATE.VOTING)
+    AssertEqual(item:GetState(), Loothing.ItemState.VOTING)
 
     -- VOTING → TALLIED
-    SimulateVotes(item, { [LOOTHING_RESPONSE.NEED] = 2 })
+    SimulateVotes(item, { [Loothing.Response.NEED] = 2 })
     item:TallyVotes()
-    AssertEqual(item:GetState(), LOOTHING_ITEM_STATE.TALLIED)
+    AssertEqual(item:GetState(), Loothing.ItemState.TALLIED)
 
     -- TALLIED → AWARDED
     Loothing.Session:AwardItem(item.guid, "TestPlayer-Realm", "Main Spec")
-    AssertEqual(item:GetState(), LOOTHING_ITEM_STATE.AWARDED)
+    AssertEqual(item:GetState(), Loothing.ItemState.AWARDED)
 
     Loothing.Session:EndSession()
     TeardownTest()
@@ -282,7 +282,7 @@ local function Test_SkippedItems()
 
     -- Skip instead of awarding
     Loothing.Session:SkipItem(item.guid, "Disenchant")
-    AssertEqual(item:GetState(), LOOTHING_ITEM_STATE.SKIPPED)
+    AssertEqual(item:GetState(), Loothing.ItemState.SKIPPED)
 
     -- Verify in history
     local historyEntries = Loothing.History:GetAllEntries()
@@ -319,7 +319,7 @@ local function Test_FiveItemSession()
 
     for i, item in ipairs(items) do
         Loothing.Session:StartVoting(item.guid)
-        SimulateVotes(item, { [LOOTHING_RESPONSE.NEED] = math.random(1, 3) })
+        SimulateVotes(item, { [Loothing.Response.NEED] = math.random(1, 3) })
         local results = item:TallyVotes()
         local winner = results.winner or "Player" .. i .. "-Realm"
         Loothing.Session:AwardItem(item.guid, winner, "Main Spec")
@@ -403,7 +403,7 @@ local function Test_RankedChoiceVoting()
 
     -- Set voting mode to ranked choice
     local originalMode = Loothing.Settings:GetVotingMode()
-    Loothing.Settings:SetVotingMode(LOOTHING_VOTING_MODE.RANKED_CHOICE)
+    Loothing.Settings:SetVotingMode(Loothing.VotingMode.RANKED_CHOICE)
 
     Loothing.Session:StartSession(0, "Test Boss")
     local item = CreateTestItem()
@@ -415,9 +415,9 @@ local function Test_RankedChoiceVoting()
     for i = 2, math.min(5, #councilMembers) do
         local member = councilMembers[i]
         local rankedResponses = {
-            LOOTHING_RESPONSE.NEED,
-            LOOTHING_RESPONSE.GREED,
-            LOOTHING_RESPONSE.OFFSPEC,
+            Loothing.Response.NEED,
+            Loothing.Response.GREED,
+            Loothing.Response.OFFSPEC,
         }
         item:AddVote(member.name, member.class, rankedResponses)
     end
@@ -451,8 +451,8 @@ local function Test_AutoAwardMatching()
     local originalThreshold = Loothing.Settings:Get("autoAward.lowerThreshold")
 
     Loothing.Settings:Set("autoAward.enabled", true)
-    Loothing.Settings:Set("autoAward.lowerThreshold", LOOTHING_QUALITY.UNCOMMON)
-    Loothing.Settings:Set("autoAward.upperThreshold", LOOTHING_QUALITY.RARE)
+    Loothing.Settings:Set("autoAward.lowerThreshold", Loothing.Quality.UNCOMMON)
+    Loothing.Settings:Set("autoAward.upperThreshold", Loothing.Quality.RARE)
     Loothing.Settings:Set("autoAward.awardTo", "TestPlayer-Realm")
 
     Loothing.Session:StartSession(0, "Test Boss")

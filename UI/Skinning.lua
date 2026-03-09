@@ -9,7 +9,7 @@ local Loolib = LibStub("Loolib")
     Skin Presets
 ----------------------------------------------------------------------]]
 
-LOOTHING_SKIN_PRESETS = {
+Loothing.SkinPresets = {
     Default = {
         bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
         edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
@@ -71,9 +71,9 @@ function LoothingSkinningMixin:ApplySkin(frame, skinName)
     if not frame or not frame.SetBackdrop then return end
 
     skinName = skinName or self:GetCurrentSkin()
-    local skin = LOOTHING_SKIN_PRESETS[skinName]
+    local skin = Loothing.SkinPresets[skinName]
     if not skin then
-        skin = LOOTHING_SKIN_PRESETS.Default
+        skin = Loothing.SkinPresets.Default
     end
 
     frame:SetBackdrop({
@@ -101,7 +101,7 @@ end
 --- Set the current skin and apply to all managed frames
 -- @param skinName string
 function LoothingSkinningMixin:SetCurrentSkin(skinName)
-    if not LOOTHING_SKIN_PRESETS[skinName] then return end
+    if not Loothing.SkinPresets[skinName] then return end
 
     if Loothing.Settings then
         Loothing.Settings:Set("frame.skin", skinName)

@@ -444,7 +444,7 @@ end
 
 -- Current tier (TWW Season 1) encounter IDs
 -- These are populated on first access from the Encounter Journal
-LOOTHING_ENCOUNTERS = LOOTHING_ENCOUNTERS or {}
+Loothing.Encounters = Loothing.Encounters or {}
 
 --- Populate common encounter IDs from the journal
 function LoothingEncounterData:PopulateEncounterIDs()
@@ -455,11 +455,11 @@ function LoothingEncounterData:PopulateEncounterIDs()
         local encounters = self:GetEncountersForInstance(raid.instanceID)
         for _, encounter in ipairs(encounters) do
             local safeName = encounter.name:gsub("[^%w]", "_"):upper()
-            LOOTHING_ENCOUNTERS[safeName] = encounter.encounterID
+            Loothing.Encounters[safeName] = encounter.encounterID
         end
     end
 
-    return LOOTHING_ENCOUNTERS
+    return Loothing.Encounters
 end
 
 --[[--------------------------------------------------------------------

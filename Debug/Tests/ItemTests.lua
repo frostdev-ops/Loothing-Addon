@@ -89,7 +89,7 @@ local function RunItemTests()
     local stateItem = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
 
     -- Initial state
-    assertEqual(stateItem:GetState(), LOOTHING_ITEM_STATE.PENDING, "Initial state is PENDING")
+    assertEqual(stateItem:GetState(), Loothing.ItemState.PENDING, "Initial state is PENDING")
     assert(stateItem:IsPending(), "IsPending returns true for PENDING state")
     assert(not stateItem:IsVoting(), "IsVoting returns false for PENDING state")
     assert(not stateItem:IsTallied(), "IsTallied returns false for PENDING state")
@@ -98,25 +98,25 @@ local function RunItemTests()
     assert(not stateItem:IsComplete(), "IsComplete returns false for PENDING state")
 
     -- Change to VOTING
-    stateItem:SetState(LOOTHING_ITEM_STATE.VOTING)
-    assertEqual(stateItem:GetState(), LOOTHING_ITEM_STATE.VOTING, "SetState changes state to VOTING")
+    stateItem:SetState(Loothing.ItemState.VOTING)
+    assertEqual(stateItem:GetState(), Loothing.ItemState.VOTING, "SetState changes state to VOTING")
     assert(stateItem:IsVoting(), "IsVoting returns true for VOTING state")
     assert(not stateItem:IsPending(), "IsPending returns false after state change")
 
     -- Change to TALLIED
-    stateItem:SetState(LOOTHING_ITEM_STATE.TALLIED)
-    assertEqual(stateItem:GetState(), LOOTHING_ITEM_STATE.TALLIED, "SetState changes state to TALLIED")
+    stateItem:SetState(Loothing.ItemState.TALLIED)
+    assertEqual(stateItem:GetState(), Loothing.ItemState.TALLIED, "SetState changes state to TALLIED")
     assert(stateItem:IsTallied(), "IsTallied returns true for TALLIED state")
 
     -- Change to AWARDED
-    stateItem:SetState(LOOTHING_ITEM_STATE.AWARDED)
-    assertEqual(stateItem:GetState(), LOOTHING_ITEM_STATE.AWARDED, "SetState changes state to AWARDED")
+    stateItem:SetState(Loothing.ItemState.AWARDED)
+    assertEqual(stateItem:GetState(), Loothing.ItemState.AWARDED, "SetState changes state to AWARDED")
     assert(stateItem:IsAwarded(), "IsAwarded returns true for AWARDED state")
     assert(stateItem:IsComplete(), "IsComplete returns true for AWARDED state")
 
     -- Change to SKIPPED
     local skipItem = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
-    skipItem:SetState(LOOTHING_ITEM_STATE.SKIPPED)
+    skipItem:SetState(Loothing.ItemState.SKIPPED)
     assert(skipItem:IsSkipped(), "IsSkipped returns true for SKIPPED state")
     assert(skipItem:IsComplete(), "IsComplete returns true for SKIPPED state")
 
@@ -130,10 +130,10 @@ local function RunItemTests()
         newStateCapture = newState
         oldStateCapture = oldState
     end)
-    eventItem:SetState(LOOTHING_ITEM_STATE.VOTING)
+    eventItem:SetState(Loothing.ItemState.VOTING)
     assert(eventFired, "OnStateChanged event triggered")
-    assertEqual(oldStateCapture, LOOTHING_ITEM_STATE.PENDING, "Event receives correct old state")
-    assertEqual(newStateCapture, LOOTHING_ITEM_STATE.VOTING, "Event receives correct new state")
+    assertEqual(oldStateCapture, Loothing.ItemState.PENDING, "Event receives correct old state")
+    assertEqual(newStateCapture, Loothing.ItemState.VOTING, "Event receives correct new state")
 
     --[[--------------------------------------------------------------------
         Test Group 3: Vote Management
@@ -141,12 +141,12 @@ local function RunItemTests()
     printGroup("Vote Management")
 
     local voteItem = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
-    voteItem:SetState(LOOTHING_ITEM_STATE.VOTING)
+    voteItem:SetState(Loothing.ItemState.VOTING)
 
     -- Add vote
     local voter1 = "Voter1-Realm"
     local voter1Class = "WARRIOR"
-    local responses1 = { LOOTHING_RESPONSE.NEED, LOOTHING_RESPONSE.GREED }
+    local responses1 = { Loothing.Response.NEED, Loothing.Response.GREED }
     local addResult = voteItem:AddVote(voter1, voter1Class, responses1)
     assert(addResult, "AddVote returns true")
     assertEqual(voteItem:GetVoteCount(), 1, "Vote count incremented")
@@ -157,20 +157,20 @@ local function RunItemTests()
     assertNotNil(vote, "GetVoteByVoter returns vote")
     assertEqual(vote.voter, voter1, "Vote has correct voter")
     assertEqual(vote.voterClass, voter1Class, "Vote has correct voter class")
-    assertEqual(vote.responses[1], LOOTHING_RESPONSE.NEED, "Vote has correct first response")
-    assertEqual(vote.responses[2], LOOTHING_RESPONSE.GREED, "Vote has correct second response")
+    assertEqual(vote.responses[1], Loothing.Response.NEED, "Vote has correct first response")
+    assertEqual(vote.responses[2], Loothing.Response.GREED, "Vote has correct second response")
 
     -- Add multiple votes
-    voteItem:AddVote("Voter2-Realm", "MAGE", { LOOTHING_RESPONSE.GREED })
-    voteItem:AddVote("Voter3-Realm", "PRIEST", { LOOTHING_RESPONSE.NEED })
+    voteItem:AddVote("Voter2-Realm", "MAGE", { Loothing.Response.GREED })
+    voteItem:AddVote("Voter3-Realm", "PRIEST", { Loothing.Response.NEED })
     assertEqual(voteItem:GetVoteCount(), 3, "Multiple votes added correctly")
 
     -- Update existing vote
-    local updateResult = voteItem:AddVote(voter1, voter1Class, { LOOTHING_RESPONSE.OFFSPEC })
+    local updateResult = voteItem:AddVote(voter1, voter1Class, { Loothing.Response.OFFSPEC })
     assert(updateResult, "AddVote can update existing vote")
     assertEqual(voteItem:GetVoteCount(), 3, "Vote count unchanged after update")
     local updatedVote = voteItem:GetVoteByVoter(voter1)
-    assertEqual(updatedVote.responses[1], LOOTHING_RESPONSE.OFFSPEC, "Vote updated correctly")
+    assertEqual(updatedVote.responses[1], Loothing.Response.OFFSPEC, "Vote updated correctly")
 
     -- Remove vote
     local removeResult = voteItem:RemoveVote(voter1)
@@ -184,28 +184,28 @@ local function RunItemTests()
     assertEqual(allVotes:GetSize(), 2, "DataProvider has correct size")
 
     -- Get votes by response
-    local needVotes = voteItem:GetVotesByResponse(LOOTHING_RESPONSE.NEED)
+    local needVotes = voteItem:GetVotesByResponse(Loothing.Response.NEED)
     assertEqual(#needVotes, 1, "GetVotesByResponse returns correct count")
 
     -- Test vote events
     local voteEventFired = false
     local voteEventItem = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
-    voteEventItem:SetState(LOOTHING_ITEM_STATE.VOTING)
+    voteEventItem:SetState(Loothing.ItemState.VOTING)
     voteEventItem:RegisterCallback("OnVoteAdded", function()
         voteEventFired = true
     end)
-    voteEventItem:AddVote("TestVoter-Realm", "HUNTER", { LOOTHING_RESPONSE.NEED })
+    voteEventItem:AddVote("TestVoter-Realm", "HUNTER", { Loothing.Response.NEED })
     assert(voteEventFired, "OnVoteAdded event triggered")
 
     -- Test voter normalization
     local normalizeItem = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
-    normalizeItem:SetState(LOOTHING_ITEM_STATE.VOTING)
-    normalizeItem:AddVote("VoterNoRealm", "ROGUE", { LOOTHING_RESPONSE.NEED })
+    normalizeItem:SetState(Loothing.ItemState.VOTING)
+    normalizeItem:AddVote("VoterNoRealm", "ROGUE", { Loothing.Response.NEED })
     assert(normalizeItem:HasVoted("VoterNoRealm-" .. GetNormalizedRealmName()), "Voter name normalized correctly")
 
     -- Test voting only allowed in VOTING state
     local pendingItem = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
-    local pendingResult = pendingItem:AddVote("Voter-Realm", "WARRIOR", { LOOTHING_RESPONSE.NEED })
+    local pendingResult = pendingItem:AddVote("Voter-Realm", "WARRIOR", { Loothing.Response.NEED })
     assert(not pendingResult, "AddVote fails when not in VOTING state")
 
     --[[--------------------------------------------------------------------
@@ -235,7 +235,7 @@ local function RunItemTests()
 
     -- Start voting fails if not pending
     local notPendingItem = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
-    notPendingItem:SetState(LOOTHING_ITEM_STATE.TALLIED)
+    notPendingItem:SetState(Loothing.ItemState.TALLIED)
     local failResult = notPendingItem:StartVoting()
     assert(not failResult, "StartVoting fails when not PENDING")
 
@@ -257,7 +257,7 @@ local function RunItemTests()
     -- Set winner
     local awardItem = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
     local winner = "Winner-Realm"
-    local winnerResponse = LOOTHING_RESPONSE.NEED
+    local winnerResponse = Loothing.Response.NEED
     awardItem:SetWinner(winner, winnerResponse)
     assertEqual(awardItem:GetWinner(), winner, "GetWinner returns correct winner")
     assertEqual(awardItem.winnerResponse, winnerResponse, "Winner response stored")
@@ -266,7 +266,7 @@ local function RunItemTests()
 
     -- Test winner normalization
     local normWinnerItem = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
-    normWinnerItem:SetWinner("WinnerNoRealm", LOOTHING_RESPONSE.NEED)
+    normWinnerItem:SetWinner("WinnerNoRealm", Loothing.Response.NEED)
     assert(normWinnerItem.winner:find("-"), "Winner name normalized")
 
     -- Test winner event
@@ -275,7 +275,7 @@ local function RunItemTests()
     winnerEventItem:RegisterCallback("OnWinnerSet", function()
         winnerEventFired = true
     end)
-    winnerEventItem:SetWinner("TestWinner-Realm", LOOTHING_RESPONSE.NEED)
+    winnerEventItem:SetWinner("TestWinner-Realm", Loothing.Response.NEED)
     assert(winnerEventFired, "OnWinnerSet event triggered")
 
     -- Skip item
@@ -292,10 +292,10 @@ local function RunItemTests()
 
     -- Create item with votes
     local serItem = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
-    serItem:SetState(LOOTHING_ITEM_STATE.VOTING)
-    serItem:AddVote("SerVoter1-Realm", "WARRIOR", { LOOTHING_RESPONSE.NEED })
-    serItem:AddVote("SerVoter2-Realm", "MAGE", { LOOTHING_RESPONSE.GREED })
-    serItem:SetWinner("SerWinner-Realm", LOOTHING_RESPONSE.NEED)
+    serItem:SetState(Loothing.ItemState.VOTING)
+    serItem:AddVote("SerVoter1-Realm", "WARRIOR", { Loothing.Response.NEED })
+    serItem:AddVote("SerVoter2-Realm", "MAGE", { Loothing.Response.GREED })
+    serItem:SetWinner("SerWinner-Realm", Loothing.Response.NEED)
 
     -- Serialize
     local serialized = serItem:Serialize()
@@ -303,7 +303,7 @@ local function RunItemTests()
     assertEqual(serialized.guid, serItem.guid, "Serialized GUID matches")
     assertEqual(serialized.itemLink, testItemLink, "Serialized itemLink matches")
     assertEqual(serialized.looter, testLooter, "Serialized looter matches")
-    assertEqual(serialized.state, LOOTHING_ITEM_STATE.AWARDED, "Serialized state matches")
+    assertEqual(serialized.state, Loothing.ItemState.AWARDED, "Serialized state matches")
     assertEqual(serialized.winner, "SerWinner-Realm", "Serialized winner matches")
     assertNotNil(serialized.votes, "Serialized votes present")
     assertEqual(#serialized.votes, 2, "Serialized votes count correct")
@@ -334,7 +334,7 @@ local function RunItemTests()
 
     -- Empty voter handling
     local emptyVoteItem = CreateLoothingItem(testItemLink, testLooter, testEncounterID)
-    emptyVoteItem:SetState(LOOTHING_ITEM_STATE.VOTING)
+    emptyVoteItem:SetState(Loothing.ItemState.VOTING)
     assertEqual(emptyVoteItem:GetVoteCount(), 0, "Empty votes returns 0 count")
     assertEqual(emptyVoteItem:GetVoteByVoter("NonExistent-Realm"), nil, "Non-existent voter returns nil")
     assert(not emptyVoteItem:HasVoted("NonExistent-Realm"), "HasVoted false for non-existent voter")
@@ -344,7 +344,7 @@ local function RunItemTests()
     assert(not removeNonExistent, "RemoveVote returns false for non-existent vote")
 
     -- Get votes by response with no votes
-    local noNeedVotes = emptyVoteItem:GetVotesByResponse(LOOTHING_RESPONSE.NEED)
+    local noNeedVotes = emptyVoteItem:GetVotesByResponse(Loothing.Response.NEED)
     assertEqual(#noNeedVotes, 0, "GetVotesByResponse returns empty table")
 
     -- Callback registry initialized
@@ -367,7 +367,7 @@ local function RunItemTests()
 
     -- Status text
     assertEqual(type(displayItem:GetStatusText()), "string", "GetStatusText returns string")
-    displayItem:SetState(LOOTHING_ITEM_STATE.VOTING)
+    displayItem:SetState(Loothing.ItemState.VOTING)
     assertNotNil(displayItem:GetStatusText(), "GetStatusText returns text for VOTING")
 
     --[[--------------------------------------------------------------------

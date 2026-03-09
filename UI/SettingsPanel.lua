@@ -4,6 +4,8 @@
 ----------------------------------------------------------------------]]
 
 local Loolib = LibStub("Loolib")
+local Config = Loolib.Config
+local CreateFromMixins = Loolib.CreateFromMixins
 
 local HEADER_HEIGHT = 56
 
@@ -67,7 +69,7 @@ function LoothingSettingsPanelMixin:CreateHeader()
     title:SetTextColor(1, 1, 1, 1)
 
     -- Version below title
-    local versionStr = "v" .. (Loothing and Loothing.version or (LOOTHING_VERSION or ""))
+    local versionStr = "v" .. (Loothing and Loothing.version or (Loothing.VERSION or ""))
     local version = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     version:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -2)
     version:SetText(versionStr)
@@ -83,8 +85,8 @@ end
 
 --- Create UI elements using ConfigDialog
 function LoothingSettingsPanelMixin:CreateElements()
-    -- Ensure LoolibConfig is initialized
-    if not LoolibConfig or not LoolibConfig.Dialog or type(LoolibConfig.Dialog.Open) ~= "function" then
+    -- Ensure Loolib.Config is initialized
+    if not Config or not Config.Dialog or type(Config.Dialog.Open) ~= "function" then
         -- Fallback: show error message
         local errText = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
         errText:SetPoint("CENTER")
@@ -101,12 +103,12 @@ function LoothingSettingsPanelMixin:CreateElements()
     -- Open the dialog with our options table
     if LoothingOptionsTable then
         -- Register the options table if not already registered
-        if not LoolibConfig:IsRegistered("Loothing") then
-            LoolibConfig:RegisterOptionsTable("Loothing", LoothingOptionsTable)
+        if not Config:IsRegistered("Loothing") then
+            Config:RegisterOptionsTable("Loothing", LoothingOptionsTable)
         end
 
         -- Open dialog in our container
-        LoolibConfig.Dialog:Open("Loothing", container)
+        Config.Dialog:Open("Loothing", container)
     else
         -- Fallback: show error message
         local errText = container:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
@@ -126,8 +128,8 @@ end
 function LoothingSettingsPanelMixin:Refresh()
     -- ConfigDialog handles this automatically when options change via get/set
     -- If we need to force a refresh, we can notify the system
-    if LoolibConfig and LoolibConfig.Dialog then
-        LoolibConfig.Dialog:RefreshContent("Loothing")
+    if Config and Config.Dialog then
+        Config.Dialog:RefreshContent("Loothing")
     end
 end
 
@@ -153,7 +155,7 @@ end
 ----------------------------------------------------------------------]]
 
 function CreateLoothingSettingsPanel(parent)
-    local panel = LoolibCreateFromMixins(LoothingSettingsPanelMixin)
+    local panel = CreateFromMixins(LoothingSettingsPanelMixin)
     panel:Init(parent)
     return panel
 end

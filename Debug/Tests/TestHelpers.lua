@@ -588,7 +588,7 @@ function TestHelpers:CreateFakeItem(overrides)
     local encounterID = overrides.encounterID or 0
 
     -- Create item using mixin
-    local item = LoolibCreateFromMixins(LoothingItemMixin)
+    local item = Loolib.CreateFromMixins(LoothingItemMixin)
     item:Init(itemLink, looter, encounterID)
 
     -- Apply state override if provided
@@ -605,7 +605,7 @@ end
 
 --- Create a single fake vote
 -- @param voter string|table - Voter name or player data
--- @param responses table - Array of LOOTHING_RESPONSE values (ranked)
+-- @param responses table - Array of Loothing.Response values (ranked)
 -- @return table - Vote data
 function TestHelpers:CreateFakeVote(voter, responses)
     local voterName, voterClass
@@ -619,7 +619,7 @@ function TestHelpers:CreateFakeVote(voter, responses)
         voterClass = fakePlayer.class
     end
 
-    responses = responses or { LOOTHING_RESPONSE.NEED }
+    responses = responses or { Loothing.Response.NEED }
 
     return {
         voter = voterName,
@@ -643,7 +643,7 @@ function TestHelpers:CreateFakeVotes(item, distribution)
     local council = LoothingTestMode and LoothingTestMode:GetFakeCouncilMembers() or self:CreateFakeCouncil()
 
     -- If distribution is a simple count table
-    if distribution[LOOTHING_RESPONSE.NEED] or distribution[LOOTHING_RESPONSE.GREED] then
+    if distribution[Loothing.Response.NEED] or distribution[Loothing.Response.GREED] then
         local voterIndex = 2 -- Skip player at index 1
 
         for response, count in pairs(distribution) do
@@ -659,7 +659,7 @@ function TestHelpers:CreateFakeVotes(item, distribution)
         -- Distribution is a custom table of { voter, responses } pairs
         for _, voteData in ipairs(distribution) do
             local voter = voteData.voter or voteData[1]
-            local responses = voteData.responses or voteData[2] or { LOOTHING_RESPONSE.NEED }
+            local responses = voteData.responses or voteData[2] or { Loothing.Response.NEED }
 
             if type(voter) == "table" then
                 item:AddVote(voter.name, voter.class, responses)
@@ -763,9 +763,9 @@ function TestHelpers:CreateVotingScenario(scenarioType)
     local scenarios = {
         simple = function()
             self:CreateFakeVotes(item, {
-                [LOOTHING_RESPONSE.NEED] = 3,
-                [LOOTHING_RESPONSE.GREED] = 2,
-                [LOOTHING_RESPONSE.PASS] = 1,
+                [Loothing.Response.NEED] = 3,
+                [Loothing.Response.GREED] = 2,
+                [Loothing.Response.PASS] = 1,
             })
             return "Simple majority (3 NEED, 2 GREED, 1 PASS)"
         end,
@@ -774,9 +774,9 @@ function TestHelpers:CreateVotingScenario(scenarioType)
             local council = self:CreateFakeCouncil(5)
             for i = 2, #council do
                 local responses = {
-                    LOOTHING_RESPONSE.NEED,
-                    LOOTHING_RESPONSE.GREED,
-                    LOOTHING_RESPONSE.OFFSPEC,
+                    Loothing.Response.NEED,
+                    Loothing.Response.GREED,
+                    Loothing.Response.OFFSPEC,
                 }
                 item:AddVote(council[i].name, council[i].class, responses)
             end
@@ -784,12 +784,12 @@ function TestHelpers:CreateVotingScenario(scenarioType)
         end,
 
         tie = function()
-            self:CreateTiedVotes(item, LOOTHING_RESPONSE.NEED, LOOTHING_RESPONSE.GREED, 2)
+            self:CreateTiedVotes(item, Loothing.Response.NEED, Loothing.Response.GREED, 2)
             return "Tied vote (2 NEED vs 2 GREED)"
         end,
 
         unanimous = function()
-            self:CreateUnanimousVotes(item, LOOTHING_RESPONSE.NEED, 5)
+            self:CreateUnanimousVotes(item, Loothing.Response.NEED, 5)
             return "Unanimous vote (5 NEED)"
         end,
 
@@ -801,10 +801,10 @@ function TestHelpers:CreateVotingScenario(scenarioType)
 
         split = function()
             self:CreateFakeVotes(item, {
-                [LOOTHING_RESPONSE.NEED] = 2,
-                [LOOTHING_RESPONSE.GREED] = 2,
-                [LOOTHING_RESPONSE.OFFSPEC] = 1,
-                [LOOTHING_RESPONSE.TRANSMOG] = 1,
+                [Loothing.Response.NEED] = 2,
+                [Loothing.Response.GREED] = 2,
+                [Loothing.Response.OFFSPEC] = 1,
+                [Loothing.Response.TRANSMOG] = 1,
             })
             return "Split vote (2 NEED, 2 GREED, 1 OFFSPEC, 1 TRANSMOG)"
         end,
@@ -827,7 +827,7 @@ end
 
 --- Assert that an item is in the expected state
 -- @param item LoothingItemMixin
--- @param expectedState number - LOOTHING_ITEM_STATE value
+-- @param expectedState number - Loothing.ItemState value
 -- @param errorMsg string - Optional custom error message
 function TestHelpers:AssertItemState(item, expectedState, errorMsg)
     if not item then
@@ -851,7 +851,7 @@ end
 
 --- Assert that a session is in the expected state
 -- @param session table - Session object
--- @param expectedState number - LOOTHING_SESSION_STATE value
+-- @param expectedState number - Loothing.SessionState value
 -- @param errorMsg string - Optional custom error message
 function TestHelpers:AssertSessionState(session, expectedState, errorMsg)
     if not session then
@@ -875,7 +875,7 @@ end
 
 --- Assert vote tally for a specific response
 -- @param item LoothingItemMixin
--- @param response number - LOOTHING_RESPONSE value
+-- @param response number - Loothing.Response value
 -- @param expectedCount number
 function TestHelpers:AssertVoteTally(item, response, expectedCount)
     if not item then
@@ -887,7 +887,7 @@ function TestHelpers:AssertVoteTally(item, response, expectedCount)
     local actualCount = #votes
 
     if actualCount ~= expectedCount then
-        local responseName = LOOTHING_RESPONSE_INFO[response] and LOOTHING_RESPONSE_INFO[response].name or "UNKNOWN"
+        local responseName = Loothing.ResponseInfo[response] and Loothing.ResponseInfo[response].name or "UNKNOWN"
         error(string.format(
             "Vote tally mismatch for %s: expected %d, got %d",
             responseName,

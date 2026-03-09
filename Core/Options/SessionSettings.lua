@@ -4,7 +4,9 @@
     Master Looter. They control the session for everyone.
 ----------------------------------------------------------------------]]
 
-local L = LOOTHING_LOCALE
+local Loolib = LibStub("Loolib")
+
+local L = Loothing.Locale
 local unpack = unpack
 
 
@@ -37,8 +39,8 @@ local function GetSessionSettingsOptions()
                         name = L["VOTING_MODE"],
                         order = 1,
                         values = {
-                            [LOOTHING_VOTING_MODE.SIMPLE] = L["SIMPLE_VOTING"],
-                            [LOOTHING_VOTING_MODE.RANKED_CHOICE] = L["RANKED_VOTING"],
+                            [Loothing.VotingMode.SIMPLE] = L["SIMPLE_VOTING"],
+                            [Loothing.VotingMode.RANKED_CHOICE] = L["RANKED_VOTING"],
                         },
                         get = function() return Loothing.Settings:GetVotingMode() end,
                         set = function(_, v) Loothing.Settings:SetVotingMode(v) end,
@@ -49,13 +51,13 @@ local function GetSessionSettingsOptions()
                         desc = "When disabled, voting runs until the ML manually ends it.",
                         order = 2,
                         get = function()
-                            return Loothing.Settings:GetVotingTimeout() ~= LOOTHING_TIMING.NO_TIMEOUT
+                            return Loothing.Settings:GetVotingTimeout() ~= Loothing.Timing.NO_TIMEOUT
                         end,
                         set = function(_, v)
                             if v then
-                                Loothing.Settings:SetVotingTimeout(LOOTHING_TIMING.DEFAULT_VOTE_TIMEOUT)
+                                Loothing.Settings:SetVotingTimeout(Loothing.Timing.DEFAULT_VOTE_TIMEOUT)
                             else
-                                Loothing.Settings:SetVotingTimeout(LOOTHING_TIMING.NO_TIMEOUT)
+                                Loothing.Settings:SetVotingTimeout(Loothing.Timing.NO_TIMEOUT)
                             end
                         end,
                     },
@@ -64,11 +66,11 @@ local function GetSessionSettingsOptions()
                         name = L["VOTING_TIMEOUT_DURATION"] or "Timeout Duration",
                         desc = L["SECONDS"] or "Seconds",
                         order = 3,
-                        min = LOOTHING_TIMING.MIN_VOTE_TIMEOUT,
-                        max = LOOTHING_TIMING.MAX_VOTE_TIMEOUT,
+                        min = Loothing.Timing.MIN_VOTE_TIMEOUT,
+                        max = Loothing.Timing.MAX_VOTE_TIMEOUT,
                         step = 5,
                         hidden = function()
-                            return Loothing.Settings:GetVotingTimeout() == LOOTHING_TIMING.NO_TIMEOUT
+                            return Loothing.Settings:GetVotingTimeout() == Loothing.Timing.NO_TIMEOUT
                         end,
                         get = function() return Loothing.Settings:GetVotingTimeout() end,
                         set = function(_, v) Loothing.Settings:SetVotingTimeout(v) end,
@@ -258,8 +260,8 @@ local function GetSessionSettingsOptions()
                                     local success, err = Loothing.Council:AddMember(value)
                                     if success then
                                         Loothing:Print(string.format(L["IS_COUNCIL"], value))
-                                        if LoolibConfig and LoolibConfig.Dialog then
-                                            LoolibConfig.Dialog:RefreshContent("Loothing")
+                                        if Loolib.Config and Loolib.Config.Dialog then
+                                            Loolib.Config.Dialog:RefreshContent("Loothing")
                                         end
                                     else
                                         Loothing:Error(err or "Failed to add council member")
@@ -287,8 +289,8 @@ local function GetSessionSettingsOptions()
                             if value and Loothing.Council then
                                 Loothing.Council:RemoveMember(value)
                                 Loothing:Print(value .. " removed from council")
-                                if LoolibConfig and LoolibConfig.Dialog then
-                                    LoolibConfig.Dialog:RefreshContent("Loothing")
+                                if Loolib.Config and Loolib.Config.Dialog then
+                                    Loolib.Config.Dialog:RefreshContent("Loothing")
                                 end
                             end
                         end,
@@ -312,8 +314,8 @@ local function GetSessionSettingsOptions()
                                     Loothing.Council:RemoveMember(members[i])
                                 end
                                 Loothing:Print("All council members removed")
-                                if LoolibConfig and LoolibConfig.Dialog then
-                                    LoolibConfig.Dialog:RefreshContent("Loothing")
+                                if Loolib.Config and Loolib.Config.Dialog then
+                                    Loolib.Config.Dialog:RefreshContent("Loothing")
                                 end
                             end
                         end,

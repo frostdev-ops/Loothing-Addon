@@ -360,7 +360,7 @@ function LoothingCouncilTableMixin:UpdateMoreInfoPanel(candidate)
     end
 
     -- Response
-    local responseInfo = candidate.response and LOOTHING_RESPONSE_INFO[candidate.response]
+    local responseInfo = candidate.response and Loothing.ResponseInfo[candidate.response]
     if responseInfo then
         self.moreInfoResponse:SetText(responseInfo.name)
         self.moreInfoResponse:SetTextColor(responseInfo.color.r, responseInfo.color.g, responseInfo.color.b)
@@ -415,7 +415,7 @@ function LoothingCouncilTableMixin:UpdateMoreInfoPanel(candidate)
             for _, c in ipairs(allCandidates) do
                 local resp = c.response
                 if resp and (c.councilVotes or 0) > 0 then
-                    local info = LOOTHING_RESPONSE_INFO[resp]
+                    local info = Loothing.ResponseInfo[resp]
                     local respName = info and info.name or tostring(resp)
                     responseCounts[respName] = (responseCounts[respName] or 0) + c.councilVotes
                 end
@@ -438,7 +438,7 @@ end
 ----------------------------------------------------------------------]]
 
 function LoothingCouncilTableMixin:ShowCandidateContextMenu(row, candidate)
-    local L = LOOTHING_LOCALE or {}
+    local L = Loothing.Locale or {}
     local isML = Loothing.Session and Loothing.Session:IsMasterLooter()
 
     MenuUtil.CreateContextMenu(row, function(ownerRegion, rootDescription)
@@ -456,7 +456,7 @@ function LoothingCouncilTableMixin:ShowCandidateContextMenu(row, candidate)
             end)
 
             -- Award with response type
-            for id, info in pairs(LOOTHING_RESPONSE_INFO) do
+            for id, info in pairs(Loothing.ResponseInfo) do
                 rootDescription:CreateButton(string.format("Award: %s", info.name), function()
                     if Loothing.Session then
                         Loothing.Session:AwardItem(itemGUID, candidate.name, info.name)
@@ -510,7 +510,7 @@ function LoothingCouncilTableMixin:ShowCandidateContextMenu(row, candidate)
         -- Change response (ML only)
         if isML then
             local responseSubmenu = rootDescription:CreateButton(L["CHANGE_RESPONSE"] or "Change Response")
-            for id, info in pairs(LOOTHING_RESPONSE_INFO) do
+            for id, info in pairs(Loothing.ResponseInfo) do
                 responseSubmenu:CreateButton(info.name, function()
                     if self.currentItem and self.currentItem.candidateManager then
                         self.currentItem.candidateManager:SetCandidateResponse(candidate.name, id)

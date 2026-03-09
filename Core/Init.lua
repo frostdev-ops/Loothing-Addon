@@ -4,13 +4,20 @@
 ----------------------------------------------------------------------]]
 
 local Loolib = LibStub("Loolib")
+local Config = Loolib.Config
+local CreateFromMixins = Loolib.CreateFromMixins
+local Events = Loolib.Events
+local SecretUtil = Loolib.SecretUtil
+local CreateFrame, GetTime, GetInstanceInfo = CreateFrame, GetTime, GetInstanceInfo
+local GetNumGroupMembers, IsInGroup, IsInRaid = GetNumGroupMembers, IsInGroup, IsInRaid
+local print, select, UnitExists, UnitIsGroupLeader = print, select, UnitExists, UnitIsGroupLeader
 
 --[[--------------------------------------------------------------------
     Addon Namespace
 ----------------------------------------------------------------------]]
 
 Loothing = Loothing or {}
-Loothing.version = LOOTHING_VERSION
+Loothing.version = Loothing.VERSION
 Loothing.initialized = false
 
 -- ML detection state
@@ -23,6 +30,9 @@ Loothing.lootMethod = nil           -- Current loot method from GetLootMethod()
 -- ML check state (module-private via upvalues)
 local mlCheckTimer = nil            -- Pending NewMLCheck timer handle
 local mlRetryCount = 0              -- Number of ML retry attempts
+local raidEnterTimer = nil          -- Pending OnRaidEnter timer handle
+local raidEnterAt = nil             -- Absolute trigger time for pending OnRaidEnter timer
+local OnRaidEnter
 
 -- Module references (populated during init)
 Loothing.Settings = nil
@@ -51,7 +61,7 @@ Loothing.ResponseButtonSettings = nil
 Loothing.UI = nil
 
 -- Localization shortcut
-local L = LOOTHING_LOCALE
+local L = Loothing.Locale
 
 -- All popup dialogs are registered in UI/Popups.lua via LoothingPopups:Register()
 
@@ -98,28 +108,11 @@ eventFrame:RegisterEvent("PLAYER_LOGOUT")
 ----------------------------------------------------------------------]]
 
 local function InitializeModules()
-    -- Get loolib modules
-    local Events = Loolib:GetModule("Events")
-    local Data = Loolib:GetModule("Data")
-    local UI = Loolib:GetModule("UI")
-
-    -- Store loolib references
-    Loothing.Loolib = {
-        Events = Events,
-        Data = Data,
-        UI = UI,
-    }
-
     -- Initialize settings (must be first - other modules depend on it)
     -- Uses Loolib SavedVariables with multi-profile support
     if LoothingSettingsMixin then
-        Loothing.Settings = LoolibCreateFromMixins(LoothingSettingsMixin)
+        Loothing.Settings = CreateFromMixins(LoothingSettingsMixin)
         Loothing.Settings:Init()
-    end
-
-    -- Initialize announcer (depends on Settings)
-    if CreateLoothingAnnouncer then
-        Loothing.Announcer = CreateLoothingAnnouncer()
     end
 
     -- Initialize auto-award system (depends on Settings)
@@ -138,10 +131,10 @@ local function InitializeModules()
         Loothing.Options.BuildOptionsTable()
     end
 
-    -- Register options table with LoolibConfig for settings dialog
-    if LoolibConfig and LoothingOptionsTable then
-        if not LoolibConfig:IsRegistered("Loothing") then
-            LoolibConfig:RegisterOptionsTable("Loothing", LoothingOptionsTable)
+    -- Register options table with Loolib.Config for settings dialog
+    if Config and LoothingOptionsTable then
+        if not Config:IsRegistered("Loothing") then
+            Config:RegisterOptionsTable("Loothing", LoothingOptionsTable)
         end
     end
 
@@ -169,13 +162,13 @@ local function InitializeModules()
 
     -- Initialize history
     if LoothingHistoryMixin then
-        Loothing.History = LoolibCreateFromMixins(LoothingHistoryMixin)
+        Loothing.History = CreateFromMixins(LoothingHistoryMixin)
         Loothing.History:Init()
     end
 
     -- Initialize history import
     if LoothingHistoryImportMixin then
-        Loothing.HistoryImport = LoolibCreateFromMixins(LoothingHistoryImportMixin)
+        Loothing.HistoryImport = CreateFromMixins(LoothingHistoryImportMixin)
         Loothing.HistoryImport:Init()
     end
 
@@ -196,30 +189,35 @@ local function InitializeModules()
 
     -- Initialize council manager
     if LoothingCouncilMixin then
-        Loothing.Council = LoolibCreateFromMixins(LoothingCouncilMixin)
+        Loothing.Council = CreateFromMixins(LoothingCouncilMixin)
         Loothing.Council:Init()
     end
 
     -- Initialize observer manager
     if LoothingObserverMixin then
-        Loothing.Observer = LoolibCreateFromMixins(LoothingObserverMixin)
+        Loothing.Observer = CreateFromMixins(LoothingObserverMixin)
         Loothing.Observer:Init()
     end
 
-    -- Initialize communication (LoolibComm handles prefix registration + CHAT_MSG_ADDON)
+    -- Initialize communication (Loolib.Comm handles prefix registration + CHAT_MSG_ADDON)
     if LoothingCommMixin then
-        Loothing.Comm = LoolibCreateFromMixins(LoothingCommMixin)
+        Loothing.Comm = CreateFromMixins(LoothingCommMixin)
         Loothing.Comm:Init()
     end
 
-    -- Initialize encounter restrictions handler
+    -- Initialize encounter restrictions handler (must be before Announcer so it can hook OnRestrictionChanged)
     if CreateLoothingRestrictions then
         Loothing.Restrictions = CreateLoothingRestrictions()
     end
 
+    -- FIX(Area2-2): Initialize announcer AFTER Restrictions so it can register the callback
+    if CreateLoothingAnnouncer then
+        Loothing.Announcer = CreateLoothingAnnouncer()
+    end
+
     -- Initialize sync handler
     if LoothingSyncMixin then
-        Loothing.Sync = LoolibCreateFromMixins(LoothingSyncMixin)
+        Loothing.Sync = CreateFromMixins(LoothingSyncMixin)
         Loothing.Sync:Init()
     end
 
@@ -246,7 +244,7 @@ local function InitializeModules()
 
     -- Initialize session manager
     if LoothingSessionMixin then
-        Loothing.Session = LoolibCreateFromMixins(LoothingSessionMixin)
+        Loothing.Session = CreateFromMixins(LoothingSessionMixin)
         Loothing.Session:Init()
     end
 
@@ -373,7 +371,7 @@ local function DetermineML()
     -- In retail WoW 12.0+, the group/raid leader is treated as ML
     if IsInRaid() then
         for i = 1, GetNumGroupMembers() do
-            local name, rank = LoolibSecretUtil.SafeGetRaidRosterInfo(i)
+            local name, rank = SecretUtil.SafeGetRaidRosterInfo(i)
             if rank == 2 and name then -- Raid leader
                 return LoothingUtils.NormalizeName(name)
             end
@@ -385,7 +383,7 @@ local function DetermineML()
         for i = 1, 4 do
             local unit = "party" .. i
             if UnitExists(unit) and UnitIsGroupLeader(unit) then
-                local name, realm = LoolibSecretUtil.SafeUnitName(unit)
+                local name, realm = SecretUtil.SafeUnitName(unit)
                 if not name then return nil end
                 if realm and realm ~= "" then
                     return name .. "-" .. realm
@@ -442,7 +440,7 @@ local function PerformMLCheck()
     Loothing.isInGuildGroup = LoothingUtils.IsGuildGroup()
 
     -- Update stored loot method
-    Loothing.lootMethod = GetLootMethod and GetLootMethod() or nil
+    Loothing.lootMethod = Loothing.GetLootMethod and Loothing.GetLootMethod() or nil
 
     -- Early exit if nothing changed (but re-evaluate if we're ML without handleLoot)
     if ml == oldML and isNowML == wasML and (not isNowML or Loothing.handleLoot) then
@@ -516,9 +514,28 @@ local function ScheduleMLCheck()
     mlCheckTimer = C_Timer.NewTimer(2, PerformMLCheck)
 end
 
+local function ScheduleRaidEnter(delay)
+    local triggerAt = GetTime() + delay
+
+    if raidEnterTimer and raidEnterAt and raidEnterAt <= triggerAt then
+        return
+    end
+
+    if raidEnterTimer then
+        raidEnterTimer:Cancel()
+    end
+
+    raidEnterAt = triggerAt
+    raidEnterTimer = C_Timer.NewTimer(delay, function()
+        raidEnterTimer = nil
+        raidEnterAt = nil
+        OnRaidEnter()
+    end)
+end
+
 --- Handle instance entry - prompts leader to activate Loothing
 -- Separate from PerformMLCheck which handles ML *transitions*
-local function OnRaidEnter()
+OnRaidEnter = function()
     if not Loothing.initialized then return end
 
     local usageMode = Loothing.Settings and Loothing.Settings:Get("ml.usageMode", "ask_gl") or "ask_gl"
@@ -604,7 +621,7 @@ function Loothing:StopHandleLoot()
     if self.Comm and self.Comm.BroadcastStopHandleLoot then
         self.Comm:BroadcastStopHandleLoot()
     elseif self.Comm and self.Comm.Send then
-        self.Comm:Send(LOOTHING_MSG_TYPE.STOP_HANDLE_LOOT, {}, "group")
+        self.Comm:Send(Loothing.MsgType.STOP_HANDLE_LOOT, {}, "group")
     end
 
     -- Disable whisper command handler
@@ -624,7 +641,6 @@ function Loothing:StopHandleLoot()
 end
 
 local function RegisterEvents()
-    local Events = Loothing.Loolib.Events
     if not Events or not Events.Registry then return end
 
     -- ML detection events
@@ -641,6 +657,12 @@ local function RegisterEvents()
     end, Loothing)
 
     Events.Registry:RegisterEventCallback("GROUP_LEFT", function()
+        if raidEnterTimer then
+            raidEnterTimer:Cancel()
+            raidEnterTimer = nil
+            raidEnterAt = nil
+        end
+
         if Loothing.handleLoot then
             Loothing:StopHandleLoot()
         end
@@ -659,7 +681,7 @@ local function RegisterEvents()
     end, Loothing)
 
     Events.Registry:RegisterEventCallback("RAID_INSTANCE_WELCOME", function()
-        C_Timer.After(2, OnRaidEnter)
+        ScheduleRaidEnter(2)
     end, Loothing)
 
     -- Raid events
@@ -706,7 +728,7 @@ local function RegisterEvents()
         end
     end, Loothing)
 
-    -- NOTE: CHAT_MSG_ADDON is handled by LoolibComm (registered in LoothingCommMixin:Init)
+    -- NOTE: CHAT_MSG_ADDON is handled by Loolib.Comm (registered in LoothingCommMixin:Init)
 
     -- Wire VersionCheck callbacks to Comm events
     if Loothing.Comm and LoothingVersionCheck then
@@ -785,11 +807,11 @@ local function RegisterSlashCommands()
     end
 
     local function openConfig(section)
-        if not LoolibConfig then
+        if not Config then
             printError(L["SLASH_NO_CONFIG"] or "Config dialog not available.")
             return
         end
-        LoolibConfig:Open("Loothing", section)
+        Config:Open("Loothing", section)
     end
 
     local function handleIgnore(argText)
@@ -1065,7 +1087,8 @@ local function RegisterSlashCommands()
                         retries = retries or 0
                         local name, resolvedLink = C_Item.GetItemInfo(link or input)
                         if resolvedLink then
-                            local item = Loothing.Session:AddItem(resolvedLink, UnitName("player"), nil, true)
+                            -- FIX(Area4-4): Use SafeUnitName to avoid secret value tainting
+                            local item = Loothing.Session:AddItem(resolvedLink, Loolib.SecretUtil.SafeUnitName("player"), nil, true)
                             if item then
                                 printLine(string.format("%s added to session.", resolvedLink))
                             else
@@ -1276,7 +1299,7 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
     if event == "ADDON_LOADED" then
         local addonName = ...
         if addonName == "Loothing" then
-            -- Initialize all modules (LoolibComm handles addon prefix registration)
+            -- Initialize all modules (Loolib.Comm handles addon prefix registration)
             InitializeModules()
 
             -- Register slash commands
@@ -1341,7 +1364,7 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
                 local versionText = settingsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
                 versionText:SetPoint("TOP", subdesc, "BOTTOM", 0, -8)
                 versionText:SetTextColor(0.7, 0.7, 0.7)
-                versionText:SetText("v" .. (LOOTHING_VERSION or "?"))
+                versionText:SetText("v" .. (Loothing.VERSION or "?"))
 
                 local openBtn = CreateFrame("Button", nil, settingsFrame, "UIPanelButtonTemplate")
                 openBtn:SetSize(200, 30)
@@ -1351,8 +1374,8 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
                     if SettingsPanel then
                         SettingsPanel:Close()
                     end
-                    if LoolibConfig then
-                        LoolibConfig:Open("Loothing")
+                    if Config then
+                        Config:Open("Loothing")
                     end
                 end)
 
@@ -1366,7 +1389,7 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             end
 
             -- Print loaded message
-            print(string.format(L["ADDON_LOADED"], LOOTHING_VERSION))
+            print(string.format(L["ADDON_LOADED"], Loothing.VERSION))
         end
     elseif event == "PLAYER_ENTERING_WORLD" then
         local isLogin, isReload = ...
@@ -1375,14 +1398,14 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             Loothing:RestoreFromCache()
             -- If cache didn't restore handleLoot, re-check like login path
             if IsInGroup() and not Loothing.handleLoot then
-                C_Timer.After(3, OnRaidEnter)
+                ScheduleRaidEnter(3)
             end
         elseif isLogin and Loothing.initialized then
             -- Try to restore cached session (e.g., disconnect/reconnect within 15 min)
             Loothing:RestoreFromCache()
             -- If no session was restored, check for raid entry prompt
             if IsInGroup() and not Loothing.handleLoot then
-                C_Timer.After(3, OnRaidEnter)
+                ScheduleRaidEnter(3)
             end
         end
     elseif event == "PLAYER_LOGOUT" then
@@ -1409,16 +1432,16 @@ Loothing.debug = false
 
 function Loothing:Debug(...)
     if self.debug then
-        print("|cff00ff00[Loothing Debug]|r", LoolibSecretUtil.SecretsForPrint(...))
+        print("|cff00ff00[Loothing Debug]|r", SecretUtil.SecretsForPrint(...))
     end
 end
 
 function Loothing:Error(...)
-    print("|cffff0000[Loothing Error]|r", LoolibSecretUtil.SecretsForPrint(...))
+    print("|cffff0000[Loothing Error]|r", SecretUtil.SecretsForPrint(...))
 end
 
 function Loothing:Print(...)
-    print("|cff00ccff[Loothing]|r", LoolibSecretUtil.SecretsForPrint(...))
+    print("|cff00ccff[Loothing]|r", SecretUtil.SecretsForPrint(...))
 end
 
 --[[--------------------------------------------------------------------
@@ -1545,6 +1568,9 @@ function Loothing:CacheStateForReconnect()
         cache.session.items = items
     end
 
+    -- FIX(critical-02): Tag cache with owner to prevent alt character restore
+    cache.owner = LoothingUtils.GetPlayerFullName()
+
     -- Store in global scope (persists across profiles)
     self.Settings:SetGlobalValue("reconnectCache", cache)
     self:Debug("Cached state for reconnect (handleLoot:", tostring(self.handleLoot), ")")
@@ -1557,6 +1583,14 @@ function Loothing:RestoreFromCache()
     local cache = self.Settings:GetGlobalValue("reconnectCache")
     if not cache then
         self:Debug("No reconnect cache found")
+        return
+    end
+
+    -- FIX(critical-02): Reject cache if it belongs to a different character
+    local currentOwner = LoothingUtils.GetPlayerFullName()
+    if cache.owner and currentOwner and cache.owner ~= currentOwner then
+        self:Debug("Reconnect cache owner mismatch; clearing stale cache from", tostring(cache.owner))
+        self.Settings:SetGlobalValue("reconnectCache", nil)
         return
     end
 

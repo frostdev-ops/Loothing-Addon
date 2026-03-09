@@ -430,7 +430,8 @@ function LoothingAutoPass:ShouldAutoPass(itemLink, playerClass, classesFlag)
 
     -- Default to player's class
     if not playerClass then
-        local _, class = UnitClass("player")
+        -- FIX(Area4-4): Use SafeUnitClass to avoid secret value tainting
+        local _, class = Loolib.SecretUtil.SafeUnitClass("player")
         playerClass = class
     end
 

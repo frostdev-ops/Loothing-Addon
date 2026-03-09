@@ -3,7 +3,9 @@
     AddItemFrame - Dedicated frame for adding items to a session
 ----------------------------------------------------------------------]]
 
-local L = LOOTHING_LOCALE
+local Loolib = LibStub("Loolib")
+
+local L = Loothing.Locale
 
 --[[--------------------------------------------------------------------
     Item Resolution Pipeline
@@ -453,7 +455,7 @@ function LoothingAddItemFrameMixin:RefreshRecentDrops()
             local link = C_Container.GetContainerItemLink(bag, slot)
             if link then
                 local _, _, quality, ilvl = C_Item.GetItemInfo(link)
-                if quality and quality >= (LOOTHING_MIN_QUALITY or 4) then
+                if quality and quality >= (Loothing.MinQuality or 4) then
                     local timeRemaining = nil
                     if Loothing.TradeQueue and Loothing.TradeQueue.GetContainerItemTradeTimeRemaining then
                         timeRemaining = Loothing.TradeQueue:GetContainerItemTradeTimeRemaining(bag, slot)
@@ -770,7 +772,8 @@ function LoothingAddItemFrameMixin:OnAddClick()
 
     local added = 0
     for _, entry in ipairs(self.itemQueue) do
-        local item = Loothing.Session:AddItem(entry.link, UnitName("player"), nil, true)
+        -- FIX(Area4-4): Use SafeUnitName to avoid secret value tainting
+        local item = Loothing.Session:AddItem(entry.link, Loolib.SecretUtil.SafeUnitName("player"), nil, true)
         if item then
             added = added + 1
         end
@@ -811,7 +814,7 @@ end
 ----------------------------------------------------------------------]]
 
 function CreateLoothingAddItemFrame()
-    local obj = LoolibCreateFromMixins(LoothingAddItemFrameMixin)
+    local obj = Loolib.CreateFromMixins(LoothingAddItemFrameMixin)
     obj:Init()
     return obj
 end

@@ -3,6 +3,8 @@
     Event registration and roll handling entry point.
 ----------------------------------------------------------------------]]
 
+local time = time
+
 LoothingGroupLootMixin = LoothingGroupLootMixin or {}
 
 --- Enable the group loot handler.
@@ -46,7 +48,14 @@ function LoothingGroupLootMixin:OnStartLootRoll(event, rollID)
         return
     end
 
-    local _, _, _, quality, _, canNeed, _, _, _, _, _, _, canTransmog = GetLootRollItemInfo(rollID)
+    local rollInfo = Loothing.GetLootRollItemData(rollID)
+    if not rollInfo then
+        return
+    end
+
+    local quality = rollInfo.quality
+    local canNeed = rollInfo.canNeed
+    local canTransmog = rollInfo.canTransmog
 
     -- Skip below threshold
     local qualityThreshold = Loothing.Settings:Get("groupLoot.qualityThreshold") or Enum.ItemQuality.Epic
@@ -86,4 +95,3 @@ function LoothingGroupLootMixin:OnStartLootRoll(event, rollID)
         self:LogRoll(rollID, link, rollType, isMasterLooter)
     end)
 end
-

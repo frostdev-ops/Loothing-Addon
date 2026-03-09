@@ -16,6 +16,9 @@
 ----------------------------------------------------------------------]]
 
 local Loolib = LibStub("Loolib")
+local Compressor = Loolib.Compressor
+local CreateFromMixins = Loolib.CreateFromMixins
+local Serializer = Loolib.Serializer
 
 --[[--------------------------------------------------------------------
     Checksum Helpers
@@ -45,10 +48,10 @@ LoothingProtocolMixin = {}
 
 --- Initialize protocol handler
 function LoothingProtocolMixin:Init()
-    self.version = LOOTHING_PROTOCOL_VERSION
+    self.version = Loothing.PROTOCOL_VERSION
 
-    self.Serializer = LoolibSerializer
-    self.Compressor = LoolibCompressor
+    self.Serializer = Serializer
+    self.Compressor = Compressor
 
     assert(self.Serializer, "Loolib Serializer not available")
     assert(self.Compressor, "Loolib Compressor not available")
@@ -60,9 +63,9 @@ end
 
 --- Encode a command + data for transmission
 -- Pipeline: Serialize → Compress → append Adler32 checksum → EncodeForAddonChannel
--- @param command string - Message type from LOOTHING_MSG_TYPE
+-- @param command string - Message type from Loothing.MsgType
 -- @param data table|nil - Message payload (structured table)
--- @return string|nil - Encoded message ready for LoolibComm
+-- @return string|nil - Encoded message ready for Loolib.Comm
 function LoothingProtocolMixin:Encode(command, data)
     -- Step 1: Serialize (version + command + data → string)
     local serialized = self.Serializer:Serialize(self.version, command, data)
@@ -82,7 +85,7 @@ end
 
 --- Decode a received message
 -- Pipeline: DecodeForAddonChannel → split checksum → Decompress → verify → Deserialize
--- @param encoded string - Encoded message from LoolibComm callback
+-- @param encoded string - Encoded message from Loolib.Comm callback
 -- @return number|nil, string|nil, table|nil - version, command, data (all nil on error)
 function LoothingProtocolMixin:Decode(encoded)
     if not encoded or encoded == "" then
@@ -127,5 +130,5 @@ end
     Singleton Instance
 ----------------------------------------------------------------------]]
 
-LoothingProtocol = LoolibCreateFromMixins(LoothingProtocolMixin)
+LoothingProtocol = CreateFromMixins(LoothingProtocolMixin)
 LoothingProtocol:Init()

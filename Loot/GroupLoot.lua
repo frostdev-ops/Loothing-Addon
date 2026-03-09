@@ -33,7 +33,7 @@ LoothingGroupLootRollNames = {
 ----------------------------------------------------------------------]]
 
 function CreateLoothingGroupLoot()
-    local groupLoot = LoolibCreateFromMixins(LoothingGroupLootMixin)
+    local groupLoot = Loolib.CreateFromMixins(LoothingGroupLootMixin)
     if groupLoot.Init then
         groupLoot:Init()
     end

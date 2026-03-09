@@ -3,6 +3,10 @@
     Minimap - Addon Compartment + custom minimap button
 ----------------------------------------------------------------------]]
 
+local Loolib = LibStub("Loolib")
+local Config = Loolib.Config
+local CreateFromMixins = Loolib.CreateFromMixins
+
 local LOGO_TEXTURE = "Interface\\AddOns\\Loothing\\Media\\logo"
 
 --[[--------------------------------------------------------------------
@@ -17,8 +21,8 @@ local LOGO_TEXTURE = "Interface\\AddOns\\Loothing\\Media\\logo"
 
 function Loothing_OnAddonCompartmentClick(addonName, mouseButton)
     if mouseButton == "RightButton" then
-        if LoolibConfig then
-            LoolibConfig:Open("Loothing")
+        if Config then
+            Config:Open("Loothing")
         end
     else
         if Loothing and Loothing.UI and Loothing.UI.MainFrame then
@@ -30,10 +34,10 @@ end
 function Loothing_OnAddonCompartmentEnter(addonName, menuButtonFrame)
     GameTooltip:SetOwner(menuButtonFrame, "ANCHOR_LEFT")
     GameTooltip:AddLine("Loothing", 1, 0.82, 0)
-    local version = (Loothing and Loothing.version) or LOOTHING_VERSION or "1.0.0"
+    local version = (Loothing and Loothing.version) or Loothing.VERSION or "1.0.0"
     GameTooltip:AddLine("v" .. version, 0.5, 0.5, 0.5)
     GameTooltip:AddLine(" ")
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
     if L then
         GameTooltip:AddLine(L["MINIMAP_TOOLTIP_LEFT"] or "|cffffffffLeft-Click|r Toggle main window", 1, 1, 1)
         GameTooltip:AddLine(L["MINIMAP_TOOLTIP_RIGHT"] or "|cffffffffRight-Click|r Open settings", 1, 1, 1)
@@ -191,7 +195,7 @@ end
 
 --- Show context menu
 function LoothingMinimapButtonMixin:ShowContextMenu()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     MenuUtil.CreateContextMenu(self.button, function(ownerRegion, rootDescription)
         rootDescription:CreateTitle("Loothing")
@@ -201,8 +205,8 @@ function LoothingMinimapButtonMixin:ShowContextMenu()
             end
         end)
         rootDescription:CreateButton(L["SETTINGS"] or "Settings", function()
-            if LoolibConfig then
-                LoolibConfig:Open("Loothing")
+            if Config then
+                Config:Open("Loothing")
             end
         end)
         rootDescription:CreateDivider()
@@ -217,12 +221,12 @@ end
 
 --- Handle mouse enter
 function LoothingMinimapButtonMixin:OnEnter()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     GameTooltip:SetOwner(self.button, "ANCHOR_LEFT")
     GameTooltip:AddLine("Loothing", 1, 0.82, 0)
 
-    local version = LOOTHING_VERSION or "1.0.0"
+    local version = Loothing.VERSION or "1.0.0"
     GameTooltip:AddLine(string.format("v%s", version), 0.5, 0.5, 0.5)
 
     GameTooltip:AddLine(" ")
@@ -242,7 +246,7 @@ function LoothingMinimapButtonMixin:OnEnter()
             end
         end
 
-        if Loothing.Session:GetState() ~= LOOTHING_SESSION_STATE.INACTIVE then
+        if Loothing.Session:GetState() ~= Loothing.SessionState.INACTIVE then
             GameTooltip:AddLine(" ")
             GameTooltip:AddLine(L["SESSION_ACTIVE"] or "Session Active", 0, 1, 0)
 
@@ -251,9 +255,9 @@ function LoothingMinimapButtonMixin:OnEnter()
                 local pending = 0
                 local voting = 0
                 for _, item in items:Enumerate() do
-                    if item.state == LOOTHING_ITEM_STATE.PENDING then
+                    if item.state == Loothing.ItemState.PENDING then
                         pending = pending + 1
-                    elseif item.state == LOOTHING_ITEM_STATE.VOTING then
+                    elseif item.state == Loothing.ItemState.VOTING then
                         voting = voting + 1
                     end
                 end
@@ -426,7 +430,7 @@ end
 ----------------------------------------------------------------------]]
 
 function CreateLoothingMinimapButton()
-    local button = LoolibCreateFromMixins(LoothingMinimapButtonMixin)
+    local button = CreateFromMixins(LoothingMinimapButtonMixin)
     button:Init()
     return button
 end

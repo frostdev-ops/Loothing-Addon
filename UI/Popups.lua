@@ -7,7 +7,7 @@
 ----------------------------------------------------------------------]]
 
 local Loolib = LibStub("Loolib")
-local L = LOOTHING_LOCALE
+local L = Loothing.Locale
 
 --[[--------------------------------------------------------------------
     Popup Registry
@@ -93,7 +93,7 @@ function LoothingPopups:Show(name, data, onAccept, onCancel)
     end
 
     -- Create dialog
-    local dialog = CreateLoolibDialog()
+    local dialog = Loolib.UI.Dialog.Create()
 
     -- Set title
     local title = config.title or "Loothing"
@@ -839,7 +839,7 @@ LoothingPopups:Register("LOOTHING_CONFIRM_PROFILE_OVERWRITE", {
 -- @param onYes function - Callback when yes is clicked
 -- @param onNo function - Callback when no is clicked (optional)
 function LoothingPopups:Confirm(title, message, onYes, onNo)
-    local dialog = CreateLoolibDialog()
+    local dialog = Loolib.UI.Dialog.Create()
     dialog:SetTitle(title)
     dialog:SetMessage(message)
     dialog:SetModal(true)
@@ -873,7 +873,7 @@ end
 -- @param message string - Dialog message
 -- @param onOK function - Callback when OK is clicked (optional)
 function LoothingPopups:Alert(title, message, onOK)
-    local dialog = CreateLoolibDialog()
+    local dialog = Loolib.UI.Dialog.Create()
     dialog:SetTitle(title)
     dialog:SetMessage(message)
     dialog:SetModal(true)
@@ -901,7 +901,7 @@ end
 -- @param onAccept function - Callback with input value when accepted
 -- @param onCancel function - Callback when cancelled (optional)
 function LoothingPopups:Input(title, prompt, defaultValue, onAccept, onCancel)
-    local dialog = CreateLoolibInputDialog()
+    local dialog = Loolib.UI.Dialog.CreateInput()
     dialog:SetTitle(title)
     dialog:SetPrompt(prompt)
     dialog:SetInputValue(defaultValue or "")

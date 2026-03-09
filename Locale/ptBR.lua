@@ -3,12 +3,12 @@
     Locale - Portuguese (Brazilian) localization
 ----------------------------------------------------------------------]]
 
-local locale = (LOOTHING_FORCE_LOCALE or GetLocale())
+local locale = (Loothing.ForceLocale or GetLocale())
 if locale ~= "ptBR" then
     return
 end
 
-local base = LOOTHING_LOCALE or {}
+local base = Loothing.Locale or {}
 local L = setmetatable({}, { __index = base })
 
 -- General
@@ -733,7 +733,7 @@ L["CONFIG_OBSERVER_REMOVE_ALL"] = L["CONFIG_OBSERVER_REMOVE_ALL"] or "Remove All
 L["CONFIG_OBSERVER_REMOVE_ALL_DESC"] = L["CONFIG_OBSERVER_REMOVE_ALL_DESC"] or "Remove all observers from the list"
 
 -- Make locale available globally
-LOOTHING_LOCALE = L
+Loothing.Locale = L
 
 -- Return for module use
 return L

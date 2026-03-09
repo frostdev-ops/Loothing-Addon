@@ -3,7 +3,9 @@
     These settings only affect you. They are not broadcast to the raid.
 ----------------------------------------------------------------------]]
 
-local L = LOOTHING_LOCALE
+local Loolib = LibStub("Loolib")
+
+local L = Loothing.Locale
 
 local function GetQualityValues()
     return { [0]="Poor", [1]="Common", [2]="Uncommon", [3]="Rare", [4]="Epic", [5]="Legendary" }
@@ -174,14 +176,14 @@ local function GetLocalPreferencesOptions()
                         get = function()
                             local enabled = Loothing.Settings:GetRollFrameTimeoutEnabled()
                             local duration = Loothing.Settings:GetRollFrameTimeoutDuration()
-                            return enabled and duration ~= LOOTHING_TIMING.NO_TIMEOUT
+                            return enabled and duration ~= Loothing.Timing.NO_TIMEOUT
                         end,
                         set = function(_, v)
                             Loothing.Settings:SetRollFrameTimeoutEnabled(v)
                             if not v then
-                                Loothing.Settings:SetRollFrameTimeoutDuration(LOOTHING_TIMING.NO_TIMEOUT)
-                            elseif Loothing.Settings:GetRollFrameTimeoutDuration() == LOOTHING_TIMING.NO_TIMEOUT then
-                                Loothing.Settings:SetRollFrameTimeoutDuration(LOOTHING_TIMING.DEFAULT_ROLL_TIMEOUT)
+                                Loothing.Settings:SetRollFrameTimeoutDuration(Loothing.Timing.NO_TIMEOUT)
+                            elseif Loothing.Settings:GetRollFrameTimeoutDuration() == Loothing.Timing.NO_TIMEOUT then
+                                Loothing.Settings:SetRollFrameTimeoutDuration(Loothing.Timing.DEFAULT_ROLL_TIMEOUT)
                             end
                         end,
                     },
@@ -190,13 +192,13 @@ local function GetLocalPreferencesOptions()
                         name = L["CONFIG_ROLLFRAME_TIMER_DURATION"] or "Timer Duration",
                         desc = L["SECONDS"] or "Seconds",
                         order = 12,
-                        min = LOOTHING_TIMING.MIN_ROLL_TIMEOUT,
-                        max = LOOTHING_TIMING.MAX_ROLL_TIMEOUT,
+                        min = Loothing.Timing.MIN_ROLL_TIMEOUT,
+                        max = Loothing.Timing.MAX_ROLL_TIMEOUT,
                         step = 5,
                         hidden = function()
                             local enabled = Loothing.Settings:GetRollFrameTimeoutEnabled()
                             local duration = Loothing.Settings:GetRollFrameTimeoutDuration()
-                            return not enabled or duration == LOOTHING_TIMING.NO_TIMEOUT
+                            return not enabled or duration == Loothing.Timing.NO_TIMEOUT
                         end,
                         get = function() return Loothing.Settings:GetRollFrameTimeoutDuration() end,
                         set = function(_, v) Loothing.Settings:SetRollFrameTimeoutDuration(v) end,
@@ -564,8 +566,8 @@ local function GetLocalPreferencesOptions()
                             if Loothing.History then
                                 Loothing.History:ClearHistory()
                                 Loothing:Print("All history cleared")
-                                if LoolibConfig and LoolibConfig.Dialog then
-                                    LoolibConfig.Dialog:RefreshContent("Loothing")
+                                if Loolib.Config and Loolib.Config.Dialog then
+                                    Loolib.Config.Dialog:RefreshContent("Loothing")
                                 end
                             end
                         end,

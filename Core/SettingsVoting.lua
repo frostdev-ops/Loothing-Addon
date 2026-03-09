@@ -2,11 +2,13 @@
     Loothing - Settings (Voting & Session Control)
 ----------------------------------------------------------------------]]
 
+local Loolib = LibStub("Loolib")
+
 LoothingSettingsMixin = LoothingSettingsMixin or {}
 
 -- Voting mode and timing
 function LoothingSettingsMixin:GetVotingMode()
-    return self:Get("settings.votingMode", LOOTHING_VOTING_MODE.SIMPLE)
+    return self:Get("settings.votingMode", Loothing.VotingMode.SIMPLE)
 end
 
 function LoothingSettingsMixin:SetVotingMode(mode)
@@ -14,14 +16,14 @@ function LoothingSettingsMixin:SetVotingMode(mode)
 end
 
 function LoothingSettingsMixin:GetVotingTimeout()
-    return self:Get("settings.votingTimeout", LOOTHING_TIMING.DEFAULT_VOTE_TIMEOUT)
+    return self:Get("settings.votingTimeout", Loothing.Timing.DEFAULT_VOTE_TIMEOUT)
 end
 
 function LoothingSettingsMixin:SetVotingTimeout(seconds)
-    if seconds == LOOTHING_TIMING.NO_TIMEOUT then
+    if seconds == Loothing.Timing.NO_TIMEOUT then
         self:Set("settings.votingTimeout", 0)
     else
-        seconds = math.max(LOOTHING_TIMING.MIN_VOTE_TIMEOUT, math.min(LOOTHING_TIMING.MAX_VOTE_TIMEOUT, seconds))
+        seconds = math.max(Loothing.Timing.MIN_VOTE_TIMEOUT, math.min(Loothing.Timing.MAX_VOTE_TIMEOUT, seconds))
         self:Set("settings.votingTimeout", seconds)
     end
 end
@@ -75,7 +77,7 @@ function LoothingSettingsMixin:GetMasterLooter()
 
     if IsInRaid() then
         for i = 1, GetNumGroupMembers() do
-            local name, rank = LoolibSecretUtil.SafeGetRaidRosterInfo(i)
+            local name, rank = Loolib.SecretUtil.SafeGetRaidRosterInfo(i)
             if rank == 2 and name then
                 return name
             end
@@ -87,7 +89,7 @@ function LoothingSettingsMixin:GetMasterLooter()
         for i = 1, 4 do
             local unit = "party" .. i
             if UnitExists(unit) and UnitIsGroupLeader(unit) then
-                local name, realm = LoolibSecretUtil.SafeUnitName(unit)
+                local name, realm = Loolib.SecretUtil.SafeUnitName(unit)
                 if name then
                     if realm and realm ~= "" then
                         return name .. "-" .. realm

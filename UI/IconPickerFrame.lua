@@ -39,7 +39,7 @@ end
 function LoothingIconPickerMixin:Refresh()
     local search  = self.searchStr and self.searchStr:lower() or ""
     local filtered = {}
-    for _, entry in ipairs(LOOTHING_ICON_LIST) do
+    for _, entry in ipairs(Loothing.IconList) do
         if search == "" or entry.label:lower():find(search, 1, true) then
             filtered[#filtered + 1] = entry
         end
@@ -203,7 +203,7 @@ function LoothingIconPickerMixin:OnLoad()
     self.iconButtons = {}
 
     -- Pre-create buttons for the full icon list
-    for i = 1, #LOOTHING_ICON_LIST do
+    for i = 1, #Loothing.IconList do
         self:CreateIconButton(i)
     end
 

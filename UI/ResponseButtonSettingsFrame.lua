@@ -3,6 +3,8 @@
     ResponseButtonSettingsFrame - Visual editor for response button sets
 ----------------------------------------------------------------------]]
 
+local Loolib = LibStub("Loolib")
+
 local FRAME_W        = 760
 local FRAME_H        = 720
 local FRAME_MIN_W    = 680
@@ -518,7 +520,7 @@ function LoothingResponseButtonSettingsMixin:RebuildRows()
 
     self.scrollChild:SetHeight(math.max(yOffset, 1))
 
-    -- Keep LOOTHING_RESPONSE_INFO in sync after any data change
+    -- Keep Loothing.ResponseInfo in sync after any data change
     if Loothing.ResponseManager and self.frame and self.frame:IsShown() then
         Loothing.ResponseManager:LoadResponses()
     end
@@ -821,7 +823,7 @@ end
 ----------------------------------------------------------------------]]
 
 function CreateLoothingResponseButtonSettings()
-    local obj = LoolibCreateFromMixins(LoothingResponseButtonSettingsMixin)
+    local obj = Loolib.CreateFromMixins(LoothingResponseButtonSettingsMixin)
     obj:Init()
     return obj
 end

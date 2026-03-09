@@ -92,7 +92,7 @@ function LoothingRollFrameMixin:CreateFrame()
 end
 
 function LoothingRollFrameMixin:CreateElements()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     self.closeButton = CreateFrame("Button", nil, self.frame, "UIPanelCloseButton")
     self.closeButton:SetPoint("TOPRIGHT", -5, -5)
@@ -290,7 +290,7 @@ function LoothingRollFrameMixin:CreateSessionButton(index, item)
         btn.selectBar:Hide()
         btn.selectGlow:Hide()
 
-        if item.state == LOOTHING_ITEM_STATE.AWARDED then
+        if item.state == Loothing.ItemState.AWARDED then
             btn.check:Show()
             btn.icon:SetAlpha(0.5)
         elseif hasResponded then
@@ -303,7 +303,7 @@ function LoothingRollFrameMixin:CreateSessionButton(index, item)
         end
     end
 
-    if item.state == LOOTHING_ITEM_STATE.AWARDED then
+    if item.state == Loothing.ItemState.AWARDED then
         btn.check:SetTexture("Interface\\RaidFrame\\ReadyCheck-Ready")
         btn.check:Show()
     end
@@ -662,7 +662,7 @@ end
 ----------------------------------------------------------------------]]
 
 function LoothingRollFrameMixin:CreateResponseSection()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     local container = CreateFrame("Frame", nil, self.frame)
     container:SetPoint("TOPLEFT", 20, -140)
@@ -690,10 +690,10 @@ function LoothingRollFrameMixin:RefreshResponseButtons()
     wipe(self.responseButtonsArray)
 
     local buttons = Loothing.Settings and Loothing.Settings:GetResponseButtons() or {}
-    if #buttons == 0 and LOOTHING_DEFAULT_SETTINGS then
-        local defaultSet = LOOTHING_DEFAULT_SETTINGS.responseSets
-            and LOOTHING_DEFAULT_SETTINGS.responseSets.sets
-            and LOOTHING_DEFAULT_SETTINGS.responseSets.sets[1]
+    if #buttons == 0 and Loothing.DefaultSettings then
+        local defaultSet = Loothing.DefaultSettings.responseSets
+            and Loothing.DefaultSettings.responseSets.sets
+            and Loothing.DefaultSettings.responseSets.sets[1]
         if defaultSet and defaultSet.buttons then
             buttons = defaultSet.buttons
         end

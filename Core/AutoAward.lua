@@ -101,12 +101,12 @@ function LoothingAutoAwardMixin:FindDisenchanter()
         for i = 1, numMembers do
             local unit = isRaid and ("raid" .. i) or ("party" .. i)
             if UnitExists(unit) then
-                local name = LoolibSecretUtil.SafeUnitName(unit, true)
+                local name = Loolib.SecretUtil.SafeUnitName(unit, true)
                 local note = ""
 
                 -- Get player's raid note if available
                 if isRaid then
-                    local _, _, _, _, _, _, _, publicNote = LoolibSecretUtil.SafeGetRaidRosterInfo(i)
+                    local _, _, _, _, _, _, _, publicNote = Loolib.SecretUtil.SafeGetRaidRosterInfo(i)
                     note = publicNote or ""
                 end
 
@@ -126,7 +126,7 @@ function LoothingAutoAwardMixin:FindDisenchanter()
     if IsInGuild() then
         local numGuildMembers = GetNumGuildMembers()
         for i = 1, numGuildMembers do
-            local name, _, _, _, _, _, publicNote, _, isOnline = GetGuildRosterInfo(i)
+            local name, _, _, _, _, _, publicNote, _, isOnline = Loothing.GetGuildRosterInfo(i)
             if isOnline and name then
                 local lowerNote = (publicNote or ""):lower()
                 if lowerNote:find("enchant") or lowerNote:find(" de ") or lowerNote == "de" then
@@ -155,7 +155,7 @@ function LoothingAutoAwardMixin:IsPlayerInRaid(playerName)
 
     if numMembers == 0 then
         -- Solo, check if it's us
-        local myName = LoolibSecretUtil.SafeUnitName("player")
+        local myName = Loolib.SecretUtil.SafeUnitName("player")
         if not myName then return false end
         return normalized == LoothingUtils.NormalizeName(myName)
     end
@@ -164,7 +164,7 @@ function LoothingAutoAwardMixin:IsPlayerInRaid(playerName)
     for i = 1, numMembers do
         local unit = isRaid and ("raid" .. i) or ("party" .. i)
         if UnitExists(unit) then
-            local name = LoolibSecretUtil.SafeUnitName(unit, true)
+            local name = Loolib.SecretUtil.SafeUnitName(unit, true)
             if name and LoothingUtils.NormalizeName(name) == normalized then
                 return true
             end
@@ -292,7 +292,7 @@ end
 ----------------------------------------------------------------------]]
 
 function CreateLoothingAutoAward()
-    local autoAward = LoolibCreateFromMixins(LoothingAutoAwardMixin)
+    local autoAward = Loolib.CreateFromMixins(LoothingAutoAwardMixin)
     autoAward:Init()
     return autoAward
 end

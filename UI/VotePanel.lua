@@ -9,7 +9,7 @@ local Loolib = LibStub("Loolib")
     LoothingVotePanelMixin
 ----------------------------------------------------------------------]]
 
-LoothingVotePanelMixin = LoolibCreateFromMixins(LoolibCallbackRegistryMixin)
+LoothingVotePanelMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
 
 local VOTE_PANEL_EVENTS = {
     "OnVoteSubmitted",
@@ -24,12 +24,12 @@ local responseButtonPool = {}
 
 --- Initialize the vote panel
 function LoothingVotePanelMixin:Init()
-    LoolibCallbackRegistryMixin.OnLoad(self)
+    Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(VOTE_PANEL_EVENTS)
 
     self.item = nil
     self.selectedResponses = {} -- For ranked choice
-    self.votingMode = LOOTHING_VOTING_MODE.SIMPLE
+    self.votingMode = Loothing.VotingMode.SIMPLE
 
     self:CreateFrame()
     self:CreateElements()
@@ -75,7 +75,7 @@ end
 
 --- Create UI elements
 function LoothingVotePanelMixin:CreateElements()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     -- Title
     self.title = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
@@ -117,7 +117,7 @@ end
 
 --- Create note input field
 function LoothingVotePanelMixin:CreateNoteInput()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     -- Container for note input
     local container = CreateFrame("Frame", nil, self.frame)
@@ -221,7 +221,7 @@ end
 
 --- Create response buttons
 function LoothingVotePanelMixin:CreateResponseButtons()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     local container = CreateFrame("Frame", nil, self.frame)
     container:SetPoint("TOPLEFT", 20, -120)
@@ -366,7 +366,7 @@ end
 
 --- Create ranked choice display
 function LoothingVotePanelMixin:CreateRankedDisplay()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     local container = CreateFrame("Frame", nil, self.frame)
     container:SetPoint("TOPLEFT", 20, -280)
@@ -473,7 +473,7 @@ function LoothingVotePanelMixin:SetItem(item)
     local existingVote = item.GetVoteByVoter and item:GetVoteByVoter(LoothingUtils.GetPlayerFullName())
     if existingVote and existingVote.responses then
         for i, response in ipairs(existingVote.responses) do
-            if self.votingMode == LOOTHING_VOTING_MODE.RANKED_CHOICE then
+            if self.votingMode == Loothing.VotingMode.RANKED_CHOICE then
                 self.selectedResponses[i] = response
             else
                 self.selectedResponses[1] = response
@@ -507,7 +507,7 @@ function LoothingVotePanelMixin:ApplyObserveMode()
         if observeMode then
             self.submitButton:SetText("Observe Mode")
         else
-            local L = LOOTHING_LOCALE
+            local L = Loothing.Locale
             self.submitButton:SetText(L["SUBMIT_VOTE"] or "Submit Vote")
         end
     end
@@ -527,7 +527,7 @@ end
 function LoothingVotePanelMixin:OnResponseClick(button)
     local buttonId = button.buttonId
 
-    if self.votingMode == LOOTHING_VOTING_MODE.RANKED_CHOICE then
+    if self.votingMode == Loothing.VotingMode.RANKED_CHOICE then
         -- Ranked choice - add to ranking
         self:AddToRanking(buttonId)
     else
@@ -574,7 +574,7 @@ end
 function LoothingVotePanelMixin:UpdateResponseButtons()
     self:ResetResponseButtons()
 
-    if self.votingMode == LOOTHING_VOTING_MODE.RANKED_CHOICE then
+    if self.votingMode == Loothing.VotingMode.RANKED_CHOICE then
         -- Show rank numbers
         for i, response in ipairs(self.selectedResponses) do
             local button = self.responseButtons[response]
@@ -604,7 +604,7 @@ end
 --- Update ranking text display
 function LoothingVotePanelMixin:UpdateRankingText()
     if #self.selectedResponses == 0 then
-        self.rankingText:SetText(LOOTHING_LOCALE["NO_SELECTION"])
+        self.rankingText:SetText(Loothing.Locale["NO_SELECTION"])
         return
     end
 
@@ -705,7 +705,7 @@ function LoothingVotePanelMixin:UpdateTimer()
 
     -- No-timeout mode: show "No Limit", full bar, never auto-close
     if remaining == math.huge then
-        self.timerText:SetText(LOOTHING_LOCALE["NO_LIMIT"] or "No Limit")
+        self.timerText:SetText(Loothing.Locale["NO_LIMIT"] or "No Limit")
         local maxWidth = self.timerContainer:GetWidth() - 2
         self.timerBar:SetWidth(math.max(0.001, maxWidth))
         self.timerBar:SetColorTexture(0.2, 0.6, 0.2, 1)
@@ -713,7 +713,7 @@ function LoothingVotePanelMixin:UpdateTimer()
     end
 
     if remaining <= 0 then
-        self.timerText:SetText(LOOTHING_LOCALE["TIME_EXPIRED"])
+        self.timerText:SetText(Loothing.Locale["TIME_EXPIRED"])
         self.timerBar:SetWidth(0.001)
         self.timerBar:SetColorTexture(0.6, 0.2, 0.2, 1)
 
@@ -728,7 +728,7 @@ function LoothingVotePanelMixin:UpdateTimer()
     end
 
     -- Calculate progress
-    local timeout = self.item.voteTimeout or LOOTHING_TIMING.VOTING_DEFAULT
+    local timeout = self.item.voteTimeout or Loothing.Timing.VOTING_DEFAULT
     local progress = (timeout > 0) and (remaining / timeout) or 1
 
     -- Update bar
@@ -783,11 +783,11 @@ end
 ----------------------------------------------------------------------]]
 
 --- Set voting mode
--- @param mode string - LOOTHING_VOTING_MODE value
+-- @param mode string - Loothing.VotingMode value
 function LoothingVotePanelMixin:SetVotingMode(mode)
     self.votingMode = mode
 
-    if mode == LOOTHING_VOTING_MODE.RANKED_CHOICE then
+    if mode == Loothing.VotingMode.RANKED_CHOICE then
         self.rankedContainer:Show()
     else
         self.rankedContainer:Hide()
@@ -801,7 +801,7 @@ end
 ----------------------------------------------------------------------]]
 
 function CreateLoothingVotePanel()
-    local panel = LoolibCreateFromMixins(LoothingVotePanelMixin)
+    local panel = Loolib.CreateFromMixins(LoothingVotePanelMixin)
     panel:Init()
     return panel
 end

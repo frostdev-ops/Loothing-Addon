@@ -25,7 +25,7 @@ local Loolib = LibStub("Loolib")
     LoothingPlayerCacheMixin
 ----------------------------------------------------------------------]]
 
-LoothingPlayerCacheMixin = LoolibCreateFromMixins(LoolibCallbackRegistryMixin)
+LoothingPlayerCacheMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
 
 local PLAYER_CACHE_EVENTS = {
     "OnPlayerAdded",
@@ -42,7 +42,7 @@ local GUID_PATTERN = "^Player%-%d+%-%x+$"
 
 --- Initialize the player cache
 function LoothingPlayerCacheMixin:Init()
-    LoolibCallbackRegistryMixin.OnLoad(self)
+    Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(PLAYER_CACHE_EVENTS)
 
     -- In-memory cache: guid -> player table
@@ -70,7 +70,7 @@ function LoothingPlayerCacheMixin:Get(nameOrGUID)
     if not nameOrGUID or nameOrGUID == "" then
         return nil
     end
-    if LoolibSecretUtil.IsSecretValue(nameOrGUID) then return nil end
+    if Loolib.SecretUtil.IsSecretValue(nameOrGUID) then return nil end
 
     -- Check if it's a GUID
     if nameOrGUID:match(GUID_PATTERN) then
@@ -104,7 +104,7 @@ function LoothingPlayerCacheMixin:GetOrCreate(nameOrGUID)
     if player then
         return player
     end
-    if LoolibSecretUtil.IsSecretValue(nameOrGUID) then return nil end
+    if Loolib.SecretUtil.IsSecretValue(nameOrGUID) then return nil end
 
     -- Create new empty entry
     if nameOrGUID:match(GUID_PATTERN) then
@@ -152,7 +152,7 @@ function LoothingPlayerCacheMixin:Invalidate(nameOrGUID)
     if not nameOrGUID or nameOrGUID == "" then
         return false
     end
-    if LoolibSecretUtil.IsSecretValue(nameOrGUID) then return false end
+    if Loolib.SecretUtil.IsSecretValue(nameOrGUID) then return false end
 
     local guid
 
@@ -289,7 +289,7 @@ function LoothingPlayerCacheMixin:FetchFromGUID(guid)
         return nil
     end
 
-    local _, englishClass, _, _, _, name, realmName = LoolibSecretUtil.SafeGetPlayerInfoByGUID(guid)
+    local _, englishClass, _, _, _, name, realmName = Loolib.SecretUtil.SafeGetPlayerInfoByGUID(guid)
 
     if not name then
         return nil
@@ -364,7 +364,7 @@ end
 -- @param fullName string - "Name-Realm" or just "Name"
 -- @return string, string|nil - name, realm
 function LoothingPlayerCacheMixin:SplitNameRealm(fullName)
-    if not fullName or LoolibSecretUtil.IsSecretValue(fullName) then
+    if not fullName or Loolib.SecretUtil.IsSecretValue(fullName) then
         return nil, nil
     end
     local name, realm = fullName:match("^(.+)-(.+)$")
@@ -389,7 +389,7 @@ function LoothingPlayerCacheMixin:GetClassColoredName(nameOrGUID)
 
     if player.class then
         local colors = RAID_CLASS_COLORS and RAID_CLASS_COLORS[player.class]
-            or LOOTHING_CLASS_COLORS and LOOTHING_CLASS_COLORS[player.class]
+            or Loothing.ClassColors and Loothing.ClassColors[player.class]
         if colors then
             local hex = string.format("%02x%02x%02x",
                 (colors.r or 1) * 255,
@@ -551,7 +551,7 @@ end
 --- Create a new player cache instance
 -- @return table - PlayerCache instance
 function CreateLoothingPlayerCache()
-    local cache = LoolibCreateFromMixins(LoothingPlayerCacheMixin)
+    local cache = Loolib.CreateFromMixins(LoothingPlayerCacheMixin)
     cache:Init()
     return cache
 end

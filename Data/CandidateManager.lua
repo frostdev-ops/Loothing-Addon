@@ -9,7 +9,7 @@ local Loolib = LibStub("Loolib")
     LoothingCandidateManagerMixin
 ----------------------------------------------------------------------]]
 
-LoothingCandidateManagerMixin = LoolibCreateFromMixins(LoolibCallbackRegistryMixin)
+LoothingCandidateManagerMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
 
 local MANAGER_EVENTS = {
     "OnCandidateAdded",
@@ -20,7 +20,7 @@ local MANAGER_EVENTS = {
 
 --- Initialize the candidate manager
 function LoothingCandidateManagerMixin:Init()
-    LoolibCallbackRegistryMixin.OnLoad(self)
+    Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(MANAGER_EVENTS)
 
     -- Candidates storage - keyed by normalized player name
@@ -141,7 +141,7 @@ end
 
 --- Forcibly set the response on a candidate (ML override)
 -- @param playerName string - Player name
--- @param response number - LOOTHING_RESPONSE value
+-- @param response number - Loothing.Response value
 -- @param note string|nil - Optional note
 -- @return boolean - True if updated
 function LoothingCandidateManagerMixin:SetCandidateResponse(playerName, response, note)
@@ -229,7 +229,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Get candidates filtered by response type
--- @param response number - LOOTHING_RESPONSE value
+-- @param response number - Loothing.Response value
 -- @return table - Array of candidates
 function LoothingCandidateManagerMixin:GetCandidatesByResponse(response)
     local result = {}
@@ -312,7 +312,7 @@ function LoothingCandidateManagerMixin:GetResponseCounts()
     local counts = {}
 
     -- Initialize all response types to 0
-    for _, response in pairs(LOOTHING_RESPONSE) do
+    for _, response in pairs(Loothing.Response) do
         counts[response] = 0
     end
 
@@ -458,7 +458,7 @@ end
 --- Create a new candidate manager
 -- @return table - CandidateManager instance
 function CreateLoothingCandidateManager()
-    local manager = LoolibCreateFromMixins(LoothingCandidateManagerMixin)
+    local manager = Loolib.CreateFromMixins(LoothingCandidateManagerMixin)
     manager:Init()
     return manager
 end

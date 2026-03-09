@@ -164,7 +164,7 @@ function LoothingItemRowMixin:Refresh()
         return
     end
 
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     -- Icon
     local texture = self.item.texture or GetItemIcon(self.item.itemID or 0)
@@ -233,7 +233,7 @@ end
 
 --- Adjust the row layout for the current display state.
 function LoothingItemRowMixin:UpdateLayout()
-    local isAwarded = self.item and self.item.state == LOOTHING_ITEM_STATE.AWARDED and self.item.winner
+    local isAwarded = self.item and self.item.state == Loothing.ItemState.AWARDED and self.item.winner
 
     if isAwarded == self._layoutAwarded then return end
     self._layoutAwarded = isAwarded
@@ -255,15 +255,15 @@ end
 function LoothingItemRowMixin:UpdateStatus()
     if not self.item then return end
 
-    local L = LOOTHING_LOCALE
-    local state = self.item.state or LOOTHING_ITEM_STATE.PENDING
+    local L = Loothing.Locale
+    local state = self.item.state or Loothing.ItemState.PENDING
 
-    if state == LOOTHING_ITEM_STATE.PENDING then
+    if state == Loothing.ItemState.PENDING then
         self.statusText:SetText(L["STATUS_PENDING"])
         self.statusText:SetTextColor(0.7, 0.7, 0.7)
         self.infoText:SetText("")
 
-    elseif state == LOOTHING_ITEM_STATE.VOTING then
+    elseif state == Loothing.ItemState.VOTING then
         self.statusText:SetText(L["STATUS_VOTING"])
         self.statusText:SetTextColor(0, 1, 0)
 
@@ -286,7 +286,7 @@ function LoothingItemRowMixin:UpdateStatus()
             self.infoText:SetTextColor(1, 1, 1)
         end
 
-    elseif state == LOOTHING_ITEM_STATE.TALLIED then
+    elseif state == Loothing.ItemState.TALLIED then
         self.statusText:SetText(L["STATUS_TALLIED"])
         self.statusText:SetTextColor(1, 0.82, 0)
 
@@ -300,12 +300,12 @@ function LoothingItemRowMixin:UpdateStatus()
             self.infoText:SetTextColor(1, 1, 1)
         end
 
-    elseif state == LOOTHING_ITEM_STATE.AWARDED then
+    elseif state == Loothing.ItemState.AWARDED then
         self.statusText:SetText(L["STATUS_AWARDED"])
         self.statusText:SetTextColor(0.2, 0.8, 0.2)
         self.infoText:SetText("")
 
-    elseif state == LOOTHING_ITEM_STATE.SKIPPED then
+    elseif state == Loothing.ItemState.SKIPPED then
         self.statusText:SetText(L["STATUS_SKIPPED"])
         self.statusText:SetTextColor(0.5, 0.5, 0.5)
         self.infoText:SetText("")
@@ -319,12 +319,12 @@ function LoothingItemRowMixin:UpdateActionButton()
         return
     end
 
-    local L = LOOTHING_LOCALE
-    local state = self.item.state or LOOTHING_ITEM_STATE.PENDING
+    local L = Loothing.Locale
+    local state = self.item.state or Loothing.ItemState.PENDING
     local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
     local isCouncil = Loothing.Council and Loothing.Council:IsPlayerCouncilMember()
 
-    if state == LOOTHING_ITEM_STATE.PENDING then
+    if state == Loothing.ItemState.PENDING then
         if isML then
             self.actionButton:SetText(L["START_VOTE"])
             self.actionButton:Show()
@@ -333,7 +333,7 @@ function LoothingItemRowMixin:UpdateActionButton()
             self.actionButton:Hide()
         end
 
-    elseif state == LOOTHING_ITEM_STATE.VOTING then
+    elseif state == Loothing.ItemState.VOTING then
         if isML then
             self.actionButton:SetText(L["END_VOTE"])
             self.actionButton:Show()
@@ -351,7 +351,7 @@ function LoothingItemRowMixin:UpdateActionButton()
             self.actionButton:Hide()
         end
 
-    elseif state == LOOTHING_ITEM_STATE.TALLIED then
+    elseif state == Loothing.ItemState.TALLIED then
         if isML then
             self.actionButton:SetText(L["AWARD"])
             self.actionButton:Show()
@@ -374,7 +374,7 @@ function LoothingItemRowMixin:UpdateWinner()
         return
     end
 
-    if self.item.state == LOOTHING_ITEM_STATE.AWARDED and self.item.winner then
+    if self.item.state == Loothing.ItemState.AWARDED and self.item.winner then
         local winnerName = LoothingUtils.GetShortName(self.item.winner)
         -- Try to get class color
         local coloredName = winnerName
@@ -460,7 +460,7 @@ function LoothingItemRowMixin:OnEnter()
     -- Add loot info
     if self.item.looter then
         GameTooltip:AddLine(" ")
-        GameTooltip:AddLine(string.format(LOOTHING_LOCALE["LOOTED_BY"], self.item.looter), 1, 0.82, 0)
+        GameTooltip:AddLine(string.format(Loothing.Locale["LOOTED_BY"], self.item.looter), 1, 0.82, 0)
     end
 
     GameTooltip:Show()
@@ -493,15 +493,15 @@ end
 function LoothingItemRowMixin:OnActionClick()
     if not self.item then return end
 
-    local state = self.item.state or LOOTHING_ITEM_STATE.PENDING
+    local state = self.item.state or Loothing.ItemState.PENDING
 
-    if state == LOOTHING_ITEM_STATE.PENDING then
+    if state == Loothing.ItemState.PENDING then
         -- Start voting
         if self.callbacks.onStartVote then
             self.callbacks.onStartVote(self, self.item)
         end
 
-    elseif state == LOOTHING_ITEM_STATE.VOTING then
+    elseif state == Loothing.ItemState.VOTING then
         local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
         if isML then
             -- End voting
@@ -515,7 +515,7 @@ function LoothingItemRowMixin:OnActionClick()
             end
         end
 
-    elseif state == LOOTHING_ITEM_STATE.TALLIED then
+    elseif state == Loothing.ItemState.TALLIED then
         local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
         if isML then
             -- Open award dialog
@@ -535,14 +535,14 @@ end
 function LoothingItemRowMixin:ShowContextMenu()
     if not self.item then return end
 
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
     local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
 
     MenuUtil.CreateContextMenu(self.frame, function(ownerRegion, rootDescription)
         rootDescription:CreateTitle(self.item.name or "Item")
 
         if isML then
-            if self.item.state == LOOTHING_ITEM_STATE.PENDING then
+            if self.item.state == Loothing.ItemState.PENDING then
                 rootDescription:CreateButton(L["START_VOTE"], function()
                     if self.callbacks.onStartVote then
                         self.callbacks.onStartVote(self, self.item)
@@ -553,13 +553,13 @@ function LoothingItemRowMixin:ShowContextMenu()
                         self.callbacks.onSkip(self, self.item)
                     end
                 end)
-            elseif self.item.state == LOOTHING_ITEM_STATE.VOTING then
+            elseif self.item.state == Loothing.ItemState.VOTING then
                 rootDescription:CreateButton(L["END_VOTE"], function()
                     if self.callbacks.onEndVote then
                         self.callbacks.onEndVote(self, self.item)
                     end
                 end)
-            elseif self.item.state == LOOTHING_ITEM_STATE.TALLIED then
+            elseif self.item.state == Loothing.ItemState.TALLIED then
                 rootDescription:CreateButton(L["AWARD"], function()
                     if self.callbacks.onAward then
                         self.callbacks.onAward(self, self.item)
@@ -623,7 +623,7 @@ end
 -- @param parent Frame
 -- @return table - LoothingItemRow
 function CreateLoothingItemRow(parent)
-    local row = LoolibCreateFromMixins(LoothingItemRowMixin)
+    local row = Loolib.CreateFromMixins(LoothingItemRowMixin)
     row:Init(parent)
     return row
 end

@@ -20,7 +20,7 @@ end
     LoothingFiltersMixin
 ----------------------------------------------------------------------]]
 
-LoothingFiltersMixin = LoolibCreateFromMixins(LoolibCallbackRegistryMixin)
+LoothingFiltersMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
 
 local FILTER_EVENTS = {
     "OnFiltersChanged",
@@ -28,7 +28,7 @@ local FILTER_EVENTS = {
 
 --- Initialize the filters module
 function LoothingFiltersMixin:Init()
-    LoolibCallbackRegistryMixin.OnLoad(self)
+    Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(FILTER_EVENTS)
 end
 
@@ -77,7 +77,7 @@ function LoothingFiltersMixin:ShouldShowCandidate(candidateData, itemData)
 
     -- Hide passed items
     if settings:GetHidePassedItems() then
-        if candidateData.response == LOOTHING_RESPONSE.PASS then
+        if candidateData.response == Loothing.Response.PASS then
             return false
         end
     end
@@ -340,7 +340,7 @@ end
 -- @param parent Frame - Parent frame
 -- @return Frame - Filter bar frame
 function LoothingFiltersMixin:CreateFilterBar(parent)
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     local filterBar = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     filterBar:SetHeight(80)
@@ -455,7 +455,7 @@ end
 function LoothingFiltersMixin:UpdateFilterBar(filterBar)
     if not filterBar then return end
 
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
     local count = self:GetActiveFilterCount()
 
     if count > 0 then
@@ -482,7 +482,7 @@ end
 --- Show class filter menu
 -- @param anchor Frame - Anchor frame for menu
 function LoothingFiltersMixin:ShowClassFilterMenu(anchor)
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
     local settings = Loothing.Settings
     local classFilters = settings:GetClassFilters()
 
@@ -527,7 +527,7 @@ end
 --- Show response filter menu
 -- @param anchor Frame - Anchor frame for menu
 function LoothingFiltersMixin:ShowResponseFilterMenu(anchor)
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
     local settings = Loothing.Settings
     local responseFilters = settings:GetResponseFilters()
 
@@ -545,7 +545,7 @@ function LoothingFiltersMixin:ShowResponseFilterMenu(anchor)
         rootDescription:CreateDivider()
 
         -- Add each response type
-        for responseId, responseInfo in pairs(LOOTHING_RESPONSE_INFO) do
+        for responseId, responseInfo in pairs(Loothing.ResponseInfo) do
             rootDescription:CreateCheckbox(L[responseInfo.name] or responseInfo.name,
                 function() return responseFilters[responseId] == true end,
                 function()
@@ -565,7 +565,7 @@ end
 --- Show guild rank filter menu
 -- @param anchor Frame - Anchor frame for menu
 function LoothingFiltersMixin:ShowRankFilterMenu(anchor)
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
     local settings = Loothing.Settings
     local rankFilters = settings:GetGuildRankFilters()
 

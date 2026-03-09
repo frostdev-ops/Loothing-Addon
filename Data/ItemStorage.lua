@@ -26,7 +26,7 @@ local Loolib = LibStub("Loolib")
         storage:WatchForItem(itemLink, onFound, onFail, 3)
 ----------------------------------------------------------------------]]
 
-LoothingItemStorageMixin = LoolibCreateFromMixins(LoolibCallbackRegistryMixin)
+LoothingItemStorageMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
 
 local ITEM_STORAGE_EVENTS = {
     "OnItemAdded",
@@ -145,7 +145,7 @@ end
 
 --- Initialize the item storage
 function LoothingItemStorageMixin:Init()
-    LoolibCallbackRegistryMixin.OnLoad(self)
+    Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(ITEM_STORAGE_EVENTS)
 
     -- Storage arrays
@@ -575,13 +575,25 @@ end
 ----------------------------------------------------------------------]]
 
 --- Get the item storage array from SavedVariables (global scope)
+-- FIX(Area4-3): Added owner key to prevent cross-character bleed
 -- @return table - The storage array
 function LoothingItemStorageMixin:GetStorageTable()
+    local currentOwner = LoothingUtils and LoothingUtils.GetPlayerFullName and LoothingUtils.GetPlayerFullName()
+
     if Loothing and Loothing.Settings and Loothing.Settings.GetGlobalValue then
         local storage = Loothing.Settings:GetGlobalValue("itemStorage")
         if not storage then
-            storage = {}
+            storage = { _owner = currentOwner }
             Loothing.Settings:SetGlobalValue("itemStorage", storage)
+        end
+        -- Discard storage from a different character
+        if storage._owner and currentOwner and storage._owner ~= currentOwner then
+            storage = { _owner = currentOwner }
+            Loothing.Settings:SetGlobalValue("itemStorage", storage)
+        end
+        -- Stamp owner if not yet set
+        if not storage._owner and currentOwner then
+            storage._owner = currentOwner
         end
         return storage
     end
@@ -591,7 +603,10 @@ function LoothingItemStorageMixin:GetStorageTable()
         LoothingDB = {}
     end
     if not LoothingDB.itemStorage then
-        LoothingDB.itemStorage = {}
+        LoothingDB.itemStorage = { _owner = currentOwner }
+    end
+    if LoothingDB.itemStorage._owner and currentOwner and LoothingDB.itemStorage._owner ~= currentOwner then
+        LoothingDB.itemStorage = { _owner = currentOwner }
     end
     return LoothingDB.itemStorage
 end
@@ -744,7 +759,7 @@ end
 --- Create a new item storage instance
 -- @return table - ItemStorage instance
 function CreateLoothingItemStorage()
-    local storage = LoolibCreateFromMixins(LoothingItemStorageMixin)
+    local storage = Loolib.CreateFromMixins(LoothingItemStorageMixin)
     storage:Init()
     return storage
 end

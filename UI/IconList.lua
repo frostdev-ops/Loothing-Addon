@@ -3,7 +3,7 @@
     IconList - Common icons for the response button icon picker
 ----------------------------------------------------------------------]]
 
-LOOTHING_ICON_LIST = {
+Loothing.IconList = {
     -- Loot / Group Loot
     { path = "Interface\\Buttons\\UI-GroupLoot-Dice-Up",   label = "Dice" },
     { path = "Interface\\Buttons\\UI-GroupLoot-Coin-Up",   label = "Coin" },

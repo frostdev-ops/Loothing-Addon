@@ -4,6 +4,8 @@
 ----------------------------------------------------------------------]]
 
 local Loolib = LibStub("Loolib")
+local CreateFromMixins = Loolib.CreateFromMixins
+local Events = Loolib.Events
 
 --[[--------------------------------------------------------------------
     LoothingAnnouncerMixin
@@ -49,7 +51,6 @@ function LoothingAnnouncerMixin:Init()
     self.announcementQueue = {}
 
     -- Register for combat end to flush queued announcements
-    local Events = Loothing and Loothing.Loolib and Loothing.Loolib.Events
     if Events and Events.Registry then
         Events.Registry:RegisterEventCallback("PLAYER_REGEN_ENABLED", function()
             self:ProcessQueuedAnnouncements()
@@ -100,7 +101,8 @@ function LoothingAnnouncerMixin:BuildReplacements(params)
     replacements.oldItem = params.oldItem or ""
 
     -- Master Looter
-    replacements.ml = params.ml or UnitName("player") or ""
+    -- FIX(Area4-4): Use SafeUnitName to avoid secret value tainting
+    replacements.ml = params.ml or Loolib.SecretUtil.SafeUnitName("player") or ""
     replacements.ml = LoothingUtils.GetShortName(replacements.ml) or replacements.ml
 
     -- Session/encounter name
@@ -419,7 +421,7 @@ end
 ----------------------------------------------------------------------]]
 
 function CreateLoothingAnnouncer()
-    local announcer = LoolibCreateFromMixins(LoothingAnnouncerMixin)
+    local announcer = CreateFromMixins(LoothingAnnouncerMixin)
     announcer:Init()
     return announcer
 end

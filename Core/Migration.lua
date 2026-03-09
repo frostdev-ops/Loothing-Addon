@@ -73,7 +73,7 @@ function LoothingMigration:RegisterMigrations()
         -- Ensure migration tracking exists in global scope
         if not globalDB.migrations then
             globalDB.migrations = {
-                version = LOOTHING_VERSION,
+                version = Loothing.VERSION,
                 history = {},
                 lastRun = nil,
             }
@@ -215,7 +215,7 @@ function LoothingMigration:RegisterMigrations()
             return
         end
 
-        local defaults = LOOTHING_DEFAULT_SETTINGS.responseSets
+        local defaults = Loothing.DefaultSettings.responseSets
         local rs = {
             activeSet  = 1,
             sets       = {},
@@ -224,7 +224,7 @@ function LoothingMigration:RegisterMigrations()
 
         -- Migrate buttonSets -> responseSets
         local oldSets = profileDB.buttonSets and profileDB.buttonSets.sets
-        local oldResponses = profileDB.responses  -- keyed by numeric LOOTHING_RESPONSE id
+        local oldResponses = profileDB.responses  -- keyed by numeric Loothing.Response id
 
         if oldSets then
             rs.activeSet = profileDB.buttonSets.activeSet or 1
@@ -235,9 +235,9 @@ function LoothingMigration:RegisterMigrations()
                     -- Merge icon + responseText from old responses table if available
                     local oldResp = oldResponses and oldResponses[btn.id]
                     local icon = (oldResp and oldResp.icon)
-                        or (LOOTHING_DEFAULT_SETTINGS.responseSets.sets[1]
+                        or (Loothing.DefaultSettings.responseSets.sets[1]
                             and (function()
-                                for _, db in ipairs(LOOTHING_DEFAULT_SETTINGS.responseSets.sets[1].buttons) do
+                                for _, db in ipairs(Loothing.DefaultSettings.responseSets.sets[1].buttons) do
                                     if db.id == btn.id then return db.icon end
                                 end
                             end)())
@@ -311,7 +311,7 @@ function LoothingMigration:RunOnLoad()
     end
 
     local oldVersion = globalDB.migrations.version or "0.0.0"
-    local currentVersion = LOOTHING_VERSION
+    local currentVersion = Loothing.VERSION
 
     Loothing:Debug("Running migrations from", oldVersion, "to", currentVersion)
 

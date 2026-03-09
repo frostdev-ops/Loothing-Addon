@@ -4,6 +4,10 @@
 ----------------------------------------------------------------------]]
 
 local Loolib = LibStub("Loolib")
+local CallbackRegistryMixin = Loolib.CallbackRegistryMixin
+local CreateFromMixins = Loolib.CreateFromMixins
+local Data = Loolib.Data
+local Events = Loolib.Events
 
 --[[--------------------------------------------------------------------
     LoothingTradeQueueMixin
@@ -12,7 +16,7 @@ local Loolib = LibStub("Loolib")
     Tracks 2-hour trade window and persists to SavedVariables.
 ----------------------------------------------------------------------]]
 
-LoothingTradeQueueMixin = LoolibCreateFromMixins(LoolibCallbackRegistryMixin)
+LoothingTradeQueueMixin = CreateFromMixins(CallbackRegistryMixin)
 
 local TRADE_QUEUE_EVENTS = {
     "OnItemQueued",
@@ -33,11 +37,10 @@ local TRADE_TIMER_CHECK_INTERVAL = 60
 
 --- Initialize the trade queue
 function LoothingTradeQueueMixin:Init()
-    LoolibCallbackRegistryMixin.OnLoad(self)
+    CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(TRADE_QUEUE_EVENTS)
 
     -- Queue storage (DataProvider)
-    local Data = Loolib:GetModule("Data")
     self.queue = Data.CreateDataProvider()
 
     -- Track current trade state
@@ -61,7 +64,6 @@ end
 
 --- Register for trade-related events
 function LoothingTradeQueueMixin:RegisterEvents()
-    local Events = Loothing.Loolib.Events
     if not Events or not Events.Registry then return end
 
     -- Trade window events
@@ -605,7 +607,7 @@ end
 function LoothingTradeQueueMixin:SendTradableComm(itemLink, timeRemaining)
     if not Loothing.Comm or not Loothing.Comm.Send then return end
 
-    Loothing.Comm:Send(LOOTHING_MSG_TYPE.TRADABLE, {
+    Loothing.Comm:Send(Loothing.MsgType.TRADABLE, {
         itemLink = itemLink,
         timeRemaining = timeRemaining,
     }, "group")
@@ -619,7 +621,7 @@ end
 function LoothingTradeQueueMixin:SendNonTradableComm(itemLink)
     if not Loothing.Comm or not Loothing.Comm.Send then return end
 
-    Loothing.Comm:Send(LOOTHING_MSG_TYPE.NON_TRADABLE, {
+    Loothing.Comm:Send(Loothing.MsgType.NON_TRADABLE, {
         itemLink = itemLink,
     }, "group")
 
@@ -723,6 +725,13 @@ function LoothingTradeQueueMixin:LoadFromDatabase()
         return
     end
 
+    -- FIX(Area4-2): Discard entries owned by a different character
+    local currentOwner = LoothingUtils and LoothingUtils.GetPlayerFullName and LoothingUtils.GetPlayerFullName()
+    if stored._owner and currentOwner and stored._owner ~= currentOwner then
+        Loothing:Debug("TradeQueue: discarding stale entries from", tostring(stored._owner))
+        return
+    end
+
     self.queue:Flush()
 
     for _, entry in ipairs(stored) do
@@ -753,6 +762,12 @@ function LoothingTradeQueueMixin:SaveToDatabase()
         end
     end
 
+    -- FIX(Area4-2): Persist owner key so other characters discard stale entries
+    local currentOwner = LoothingUtils and LoothingUtils.GetPlayerFullName and LoothingUtils.GetPlayerFullName()
+    if currentOwner then
+        entries._owner = currentOwner
+    end
+
     if Loothing.Settings and Loothing.Settings.SetGlobalValue then
         Loothing.Settings:SetGlobalValue("tradeQueue", entries)
     elseif LoothingDB then
@@ -769,7 +784,7 @@ end
 --- Create a new trade queue
 -- @return table - TradeQueue instance
 function CreateLoothingTradeQueue()
-    local queue = LoolibCreateFromMixins(LoothingTradeQueueMixin)
+    local queue = CreateFromMixins(LoothingTradeQueueMixin)
     queue:Init()
     return queue
 end

@@ -3,6 +3,8 @@
     Comprehensive test suite for Session lifecycle and item management
 ----------------------------------------------------------------------]]
 
+local Loolib = LibStub("Loolib")
+
 --[[--------------------------------------------------------------------
     Test Framework Setup
 ----------------------------------------------------------------------]]
@@ -93,7 +95,7 @@ end
 ----------------------------------------------------------------------]]
 
 local function CreateMockSession()
-    local session = LoolibCreateFromMixins(LoothingSessionMixin)
+    local session = Loolib.CreateFromMixins(LoothingSessionMixin)
     session:Init()
     return session
 end
@@ -143,7 +145,7 @@ Describe("Session Creation", function()
     It("Session has correct initial state", function()
         local session = CreateMockSession()
 
-        AssertEquals(session:GetState(), LOOTHING_SESSION_STATE.INACTIVE, "Initial state should be INACTIVE")
+        AssertEquals(session:GetState(), Loothing.SessionState.INACTIVE, "Initial state should be INACTIVE")
         AssertNil(session:GetSessionID(), "Session ID should be nil initially")
         AssertNil(session:GetEncounterID(), "Encounter ID should be nil initially")
         AssertFalse(session:IsActive(), "Session should not be active initially")
@@ -204,7 +206,7 @@ Describe("Session Creation", function()
         local success = session:StartSession(1, "Boss")
 
         AssertFalse(success, "Should not start without permissions")
-        AssertEquals(session:GetState(), LOOTHING_SESSION_STATE.INACTIVE, "State should remain INACTIVE")
+        AssertEquals(session:GetState(), Loothing.SessionState.INACTIVE, "State should remain INACTIVE")
 
         RestoreSessionPermissions(saved)
     end)
@@ -226,7 +228,7 @@ Describe("Item Management", function()
 
         AssertNotNil(item, "AddItem should return item")
         AssertNotNil(item.guid, "Item should have GUID")
-        AssertEquals(item.state, LOOTHING_ITEM_STATE.PENDING, "Item should be PENDING")
+        AssertEquals(item.state, Loothing.ItemState.PENDING, "Item should be PENDING")
 
         RestoreSessionPermissions(saved)
         session:EndSession()
@@ -306,7 +308,7 @@ Describe("Item Management", function()
         local item1 = session:AddItem("|cffa335ee|Hitem:212398::::::::80::::::::::|h[Item 1]|h|r", "Player1")
         local item2 = session:AddItem("|cffa335ee|Hitem:212399::::::::80::::::::::|h[Item 2]|h|r", "Player2")
 
-        item2:SetState(LOOTHING_ITEM_STATE.AWARDED)
+        item2:SetState(Loothing.ItemState.AWARDED)
 
         local pending = session:GetPendingItems()
 
@@ -334,7 +336,7 @@ Describe("State Transitions", function()
         local success = session:StartVoting(item.guid, 30)
 
         AssertTrue(success, "StartVoting should succeed")
-        AssertEquals(item:GetState(), LOOTHING_ITEM_STATE.VOTING, "Item should be in VOTING state")
+        AssertEquals(item:GetState(), Loothing.ItemState.VOTING, "Item should be in VOTING state")
         AssertEquals(session:GetCurrentVotingItem(), item, "Session should track voting item")
 
         RestoreSessionPermissions(saved)
@@ -352,7 +354,7 @@ Describe("State Transitions", function()
         session:StartVoting(item.guid, 30)
         session:EndVoting()
 
-        AssertEquals(item:GetState(), LOOTHING_ITEM_STATE.TALLIED, "Item should be TALLIED")
+        AssertEquals(item:GetState(), Loothing.ItemState.TALLIED, "Item should be TALLIED")
         AssertNil(session:GetCurrentVotingItem(), "Current voting item should be cleared")
 
         RestoreSessionPermissions(saved)
@@ -367,9 +369,9 @@ Describe("State Transitions", function()
         session:StartSession(1, "Boss")
         local item = session:AddItem("|cffa335ee|Hitem:212398::::::::80::::::::::|h[Epic Sword]|h|r", "Player1")
 
-        session:AwardItem(item.guid, "Winner", LOOTHING_RESPONSE.NEED)
+        session:AwardItem(item.guid, "Winner", Loothing.Response.NEED)
 
-        AssertEquals(item:GetState(), LOOTHING_ITEM_STATE.AWARDED, "Item should be AWARDED")
+        AssertEquals(item:GetState(), Loothing.ItemState.AWARDED, "Item should be AWARDED")
         AssertEquals(item:GetWinner(), LoothingUtils.NormalizeName("Winner"), "Winner should be set")
 
         RestoreSessionPermissions(saved)
@@ -386,7 +388,7 @@ Describe("State Transitions", function()
 
         session:SkipItem(item.guid)
 
-        AssertEquals(item:GetState(), LOOTHING_ITEM_STATE.SKIPPED, "Item should be SKIPPED")
+        AssertEquals(item:GetState(), Loothing.ItemState.SKIPPED, "Item should be SKIPPED")
 
         RestoreSessionPermissions(saved)
         session:EndSession()
@@ -419,7 +421,7 @@ Describe("State Transitions", function()
         session:StartSession(1, "Boss")
         local item = session:AddItem("|cffa335ee|Hitem:212398::::::::80::::::::::|h[Epic Sword]|h|r", "Player1")
 
-        item:SetState(LOOTHING_ITEM_STATE.AWARDED)
+        item:SetState(Loothing.ItemState.AWARDED)
 
         local success = session:StartVoting(item.guid, 30)
 
@@ -459,11 +461,11 @@ Describe("Session End", function()
         local saved = MockSessionPermissions(true)
 
         session:StartSession(1, "Boss")
-        AssertEquals(session:GetState(), LOOTHING_SESSION_STATE.ACTIVE, "Should be ACTIVE")
+        AssertEquals(session:GetState(), Loothing.SessionState.ACTIVE, "Should be ACTIVE")
 
         session:EndSession()
 
-        AssertEquals(session:GetState(), LOOTHING_SESSION_STATE.INACTIVE, "Should be INACTIVE")
+        AssertEquals(session:GetState(), Loothing.SessionState.INACTIVE, "Should be INACTIVE")
         AssertFalse(session:IsActive(), "IsActive should be false")
 
         RestoreSessionPermissions(saved)
@@ -495,7 +497,7 @@ Describe("Session End", function()
         session:StartSession(1, "Boss")
         session:CloseSession()
 
-        AssertEquals(session:GetState(), LOOTHING_SESSION_STATE.CLOSED, "Should be CLOSED")
+        AssertEquals(session:GetState(), Loothing.SessionState.CLOSED, "Should be CLOSED")
 
         RestoreSessionPermissions(saved)
         session:EndSession()
@@ -578,9 +580,9 @@ Describe("Edge Cases", function()
         local item2 = session:AddItem("|cffa335ee|Hitem:212399::::::::80::::::::::|h[Item 2]|h|r", "Looter2")
         local item3 = session:AddItem("|cffa335ee|Hitem:212400::::::::80::::::::::|h[Item 3]|h|r", "Looter3")
 
-        session:AwardItem(item1.guid, "Winner1", LOOTHING_RESPONSE.NEED)
-        session:AwardItem(item2.guid, "Winner1", LOOTHING_RESPONSE.GREED)
-        session:AwardItem(item3.guid, "Winner2", LOOTHING_RESPONSE.NEED)
+        session:AwardItem(item1.guid, "Winner1", Loothing.Response.NEED)
+        session:AwardItem(item2.guid, "Winner1", Loothing.Response.GREED)
+        session:AwardItem(item3.guid, "Winner2", Loothing.Response.NEED)
 
         AssertEquals(session:GetItemsWonByPlayer("Winner1"), 2, "Winner1 should have 2 items")
         AssertEquals(session:GetItemsWonByPlayer("Winner2"), 1, "Winner2 should have 1 item")
@@ -607,8 +609,8 @@ Describe("Edge Cases", function()
         session:StartSession(1, "Boss")
 
         AssertTrue(stateChangeFired, "State change event should fire")
-        AssertEquals(newState, LOOTHING_SESSION_STATE.ACTIVE, "New state should be ACTIVE")
-        AssertEquals(oldState, LOOTHING_SESSION_STATE.INACTIVE, "Old state should be INACTIVE")
+        AssertEquals(newState, Loothing.SessionState.ACTIVE, "New state should be ACTIVE")
+        AssertEquals(oldState, Loothing.SessionState.INACTIVE, "Old state should be INACTIVE")
 
         RestoreSessionPermissions(saved)
         session:EndSession()

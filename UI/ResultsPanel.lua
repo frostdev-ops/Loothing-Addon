@@ -9,7 +9,7 @@ local Loolib = LibStub("Loolib")
     LoothingResultsPanelMixin
 ----------------------------------------------------------------------]]
 
-LoothingResultsPanelMixin = LoolibCreateFromMixins(LoolibCallbackRegistryMixin)
+LoothingResultsPanelMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
 
 local RESULTS_EVENTS = {
     "OnAwardClicked",
@@ -22,7 +22,7 @@ local PANEL_HEIGHT = 450
 
 --- Initialize the results panel
 function LoothingResultsPanelMixin:Init()
-    LoolibCallbackRegistryMixin.OnLoad(self)
+    Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(RESULTS_EVENTS)
 
     self.item = nil
@@ -73,7 +73,7 @@ end
 
 --- Create UI elements
 function LoothingResultsPanelMixin:CreateElements()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     -- Title
     self.title = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
@@ -179,7 +179,7 @@ end
 
 --- Create action buttons
 function LoothingResultsPanelMixin:CreateActionButtons()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     -- Award button
     self.awardButton = CreateFrame("Button", nil, self.frame, "UIPanelButtonTemplate")
@@ -251,10 +251,10 @@ function LoothingResultsPanelMixin:SetItem(item, results)
         local cm = item.candidateManager
         if cm then
             local totalVotes = cm:GetTotalVotes()
-            self.voteSummary:SetText(string.format(LOOTHING_LOCALE["TOTAL_VOTES"], totalVotes))
+            self.voteSummary:SetText(string.format(Loothing.Locale["TOTAL_VOTES"], totalVotes))
         else
             local voteCount = item:GetVoteCount()
-            self.voteSummary:SetText(string.format(LOOTHING_LOCALE["TOTAL_VOTES"], voteCount))
+            self.voteSummary:SetText(string.format(Loothing.Locale["TOTAL_VOTES"], voteCount))
         end
     end
 
@@ -369,7 +369,7 @@ function LoothingResultsPanelMixin:UpdateAwardButtonText()
         local fs = self.awardButton:GetFontString()
         self.awardButton:SetWidth(math.max(90, fs:GetStringWidth() + 24))
     else
-        self.awardButton:SetText(LOOTHING_LOCALE["AWARD"])
+        self.awardButton:SetText(Loothing.Locale["AWARD"])
         self.awardButton:SetWidth(90)
     end
 end
@@ -420,10 +420,10 @@ function LoothingResultsPanelMixin:UpdateResponseSummary(cm)
     local counts = cm:GetResponseCounts()
     local parts = {}
 
-    for _, response in ipairs(LOOTHING_RESPONSE_PRIORITY) do
+    for _, response in ipairs(Loothing.ResponsePriority) do
         local count = counts[response]
         if count and count > 0 then
-            local info = LOOTHING_RESPONSE_INFO[response]
+            local info = Loothing.ResponseInfo[response]
             if info then
                 local rawColor = info.color
                 local cr, cg, cb
@@ -565,7 +565,7 @@ end
 ----------------------------------------------------------------------]]
 
 function CreateLoothingResultsPanel()
-    local panel = LoolibCreateFromMixins(LoothingResultsPanelMixin)
+    local panel = Loolib.CreateFromMixins(LoothingResultsPanelMixin)
     panel:Init()
     return panel
 end

@@ -13,7 +13,7 @@
 
     Heartbeat payload (~100 bytes compressed):
         sessionID   = string
-        state       = number (LOOTHING_SESSION_STATE)
+        state       = number (Loothing.SessionState)
         itemCount   = number
         itemStates  = { [guid] = stateCode, ... }
         councilHash = number (Adler-32 of sorted council member names)
@@ -65,7 +65,7 @@ function LoothingAckTrackerMixin:BroadcastHeartbeat()
         self:StopHeartbeat()
         return
     end
-    if Loothing.Session:GetState() == LOOTHING_SESSION_STATE.INACTIVE then
+    if Loothing.Session:GetState() == Loothing.SessionState.INACTIVE then
         return
     end
 
@@ -73,7 +73,7 @@ function LoothingAckTrackerMixin:BroadcastHeartbeat()
     if not digest then return end
 
     -- BULK priority — 30s interval means ~3.3 B/s against our 800 B/s budget
-    Loothing.Comm:Send(LOOTHING_MSG_TYPE.HEARTBEAT, digest, nil, "BULK")
+    Loothing.Comm:Send(Loothing.MsgType.HEARTBEAT, digest, nil, "BULK")
     Loothing:Debug("AckTracker: heartbeat broadcast")
 end
 
@@ -127,9 +127,9 @@ function LoothingAckTrackerMixin:HandleHeartbeat(digest, sender)
 
     local localState = session:GetState()
 
-    if localState == LOOTHING_SESSION_STATE.INACTIVE then
+    if localState == Loothing.SessionState.INACTIVE then
         -- We have no session but ML reports one active → sync
-        if digest.state ~= LOOTHING_SESSION_STATE.INACTIVE then
+        if digest.state ~= Loothing.SessionState.INACTIVE then
             Loothing:Debug("AckTracker: no local session, ML has active session — sync needed")
             needsSync = true
         end
@@ -205,7 +205,7 @@ function LoothingAckTrackerMixin:ComputeCouncilHash()
     table.sort(sorted)
 
     local str = table.concat(sorted, ",")
-    return LoolibCompressor:Adler32(str)
+    return Loolib.Compressor:Adler32(str)
 end
 
 --- Compute Adler-32 hash of the current MLDB
@@ -216,10 +216,10 @@ function LoothingAckTrackerMixin:ComputeMLDBHash()
     local mldb = Loothing.MLDB:Get()
     if not mldb then return 0 end
 
-    local serialized = LoolibSerializer:Serialize(mldb)
+    local serialized = Loolib.Serializer:Serialize(mldb)
     if not serialized then return 0 end
 
-    return LoolibCompressor:Adler32(serialized)
+    return Loolib.Compressor:Adler32(serialized)
 end
 
 --- Get the number of items in the local session
@@ -240,7 +240,7 @@ end
 ----------------------------------------------------------------------]]
 
 function CreateLoothingAckTracker()
-    local tracker = LoolibCreateFromMixins(LoothingAckTrackerMixin)
+    local tracker = Loolib.CreateFromMixins(LoothingAckTrackerMixin)
     tracker:Init()
     return tracker
 end

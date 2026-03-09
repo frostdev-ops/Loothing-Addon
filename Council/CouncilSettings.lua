@@ -48,12 +48,12 @@ function LoothingCouncilMixin:LoadFromSettings()
 
     self.autoIncludeOfficers = Loothing.Settings:Get("council.autoIncludeOfficers")
     if self.autoIncludeOfficers == nil then
-        self.autoIncludeOfficers = LOOTHING_DEFAULT_SETTINGS.council.autoIncludeOfficers
+        self.autoIncludeOfficers = Loothing.DefaultSettings.council.autoIncludeOfficers
     end
 
     self.autoIncludeRaidLeader = Loothing.Settings:Get("council.autoIncludeRaidLeader")
     if self.autoIncludeRaidLeader == nil then
-        self.autoIncludeRaidLeader = LOOTHING_DEFAULT_SETTINGS.council.autoIncludeRaidLeader
+        self.autoIncludeRaidLeader = Loothing.DefaultSettings.council.autoIncludeRaidLeader
     end
 end
 

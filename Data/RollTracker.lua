@@ -4,6 +4,8 @@
 ----------------------------------------------------------------------]]
 
 local Loolib = LibStub("Loolib")
+local CreateFromMixins = Loolib.CreateFromMixins
+local Events = Loolib.Events
 
 --[[--------------------------------------------------------------------
     LoothingRollTrackerMixin
@@ -18,7 +20,6 @@ function LoothingRollTrackerMixin:Init()
     self.rolls = {}
 
     -- Register for CHAT_MSG_SYSTEM
-    local Events = Loothing.Loolib.Events
     if Events and Events.Registry then
         Events.Registry:RegisterEventCallback("CHAT_MSG_SYSTEM", function(_, text)
             self:OnChatMessage(text)
@@ -145,7 +146,7 @@ end
 -- Announces a message asking players to /roll
 -- @param itemLink string - Optional item link to include in message
 function LoothingRollTrackerMixin:RequestRolls(itemLink)
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     -- Clear previous rolls
     self:ClearAllRolls()
@@ -173,7 +174,7 @@ end
 --- Create the RollTracker singleton
 -- @return table
 function CreateLoothingRollTracker()
-    local tracker = LoolibCreateFromMixins(LoothingRollTrackerMixin)
+    local tracker = CreateFromMixins(LoothingRollTrackerMixin)
     tracker:Init()
     return tracker
 end

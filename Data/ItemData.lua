@@ -226,7 +226,7 @@ end
     LoothingItemMixin
 ----------------------------------------------------------------------]]
 
-LoothingItemMixin = LoolibCreateFromMixins(LoolibCallbackRegistryMixin)
+LoothingItemMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
 
 local ITEM_EVENTS = {
     "OnStateChanged",
@@ -239,7 +239,7 @@ local ITEM_EVENTS = {
 
 --- Initialize the item
 function LoothingItemMixin:Init(itemLink, looter, encounterID)
-    LoolibCallbackRegistryMixin.OnLoad(self)
+    Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(ITEM_EVENTS)
 
     -- Core properties
@@ -279,13 +279,13 @@ function LoothingItemMixin:Init(itemLink, looter, encounterID)
     self.isBoe = false
 
     -- State
-    self.state = LOOTHING_ITEM_STATE.PENDING
+    self.state = Loothing.ItemState.PENDING
     self.voteStartTime = nil
     self.voteEndTime = nil
     self.voteTimeout = nil
 
     -- Votes (DataProvider)
-    local Data = Loolib:GetModule("Data")
+    local Data = Loolib.Data
     self.votes = Data.CreateDataProvider()
 
     -- Candidate manager
@@ -369,13 +369,13 @@ end
 ----------------------------------------------------------------------]]
 
 --- Get the current state
--- @return number - LOOTHING_ITEM_STATE value
+-- @return number - Loothing.ItemState value
 function LoothingItemMixin:GetState()
     return self.state
 end
 
 --- Set the state
--- @param state number - LOOTHING_ITEM_STATE value
+-- @param state number - Loothing.ItemState value
 function LoothingItemMixin:SetState(state)
     if self.state ~= state then
         local oldState = self.state
@@ -387,38 +387,38 @@ end
 --- Check if item is pending
 -- @return boolean
 function LoothingItemMixin:IsPending()
-    return self.state == LOOTHING_ITEM_STATE.PENDING
+    return self.state == Loothing.ItemState.PENDING
 end
 
 --- Check if item is being voted on
 -- @return boolean
 function LoothingItemMixin:IsVoting()
-    return self.state == LOOTHING_ITEM_STATE.VOTING
+    return self.state == Loothing.ItemState.VOTING
 end
 
 --- Check if item has been tallied
 -- @return boolean
 function LoothingItemMixin:IsTallied()
-    return self.state == LOOTHING_ITEM_STATE.TALLIED
+    return self.state == Loothing.ItemState.TALLIED
 end
 
 --- Check if item has been awarded
 -- @return boolean
 function LoothingItemMixin:IsAwarded()
-    return self.state == LOOTHING_ITEM_STATE.AWARDED
+    return self.state == Loothing.ItemState.AWARDED
 end
 
 --- Check if item was skipped
 -- @return boolean
 function LoothingItemMixin:IsSkipped()
-    return self.state == LOOTHING_ITEM_STATE.SKIPPED
+    return self.state == Loothing.ItemState.SKIPPED
 end
 
 --- Check if item is complete (awarded or skipped)
 -- @return boolean
 function LoothingItemMixin:IsComplete()
-    return self.state == LOOTHING_ITEM_STATE.AWARDED or
-           self.state == LOOTHING_ITEM_STATE.SKIPPED
+    return self.state == Loothing.ItemState.AWARDED or
+           self.state == Loothing.ItemState.SKIPPED
 end
 
 --[[--------------------------------------------------------------------
@@ -428,37 +428,37 @@ end
 --- Start voting for this item
 -- @param timeout number - Seconds until voting closes (0 = no timeout)
 function LoothingItemMixin:StartVoting(timeout)
-    if self.state ~= LOOTHING_ITEM_STATE.PENDING then
+    if self.state ~= Loothing.ItemState.PENDING then
         return false
     end
 
     self.voteStartTime = GetTime()
     self.voteTimeout = timeout or Loothing.Settings:GetVotingTimeout()
-    if self.voteTimeout == LOOTHING_TIMING.NO_TIMEOUT then
+    if self.voteTimeout == Loothing.Timing.NO_TIMEOUT then
         self.voteEndTime = math.huge
     else
         self.voteEndTime = self.voteStartTime + self.voteTimeout
     end
 
-    self:SetState(LOOTHING_ITEM_STATE.VOTING)
+    self:SetState(Loothing.ItemState.VOTING)
     return true
 end
 
 --- End voting for this item
 function LoothingItemMixin:EndVoting()
-    if self.state ~= LOOTHING_ITEM_STATE.VOTING then
+    if self.state ~= Loothing.ItemState.VOTING then
         return false
     end
 
     self.voteEndTime = GetTime()
-    self:SetState(LOOTHING_ITEM_STATE.TALLIED)
+    self:SetState(Loothing.ItemState.TALLIED)
     return true
 end
 
 --- Get time remaining for voting
 -- @return number - Seconds remaining, math.huge if no-timeout, or 0 if not voting
 function LoothingItemMixin:GetTimeRemaining()
-    if self.state ~= LOOTHING_ITEM_STATE.VOTING then
+    if self.state ~= Loothing.ItemState.VOTING then
         return 0
     end
 
@@ -483,7 +483,7 @@ function LoothingItemMixin:IsVotingTimedOut()
     if self.voteEndTime == math.huge then
         return false
     end
-    return self.state == LOOTHING_ITEM_STATE.VOTING and
+    return self.state == Loothing.ItemState.VOTING and
            GetTime() >= self.voteEndTime
 end
 
@@ -497,7 +497,7 @@ end
 -- @param responses table - Array of response values (ranked)
 -- @return boolean - True if vote was added
 function LoothingItemMixin:AddVote(voter, voterClass, responses)
-    if self.state ~= LOOTHING_ITEM_STATE.VOTING then
+    if self.state ~= Loothing.ItemState.VOTING then
         return false
     end
 
@@ -583,7 +583,7 @@ function LoothingItemMixin:GetVoteCount()
 end
 
 --- Get votes by response type
--- @param responseType number - LOOTHING_RESPONSE value
+-- @param responseType number - Loothing.Response value
 -- @return table - Array of votes with that first-choice response
 function LoothingItemMixin:GetVotesByResponse(responseType)
     local result = {}
@@ -610,14 +610,14 @@ function LoothingItemMixin:SetWinner(winner, response)
     self.awardedTime = time()
     self.awarded = true
 
-    self:SetState(LOOTHING_ITEM_STATE.AWARDED)
+    self:SetState(Loothing.ItemState.AWARDED)
     self:TriggerEvent("OnWinnerSet", self.winner, response)
 end
 
 --- Skip this item (no award)
 function LoothingItemMixin:Skip()
     self.awardedTime = time()
-    self:SetState(LOOTHING_ITEM_STATE.SKIPPED)
+    self:SetState(Loothing.ItemState.SKIPPED)
 end
 
 --- Get the winner
@@ -742,11 +742,11 @@ function LoothingItemMixin.PrepareLootTableEntry(entry, callback)
     end
 
     -- Create item with data from comm
-    local item = LoolibCreateFromMixins(LoothingItemMixin)
-    LoolibCallbackRegistryMixin.OnLoad(item)
+    local item = Loolib.CreateFromMixins(LoothingItemMixin)
+    Loolib.CallbackRegistryMixin.OnLoad(item)
     item:GenerateCallbackEvents(ITEM_EVENTS)
 
-    local Data = Loolib:GetModule("Data")
+    local Data = Loolib.Data
     item.votes = Data.CreateDataProvider()
 
     item.guid = entry.g
@@ -758,7 +758,7 @@ function LoothingItemMixin.PrepareLootTableEntry(entry, callback)
     item.classesFlag = entry.c or 0xFFFFFFFF
     item.isBoe = entry.b or false
     item.looter = entry.o
-    item.state = LOOTHING_ITEM_STATE.PENDING
+    item.state = Loothing.ItemState.PENDING
     item.timestamp = time()
     item.candidateManager = nil
     item.winner = nil
@@ -829,17 +829,17 @@ end
 --- Get status text
 -- @return string
 function LoothingItemMixin:GetStatusText()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
-    if self.state == LOOTHING_ITEM_STATE.PENDING then
+    if self.state == Loothing.ItemState.PENDING then
         return L["STATUS_PENDING"]
-    elseif self.state == LOOTHING_ITEM_STATE.VOTING then
+    elseif self.state == Loothing.ItemState.VOTING then
         return L["STATUS_VOTING"]
-    elseif self.state == LOOTHING_ITEM_STATE.TALLIED then
+    elseif self.state == Loothing.ItemState.TALLIED then
         return L["STATUS_TALLIED"]
-    elseif self.state == LOOTHING_ITEM_STATE.AWARDED then
+    elseif self.state == Loothing.ItemState.AWARDED then
         return L["STATUS_AWARDED"]
-    elseif self.state == LOOTHING_ITEM_STATE.SKIPPED then
+    elseif self.state == Loothing.ItemState.SKIPPED then
         return L["STATUS_SKIPPED"]
     end
 
@@ -868,7 +868,7 @@ LoothingItemData = {
 -- @param encounterID number
 -- @return table - LoothingItem instance
 function CreateLoothingItem(itemLink, looter, encounterID)
-    local item = LoolibCreateFromMixins(LoothingItemMixin)
+    local item = Loolib.CreateFromMixins(LoothingItemMixin)
     item:Init(itemLink, looter, encounterID)
     return item
 end

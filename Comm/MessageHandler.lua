@@ -2,18 +2,21 @@
     Loothing - Loot Council Addon for WoW 12.0+
     MessageHandler - Message routing, sending, and receiving
 
-    Uses LoolibComm for transport (handles chunking, throttling, queuing).
+    Uses Loolib.Comm for transport (handles chunking, throttling, queuing).
     Uses LoothingProtocol for encoding (Serializer + Compressor pipeline).
     Integrates with LoothingRestrictions for encounter restriction handling.
 ----------------------------------------------------------------------]]
 
 local Loolib = LibStub("Loolib")
+local CallbackRegistryMixin = Loolib.CallbackRegistryMixin
+local Comm = Loolib.Comm
+local CreateFromMixins = Loolib.CreateFromMixins
 
 --[[--------------------------------------------------------------------
     LoothingCommMixin
 ----------------------------------------------------------------------]]
 
-LoothingCommMixin = LoolibCreateFromMixins(LoolibCallbackRegistryMixin)
+LoothingCommMixin = CreateFromMixins(CallbackRegistryMixin)
 
 local COMM_EVENTS = {
     "OnSessionStart",
@@ -66,63 +69,63 @@ end
 ----------------------------------------------------------------------]]
 
 local CRITICAL_COMMANDS = {
-    [LOOTHING_MSG_TYPE.SESSION_START]       = true,
-    [LOOTHING_MSG_TYPE.SESSION_END]         = true,
-    [LOOTHING_MSG_TYPE.VOTE_AWARD]          = true,
-    [LOOTHING_MSG_TYPE.VOTE_RESULTS]        = true,
-    [LOOTHING_MSG_TYPE.PLAYER_RESPONSE]     = true,
-    [LOOTHING_MSG_TYPE.PLAYER_RESPONSE_ACK] = true,
+    [Loothing.MsgType.SESSION_START]       = true,
+    [Loothing.MsgType.SESSION_END]         = true,
+    [Loothing.MsgType.VOTE_AWARD]          = true,
+    [Loothing.MsgType.VOTE_RESULTS]        = true,
+    [Loothing.MsgType.PLAYER_RESPONSE]     = true,
+    [Loothing.MsgType.PLAYER_RESPONSE_ACK] = true,
 }
 
 --- Command → handler method name dispatch table
 local HANDLERS = {
-    [LOOTHING_MSG_TYPE.SESSION_START]           = "HandleSessionStart",
-    [LOOTHING_MSG_TYPE.SESSION_END]             = "HandleSessionEnd",
-    [LOOTHING_MSG_TYPE.ITEM_ADD]                = "HandleItemAdd",
-    [LOOTHING_MSG_TYPE.ITEM_REMOVE]             = "HandleItemRemove",
-    [LOOTHING_MSG_TYPE.VOTE_REQUEST]            = "HandleVoteRequest",
-    [LOOTHING_MSG_TYPE.VOTE_COMMIT]             = "HandleVoteCommit",
-    [LOOTHING_MSG_TYPE.VOTE_CANCEL]             = "HandleVoteCancel",
-    [LOOTHING_MSG_TYPE.VOTE_RESULTS]            = "HandleVoteResults",
-    [LOOTHING_MSG_TYPE.VOTE_AWARD]              = "HandleVoteAward",
-    [LOOTHING_MSG_TYPE.VOTE_SKIP]               = "HandleVoteSkip",
-    [LOOTHING_MSG_TYPE.SYNC_REQUEST]            = "HandleSyncRequest",
-    [LOOTHING_MSG_TYPE.SYNC_DATA]               = "HandleSyncData",
-    [LOOTHING_MSG_TYPE.COUNCIL_ROSTER]          = "HandleCouncilRoster",
-    [LOOTHING_MSG_TYPE.OBSERVER_ROSTER]         = "HandleObserverRoster",
-    [LOOTHING_MSG_TYPE.PLAYER_INFO_REQUEST]     = "HandlePlayerInfoRequest",
-    [LOOTHING_MSG_TYPE.PLAYER_INFO_RESPONSE]    = "HandlePlayerInfoResponse",
-    [LOOTHING_MSG_TYPE.PLAYER_RESPONSE]         = "HandlePlayerResponse",
-    [LOOTHING_MSG_TYPE.PLAYER_RESPONSE_ACK]     = "HandlePlayerResponseAck",
-    [LOOTHING_MSG_TYPE.VERSION_REQUEST]         = "HandleVersionRequest",
-    [LOOTHING_MSG_TYPE.VERSION_RESPONSE]        = "HandleVersionResponse",
-    [LOOTHING_MSG_TYPE.MLDB_BROADCAST]          = "HandleMLDBBroadcast",
-    [LOOTHING_MSG_TYPE.CANDIDATE_UPDATE]        = "HandleCandidateUpdate",
-    [LOOTHING_MSG_TYPE.VOTE_UPDATE]             = "HandleVoteUpdate",
-    [LOOTHING_MSG_TYPE.SYNC_SETTINGS_REQUEST]   = "HandleSettingsSyncRequest",
-    [LOOTHING_MSG_TYPE.SYNC_SETTINGS_ACK]       = "HandleSettingsSyncAck",
-    [LOOTHING_MSG_TYPE.SYNC_SETTINGS_DATA]      = "HandleSettingsData",
-    [LOOTHING_MSG_TYPE.SYNC_HISTORY_REQUEST]    = "HandleHistorySyncRequest",
-    [LOOTHING_MSG_TYPE.SYNC_HISTORY_ACK]        = "HandleHistorySyncAck",
-    [LOOTHING_MSG_TYPE.SYNC_HISTORY_DATA]       = "HandleHistoryData",
-    [LOOTHING_MSG_TYPE.XREALM]                  = "HandleXRealm",
-    [LOOTHING_MSG_TYPE.STOP_HANDLE_LOOT]        = "HandleStopHandleLoot",
-    [LOOTHING_MSG_TYPE.TRADABLE]                = "HandleTradable",
-    [LOOTHING_MSG_TYPE.NON_TRADABLE]            = "HandleNonTradable",
+    [Loothing.MsgType.SESSION_START]           = "HandleSessionStart",
+    [Loothing.MsgType.SESSION_END]             = "HandleSessionEnd",
+    [Loothing.MsgType.ITEM_ADD]                = "HandleItemAdd",
+    [Loothing.MsgType.ITEM_REMOVE]             = "HandleItemRemove",
+    [Loothing.MsgType.VOTE_REQUEST]            = "HandleVoteRequest",
+    [Loothing.MsgType.VOTE_COMMIT]             = "HandleVoteCommit",
+    [Loothing.MsgType.VOTE_CANCEL]             = "HandleVoteCancel",
+    [Loothing.MsgType.VOTE_RESULTS]            = "HandleVoteResults",
+    [Loothing.MsgType.VOTE_AWARD]              = "HandleVoteAward",
+    [Loothing.MsgType.VOTE_SKIP]               = "HandleVoteSkip",
+    [Loothing.MsgType.SYNC_REQUEST]            = "HandleSyncRequest",
+    [Loothing.MsgType.SYNC_DATA]               = "HandleSyncData",
+    [Loothing.MsgType.COUNCIL_ROSTER]          = "HandleCouncilRoster",
+    [Loothing.MsgType.OBSERVER_ROSTER]         = "HandleObserverRoster",
+    [Loothing.MsgType.PLAYER_INFO_REQUEST]     = "HandlePlayerInfoRequest",
+    [Loothing.MsgType.PLAYER_INFO_RESPONSE]    = "HandlePlayerInfoResponse",
+    [Loothing.MsgType.PLAYER_RESPONSE]         = "HandlePlayerResponse",
+    [Loothing.MsgType.PLAYER_RESPONSE_ACK]     = "HandlePlayerResponseAck",
+    [Loothing.MsgType.VERSION_REQUEST]         = "HandleVersionRequest",
+    [Loothing.MsgType.VERSION_RESPONSE]        = "HandleVersionResponse",
+    [Loothing.MsgType.MLDB_BROADCAST]          = "HandleMLDBBroadcast",
+    [Loothing.MsgType.CANDIDATE_UPDATE]        = "HandleCandidateUpdate",
+    [Loothing.MsgType.VOTE_UPDATE]             = "HandleVoteUpdate",
+    [Loothing.MsgType.SYNC_SETTINGS_REQUEST]   = "HandleSettingsSyncRequest",
+    [Loothing.MsgType.SYNC_SETTINGS_ACK]       = "HandleSettingsSyncAck",
+    [Loothing.MsgType.SYNC_SETTINGS_DATA]      = "HandleSettingsData",
+    [Loothing.MsgType.SYNC_HISTORY_REQUEST]    = "HandleHistorySyncRequest",
+    [Loothing.MsgType.SYNC_HISTORY_ACK]        = "HandleHistorySyncAck",
+    [Loothing.MsgType.SYNC_HISTORY_DATA]       = "HandleHistoryData",
+    [Loothing.MsgType.XREALM]                  = "HandleXRealm",
+    [Loothing.MsgType.STOP_HANDLE_LOOT]        = "HandleStopHandleLoot",
+    [Loothing.MsgType.TRADABLE]                = "HandleTradable",
+    [Loothing.MsgType.NON_TRADABLE]            = "HandleNonTradable",
     -- Burst / resilience infrastructure
-    [LOOTHING_MSG_TYPE.BATCH]                   = "HandleBatch",
-    [LOOTHING_MSG_TYPE.HEARTBEAT]               = "HandleHeartbeat",
-    [LOOTHING_MSG_TYPE.ACK]                     = "HandleAck",
+    [Loothing.MsgType.BATCH]                   = "HandleBatch",
+    [Loothing.MsgType.HEARTBEAT]               = "HandleHeartbeat",
+    [Loothing.MsgType.ACK]                     = "HandleAck",
 }
 
 --- Initialize communication handler
 function LoothingCommMixin:Init()
-    LoolibCallbackRegistryMixin.OnLoad(self)
+    CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(COMM_EVENTS)
 
-    -- Register with LoolibComm for incoming addon messages
-    -- LoolibComm handles: prefix registration, message reassembly, throttling
-    LoolibComm:RegisterComm(LOOTHING_ADDON_PREFIX, function(prefix, message, distribution, sender)
+    -- Register with Loolib.Comm for incoming addon messages
+    -- Loolib.Comm handles: prefix registration, message reassembly, throttling
+    Comm:RegisterComm(Loothing.ADDON_PREFIX, function(prefix, message, distribution, sender)
         self:OnMessage(message, distribution, sender)
     end, self)
 end
@@ -132,7 +135,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Send a command + data to group or a specific player
--- @param command string - LOOTHING_MSG_TYPE value
+-- @param command string - Loothing.MsgType value
 -- @param data table|nil - Structured message payload
 -- @param target string|nil - Player name for WHISPER, nil for group broadcast
 -- @param priority string|nil - "ALERT", "NORMAL" (default), or "BULK"
@@ -150,16 +153,16 @@ function LoothingCommMixin:Send(command, data, target, priority)
     local prio = priority or "NORMAL"
     if prio == "NORMAL"
         and not CRITICAL_COMMANDS[command]
-        and LoolibComm:GetQueuePressure() > 0.5
+        and Comm:GetQueuePressure() > 0.5
     then
         prio = "BULK"
     end
 
     if target then
-        LoolibComm:SendCommMessage(LOOTHING_ADDON_PREFIX, encoded, "WHISPER", target, prio)
+        Comm:SendCommMessage(Loothing.ADDON_PREFIX, encoded, "WHISPER", target, prio)
     else
         local channel = IsInRaid() and "RAID" or "PARTY"
-        LoolibComm:SendCommMessage(LOOTHING_ADDON_PREFIX, encoded, channel, nil, prio)
+        Comm:SendCommMessage(Loothing.ADDON_PREFIX, encoded, channel, nil, prio)
     end
 end
 
@@ -172,7 +175,7 @@ end
 --- Queue a message for batched delivery
 -- Callers should call FlushAll() when the burst is complete to drain
 -- immediately; otherwise the 100 ms window timer fires automatically.
--- @param command string - LOOTHING_MSG_TYPE value
+-- @param command string - Loothing.MsgType value
 -- @param data table|nil - Message payload
 -- @param target string|nil - Player name or nil for broadcast
 -- @param priority string|nil - "ALERT", "NORMAL", or "BULK"
@@ -217,7 +220,7 @@ function LoothingCommMixin:FlushBatch(key)
     end
 
     -- Multiple messages: wrap in BATCH container
-    self:Send(LOOTHING_MSG_TYPE.BATCH, {
+    self:Send(Loothing.MsgType.BATCH, {
         messages = batch.messages,
     }, batch.target, batch.priority)
 end
@@ -235,7 +238,7 @@ function LoothingCommMixin:FlushAll()
 end
 
 --- Send a command to the guild channel
--- @param command string - LOOTHING_MSG_TYPE value
+-- @param command string - Loothing.MsgType value
 -- @param data table|nil - Message payload
 -- @param priority string|nil
 function LoothingCommMixin:SendGuild(command, data, priority)
@@ -251,12 +254,12 @@ function LoothingCommMixin:SendGuild(command, data, priority)
         LoothingTestMode:OnOutgoingComm("GUILD", nil)
     end
 
-    LoolibComm:SendCommMessage(LOOTHING_ADDON_PREFIX, encoded, "GUILD", nil, priority or "NORMAL")
+    Comm:SendCommMessage(Loothing.ADDON_PREFIX, encoded, "GUILD", nil, priority or "NORMAL")
 end
 
 --- Send with guaranteed delivery (queued during encounter restrictions)
 -- Critical messages (votes, awards, session_end) should use this.
--- @param command string - LOOTHING_MSG_TYPE value
+-- @param command string - Loothing.MsgType value
 -- @param data table|nil - Message payload
 -- @param target string|nil - Player name or nil for group
 -- @param priority string|nil
@@ -274,12 +277,12 @@ end
 
 --- Send via cross-realm relay (group channel with target envelope)
 -- Use when direct whisper to a cross-realm player fails or is unreliable.
--- @param command string - LOOTHING_MSG_TYPE value
+-- @param command string - Loothing.MsgType value
 -- @param data table|nil - Message payload
 -- @param target string - Target player name (with realm suffix)
 -- @param priority string|nil
 function LoothingCommMixin:SendViaRelay(command, data, target, priority)
-    self:Send(LOOTHING_MSG_TYPE.XREALM, {
+    self:Send(Loothing.MsgType.XREALM, {
         target = target,
         command = command,
         data = data,
@@ -290,7 +293,7 @@ end
     Message Receiving
 ----------------------------------------------------------------------]]
 
---- Handle incoming addon message (LoolibComm callback)
+--- Handle incoming addon message (Loolib.Comm callback)
 -- @param message string - Encoded message (already reassembled if multi-part)
 -- @param distribution string - Channel received on
 -- @param sender string - Sender name
@@ -304,7 +307,7 @@ function LoothingCommMixin:OnMessage(message, distribution, sender)
     end
 
     -- Version check
-    if version > LOOTHING_PROTOCOL_VERSION then
+    if version > Loothing.PROTOCOL_VERSION then
         Loothing:Debug("Received message from newer protocol version:", version, "from", sender)
         -- Still try to process - might be backwards compatible
     end
@@ -317,7 +320,7 @@ function LoothingCommMixin:OnMessage(message, distribution, sender)
 end
 
 --- Route a decoded message to appropriate handler
--- @param command string - LOOTHING_MSG_TYPE value
+-- @param command string - Loothing.MsgType value
 -- @param data table - Deserialized message data
 -- @param sender string - Normalized sender name
 -- @param distribution string - Channel
@@ -345,7 +348,7 @@ function LoothingCommMixin:HandleXRealm(data, sender, distribution)
     if not data or not data.target then return end
 
     -- Prevent recursive processing: inner message must not be XREALM or BATCH
-    if data.command == LOOTHING_MSG_TYPE.XREALM or data.command == LOOTHING_MSG_TYPE.BATCH then
+    if data.command == Loothing.MsgType.XREALM or data.command == Loothing.MsgType.BATCH then
         Loothing:Debug("HandleXRealm: blocked recursive", data.command, "from", sender)
         return
     end
@@ -370,7 +373,7 @@ end
 -- @param encounterName string
 -- @param sessionID string|nil
 function LoothingCommMixin:BroadcastSessionStart(encounterID, encounterName, sessionID)
-    self:Send(LOOTHING_MSG_TYPE.SESSION_START, {
+    self:Send(Loothing.MsgType.SESSION_START, {
         encounterID = encounterID,
         encounterName = encounterName,
         sessionID = sessionID,
@@ -379,12 +382,12 @@ end
 
 --- Broadcast session end
 function LoothingCommMixin:BroadcastSessionEnd()
-    self:SendGuaranteed(LOOTHING_MSG_TYPE.SESSION_END, {})
+    self:SendGuaranteed(Loothing.MsgType.SESSION_END, {})
 end
 
 --- Broadcast that ML has stopped handling loot entirely
 function LoothingCommMixin:BroadcastStopHandleLoot()
-    self:Send(LOOTHING_MSG_TYPE.STOP_HANDLE_LOOT, {})
+    self:Send(Loothing.MsgType.STOP_HANDLE_LOOT, {})
 end
 
 --- Broadcast item added
@@ -392,7 +395,7 @@ end
 -- @param guid string
 -- @param looter string
 function LoothingCommMixin:BroadcastItemAdd(itemLink, guid, looter)
-    self:Send(LOOTHING_MSG_TYPE.ITEM_ADD, {
+    self:Send(Loothing.MsgType.ITEM_ADD, {
         itemLink = itemLink,
         guid = guid,
         looter = looter,
@@ -402,7 +405,7 @@ end
 --- Broadcast item removed
 -- @param guid string
 function LoothingCommMixin:BroadcastItemRemove(guid)
-    self:Send(LOOTHING_MSG_TYPE.ITEM_REMOVE, {
+    self:Send(Loothing.MsgType.ITEM_REMOVE, {
         guid = guid,
     })
 end
@@ -416,7 +419,7 @@ end
 -- @param timeout number
 -- @param sessionID string|nil
 function LoothingCommMixin:BroadcastVoteRequest(itemGUID, timeout, sessionID)
-    self:Send(LOOTHING_MSG_TYPE.VOTE_REQUEST, {
+    self:Send(Loothing.MsgType.VOTE_REQUEST, {
         itemGUID = itemGUID,
         timeout = timeout,
         sessionID = sessionID,
@@ -429,7 +432,7 @@ end
 -- @param masterLooter string
 -- @param sessionID string|nil
 function LoothingCommMixin:SendVoteCommit(itemGUID, responses, masterLooter, sessionID)
-    self:SendGuaranteed(LOOTHING_MSG_TYPE.VOTE_COMMIT, {
+    self:SendGuaranteed(Loothing.MsgType.VOTE_COMMIT, {
         itemGUID = itemGUID,
         responses = responses,
         sessionID = sessionID,
@@ -441,7 +444,7 @@ end
 -- @param winnerName string
 -- @param sessionID string|nil
 function LoothingCommMixin:BroadcastVoteAward(itemGUID, winnerName, sessionID)
-    self:SendGuaranteed(LOOTHING_MSG_TYPE.VOTE_AWARD, {
+    self:SendGuaranteed(Loothing.MsgType.VOTE_AWARD, {
         itemGUID = itemGUID,
         winner = winnerName,
         sessionID = sessionID,
@@ -452,7 +455,7 @@ end
 -- @param itemGUID string
 -- @param sessionID string|nil
 function LoothingCommMixin:BroadcastVoteSkip(itemGUID, sessionID)
-    self:SendGuaranteed(LOOTHING_MSG_TYPE.VOTE_SKIP, {
+    self:SendGuaranteed(Loothing.MsgType.VOTE_SKIP, {
         itemGUID = itemGUID,
         sessionID = sessionID,
     })
@@ -462,7 +465,7 @@ end
 -- @param itemGUID string
 -- @param sessionID string|nil
 function LoothingCommMixin:BroadcastVoteCancel(itemGUID, sessionID)
-    self:Send(LOOTHING_MSG_TYPE.VOTE_CANCEL, {
+    self:Send(Loothing.MsgType.VOTE_CANCEL, {
         itemGUID = itemGUID,
         sessionID = sessionID,
     })
@@ -473,7 +476,7 @@ end
 -- @param results table
 -- @param sessionID string|nil
 function LoothingCommMixin:BroadcastVoteResults(itemGUID, results, sessionID)
-    self:SendGuaranteed(LOOTHING_MSG_TYPE.VOTE_RESULTS, {
+    self:SendGuaranteed(Loothing.MsgType.VOTE_RESULTS, {
         itemGUID = itemGUID,
         results = results,
         sessionID = sessionID,
@@ -487,7 +490,7 @@ end
 --- Broadcast council roster
 -- @param members table
 function LoothingCommMixin:BroadcastCouncilRoster(members)
-    self:Send(LOOTHING_MSG_TYPE.COUNCIL_ROSTER, {
+    self:Send(Loothing.MsgType.COUNCIL_ROSTER, {
         members = members,
     })
 end
@@ -495,7 +498,7 @@ end
 --- Request sync from ML
 -- @param masterLooter string
 function LoothingCommMixin:RequestSync(masterLooter)
-    self:Send(LOOTHING_MSG_TYPE.SYNC_REQUEST, {
+    self:Send(Loothing.MsgType.SYNC_REQUEST, {
         timestamp = time(),
     }, masterLooter)
 end
@@ -504,7 +507,7 @@ end
 -- @param sessionData table
 -- @param target string
 function LoothingCommMixin:SendSyncData(sessionData, target)
-    self:Send(LOOTHING_MSG_TYPE.SYNC_DATA, sessionData, target)
+    self:Send(Loothing.MsgType.SYNC_DATA, sessionData, target)
 end
 
 --[[--------------------------------------------------------------------
@@ -515,7 +518,7 @@ end
 -- @param itemGUID string
 -- @param playerName string
 function LoothingCommMixin:RequestPlayerInfo(itemGUID, playerName)
-    self:Send(LOOTHING_MSG_TYPE.PLAYER_INFO_REQUEST, {
+    self:Send(Loothing.MsgType.PLAYER_INFO_REQUEST, {
         itemGUID = itemGUID,
         playerName = playerName,
     }, playerName)
@@ -530,7 +533,7 @@ end
 -- @param target string
 -- @param sessionID string|nil
 function LoothingCommMixin:SendPlayerInfo(itemGUID, slot1Link, slot2Link, slot1ilvl, slot2ilvl, target, sessionID)
-    self:Send(LOOTHING_MSG_TYPE.PLAYER_INFO_RESPONSE, {
+    self:Send(Loothing.MsgType.PLAYER_INFO_RESPONSE, {
         itemGUID = itemGUID,
         slot1Link = slot1Link,
         slot2Link = slot2Link,
@@ -542,7 +545,7 @@ end
 
 --- Send player response (raid member -> ML)
 -- @param itemGUID string
--- @param response number - LOOTHING_RESPONSE value
+-- @param response number - Loothing.Response value
 -- @param note string|nil
 -- @param roll number|nil
 -- @param rollMin number|nil
@@ -571,7 +574,7 @@ function LoothingCommMixin:SendPlayerResponse(itemGUID, response, note, roll, ro
         return
     end
 
-    self:SendGuaranteed(LOOTHING_MSG_TYPE.PLAYER_RESPONSE, {
+    self:SendGuaranteed(Loothing.MsgType.PLAYER_RESPONSE, {
         itemGUID = itemGUID,
         response = response,
         note = note ~= "" and note or nil,
@@ -602,7 +605,7 @@ function LoothingCommMixin:SendPlayerResponseAck(itemGUID, success, target, sess
         return
     end
 
-    self:Send(LOOTHING_MSG_TYPE.PLAYER_RESPONSE_ACK, {
+    self:Send(Loothing.MsgType.PLAYER_RESPONSE_ACK, {
         itemGUID = itemGUID,
         success = success,
         sessionID = sessionID,
@@ -618,7 +621,7 @@ end
 -- @param candidateData table
 -- @param sessionID string|nil
 function LoothingCommMixin:BroadcastCandidateUpdate(itemGUID, candidateData, sessionID)
-    self:Send(LOOTHING_MSG_TYPE.CANDIDATE_UPDATE, {
+    self:Send(Loothing.MsgType.CANDIDATE_UPDATE, {
         itemGUID = itemGUID,
         candidateData = candidateData,
         sessionID = sessionID,
@@ -631,7 +634,7 @@ end
 -- @param voters table
 -- @param sessionID string|nil
 function LoothingCommMixin:BroadcastVoteUpdate(itemGUID, candidateName, voters, sessionID)
-    self:Send(LOOTHING_MSG_TYPE.VOTE_UPDATE, {
+    self:Send(Loothing.MsgType.VOTE_UPDATE, {
         itemGUID = itemGUID,
         candidateName = candidateName,
         voters = voters,
@@ -646,7 +649,7 @@ end
 --- Broadcast MLDB (Master Looter Database)
 -- @param mldbData table - Compressed MLDB data
 function LoothingCommMixin:BroadcastMLDB(mldbData)
-    self:Send(LOOTHING_MSG_TYPE.MLDB_BROADCAST, {
+    self:Send(Loothing.MsgType.MLDB_BROADCAST, {
         data = mldbData,
     })
 end
@@ -655,19 +658,19 @@ end
 -- @param target string|nil - "guild" for guild, nil for group, or player name
 function LoothingCommMixin:SendVersionRequest(target)
     if target == "guild" then
-        self:SendGuild(LOOTHING_MSG_TYPE.VERSION_REQUEST, {})
+        self:SendGuild(Loothing.MsgType.VERSION_REQUEST, {})
     elseif target then
-        self:Send(LOOTHING_MSG_TYPE.VERSION_REQUEST, {}, target)
+        self:Send(Loothing.MsgType.VERSION_REQUEST, {}, target)
     else
-        self:Send(LOOTHING_MSG_TYPE.VERSION_REQUEST, {})
+        self:Send(Loothing.MsgType.VERSION_REQUEST, {})
     end
 end
 
 --- Send version response
 -- @param target string - Player to respond to
 function LoothingCommMixin:SendVersionResponse(target)
-    self:Send(LOOTHING_MSG_TYPE.VERSION_RESPONSE, {
-        version = LOOTHING_VERSION,
+    self:Send(Loothing.MsgType.VERSION_RESPONSE, {
+        version = Loothing.VERSION,
     }, target)
 end
 
@@ -679,23 +682,23 @@ end
 -- @param target string - "guild" or player name
 function LoothingCommMixin:SendSettingsSyncRequest(target)
     if target == "guild" then
-        self:SendGuild(LOOTHING_MSG_TYPE.SYNC_SETTINGS_REQUEST, {})
+        self:SendGuild(Loothing.MsgType.SYNC_SETTINGS_REQUEST, {})
     else
-        self:Send(LOOTHING_MSG_TYPE.SYNC_SETTINGS_REQUEST, {}, target)
+        self:Send(Loothing.MsgType.SYNC_SETTINGS_REQUEST, {}, target)
     end
 end
 
 --- Send settings sync acknowledgment
 -- @param target string
 function LoothingCommMixin:SendSettingsSyncAck(target)
-    self:Send(LOOTHING_MSG_TYPE.SYNC_SETTINGS_ACK, {}, target)
+    self:Send(Loothing.MsgType.SYNC_SETTINGS_ACK, {}, target)
 end
 
 --- Send settings data
 -- @param settingsData table - Serialized settings
 -- @param target string
 function LoothingCommMixin:SendSettingsData(settingsData, target)
-    self:Send(LOOTHING_MSG_TYPE.SYNC_SETTINGS_DATA, {
+    self:Send(Loothing.MsgType.SYNC_SETTINGS_DATA, {
         data = settingsData,
     }, target, "BULK")
 end
@@ -705,23 +708,23 @@ end
 -- @param days number
 function LoothingCommMixin:SendHistorySyncRequest(target, days)
     if target == "guild" then
-        self:SendGuild(LOOTHING_MSG_TYPE.SYNC_HISTORY_REQUEST, { days = days })
+        self:SendGuild(Loothing.MsgType.SYNC_HISTORY_REQUEST, { days = days })
     else
-        self:Send(LOOTHING_MSG_TYPE.SYNC_HISTORY_REQUEST, { days = days }, target)
+        self:Send(Loothing.MsgType.SYNC_HISTORY_REQUEST, { days = days }, target)
     end
 end
 
 --- Send history sync acknowledgment
 -- @param target string
 function LoothingCommMixin:SendHistorySyncAck(target)
-    self:Send(LOOTHING_MSG_TYPE.SYNC_HISTORY_ACK, {}, target)
+    self:Send(Loothing.MsgType.SYNC_HISTORY_ACK, {}, target)
 end
 
 --- Send history data
 -- @param historyData table - History entries
 -- @param target string
 function LoothingCommMixin:SendHistoryData(historyData, target)
-    self:Send(LOOTHING_MSG_TYPE.SYNC_HISTORY_DATA, {
+    self:Send(Loothing.MsgType.SYNC_HISTORY_DATA, {
         data = historyData,
     }, target, "BULK")
 end

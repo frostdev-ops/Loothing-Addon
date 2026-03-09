@@ -25,26 +25,26 @@ function LoothingResponseManagerMixin:LoadResponses()
     local activeId = rs.activeSet or 1
     self.buttons = Loothing.Settings:GetResponseButtons(activeId)
     if #self.buttons == 0 then
-        self.buttons = LoothingUtils.DeepCopy(LOOTHING_DEFAULT_SETTINGS.responseSets.sets[1].buttons)
+        self.buttons = LoothingUtils.DeepCopy(Loothing.DefaultSettings.responseSets.sets[1].buttons)
     end
 
     self:UpdateGlobalResponseInfo()
 end
 
---- Update LOOTHING_RESPONSE_INFO from the active set's buttons
+--- Update Loothing.ResponseInfo from the active set's buttons
 -- Numeric entries are cleared and rebuilt; string-keyed system entries are untouched.
 function LoothingResponseManagerMixin:UpdateGlobalResponseInfo()
     -- Clear numeric response IDs
-    for k in pairs(LOOTHING_RESPONSE_INFO) do
+    for k in pairs(Loothing.ResponseInfo) do
         if type(k) == "number" then
-            LOOTHING_RESPONSE_INFO[k] = nil
+            Loothing.ResponseInfo[k] = nil
         end
     end
 
     for index, btn in ipairs(self.buttons or {}) do
         local responseId = btn.id or index
         local color = LoothingUtils.ColorToNamed(btn.color)
-        LOOTHING_RESPONSE_INFO[responseId] = {
+        Loothing.ResponseInfo[responseId] = {
             name  = btn.responseText or btn.text,
             color = color,
             icon  = btn.icon,
@@ -122,7 +122,7 @@ end
 --- Reset the active set to defaults
 function LoothingResponseManagerMixin:ResetToDefaults()
     if not Loothing.Settings then return end
-    local defaults = LoothingUtils.DeepCopy(LOOTHING_DEFAULT_SETTINGS.responseSets)
+    local defaults = LoothingUtils.DeepCopy(Loothing.DefaultSettings.responseSets)
     Loothing.Settings:Set("responseSets", defaults)
     self:LoadResponses()
 end
@@ -134,7 +134,7 @@ end
 --- Create the ResponseManager singleton
 -- @return table
 function CreateLoothingResponseManager()
-    local manager = LoolibCreateFromMixins(LoothingResponseManagerMixin)
+    local manager = Loolib.CreateFromMixins(LoothingResponseManagerMixin)
     manager:Init()
     return manager
 end

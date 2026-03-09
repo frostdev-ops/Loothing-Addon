@@ -12,11 +12,12 @@
 ----------------------------------------------------------------------]]
 
 local Loolib = LibStub("Loolib")
+local ipairs, pairs, tonumber = ipairs, pairs, tonumber
 
 --[[--------------------------------------------------------------------
     Default Values (split by scope for Loolib SavedVariables)
 
-    Profile scope: All user preferences from LOOTHING_DEFAULT_SETTINGS
+    Profile scope: All user preferences from Loothing.DefaultSettings
     Global scope: Shared data that persists across profiles
 ----------------------------------------------------------------------]]
 
@@ -33,26 +34,26 @@ end
 local PROFILE_DEFAULTS = {
     version = 1,
 
-    council = CopyDefaults(LOOTHING_DEFAULT_SETTINGS.council),
-    observers = CopyDefaults(LOOTHING_DEFAULT_SETTINGS.observers),
-    settings = CopyDefaults(LOOTHING_DEFAULT_SETTINGS.settings),
-    announcements = CopyDefaults(LOOTHING_DEFAULT_SETTINGS.announcements),
-    autoPass = CopyDefaults(LOOTHING_DEFAULT_SETTINGS.autoPass),
-    autoAward = CopyDefaults(LOOTHING_DEFAULT_SETTINGS.autoAward),
-    ignoreItems = CopyDefaults(LOOTHING_DEFAULT_SETTINGS.ignoreItems),
-    voting = CopyDefaults(LOOTHING_DEFAULT_SETTINGS.voting),
-    responses = CopyDefaults(LOOTHING_DEFAULT_SETTINGS.responses),
-    awardReasons = CopyDefaults(LOOTHING_DEFAULT_SETTINGS.awardReasons),
-    frame = CopyDefaults(LOOTHING_DEFAULT_SETTINGS.frame),
-    ml = CopyDefaults(LOOTHING_DEFAULT_SETTINGS.ml),
-    historySettings = CopyDefaults(LOOTHING_DEFAULT_SETTINGS.historySettings),
-    buttonSets = CopyDefaults(LOOTHING_DEFAULT_SETTINGS.buttonSets),
-    responseSets = CopyDefaults(LOOTHING_DEFAULT_SETTINGS.responseSets),
-    filters = CopyDefaults(LOOTHING_DEFAULT_SETTINGS.filters),
-    groupLoot = CopyDefaults(LOOTHING_DEFAULT_SETTINGS.groupLoot),
-    rollFrame = CopyDefaults(LOOTHING_DEFAULT_SETTINGS.rollFrame),
-    councilTable = CopyDefaults(LOOTHING_DEFAULT_SETTINGS.councilTable),
-    winnerDetermination = CopyDefaults(LOOTHING_DEFAULT_SETTINGS.winnerDetermination),
+    council = CopyDefaults(Loothing.DefaultSettings.council),
+    observers = CopyDefaults(Loothing.DefaultSettings.observers),
+    settings = CopyDefaults(Loothing.DefaultSettings.settings),
+    announcements = CopyDefaults(Loothing.DefaultSettings.announcements),
+    autoPass = CopyDefaults(Loothing.DefaultSettings.autoPass),
+    autoAward = CopyDefaults(Loothing.DefaultSettings.autoAward),
+    ignoreItems = CopyDefaults(Loothing.DefaultSettings.ignoreItems),
+    voting = CopyDefaults(Loothing.DefaultSettings.voting),
+    responses = CopyDefaults(Loothing.DefaultSettings.responses),
+    awardReasons = CopyDefaults(Loothing.DefaultSettings.awardReasons),
+    frame = CopyDefaults(Loothing.DefaultSettings.frame),
+    ml = CopyDefaults(Loothing.DefaultSettings.ml),
+    historySettings = CopyDefaults(Loothing.DefaultSettings.historySettings),
+    buttonSets = CopyDefaults(Loothing.DefaultSettings.buttonSets),
+    responseSets = CopyDefaults(Loothing.DefaultSettings.responseSets),
+    filters = CopyDefaults(Loothing.DefaultSettings.filters),
+    groupLoot = CopyDefaults(Loothing.DefaultSettings.groupLoot),
+    rollFrame = CopyDefaults(Loothing.DefaultSettings.rollFrame),
+    councilTable = CopyDefaults(Loothing.DefaultSettings.councilTable),
+    winnerDetermination = CopyDefaults(Loothing.DefaultSettings.winnerDetermination),
 }
 
 local GLOBAL_DEFAULTS = {
@@ -88,7 +89,7 @@ end
 --- Initialize settings with Loolib SavedVariables multi-profile support
 function LoothingSettingsMixin:Init()
     -- Create Loolib SavedVariables database with profile + global scopes
-    self.sv = CreateLoolibSavedVariables("LoothingDB", SV_DEFAULTS, "Default")
+    self.sv = Loolib.Data.SavedVariables.Create("LoothingDB", SV_DEFAULTS, "Default")
 
     -- self.db is a metatable proxy that always reads from self.sv.profile.
     -- This prevents stale references: even if other code captures self.db,
@@ -144,7 +145,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Get the Loolib SavedVariables database object
--- @return table - The LoolibSavedVariables instance
+-- @return table - The saved variables instance
 function LoothingSettingsMixin:GetDB()
     return self.sv
 end
@@ -554,7 +555,7 @@ end
 --- Get all award announcement lines
 -- @return table - Array of { enabled, channel, text } (copy)
 function LoothingSettingsMixin:GetAwardLines()
-    local defaults = LOOTHING_DEFAULT_SETTINGS.announcements.awardLines
+    local defaults = Loothing.DefaultSettings.announcements.awardLines
     local lines = self:Get("announcements.awardLines", defaults)
     return LoothingUtils.DeepCopy(lines)
 end
@@ -589,7 +590,7 @@ end
 --- Get all item announcement lines
 -- @return table - Array of { enabled, channel, text } (copy)
 function LoothingSettingsMixin:GetItemLines()
-    local defaults = LOOTHING_DEFAULT_SETTINGS.announcements.itemLines
+    local defaults = Loothing.DefaultSettings.announcements.itemLines
     local lines = self:Get("announcements.itemLines", defaults)
     return LoothingUtils.DeepCopy(lines)
 end
@@ -705,15 +706,89 @@ function LoothingSettingsMixin:GetHistory()
     return LoothingUtils.DeepCopy(history)
 end
 
---- Add history entry (to global scope)
--- @param entry table - History entry
-function LoothingSettingsMixin:AddHistoryEntry(entry)
+--- Get the live shared history table.
+-- @return table
+function LoothingSettingsMixin:GetHistoryRef()
     local history = self.global.history
     if not history then
         history = {}
         self.global.history = history
     end
+    return history
+end
+
+--- Add history entry (to global scope)
+-- @param entry table - History entry
+function LoothingSettingsMixin:AddHistoryEntry(entry)
+    local history = self:GetHistoryRef()
     history[#history + 1] = entry
+end
+
+--- Remove a history entry by GUID from the live shared history table.
+-- @param guid string
+-- @return boolean
+function LoothingSettingsMixin:RemoveHistoryEntry(guid)
+    if not guid then
+        return false
+    end
+
+    local history = self:GetHistoryRef()
+    for index, entry in ipairs(history) do
+        if entry.guid == guid then
+            table.remove(history, index)
+            return true
+        end
+    end
+
+    return false
+end
+
+--- Remove multiple history entries by GUID.
+-- @param guidSet table
+-- @return number
+function LoothingSettingsMixin:RemoveHistoryEntries(guidSet)
+    if not guidSet then
+        return 0
+    end
+
+    local history = self:GetHistoryRef()
+    local removed = 0
+
+    for index = #history, 1, -1 do
+        local entry = history[index]
+        if entry and entry.guid and guidSet[entry.guid] then
+            table.remove(history, index)
+            removed = removed + 1
+        end
+    end
+
+    return removed
+end
+
+--- Get the configured shared history cap.
+-- @return number
+function LoothingSettingsMixin:GetHistoryMaxEntries()
+    return tonumber(self:Get("historySettings.maxEntries", Loothing.DefaultSettings.historySettings.maxEntries)) or 500
+end
+
+--- Prune oldest history entries to fit the configured cap.
+-- @param maxEntries number|nil
+-- @return table
+function LoothingSettingsMixin:PruneHistory(maxEntries)
+    local history = self:GetHistoryRef()
+    maxEntries = tonumber(maxEntries) or self:GetHistoryMaxEntries()
+
+    if maxEntries <= 0 or #history <= maxEntries then
+        return {}
+    end
+
+    local removed = {}
+    local excess = #history - maxEntries
+    for index = 1, excess do
+        removed[index] = table.remove(history, 1)
+    end
+
+    return removed
 end
 
 --- Clear history (global scope)
@@ -1177,7 +1252,7 @@ end
 --- Get all award reasons
 -- @return table - Array of award reason entries (copy)
 function LoothingSettingsMixin:GetAwardReasons()
-    local defaults = LOOTHING_DEFAULT_SETTINGS.awardReasons.reasons
+    local defaults = Loothing.DefaultSettings.awardReasons.reasons
     local reasons = self:Get("awardReasons.reasons", defaults)
     return LoothingUtils.DeepCopy(reasons)
 end
@@ -1273,7 +1348,7 @@ end
 
 --- Reset award reasons to defaults
 function LoothingSettingsMixin:ResetAwardReasons()
-    local defaults = LoothingUtils.DeepCopy(LOOTHING_DEFAULT_SETTINGS.awardReasons.reasons)
+    local defaults = LoothingUtils.DeepCopy(Loothing.DefaultSettings.awardReasons.reasons)
     self:Set("awardReasons.reasons", defaults)
 end
 
@@ -1389,7 +1464,7 @@ end
 
 --- Reset award reasons to defaults (alias for ResetAwardReasons)
 function LoothingSettingsMixin:ResetAwardReasonsToDefaults()
-    local defaults = LoothingUtils.DeepCopy(LOOTHING_DEFAULT_SETTINGS.awardReasons)
+    local defaults = LoothingUtils.DeepCopy(Loothing.DefaultSettings.awardReasons)
     self:Set("awardReasons", defaults)
 end
 
@@ -1415,7 +1490,7 @@ end
 --- Get all button sets
 -- @return table - Table of button sets indexed by ID (copy)
 function LoothingSettingsMixin:GetButtonSets()
-    local defaults = LOOTHING_DEFAULT_SETTINGS.buttonSets.sets
+    local defaults = Loothing.DefaultSettings.buttonSets.sets
     local sets = self:Get("buttonSets.sets", defaults)
     return LoothingUtils.DeepCopy(sets)
 end
@@ -1628,7 +1703,7 @@ end
 ----------------------------------------------------------------------]]
 
 local function GetDefaultResponseSetTemplate(setId)
-    local defaults = LOOTHING_DEFAULT_SETTINGS.responseSets and LOOTHING_DEFAULT_SETTINGS.responseSets.sets or {}
+    local defaults = Loothing.DefaultSettings.responseSets and Loothing.DefaultSettings.responseSets.sets or {}
     return defaults[setId] or defaults[1] or { name = "Default", buttons = {} }
 end
 
@@ -1707,7 +1782,7 @@ local function NormalizeResponseSetData(setId, setData)
 end
 
 function LoothingSettingsMixin:NormalizeResponseSets(data)
-    local defaults = LOOTHING_DEFAULT_SETTINGS.responseSets or {}
+    local defaults = Loothing.DefaultSettings.responseSets or {}
     local source = type(data) == "table" and data or defaults
     local normalized = {
         activeSet = tonumber(source.activeSet) or defaults.activeSet or 1,
@@ -2382,9 +2457,9 @@ end
 -- @return number - Seconds (MIN_ROLL_TIMEOUT to MAX_ROLL_TIMEOUT)
 function LoothingSettingsMixin:GetRollFrameTimeoutDuration()
     local value = self:Get("rollFrame.timeoutDuration")
-    local defaultTimeout = LOOTHING_TIMING and LOOTHING_TIMING.DEFAULT_ROLL_TIMEOUT or 30
-    local minTimeout = LOOTHING_TIMING and LOOTHING_TIMING.MIN_ROLL_TIMEOUT or 5
-    local maxTimeout = LOOTHING_TIMING and LOOTHING_TIMING.MAX_ROLL_TIMEOUT or 200
+    local defaultTimeout = Loothing.Timing and Loothing.Timing.DEFAULT_ROLL_TIMEOUT or 30
+    local minTimeout = Loothing.Timing and Loothing.Timing.MIN_ROLL_TIMEOUT or 5
+    local maxTimeout = Loothing.Timing and Loothing.Timing.MAX_ROLL_TIMEOUT or 200
 
     if value == nil then return defaultTimeout end
     return math.max(minTimeout, math.min(maxTimeout, value))
@@ -2393,11 +2468,11 @@ end
 --- Set RollFrame timeout duration
 -- @param seconds number (MIN_ROLL_TIMEOUT to MAX_ROLL_TIMEOUT)
 function LoothingSettingsMixin:SetRollFrameTimeoutDuration(seconds)
-    if seconds == (LOOTHING_TIMING and LOOTHING_TIMING.NO_TIMEOUT or 0) then
+    if seconds == (Loothing.Timing and Loothing.Timing.NO_TIMEOUT or 0) then
         self:Set("rollFrame.timeoutDuration", 0)
     else
-        local minTimeout = LOOTHING_TIMING and LOOTHING_TIMING.MIN_ROLL_TIMEOUT or 5
-        local maxTimeout = LOOTHING_TIMING and LOOTHING_TIMING.MAX_ROLL_TIMEOUT or 200
+        local minTimeout = Loothing.Timing and Loothing.Timing.MIN_ROLL_TIMEOUT or 5
+        local maxTimeout = Loothing.Timing and Loothing.Timing.MAX_ROLL_TIMEOUT or 200
         seconds = math.max(minTimeout, math.min(maxTimeout, seconds))
         self:Set("rollFrame.timeoutDuration", seconds)
     end

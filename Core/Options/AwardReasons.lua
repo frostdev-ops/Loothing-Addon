@@ -3,7 +3,7 @@
     Award reason configuration for loot distribution
 ----------------------------------------------------------------------]]
 
-local L = LOOTHING_LOCALE
+local L = Loothing.Locale
 
 local function GetAwardReasonsOptions()
     local reasonArgs = {

@@ -3,7 +3,9 @@
     Council member management and roster settings
 ----------------------------------------------------------------------]]
 
-local L = LOOTHING_LOCALE
+local Loolib = LibStub("Loolib")
+
+local L = Loothing.Locale
 
 local function GetCouncilOptions()
     return {
@@ -62,8 +64,8 @@ local function GetCouncilOptions()
                             local success, err = Loothing.Council:AddMember(value)
                             if success then
                                 Loothing:Print(string.format(L["IS_COUNCIL"], value))
-                                if LoolibConfig and LoolibConfig.Dialog then
-                                    LoolibConfig.Dialog:RefreshContent("Loothing")
+                                if Loolib.Config and Loolib.Config.Dialog then
+                                    Loolib.Config.Dialog:RefreshContent("Loothing")
                                 end
                             else
                                 Loothing:Error(err or "Failed to add council member")
@@ -91,8 +93,8 @@ local function GetCouncilOptions()
                     if value and Loothing.Council then
                         Loothing.Council:RemoveMember(value)
                         Loothing:Print(value .. " removed from council")
-                        if LoolibConfig and LoolibConfig.Dialog then
-                            LoolibConfig.Dialog:RefreshContent("Loothing")
+                        if Loolib.Config and Loolib.Config.Dialog then
+                            Loolib.Config.Dialog:RefreshContent("Loothing")
                         end
                     end
                 end,
@@ -117,8 +119,8 @@ local function GetCouncilOptions()
                             Loothing.Council:RemoveMember(members[i])
                         end
                         Loothing:Print("All council members removed")
-                        if LoolibConfig and LoolibConfig.Dialog then
-                            LoolibConfig.Dialog:RefreshContent("Loothing")
+                        if Loolib.Config and Loolib.Config.Dialog then
+                            Loolib.Config.Dialog:RefreshContent("Loothing")
                         end
                     end
                 end,

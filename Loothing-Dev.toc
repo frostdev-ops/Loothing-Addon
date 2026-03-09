@@ -1,7 +1,7 @@
 ## Interface: 120000
 ## AllowLoadGameType: standard
-## Title: Loothing
-## Notes: Loot Council addon for WoW 12.0+ with ranked choice voting
+## Title: Loothing (Dev)
+## Notes: Development build with test harness and debug tooling
 ## Author: James Kueller
 ## Version: 1.1.8
 ## SavedVariables: LoothingDB
@@ -131,3 +131,22 @@ UI\MainFrame.lua
 # Core Init (must be after UI so it can create UI components)
 Core\Init.lua
 Debug\ErrorHandler.lua
+Debug\TestMode.lua
+
+# Debug & Testing Infrastructure (dev only)
+Debug\Tests\TestRunner.lua
+Debug\Tests\TestHelpers.lua
+Debug\Tests\TestData.lua
+Debug\Tests\SessionTests.lua
+Debug\Tests\VotingTests.lua
+Debug\Tests\ItemTests.lua
+Debug\Tests\CommunicationTests.lua
+Debug\Tests\ReconnectTests.lua
+Debug\Tests\RestrictionTests.lua
+Debug\Tests\TradeTimerTests.lua
+Debug\Tests\AutoPassTests.lua
+Debug\Tests\MLDBTests.lua
+Debug\Tests\IntegrationTests.lua
+Debug\Tests\StressTests.lua
+Debug\Tests\RollFrameSessionSettingsTests.lua
+Debug\Tests\SecretValueTests.lua

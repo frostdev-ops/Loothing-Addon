@@ -4,13 +4,13 @@
 ----------------------------------------------------------------------]]
 
 local Loolib = LibStub("Loolib")
-local L = LOOTHING_LOCALE
+local L = Loothing.Locale
 
 --[[--------------------------------------------------------------------
     LoothingVersionCheckPanelMixin
 ----------------------------------------------------------------------]]
 
-LoothingVersionCheckPanelMixin = LoolibCreateFromMixins(LoolibCallbackRegistryMixin)
+LoothingVersionCheckPanelMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
 
 local VC_EVENTS = {
     "OnQueryStarted",
@@ -23,7 +23,7 @@ local ROW_HEIGHT = 22
 
 --- Initialize the version check panel
 function LoothingVersionCheckPanelMixin:Init()
-    LoolibCallbackRegistryMixin.OnLoad(self)
+    Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(VC_EVENTS)
 
     self.entries = {}
@@ -182,13 +182,13 @@ function LoothingVersionCheckPanelMixin:QueryVersions()
         end
     else
         -- Solo - show self
-        local playerName = LoolibSecretUtil.SafeUnitName("player")
+        local playerName = Loolib.SecretUtil.SafeUnitName("player")
         if playerName then
-            local _, playerClass = LoolibSecretUtil.SafeUnitClass("player")
+            local _, playerClass = Loolib.SecretUtil.SafeUnitClass("player")
             self.entries[playerName] = {
                 name = playerName,
                 class = playerClass,
-                version = Loothing.version or LOOTHING_VERSION,
+                version = Loothing.version or Loothing.VERSION,
                 status = "current",
             }
         end
@@ -244,7 +244,7 @@ function LoothingVersionCheckPanelMixin:GetVersionStatus(version)
         return "not_installed"
     end
 
-    local currentVersion = Loothing.version or LOOTHING_VERSION or "0.0.0"
+    local currentVersion = Loothing.version or Loothing.VERSION or "0.0.0"
     if version == currentVersion then
         return "current"
     end
@@ -373,7 +373,7 @@ end
 ----------------------------------------------------------------------]]
 
 function CreateLoothingVersionCheckPanel()
-    local panel = LoolibCreateFromMixins(LoothingVersionCheckPanelMixin)
+    local panel = Loolib.CreateFromMixins(LoothingVersionCheckPanelMixin)
     panel:Init()
     return panel
 end

@@ -14,7 +14,7 @@ end
     LoothingSessionMixin
 ----------------------------------------------------------------------]]
 
-LoothingSessionMixin = LoolibCreateFromMixins(LoolibCallbackRegistryMixin)
+LoothingSessionMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
 
 local SESSION_EVENTS = {
     "OnSessionStarted",
@@ -36,7 +36,7 @@ local SESSION_EVENTS = {
 
 --- Initialize the session manager
 function LoothingSessionMixin:Init()
-    LoolibCallbackRegistryMixin.OnLoad(self)
+    Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(SESSION_EVENTS)
 
     -- Session state
@@ -44,11 +44,11 @@ function LoothingSessionMixin:Init()
     self.encounterID = nil
     self.encounterName = nil
     self.startTime = nil
-    self.state = LOOTHING_SESSION_STATE.INACTIVE
+    self.state = Loothing.SessionState.INACTIVE
     self.masterLooter = nil
 
     -- Items (DataProvider)
-    local Data = Loolib:GetModule("Data")
+    local Data = Loolib.Data
     self.items = Data.CreateDataProvider()
 
     -- Current voting item
@@ -284,7 +284,7 @@ end
 -- @param encounterName string
 -- @return boolean
 function LoothingSessionMixin:StartSession(encounterID, encounterName)
-    if self.state ~= LOOTHING_SESSION_STATE.INACTIVE then
+    if self.state ~= Loothing.SessionState.INACTIVE then
         Loothing:Debug("Session already active")
         return false
     end
@@ -310,7 +310,7 @@ function LoothingSessionMixin:StartSession(encounterID, encounterName)
     self.startTime = time()
     self.masterLooter = LoothingUtils.GetPlayerFullName()
 
-    self:SetState(LOOTHING_SESSION_STATE.ACTIVE)
+    self:SetState(Loothing.SessionState.ACTIVE)
 
     -- Broadcast to raid (include authoritative sessionID)
     Loothing.Comm:BroadcastSessionStart(encounterID, encounterName, self.sessionID)
@@ -327,10 +327,10 @@ function LoothingSessionMixin:StartSession(encounterID, encounterName)
     end
 
     self:TriggerEvent("OnSessionStarted", self.sessionID, encounterID, encounterName)
-    Loothing:Print(string.format(LOOTHING_LOCALE["SESSION_STARTED"], encounterName or "Manual Session"))
+    Loothing:Print(string.format(Loothing.Locale["SESSION_STARTED"], encounterName or "Manual Session"))
 
     -- Replay buffered loot items from before session started
-    local bufferTTL = LOOTHING_TIMING and LOOTHING_TIMING.LOOT_BUFFER_TTL or 60
+    local bufferTTL = Loothing.Timing and Loothing.Timing.LOOT_BUFFER_TTL or 60
     local now = time()
     for _, entry in ipairs(self.lootBuffer) do
         if entry.encounterID == encounterID and (now - entry.timestamp) <= bufferTTL then
@@ -345,7 +345,7 @@ end
 --- End the current session
 -- @return boolean
 function LoothingSessionMixin:EndSession()
-    if self.state == LOOTHING_SESSION_STATE.INACTIVE then
+    if self.state == Loothing.SessionState.INACTIVE then
         -- Still cleanup pending state even if inactive
         LoothingPopups:Hide("LOOTHING_CONFIRM_START_SESSION")
         return false
@@ -398,7 +398,7 @@ function LoothingSessionMixin:EndSession()
     self.currentVotingItem = nil
     self.items:Flush()
 
-    self:SetState(LOOTHING_SESSION_STATE.INACTIVE)
+    self:SetState(Loothing.SessionState.INACTIVE)
 
     -- Stop ML heartbeat
     if Loothing.AckTracker then
@@ -416,18 +416,18 @@ function LoothingSessionMixin:EndSession()
     end
 
     self:TriggerEvent("OnSessionEnded", sessionID)
-    Loothing:Print(LOOTHING_LOCALE["SESSION_ENDED"])
+    Loothing:Print(Loothing.Locale["SESSION_ENDED"])
 
     return true
 end
 
 --- Close session (no more items, finish voting)
 function LoothingSessionMixin:CloseSession()
-    if self.state ~= LOOTHING_SESSION_STATE.ACTIVE then
+    if self.state ~= Loothing.SessionState.ACTIVE then
         return false
     end
 
-    self:SetState(LOOTHING_SESSION_STATE.CLOSED)
+    self:SetState(Loothing.SessionState.CLOSED)
     return true
 end
 
@@ -454,7 +454,7 @@ end
 --- Check if session is active
 -- @return boolean
 function LoothingSessionMixin:IsActive()
-    return self.state ~= LOOTHING_SESSION_STATE.INACTIVE
+    return self.state ~= Loothing.SessionState.INACTIVE
 end
 
 --- Get session ID
@@ -511,11 +511,11 @@ end
 -- @param force boolean - Force add (bypass quality check)
 -- @return table|nil - The item, or nil if failed
 function LoothingSessionMixin:AddItem(itemLink, looter, guid, force)
-    if self.state == LOOTHING_SESSION_STATE.INACTIVE then
+    if self.state == Loothing.SessionState.INACTIVE then
         return nil
     end
 
-    if self.state == LOOTHING_SESSION_STATE.CLOSED then
+    if self.state == Loothing.SessionState.CLOSED then
         Loothing:Debug("Cannot add items to a closed session")
         return nil
     end
@@ -523,7 +523,7 @@ function LoothingSessionMixin:AddItem(itemLink, looter, guid, force)
     -- Check quality threshold
     if not force then
         local quality = LoothingUtils.GetItemQuality(itemLink)
-        if quality < LOOTHING_MIN_QUALITY then
+        if quality < Loothing.MinQuality then
             Loothing:Debug("Item below quality threshold:", itemLink)
             return nil
         end
@@ -647,12 +647,12 @@ function LoothingSessionMixin:StartVoting(guid, timeout, skipBroadcast)
         return false
     end
 
-    if self.state == LOOTHING_SESSION_STATE.CLOSED then
+    if self.state == Loothing.SessionState.CLOSED then
         Loothing:Debug("Cannot start voting on a closed session")
         return false
     end
 
-    if self.state ~= LOOTHING_SESSION_STATE.ACTIVE then
+    if self.state ~= Loothing.SessionState.ACTIVE then
         Loothing:Debug("Cannot start voting when session is not active")
         return false
     end
@@ -742,7 +742,7 @@ function LoothingSessionMixin:StartVotingOnAllItems(timeout)
         if self:StartVoting(item.guid, timeout, useBatch) then
             count = count + 1
             if useBatch then
-                Loothing.Comm:QueueForBatch(LOOTHING_MSG_TYPE.VOTE_REQUEST, {
+                Loothing.Comm:QueueForBatch(Loothing.MsgType.VOTE_REQUEST, {
                     itemGUID  = item.guid,
                     timeout   = timeout,
                     sessionID = self.sessionID,
@@ -789,7 +789,7 @@ function LoothingSessionMixin:CancelVoting(guid)
             item.voteTimer = nil
         end
 
-        item:SetState(LOOTHING_ITEM_STATE.PENDING)
+        item:SetState(Loothing.ItemState.PENDING)
         if self:IsMasterLooter() and Loothing.Comm then
             Loothing.Comm:BroadcastVoteCancel(guid, self.sessionID)
         end
@@ -810,7 +810,7 @@ function LoothingSessionMixin:CancelVoting(guid)
                 item.voteTimer:Cancel()
                 item.voteTimer = nil
             end
-            item:SetState(LOOTHING_ITEM_STATE.PENDING)
+            item:SetState(Loothing.ItemState.PENDING)
 
             if self:IsMasterLooter() and Loothing.Comm then
                 Loothing.Comm:BroadcastVoteCancel(item.guid, self.sessionID)
@@ -1064,7 +1064,7 @@ function LoothingSessionMixin:RetractAllVotes(itemGUID)
                 self:UpdateCandidateVoters(item, candidateName)
                 local candidate = item.candidateManager:GetCandidate(candidateName)
                 if candidate then
-                    Loothing.Comm:QueueForBatch(LOOTHING_MSG_TYPE.VOTE_UPDATE, {
+                    Loothing.Comm:QueueForBatch(Loothing.MsgType.VOTE_UPDATE, {
                         itemGUID      = item.guid,
                         candidateName = candidateName,
                         voters        = candidate.voters,
@@ -1095,7 +1095,8 @@ function LoothingSessionMixin:SubmitVote(itemGUID, responses)
     end
 
     local voter = LoothingUtils.GetPlayerFullName()
-    local _, class = UnitClass("player")
+    -- FIX(Area4-4): Use SafeUnitClass to avoid secret value tainting
+    local _, class = Loolib.SecretUtil.SafeUnitClass("player")
 
     -- Only council members should vote (bypass in test mode)
     local isTestMode = LoothingTestMode and LoothingTestMode:IsEnabled()
@@ -1127,7 +1128,7 @@ function LoothingSessionMixin:SubmitVote(itemGUID, responses)
         -- Broadcast vote updates — batch all candidates into 1-2 messages
         if item.candidateManager then
             for _, candidate in ipairs(item.candidateManager:GetAllCandidates()) do
-                Loothing.Comm:QueueForBatch(LOOTHING_MSG_TYPE.VOTE_UPDATE, {
+                Loothing.Comm:QueueForBatch(Loothing.MsgType.VOTE_UPDATE, {
                     itemGUID      = item.guid,
                     candidateName = candidate.playerName,
                     voters        = candidate.voters,
@@ -1215,8 +1216,8 @@ function LoothingSessionMixin:AwardItem(guid, winner, response, awardReasonId)
 
         -- Resolve awardReason text
         local awardReason = nil
-        if awardReasonId and LOOTHING_RESPONSE_INFO and LOOTHING_RESPONSE_INFO[awardReasonId] then
-            awardReason = LOOTHING_RESPONSE_INFO[awardReasonId].name
+        if awardReasonId and Loothing.ResponseInfo and Loothing.ResponseInfo[awardReasonId] then
+            awardReason = Loothing.ResponseInfo[awardReasonId].name
         end
 
         local instanceData = item.instanceData or {}
@@ -1324,7 +1325,7 @@ function LoothingSessionMixin:RevoteItem(guid)
     if item.votes then
         item.votes:Flush()
     end
-    item:SetState(LOOTHING_ITEM_STATE.PENDING)
+    item:SetState(Loothing.ItemState.PENDING)
 
     -- Start voting again (handles broadcast internally)
     return self:StartVoting(guid)
@@ -1350,7 +1351,7 @@ function LoothingSessionMixin:OnEncounterEnd(encounterID, encounterName, difficu
     if success ~= 1 then return end
     if not IsInGroup() and not IsTestModeEnabled() then return end
     if not Loothing.handleLoot and not IsTestModeEnabled() then return end
-    if self.state ~= LOOTHING_SESSION_STATE.INACTIVE then
+    if self.state ~= Loothing.SessionState.INACTIVE then
         Loothing:Debug("Encounter ended but session already active, ignoring:", encounterName)
         return
     end
@@ -1376,7 +1377,7 @@ end
 -- @param encounterName string
 function LoothingSessionMixin:ShowSessionPrompt(encounterID, encounterName)
     -- Guard: Don't show if session already active
-    if self.state ~= LOOTHING_SESSION_STATE.INACTIVE then
+    if self.state ~= Loothing.SessionState.INACTIVE then
         return
     end
 
@@ -1413,7 +1414,7 @@ function LoothingSessionMixin:OnLootReceived(encounterID, itemID, itemLink, quan
         else
             -- Fallback: simple comparison
             local myName = LoothingUtils.GetPlayerFullName()
-            local rawPlayerName = LoolibSecretUtil.SafeUnitName("player")
+            local rawPlayerName = Loolib.SecretUtil.SafeUnitName("player")
             isMyLoot = playerName == myName or (rawPlayerName and playerName == rawPlayerName)
         end
 
@@ -1427,11 +1428,11 @@ function LoothingSessionMixin:OnLootReceived(encounterID, itemID, itemLink, quan
 
             -- After debounce delay with no new loot, prompt for session
             -- (Debounce delay allows all boss loot to be distributed before prompting)
-            local debounceDelay = LOOTHING_TIMING and LOOTHING_TIMING.LOOT_DEBOUNCE_DELAY or 2.5
+            local debounceDelay = Loothing.Timing and Loothing.Timing.LOOT_DEBOUNCE_DELAY or 2.5
             self.pendingLootTimer = C_Timer.NewTimer(debounceDelay, function()
                 -- Guard: Only prompt if we have loot, session is inactive, and we have a valid encounter
                 if self.receivedLootCount > 0
-                   and self.state == LOOTHING_SESSION_STATE.INACTIVE
+                   and self.state == Loothing.SessionState.INACTIVE
                    and self.lastEncounterID then
                     self:ShowSessionPrompt(self.lastEncounterID, self.lastEncounterName)
                 end
@@ -1453,7 +1454,7 @@ function LoothingSessionMixin:OnLootReceived(encounterID, itemID, itemLink, quan
     -- Inactive but we're designated to handle loot: buffer the item for replay on session start
     if not self:IsActive() and Loothing.handleLoot then
         local quality = LoothingUtils.GetItemQuality(itemLink)
-        if quality and quality >= LOOTHING_MIN_QUALITY then
+        if quality and quality >= Loothing.MinQuality then
             if Loothing.ItemFilter and Loothing.ItemFilter:ShouldIgnoreItem(itemLink) then
                 Loothing:Debug("Item filtered (buffer):", itemLink)
             else
@@ -1509,7 +1510,7 @@ function LoothingSessionMixin:HandleRemoteSessionStart(data)
     end
 
     -- Ignore if we already have an active session (prevents clobbering)
-    if self.state ~= LOOTHING_SESSION_STATE.INACTIVE then
+    if self.state ~= Loothing.SessionState.INACTIVE then
         Loothing:Debug("Received remote session start while active, ignoring")
         return
     end
@@ -1531,10 +1532,10 @@ function LoothingSessionMixin:HandleRemoteSessionStart(data)
     self.startTime = time()
     self.masterLooter = data.masterLooter
 
-    self:SetState(LOOTHING_SESSION_STATE.ACTIVE)
+    self:SetState(Loothing.SessionState.ACTIVE)
 
     self:TriggerEvent("OnSessionStarted", self.sessionID, data.encounterID, data.encounterName)
-    Loothing:Print(string.format(LOOTHING_LOCALE["SESSION_STARTED"], data.encounterName or LOOTHING_LOCALE["MANUAL_SESSION"]))
+    Loothing:Print(string.format(Loothing.Locale["SESSION_STARTED"], data.encounterName or Loothing.Locale["MANUAL_SESSION"]))
 end
 
 function LoothingSessionMixin:HandleRemoteSessionEnd(data)
@@ -1572,12 +1573,12 @@ function LoothingSessionMixin:HandleRemoteVoteRequest(data)
     -- Validate timeout is within acceptable bounds (prevents malicious/corrupt values)
     local timeout = data.timeout
     if type(timeout) ~= "number" then
-        timeout = LOOTHING_TIMING.DEFAULT_VOTE_TIMEOUT
-    elseif timeout == LOOTHING_TIMING.NO_TIMEOUT then
+        timeout = Loothing.Timing.DEFAULT_VOTE_TIMEOUT
+    elseif timeout == Loothing.Timing.NO_TIMEOUT then
         -- 0 is the no-timeout sentinel — allow it through
     else
-        timeout = math.max(LOOTHING_TIMING.MIN_VOTE_TIMEOUT,
-                          math.min(LOOTHING_TIMING.MAX_VOTE_TIMEOUT, timeout))
+        timeout = math.max(Loothing.Timing.MIN_VOTE_TIMEOUT,
+                          math.min(Loothing.Timing.MAX_VOTE_TIMEOUT, timeout))
     end
 
     item:StartVoting(timeout)
@@ -1635,7 +1636,7 @@ function LoothingSessionMixin:HandleRemoteVoteCommit(data)
             local candidates = item.candidateManager:GetAllCandidates()
             for _, candidate in ipairs(candidates) do
                 self:UpdateCandidateVoters(item, candidate.playerName)
-                Loothing.Comm:QueueForBatch(LOOTHING_MSG_TYPE.VOTE_UPDATE, {
+                Loothing.Comm:QueueForBatch(Loothing.MsgType.VOTE_UPDATE, {
                     itemGUID      = item.guid,
                     candidateName = candidate.playerName,
                     voters        = candidate.voters,
@@ -1687,7 +1688,7 @@ function LoothingSessionMixin:HandleRemoteVoteCommit(data)
         local candidates = item.candidateManager:GetAllCandidates()
         for _, candidate in ipairs(candidates) do
             self:UpdateCandidateVoters(item, candidate.playerName)
-            Loothing.Comm:QueueForBatch(LOOTHING_MSG_TYPE.VOTE_UPDATE, {
+            Loothing.Comm:QueueForBatch(Loothing.MsgType.VOTE_UPDATE, {
                 itemGUID      = item.guid,
                 candidateName = candidate.playerName,
                 voters        = candidate.voters,
@@ -1751,7 +1752,7 @@ function LoothingSessionMixin:HandleRemoteVoteCancel(data)
                     item.voteTimer:Cancel()
                     item.voteTimer = nil
                 end
-                item:SetState(LOOTHING_ITEM_STATE.PENDING)
+                item:SetState(Loothing.ItemState.PENDING)
                 self:TriggerEvent("OnVotingEnded", item)
             end
         end
@@ -1768,7 +1769,7 @@ function LoothingSessionMixin:HandleRemoteVoteCancel(data)
         item.voteTimer = nil
     end
 
-    item:SetState(LOOTHING_ITEM_STATE.PENDING)
+    item:SetState(Loothing.ItemState.PENDING)
     self:TriggerEvent("OnVotingEnded", item)
 end
 
@@ -2005,7 +2006,7 @@ function LoothingSessionMixin:HandlePlayerResponse(data)
     end
 
     -- Validate session/item state
-    if self.state ~= LOOTHING_SESSION_STATE.ACTIVE then
+    if self.state ~= Loothing.SessionState.ACTIVE then
         Loothing:Debug("HandlePlayerResponse: session_not_active - state", tostring(self.state), "from", sender)
         sendAck(false)
         return
@@ -2018,7 +2019,7 @@ function LoothingSessionMixin:HandlePlayerResponse(data)
     end
 
     -- Validate response is a known response value
-    if not LOOTHING_RESPONSE_INFO[response] then
+    if not Loothing.ResponseInfo[response] then
         Loothing:Debug("HandlePlayerResponse: invalid_response -", tostring(response), "from", sender)
         sendAck(false)
         return
@@ -2068,7 +2069,7 @@ function LoothingSessionMixin:HandlePlayerResponse(data)
     -- Route candidate update through the batcher so concurrent responses from
     -- multiple raiders within 100ms are coalesced into a single BATCH message.
     if Loothing.Comm then
-        Loothing.Comm:QueueForBatch(LOOTHING_MSG_TYPE.CANDIDATE_UPDATE, {
+        Loothing.Comm:QueueForBatch(Loothing.MsgType.CANDIDATE_UPDATE, {
             itemGUID      = itemGUID,
             candidateData = {
                 name     = candidate.playerName,
@@ -2114,7 +2115,7 @@ function LoothingSessionMixin:GetItemsWonByPlayer(playerName)
     local normalizedName = LoothingUtils.NormalizeName(playerName)
 
     for _, item in self.items:Enumerate() do
-        if item.state == LOOTHING_ITEM_STATE.AWARDED then
+        if item.state == Loothing.ItemState.AWARDED then
             local winner = item.winner or item.awardedTo
             if winner then
                 local normalizedWinner = LoothingUtils.NormalizeName(winner)

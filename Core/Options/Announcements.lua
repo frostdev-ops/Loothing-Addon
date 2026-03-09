@@ -3,7 +3,7 @@
     Chat channel and message format settings
 ----------------------------------------------------------------------]]
 
-local L = LOOTHING_LOCALE
+local L = Loothing.Locale
 
 local function GetChannelValues()
     return {

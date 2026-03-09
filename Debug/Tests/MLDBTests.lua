@@ -12,6 +12,8 @@
     Run: /lt test run mldb
 ----------------------------------------------------------------------]]
 
+local Loolib = LibStub("Loolib")
+
 local function RunMLDBTests()
     local passed = 0
     local failed = 0
@@ -218,13 +220,13 @@ local function RunMLDBTests()
         assertNotNil(txData, "Protocol: compressed data")
 
         -- Encode via Protocol
-        local encoded = LoothingProtocol:Encode(LOOTHING_MSG_TYPE.MLDB_BROADCAST, txData)
+        local encoded = LoothingProtocol:Encode(Loothing.MsgType.MLDB_BROADCAST, txData)
         assertNotNil(encoded, "Protocol: encoded message")
         assert(type(encoded) == "string", "Protocol: encoded is string")
 
         -- Decode
         local ver, cmd, rxData = LoothingProtocol:Decode(encoded)
-        assertEqual(cmd, LOOTHING_MSG_TYPE.MLDB_BROADCAST, "Protocol: command is MLDB_BROADCAST")
+        assertEqual(cmd, Loothing.MsgType.MLDB_BROADCAST, "Protocol: command is MLDB_BROADCAST")
         assertNotNil(rxData, "Protocol: decoded data")
 
         -- Decompress
@@ -241,7 +243,7 @@ local function RunMLDBTests()
         assertEqual(restored.responses[3].name, "Pass", "Full round-trip: responses[3].name")
 
         -- Compression ratio
-        local Serializer = LoolibSerializer
+        local Serializer = Loolib.Serializer
         if Serializer then
             local raw = Serializer:Serialize(settings)
             local compressedStr = Serializer:Serialize(txData)

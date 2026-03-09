@@ -9,7 +9,7 @@ local Loolib = LibStub("Loolib")
     LoothingObserverMixin
 ----------------------------------------------------------------------]]
 
-LoothingObserverMixin = LoolibCreateFromMixins(LoolibCallbackRegistryMixin)
+LoothingObserverMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
 
 local OBSERVER_EVENTS = {
     "OnObserverAdded",
@@ -20,7 +20,7 @@ local OBSERVER_EVENTS = {
 
 --- Initialize observer manager
 function LoothingObserverMixin:Init()
-    LoolibCallbackRegistryMixin.OnLoad(self)
+    Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(OBSERVER_EVENTS)
 
     -- Local list (persisted)
@@ -293,7 +293,7 @@ end
 ----------------------------------------------------------------------]]
 
 function CreateLoothingObserver()
-    local observer = LoolibCreateFromMixins(LoothingObserverMixin)
+    local observer = Loolib.CreateFromMixins(LoothingObserverMixin)
     observer:Init()
     return observer
 end

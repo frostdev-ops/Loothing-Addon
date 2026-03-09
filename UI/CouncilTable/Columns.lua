@@ -342,7 +342,7 @@ LoothingCouncilTableMixin.CellUpdaters.response = function(self, cell, candidate
         return
     end
     local responseId = candidate.response
-    local responseInfo = responseId and LOOTHING_RESPONSE_INFO[responseId]
+    local responseInfo = responseId and Loothing.ResponseInfo[responseId]
 
     if responseInfo then
         cell.text:SetText(responseInfo.name)

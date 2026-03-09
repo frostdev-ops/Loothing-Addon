@@ -146,5 +146,5 @@ end
 --- Create a new ItemFilter instance
 -- @return table - ItemFilter instance
 function CreateLoothingItemFilter()
-    return LoolibCreateFromMixins(LoothingItemFilterMixin)
+    return Loolib.CreateFromMixins(LoothingItemFilterMixin)
 end

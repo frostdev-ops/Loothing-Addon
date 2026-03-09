@@ -9,7 +9,7 @@ local Loolib = LibStub("Loolib")
     LoothingRollFrameMixin
 ----------------------------------------------------------------------]]
 
-LoothingRollFrameMixin = LoolibCreateFromMixins(LoolibCallbackRegistryMixin)
+LoothingRollFrameMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
 
 local ROLLFRAME_EVENTS = {
     "OnResponseSubmitted",
@@ -23,7 +23,7 @@ local ROLLFRAME_EVENTS = {
 
 --- Initialize the roll frame
 function LoothingRollFrameMixin:Init()
-    LoolibCallbackRegistryMixin.OnLoad(self)
+    Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(ROLLFRAME_EVENTS)
 
     -- Current item state
@@ -598,7 +598,7 @@ function LoothingRollFrameMixin:UpdateTimer()
         remaining = self.item:GetTimeRemaining() or 0
     end
     local isVoting = self.item.IsVoting and self.item:IsVoting()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     -- No-timeout mode: hide timer, never auto-close
     if remaining == math.huge then
@@ -630,7 +630,7 @@ function LoothingRollFrameMixin:UpdateTimer()
     end
 
     -- Calculate progress using configurable timeout duration
-    local timeout = self.responseTimeout or LOOTHING_TIMING.DEFAULT_VOTE_TIMEOUT or 30
+    local timeout = self.responseTimeout or Loothing.Timing.DEFAULT_VOTE_TIMEOUT or 30
     if Loothing.Settings then
         timeout = Loothing.Settings:GetRollFrameTimeoutDuration() or timeout
     end
@@ -729,7 +729,7 @@ function LoothingRollFrameMixin:UpdateSubmitButton()
         elseif current and current.pending then
             btnText = "Sending..."
         else
-            local L = LOOTHING_LOCALE
+            local L = Loothing.Locale
             btnText = L["SUBMIT_RESPONSE"] or "Submit Response"
         end
 
@@ -862,7 +862,7 @@ function LoothingRollFrameMixin:PrintResponseToChat(item, response, note)
     if not Loothing.Settings then return end
     if not Loothing.Settings:Get("rollFrame.printResponseToChat", false) then return end
 
-    local responseInfo = response and LOOTHING_RESPONSE_INFO[response]
+    local responseInfo = response and Loothing.ResponseInfo[response]
     local responseName = responseInfo and responseInfo.name or tostring(response)
     local itemName = item and (item.name or item.itemLink or "Unknown") or "Unknown"
 
@@ -914,7 +914,7 @@ function LoothingRollFrameMixin:StartAckTimeout(itemGUID)
 
     self:ClearAckTimeout(itemGUID)
 
-    local timeout = (LOOTHING_TIMING and LOOTHING_TIMING.DEFAULT_VOTE_TIMEOUT) or 30
+    local timeout = (Loothing.Timing and Loothing.Timing.DEFAULT_VOTE_TIMEOUT) or 30
     timeout = math.min(timeout, 10) -- keep UI responsive even if vote timeout is long
 
     self.responseAckTimers[itemGUID] = C_Timer.NewTimer(timeout, function()
@@ -1027,7 +1027,7 @@ end
 --- Switch to the next non-awarded item, or close the frame if none remain
 function LoothingRollFrameMixin:SwitchToNextPendingItem()
     if not self:SwitchToNextItem(function(item)
-        return item.state ~= LOOTHING_ITEM_STATE.AWARDED
+        return item.state ~= Loothing.ItemState.AWARDED
     end) then
         self:Close(false)
     end
@@ -1152,7 +1152,7 @@ end
 --- Create a new RollFrame instance
 -- @return table - LoothingRollFrameMixin instance
 function CreateLoothingRollFrame()
-    local frame = LoolibCreateFromMixins(LoothingRollFrameMixin)
+    local frame = Loolib.CreateFromMixins(LoothingRollFrameMixin)
     if not frame then
         return nil
     end

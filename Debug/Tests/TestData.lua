@@ -474,22 +474,22 @@ TestData.VoteScenarios = {}
 TestData.VoteScenarios.SimpleMajority = {
     description = "Three voters, NEED wins with 2 votes",
     votes = {
-        { voter = "Player1-TestRealm", candidate = "Winner-TestRealm", responses = { LOOTHING_RESPONSE.NEED } },
-        { voter = "Player2-TestRealm", candidate = "Winner-TestRealm", responses = { LOOTHING_RESPONSE.NEED } },
-        { voter = "Player3-TestRealm", candidate = "Loser-TestRealm", responses = { LOOTHING_RESPONSE.GREED } },
+        { voter = "Player1-TestRealm", candidate = "Winner-TestRealm", responses = { Loothing.Response.NEED } },
+        { voter = "Player2-TestRealm", candidate = "Winner-TestRealm", responses = { Loothing.Response.NEED } },
+        { voter = "Player3-TestRealm", candidate = "Loser-TestRealm", responses = { Loothing.Response.GREED } },
     },
     expectedWinner = "Winner-TestRealm",
-    expectedResponse = LOOTHING_RESPONSE.NEED,
+    expectedResponse = Loothing.Response.NEED,
 }
 
 -- Tie scenario
 TestData.VoteScenarios.TieBreaker = {
     description = "Two candidates with equal votes, requires tie-breaker",
     votes = {
-        { voter = "Player1-TestRealm", candidate = "Candidate1-TestRealm", responses = { LOOTHING_RESPONSE.NEED } },
-        { voter = "Player2-TestRealm", candidate = "Candidate1-TestRealm", responses = { LOOTHING_RESPONSE.NEED } },
-        { voter = "Player3-TestRealm", candidate = "Candidate2-TestRealm", responses = { LOOTHING_RESPONSE.NEED } },
-        { voter = "Player4-TestRealm", candidate = "Candidate2-TestRealm", responses = { LOOTHING_RESPONSE.NEED } },
+        { voter = "Player1-TestRealm", candidate = "Candidate1-TestRealm", responses = { Loothing.Response.NEED } },
+        { voter = "Player2-TestRealm", candidate = "Candidate1-TestRealm", responses = { Loothing.Response.NEED } },
+        { voter = "Player3-TestRealm", candidate = "Candidate2-TestRealm", responses = { Loothing.Response.NEED } },
+        { voter = "Player4-TestRealm", candidate = "Candidate2-TestRealm", responses = { Loothing.Response.NEED } },
     },
     expectedWinner = nil, -- Requires manual tie-breaking
     isTied = true,
@@ -499,32 +499,32 @@ TestData.VoteScenarios.TieBreaker = {
 TestData.VoteScenarios.RankedChoice = {
     description = "Ranked choice with 3 candidates, elimination rounds",
     votes = {
-        { voter = "Player1-TestRealm", candidate = "CandidateA-TestRealm", responses = { LOOTHING_RESPONSE.NEED, LOOTHING_RESPONSE.GREED, LOOTHING_RESPONSE.OFFSPEC } },
-        { voter = "Player2-TestRealm", candidate = "CandidateB-TestRealm", responses = { LOOTHING_RESPONSE.GREED, LOOTHING_RESPONSE.NEED, LOOTHING_RESPONSE.OFFSPEC } },
-        { voter = "Player3-TestRealm", candidate = "CandidateC-TestRealm", responses = { LOOTHING_RESPONSE.OFFSPEC, LOOTHING_RESPONSE.NEED, LOOTHING_RESPONSE.GREED } },
-        { voter = "Player4-TestRealm", candidate = "CandidateA-TestRealm", responses = { LOOTHING_RESPONSE.NEED, LOOTHING_RESPONSE.OFFSPEC, LOOTHING_RESPONSE.GREED } },
-        { voter = "Player5-TestRealm", candidate = "CandidateB-TestRealm", responses = { LOOTHING_RESPONSE.GREED, LOOTHING_RESPONSE.OFFSPEC, LOOTHING_RESPONSE.NEED } },
+        { voter = "Player1-TestRealm", candidate = "CandidateA-TestRealm", responses = { Loothing.Response.NEED, Loothing.Response.GREED, Loothing.Response.OFFSPEC } },
+        { voter = "Player2-TestRealm", candidate = "CandidateB-TestRealm", responses = { Loothing.Response.GREED, Loothing.Response.NEED, Loothing.Response.OFFSPEC } },
+        { voter = "Player3-TestRealm", candidate = "CandidateC-TestRealm", responses = { Loothing.Response.OFFSPEC, Loothing.Response.NEED, Loothing.Response.GREED } },
+        { voter = "Player4-TestRealm", candidate = "CandidateA-TestRealm", responses = { Loothing.Response.NEED, Loothing.Response.OFFSPEC, Loothing.Response.GREED } },
+        { voter = "Player5-TestRealm", candidate = "CandidateB-TestRealm", responses = { Loothing.Response.GREED, Loothing.Response.OFFSPEC, Loothing.Response.NEED } },
     },
-    votingMode = LOOTHING_VOTING_MODE.RANKED_CHOICE,
+    votingMode = Loothing.VotingMode.RANKED_CHOICE,
 }
 
 -- Edge case: Single voter
 TestData.VoteScenarios.SingleVoter = {
     description = "Only one council member votes",
     votes = {
-        { voter = "Player1-TestRealm", candidate = "Winner-TestRealm", responses = { LOOTHING_RESPONSE.NEED } },
+        { voter = "Player1-TestRealm", candidate = "Winner-TestRealm", responses = { Loothing.Response.NEED } },
     },
     expectedWinner = "Winner-TestRealm",
-    expectedResponse = LOOTHING_RESPONSE.NEED,
+    expectedResponse = Loothing.Response.NEED,
 }
 
 -- Edge case: All pass
 TestData.VoteScenarios.AllPass = {
     description = "All candidates pass on the item",
     votes = {
-        { voter = "Player1-TestRealm", candidate = "Candidate1-TestRealm", responses = { LOOTHING_RESPONSE.PASS } },
-        { voter = "Player2-TestRealm", candidate = "Candidate2-TestRealm", responses = { LOOTHING_RESPONSE.PASS } },
-        { voter = "Player3-TestRealm", candidate = "Candidate3-TestRealm", responses = { LOOTHING_RESPONSE.PASS } },
+        { voter = "Player1-TestRealm", candidate = "Candidate1-TestRealm", responses = { Loothing.Response.PASS } },
+        { voter = "Player2-TestRealm", candidate = "Candidate2-TestRealm", responses = { Loothing.Response.PASS } },
+        { voter = "Player3-TestRealm", candidate = "Candidate3-TestRealm", responses = { Loothing.Response.PASS } },
     },
     expectedWinner = nil,
     allPassed = true,
@@ -534,14 +534,14 @@ TestData.VoteScenarios.AllPass = {
 TestData.VoteScenarios.Unanimous = {
     description = "All voters choose the same candidate with same response",
     votes = {
-        { voter = "Player1-TestRealm", candidate = "Winner-TestRealm", responses = { LOOTHING_RESPONSE.NEED } },
-        { voter = "Player2-TestRealm", candidate = "Winner-TestRealm", responses = { LOOTHING_RESPONSE.NEED } },
-        { voter = "Player3-TestRealm", candidate = "Winner-TestRealm", responses = { LOOTHING_RESPONSE.NEED } },
-        { voter = "Player4-TestRealm", candidate = "Winner-TestRealm", responses = { LOOTHING_RESPONSE.NEED } },
-        { voter = "Player5-TestRealm", candidate = "Winner-TestRealm", responses = { LOOTHING_RESPONSE.NEED } },
+        { voter = "Player1-TestRealm", candidate = "Winner-TestRealm", responses = { Loothing.Response.NEED } },
+        { voter = "Player2-TestRealm", candidate = "Winner-TestRealm", responses = { Loothing.Response.NEED } },
+        { voter = "Player3-TestRealm", candidate = "Winner-TestRealm", responses = { Loothing.Response.NEED } },
+        { voter = "Player4-TestRealm", candidate = "Winner-TestRealm", responses = { Loothing.Response.NEED } },
+        { voter = "Player5-TestRealm", candidate = "Winner-TestRealm", responses = { Loothing.Response.NEED } },
     },
     expectedWinner = "Winner-TestRealm",
-    expectedResponse = LOOTHING_RESPONSE.NEED,
+    expectedResponse = Loothing.Response.NEED,
     isUnanimous = true,
 }
 
@@ -557,14 +557,14 @@ TestData.VoteScenarios.NoVotes = {
 TestData.VoteScenarios.MultiResponsePriority = {
     description = "Multiple candidates with different response types",
     votes = {
-        { voter = "Player1-TestRealm", candidate = "NeedPlayer-TestRealm", responses = { LOOTHING_RESPONSE.NEED } },
-        { voter = "Player2-TestRealm", candidate = "GreedPlayer-TestRealm", responses = { LOOTHING_RESPONSE.GREED } },
-        { voter = "Player3-TestRealm", candidate = "GreedPlayer-TestRealm", responses = { LOOTHING_RESPONSE.GREED } },
-        { voter = "Player4-TestRealm", candidate = "OffspecPlayer-TestRealm", responses = { LOOTHING_RESPONSE.OFFSPEC } },
-        { voter = "Player5-TestRealm", candidate = "NeedPlayer-TestRealm", responses = { LOOTHING_RESPONSE.NEED } },
+        { voter = "Player1-TestRealm", candidate = "NeedPlayer-TestRealm", responses = { Loothing.Response.NEED } },
+        { voter = "Player2-TestRealm", candidate = "GreedPlayer-TestRealm", responses = { Loothing.Response.GREED } },
+        { voter = "Player3-TestRealm", candidate = "GreedPlayer-TestRealm", responses = { Loothing.Response.GREED } },
+        { voter = "Player4-TestRealm", candidate = "OffspecPlayer-TestRealm", responses = { Loothing.Response.OFFSPEC } },
+        { voter = "Player5-TestRealm", candidate = "NeedPlayer-TestRealm", responses = { Loothing.Response.NEED } },
     },
     expectedWinner = "NeedPlayer-TestRealm", -- NEED beats GREED even with fewer votes
-    expectedResponse = LOOTHING_RESPONSE.NEED,
+    expectedResponse = Loothing.Response.NEED,
 }
 
 --[[====================================================================
@@ -656,7 +656,7 @@ TestData.HistoryEntries.ValidEntry = {
     itemName = "Regicide",
     itemLink = "|cffa335ee|Hitem:212405::::::::80:1::3:1:28:2905:::::|h[Regicide]|h|r",
     itemID = 212405,
-    response = LOOTHING_RESPONSE.NEED,
+    response = Loothing.Response.NEED,
     responseName = "NEED",
     votes = 5,
     class = "WARRIOR",
@@ -689,7 +689,7 @@ TestData.HistoryEntries.MissingFields = {
     timestamp = 1701907800,
     winner = "Player-TestRealm",
     -- Missing itemName, itemID
-    response = LOOTHING_RESPONSE.NEED,
+    response = Loothing.Response.NEED,
     votes = 5,
 }
 
@@ -715,7 +715,7 @@ TestData.Protocol = {}
 
 -- Valid protocol messages
 TestData.Protocol.SessionStart = {
-    type = LOOTHING_MSG_TYPE.SESSION_START,
+    type = Loothing.MsgType.SESSION_START,
     encounterID = 2902,
     encounterName = "Ulgrax the Devourer",
     instanceID = 1273,
@@ -723,7 +723,7 @@ TestData.Protocol.SessionStart = {
 }
 
 TestData.Protocol.ItemAdd = {
-    type = LOOTHING_MSG_TYPE.ITEM_ADD,
+    type = Loothing.MsgType.ITEM_ADD,
     itemLink = "|cffa335ee|Hitem:212405::::::::80:1::3:1:28:2905:::::|h[Regicide]|h|r",
     guid = "item_abc123",
     looter = "Player-TestRealm",
@@ -732,7 +732,7 @@ TestData.Protocol.ItemAdd = {
 }
 
 TestData.Protocol.VoteCommit = {
-    type = LOOTHING_MSG_TYPE.VOTE_COMMIT,
+    type = Loothing.MsgType.VOTE_COMMIT,
     itemGUID = "item_abc123",
     voter = "Councilmember-TestRealm",
     votes = {
@@ -743,23 +743,23 @@ TestData.Protocol.VoteCommit = {
 }
 
 TestData.Protocol.VoteAward = {
-    type = LOOTHING_MSG_TYPE.VOTE_AWARD,
+    type = Loothing.MsgType.VOTE_AWARD,
     itemGUID = "item_abc123",
     itemLink = "|cffa335ee|Hitem:212405::::::::80:1::3:1:28:2905:::::|h[Regicide]|h|r",
     winner = "Player-TestRealm",
-    response = LOOTHING_RESPONSE.NEED,
+    response = Loothing.Response.NEED,
     votes = 5,
     timestamp = time(),
 }
 
 -- Edge cases
 TestData.Protocol.LongMessage = {
-    type = LOOTHING_MSG_TYPE.SYNC_DATA,
+    type = Loothing.MsgType.SYNC_DATA,
     data = string.rep("x", 300), -- Exceeds single message limit, requires chunking
 }
 
 TestData.Protocol.SpecialChars = {
-    type = LOOTHING_MSG_TYPE.ITEM_ADD,
+    type = Loothing.MsgType.ITEM_ADD,
     itemLink = "|cffa335ee|Hitem:212405::::::::80:1::3:1:28:2905:::::|h[Test: Item with | pipes : and colons]|h|r",
     notes = "Player said: \"This is my BiS!\" with quotes",
 }

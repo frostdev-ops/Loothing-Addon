@@ -12,7 +12,7 @@ local Loolib = LibStub("Loolib")
     Shows item, winner, and time remaining. Click to initiate trade.
 ----------------------------------------------------------------------]]
 
-LoothingTradePanelMixin = LoolibCreateFromMixins(LoolibCallbackRegistryMixin)
+LoothingTradePanelMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
 
 local TRADE_PANEL_EVENTS = {
     "OnInitiateTrade",
@@ -22,7 +22,7 @@ local TRADE_PANEL_EVENTS = {
 --- Initialize the trade panel
 -- @param parent Frame - Parent frame (usually a tab content area)
 function LoothingTradePanelMixin:Init(parent)
-    LoolibCallbackRegistryMixin.OnLoad(self)
+    Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(TRADE_PANEL_EVENTS)
 
     self.parent = parent
@@ -49,7 +49,7 @@ end
 
 --- Create UI elements
 function LoothingTradePanelMixin:CreateElements()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     -- Header
     self:CreateHeader()
@@ -63,7 +63,7 @@ end
 
 --- Create header
 function LoothingTradePanelMixin:CreateHeader()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     local header = CreateFrame("Frame", nil, self.frame)
     header:SetPoint("TOPLEFT", 8, -8)
@@ -91,7 +91,7 @@ end
 
 --- Create list
 function LoothingTradePanelMixin:CreateList()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     -- List container
     local container = CreateFrame("Frame", nil, self.frame, "BackdropTemplate")
@@ -161,7 +161,7 @@ end
 
 --- Create footer
 function LoothingTradePanelMixin:CreateFooter()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     local footer = CreateFrame("Frame", nil, self.frame)
     footer:SetPoint("BOTTOMLEFT", 8, 8)
@@ -238,7 +238,7 @@ end
 
 --- Update header display
 function LoothingTradePanelMixin:UpdateHeader()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     if not Loothing.TradeQueue then
         self.countText:SetText("")
@@ -517,12 +517,12 @@ function LoothingTradePanelMixin:CreateRow()
             local shortName = Ambiguate(playerName, "short")
             for i = 1, GetNumGroupMembers() do
                 local unit = IsInRaid() and ("raid" .. i) or ("party" .. i)
-                local uName = LoolibSecretUtil.SafeUnitName(unit)
+                local uName = Loolib.SecretUtil.SafeUnitName(unit)
                 if UnitExists(unit) and uName and uName == shortName then
                     return unit
                 end
             end
-            local tName = LoolibSecretUtil.SafeUnitName("target")
+            local tName = Loolib.SecretUtil.SafeUnitName("target")
             if UnitExists("target") and tName and tName == shortName then
                 return "target"
             end
@@ -667,7 +667,7 @@ end
 ----------------------------------------------------------------------]]
 
 function CreateLoothingTradePanel(parent)
-    local panel = LoolibCreateFromMixins(LoothingTradePanelMixin)
+    local panel = Loolib.CreateFromMixins(LoothingTradePanelMixin)
     panel:Init(parent)
     return panel
 end

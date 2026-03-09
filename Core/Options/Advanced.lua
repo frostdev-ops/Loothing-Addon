@@ -3,7 +3,9 @@
     Autopass, auto-award, ignore lists, history, and frame config
 ----------------------------------------------------------------------]]
 
-local L = LOOTHING_LOCALE
+local Loolib = LibStub("Loolib")
+
+local L = Loothing.Locale
 
 local function GetQualityValues()
     return { [0]="Poor", [1]="Common", [2]="Uncommon", [3]="Rare", [4]="Epic", [5]="Legendary" }
@@ -389,8 +391,8 @@ local function GetAdvancedOptions()
                             if Loothing.History then
                                 Loothing.History:ClearHistory()
                                 Loothing:Print("All history cleared")
-                                if LoolibConfig and LoolibConfig.Dialog then
-                                    LoolibConfig.Dialog:RefreshContent("Loothing")
+                                if Loolib.Config and Loolib.Config.Dialog then
+                                    Loolib.Config.Dialog:RefreshContent("Loothing")
                                 end
                             end
                         end,

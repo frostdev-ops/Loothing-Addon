@@ -4,6 +4,7 @@
 ----------------------------------------------------------------------]]
 
 local Loolib = LibStub("Loolib")
+local ipairs, pairs, select, time = ipairs, pairs, select, time
 
 LoothingUtils = {}
 
@@ -15,19 +16,19 @@ LoothingUtils = {}
 ----------------------------------------------------------------------]]
 
 --- Check if any of the given values are WoW secret values
--- Delegates to LoolibSecretUtil for backward compatibility.
+-- Delegates to Loolib.SecretUtil for backward compatibility.
 -- @param ... - Values to check
 -- @return boolean - True if any value is secret
 function LoothingUtils.IsSecretValue(...)
-    return LoolibSecretUtil.IsSecretValue(...)
+    return Loolib.SecretUtil.IsSecretValue(...)
 end
 
 --- Replace secret values with "<secret>" for safe printing
--- Delegates to LoolibSecretUtil for backward compatibility.
+-- Delegates to Loolib.SecretUtil for backward compatibility.
 -- @param ... - Values to sanitize
 -- @return ... - Sanitized values
 function LoothingUtils.SecretsForPrint(...)
-    return LoolibSecretUtil.SecretsForPrint(...)
+    return Loolib.SecretUtil.SecretsForPrint(...)
 end
 
 local function IsTestModeEnabled()
@@ -161,7 +162,7 @@ end
 --- Get the player's full name including realm
 -- @return string - "Name-Realm" format
 function LoothingUtils.GetPlayerFullName()
-    local name = LoolibSecretUtil.SafeUnitName("player")
+    local name = Loolib.SecretUtil.SafeUnitName("player")
     if not name then return nil end
     local realm = GetNormalizedRealmName() or GetRealmName() or ""
     if realm == "" then
@@ -174,7 +175,7 @@ end
 -- @param name string - Player name (may or may not include realm)
 -- @return string - Normalized "Name-Realm" format
 function LoothingUtils.NormalizeName(name)
-    if not name or LoolibSecretUtil.IsSecretValue(name) then return nil end
+    if not name or Loolib.SecretUtil.IsSecretValue(name) then return nil end
 
     -- Already has realm
     if name:find("-") then
@@ -193,7 +194,7 @@ end
 -- @param fullName string - "Name-Realm" format
 -- @return string - Just the name portion
 function LoothingUtils.GetShortName(fullName)
-    if not fullName or LoolibSecretUtil.IsSecretValue(fullName) then return nil end
+    if not fullName or Loolib.SecretUtil.IsSecretValue(fullName) then return nil end
     return fullName:match("^([^-]+)") or fullName
 end
 
@@ -203,7 +204,7 @@ end
 -- @return boolean
 function LoothingUtils.IsSamePlayer(name1, name2)
     if not name1 or not name2 then return false end
-    if LoolibSecretUtil.IsSecretValue(name1, name2) then return false end
+    if Loolib.SecretUtil.IsSecretValue(name1, name2) then return false end
     return LoothingUtils.NormalizeName(name1) == LoothingUtils.NormalizeName(name2)
 end
 
@@ -226,7 +227,7 @@ function LoothingUtils.GetClassColor(classFile)
     end
 
     -- Fallback to our constants
-    return LOOTHING_CLASS_COLORS[classFile] or { r = 1, g = 1, b = 1 }
+    return Loothing.ClassColors[classFile] or { r = 1, g = 1, b = 1 }
 end
 
 --- Format text with class color
@@ -282,12 +283,15 @@ function LoothingUtils.IsMasterLooter()
     end
 
     -- WoW 12.0+ removed GetLootMethod; treat group leader as ML equivalent
-    if not GetLootMethod then
+    if not Loothing.GetLootMethod then
         return UnitIsGroupLeader("player")
     end
 
-    local lootMethod, masterLooterPartyID = GetLootMethod()
-    if lootMethod ~= "master" then return false end
+    local lootMethod, masterLooterPartyID = Loothing.GetLootMethod()
+    local masterLooterEnum = Enum and Enum.LootMethod and Enum.LootMethod.Masterlooter
+    if lootMethod ~= "master" and lootMethod ~= masterLooterEnum then
+        return false
+    end
 
     if masterLooterPartyID == 0 then
         return true  -- Player is ML
@@ -341,7 +345,7 @@ function LoothingUtils.IsGuildGroup()
     -- Check if group/raid leader is in our guild
     if IsInRaid() then
         for i = 1, GetNumGroupMembers() do
-            local name, rank = LoolibSecretUtil.SafeGetRaidRosterInfo(i)
+            local name, rank = Loolib.SecretUtil.SafeGetRaidRosterInfo(i)
             if rank == 2 and name then
                 -- Raid leader found, check if in guild
                 return LoothingUtils.IsPlayerInGuild(name)
@@ -355,7 +359,7 @@ function LoothingUtils.IsGuildGroup()
         for i = 1, 4 do
             local unit = "party" .. i
             if UnitExists(unit) and UnitIsGroupLeader(unit) then
-                return UnitIsInMyGuild(unit)
+                return Loothing.UnitIsInMyGuild and Loothing.UnitIsInMyGuild(unit)
             end
         end
     end
@@ -373,7 +377,7 @@ function LoothingUtils.IsPlayerInGuild(name)
 
     local numMembers = GetNumGuildMembers()
     for i = 1, numMembers do
-        local guildName = GetGuildRosterInfo(i)
+        local guildName = Loothing.GetGuildRosterInfo and Loothing.GetGuildRosterInfo(i)
         if guildName then
             -- Guild names include realm: "Name-Realm"
             local shortGuild = guildName:match("^([^-]+)") or guildName
@@ -401,7 +405,7 @@ function LoothingUtils.GetRaidRoster()
         local numMembers = GetNumGroupMembers()
         for i = 1, numMembers do
             local name, rank, subgroup, level, class, fileName, zone,
-                  online, isDead, role, isML, assignedRole = LoolibSecretUtil.SafeGetRaidRosterInfo(i)
+                  online, isDead, role, isML, assignedRole = Loolib.SecretUtil.SafeGetRaidRosterInfo(i)
 
             if name then
                 roster[#roster + 1] = {
@@ -426,9 +430,9 @@ function LoothingUtils.GetRaidRoster()
             units[#units + 1] = "party" .. i
         end
         for _, unit in ipairs(units) do
-            local name = LoolibSecretUtil.SafeUnitName(unit)
+            local name = Loolib.SecretUtil.SafeUnitName(unit)
             if name then
-                local localizedClass, classFile = LoolibSecretUtil.SafeUnitClass(unit)
+                local localizedClass, classFile = Loolib.SecretUtil.SafeUnitClass(unit)
                 local isLeader = UnitIsGroupLeader(unit)
                 local isAssistant = UnitIsGroupAssistant(unit)
                 roster[#roster + 1] = {

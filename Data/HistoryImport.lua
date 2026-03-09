@@ -9,7 +9,7 @@ local Loolib = LibStub("Loolib")
     LoothingHistoryImportMixin
 ----------------------------------------------------------------------]]
 
-LoothingHistoryImportMixin = LoolibCreateFromMixins(LoolibCallbackRegistryMixin)
+LoothingHistoryImportMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
 
 local IMPORT_EVENTS = {
     "OnImportStarted",
@@ -39,7 +39,7 @@ local private = {
 
 --- Initialize the import module
 function LoothingHistoryImportMixin:Init()
-    LoolibCallbackRegistryMixin.OnLoad(self)
+    Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(IMPORT_EVENTS)
 end
 
@@ -631,12 +631,12 @@ end
 -- @param responseName string - Response name to find
 -- @return string|nil - Response ID or nil if not found
 function LoothingHistoryImportMixin:FindResponseByName(responseName)
-    if not responseName or not LOOTHING_RESPONSE_INFO then
+    if not responseName or not Loothing.ResponseInfo then
         return nil
     end
 
     -- Search all responses
-    for responseID, info in pairs(LOOTHING_RESPONSE_INFO) do
+    for responseID, info in pairs(Loothing.ResponseInfo) do
         if info.name and info.name:lower() == responseName:lower() then
             return responseID
         end
@@ -675,7 +675,7 @@ end
 --[==[
 
 -- Initialize
-local importer = LoolibCreateFromMixins(LoothingHistoryImportMixin)
+local importer = Loolib.CreateFromMixins(LoothingHistoryImportMixin)
 importer:Init()
 
 -- Register callbacks

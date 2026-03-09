@@ -4,12 +4,13 @@
 ----------------------------------------------------------------------]]
 
 local Loolib = LibStub("Loolib")
+local ipairs, pairs, time = ipairs, pairs, time
 
 --[[--------------------------------------------------------------------
     LoothingHistoryMixin
 ----------------------------------------------------------------------]]
 
-LoothingHistoryMixin = LoolibCreateFromMixins(LoolibCallbackRegistryMixin)
+LoothingHistoryMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
 
 local HISTORY_EVENTS = {
     "OnEntryAdded",
@@ -21,11 +22,11 @@ local HISTORY_EVENTS = {
 
 --- Initialize history manager
 function LoothingHistoryMixin:Init()
-    LoolibCallbackRegistryMixin.OnLoad(self)
+    Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(HISTORY_EVENTS)
 
     -- Data provider for history entries
-    local Data = Loolib:GetModule("Data")
+    local Data = Loolib.Data
     self.entries = Data.CreateDataProvider()
 
     -- Filter state
@@ -71,6 +72,7 @@ function LoothingHistoryMixin:AddEntry(entry)
 
     -- Save to SavedVariables
     self:SaveEntry(entry)
+    self:PruneSavedHistory()
 
     -- Refresh filtered view
     self:ApplyFilter()
@@ -484,7 +486,7 @@ function LoothingHistoryMixin:GetPlayerStats(playerName)
     }
 
     -- Initialize response counts
-    for _, response in pairs(LOOTHING_RESPONSE) do
+    for _, response in pairs(Loothing.Response) do
         stats.byResponse[response] = 0
     end
 
@@ -572,6 +574,7 @@ function LoothingHistoryMixin:LoadFromSaved()
 
     -- Auto-prune entries older than 180 days on load
     self:DeleteByAge(180)
+    self:PruneSavedHistory()
 
     -- Apply initial filter (shows all)
     self:ApplyFilter()
@@ -598,13 +601,7 @@ function LoothingHistoryMixin:RemoveSavedEntry(guid)
         return
     end
 
-    local history = Loothing.Settings:GetHistory()
-    for i, entry in ipairs(history) do
-        if entry.guid == guid then
-            table.remove(history, i)
-            break
-        end
-    end
+    Loothing.Settings:RemoveHistoryEntry(guid)
 end
 
 --- Remove multiple saved entries efficiently (O(n) single pass)
@@ -614,19 +611,40 @@ function LoothingHistoryMixin:RemoveSavedEntries(guids)
         return
     end
 
-    local history = Loothing.Settings:GetHistory()
+    Loothing.Settings:RemoveHistoryEntries(guids)
+end
 
-    -- Collect indices to remove (reverse order for safe removal)
-    local toRemove = {}
-    for i, entry in ipairs(history) do
-        if guids[entry.guid] then
-            toRemove[#toRemove + 1] = i
+--- Enforce the configured shared history cap in memory and SavedVariables.
+function LoothingHistoryMixin:PruneSavedHistory()
+    if not Loothing.Settings then
+        return
+    end
+
+    local removedEntries = Loothing.Settings:PruneHistory()
+    if #removedEntries == 0 then
+        return
+    end
+
+    local guidSet = {}
+    for _, entry in ipairs(removedEntries) do
+        if entry and entry.guid then
+            guidSet[entry.guid] = true
         end
     end
 
-    -- Remove from end to preserve indices
-    for j = #toRemove, 1, -1 do
-        table.remove(history, toRemove[j])
+    if next(guidSet) == nil then
+        return
+    end
+
+    local entriesToRemove = {}
+    for _, entry in self.entries:Enumerate() do
+        if entry.guid and guidSet[entry.guid] then
+            entriesToRemove[#entriesToRemove + 1] = entry
+        end
+    end
+
+    for _, entry in ipairs(entriesToRemove) do
+        self.entries:Remove(entry)
     end
 end
 
@@ -640,10 +658,11 @@ function LoothingHistoryMixin:GetExportMetadata()
     local guildName, guildRank = GetGuildInfo("player")
     return {
         addonName = "Loothing",
-        version = LOOTHING_VERSION,
+        version = Loothing.VERSION,
         exportDate = date("%Y-%m-%d"),
         exportTime = date("%H:%M:%S"),
-        playerName = UnitName("player"),
+        -- FIX(Area4-4): Use SafeUnitName to avoid secret value tainting
+        playerName = Loolib.SecretUtil.SafeUnitName("player") or "Unknown",
         realmName = GetNormalizedRealmName(),
         guildName = guildName or "",
         guildRank = guildRank or "",
@@ -693,8 +712,8 @@ function LoothingHistoryMixin:ExportCSV()
         local dateStr = ts > 0 and date("%Y-%m-%d", ts) or ""
         local timeStr = ts > 0 and date("%H:%M:%S", ts) or ""
         local responseName = ""
-        if entry.winnerResponse and LOOTHING_RESPONSE_INFO and LOOTHING_RESPONSE_INFO[entry.winnerResponse] then
-            responseName = LOOTHING_RESPONSE_INFO[entry.winnerResponse].name
+        if entry.winnerResponse and Loothing.ResponseInfo and Loothing.ResponseInfo[entry.winnerResponse] then
+            responseName = Loothing.ResponseInfo[entry.winnerResponse].name
         end
         local isAwardReason = (entry.awardReasonId and entry.awardReasonId ~= 0) and 1 or 0
 
@@ -749,8 +768,8 @@ function LoothingHistoryMixin:ExportTSV()
         local dateStr = ts > 0 and date("%Y-%m-%d", ts) or ""
         local timeStr = ts > 0 and date("%H:%M:%S", ts) or ""
         local responseName = ""
-        if entry.winnerResponse and LOOTHING_RESPONSE_INFO and LOOTHING_RESPONSE_INFO[entry.winnerResponse] then
-            responseName = LOOTHING_RESPONSE_INFO[entry.winnerResponse].name
+        if entry.winnerResponse and Loothing.ResponseInfo and Loothing.ResponseInfo[entry.winnerResponse] then
+            responseName = Loothing.ResponseInfo[entry.winnerResponse].name
         end
         local isAwardReason = (entry.awardReasonId and entry.awardReasonId ~= 0) and 1 or 0
 
@@ -797,8 +816,8 @@ function LoothingHistoryMixin:ExportLua()
 
     for _, entry in self.filteredEntries:Enumerate() do
         local responseName = ""
-        if entry.winnerResponse and LOOTHING_RESPONSE_INFO and LOOTHING_RESPONSE_INFO[entry.winnerResponse] then
-            responseName = LOOTHING_RESPONSE_INFO[entry.winnerResponse].name
+        if entry.winnerResponse and Loothing.ResponseInfo and Loothing.ResponseInfo[entry.winnerResponse] then
+            responseName = Loothing.ResponseInfo[entry.winnerResponse].name
         end
         local ts = entry.timestamp or 0
         local dateStr = ts > 0 and date("%Y-%m-%d %H:%M:%S", ts) or ""
@@ -868,8 +887,8 @@ function LoothingHistoryMixin:ExportBBCode()
         for _, entry in ipairs(winnerEntries) do
             local itemName = entry.itemName or "Unknown"
             local responseName = ""
-            if entry.winnerResponse and LOOTHING_RESPONSE_INFO and LOOTHING_RESPONSE_INFO[entry.winnerResponse] then
-                responseName = LOOTHING_RESPONSE_INFO[entry.winnerResponse].name
+            if entry.winnerResponse and Loothing.ResponseInfo and Loothing.ResponseInfo[entry.winnerResponse] then
+                responseName = Loothing.ResponseInfo[entry.winnerResponse].name
             end
             local ilvl = entry.itemLevel and string.format(" (ilvl %d)", entry.itemLevel) or ""
             local instance = entry.instance or entry.encounterName or ""
@@ -934,8 +953,8 @@ function LoothingHistoryMixin:ExportDiscord()
         for _, entry in ipairs(winnerEntries) do
             local itemName = entry.itemName or "Unknown"
             local responseName = ""
-            if entry.winnerResponse and LOOTHING_RESPONSE_INFO and LOOTHING_RESPONSE_INFO[entry.winnerResponse] then
-                responseName = LOOTHING_RESPONSE_INFO[entry.winnerResponse].name
+            if entry.winnerResponse and Loothing.ResponseInfo and Loothing.ResponseInfo[entry.winnerResponse] then
+                responseName = Loothing.ResponseInfo[entry.winnerResponse].name
             end
             local ilvl = entry.itemLevel and string.format(" `ilvl %d`", entry.itemLevel) or ""
             local instance = entry.instance or entry.encounterName or ""
@@ -999,8 +1018,8 @@ function LoothingHistoryMixin:ExportJSON()
 
     for _, entry in self.filteredEntries:Enumerate() do
         local responseName = ""
-        if entry.winnerResponse and LOOTHING_RESPONSE_INFO and LOOTHING_RESPONSE_INFO[entry.winnerResponse] then
-            responseName = LOOTHING_RESPONSE_INFO[entry.winnerResponse].name
+        if entry.winnerResponse and Loothing.ResponseInfo and Loothing.ResponseInfo[entry.winnerResponse] then
+            responseName = Loothing.ResponseInfo[entry.winnerResponse].name
         end
         local ts = entry.timestamp or 0
 
@@ -1122,11 +1141,11 @@ function LoothingHistoryMixin:ExportEQdkp()
     lines[#lines + 1] = '    <head>'
     lines[#lines + 1] = '        <export>'
     lines[#lines + 1] = string.format('            <name>%s</name>', "Loothing")
-    lines[#lines + 1] = string.format('            <version>%s</version>', LOOTHING_VERSION)
+    lines[#lines + 1] = string.format('            <version>%s</version>', Loothing.VERSION)
     lines[#lines + 1] = '        </export>'
     lines[#lines + 1] = '        <tracker>'
     lines[#lines + 1] = '            <name>Loothing Loot Council</name>'
-    lines[#lines + 1] = string.format('            <version>%s</version>', LOOTHING_VERSION)
+    lines[#lines + 1] = string.format('            <version>%s</version>', Loothing.VERSION)
     lines[#lines + 1] = '        </tracker>'
     lines[#lines + 1] = '        <gameinfo>'
     lines[#lines + 1] = '            <game>World of Warcraft</game>'
@@ -1182,8 +1201,8 @@ function LoothingHistoryMixin:ExportEQdkp()
 
         -- Get response name
         local responseName = ""
-        if entry.winnerResponse and LOOTHING_RESPONSE_INFO and LOOTHING_RESPONSE_INFO[entry.winnerResponse] then
-            responseName = LOOTHING_RESPONSE_INFO[entry.winnerResponse].name
+        if entry.winnerResponse and Loothing.ResponseInfo and Loothing.ResponseInfo[entry.winnerResponse] then
+            responseName = Loothing.ResponseInfo[entry.winnerResponse].name
         end
 
         lines[#lines + 1] = '            <item>'
@@ -1211,8 +1230,8 @@ end
 -- @return string
 function LoothingHistoryMixin:ExportCompact()
     local jsonStr = self:ExportJSON()
-    local compressed = LoolibCompressor:CompressZlib(jsonStr, 9)
-    local encoded = LoolibCompressor:EncodeForPrint(compressed)
+    local compressed = Loolib.Compressor:CompressZlib(jsonStr, 9)
+    local encoded = Loolib.Compressor:EncodeForPrint(compressed)
     return "LOOTHING:1:" .. encoded
 end
 

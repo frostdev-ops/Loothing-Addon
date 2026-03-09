@@ -30,14 +30,14 @@ end
 -- @return table - Results from the appropriate tally method
 function LoothingVotingEngine:Tally(votes, mode)
     -- Get mode from settings if not provided
-    mode = mode or (Loothing.Settings and Loothing.Settings:GetVotingMode()) or LOOTHING_VOTING_MODE.SIMPLE
+    mode = mode or (Loothing.Settings and Loothing.Settings:GetVotingMode()) or Loothing.VotingMode.SIMPLE
 
     -- Apply voting options
     -- Note: hideVotes and anonymousVoting are applied at the UI level
     -- multiVote is handled in VotePanel
     -- requireNotes is enforced in VotePanel submit logic
 
-    if mode == LOOTHING_VOTING_MODE.RANKED_CHOICE then
+    if mode == Loothing.VotingMode.RANKED_CHOICE then
         -- For ranked choice, we need to extract candidates from the votes
         local candidates = self:GetCandidatesFromVotes(votes)
         return self:TallyRankedChoice(votes, candidates)
@@ -85,7 +85,7 @@ function LoothingVotingEngine:TallySimple(votes, candidates)
     end
 
     -- Initialize response counts
-    for _, response in pairs(LOOTHING_RESPONSE) do
+    for _, response in pairs(Loothing.Response) do
         counts[response] = {
             count = 0,
             voters = {},
@@ -326,7 +326,7 @@ end
 function LoothingVotingEngine:GroupVotersByResponse(votes)
     local groups = {}
 
-    for _, response in pairs(LOOTHING_RESPONSE) do
+    for _, response in pairs(Loothing.Response) do
         groups[response] = {}
     end
 
@@ -388,7 +388,7 @@ function LoothingVotingEngine:GetResponseSummary(votes)
     local summary = {}
 
     for response, data in pairs(result.counts) do
-        local responseInfo = LOOTHING_RESPONSE_INFO[response]
+        local responseInfo = Loothing.ResponseInfo[response]
         if responseInfo then
             summary[#summary + 1] = {
                 response = response,

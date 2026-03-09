@@ -931,7 +931,7 @@ L["CONFIRM_BULK_REMOVE"] = "Remove %d selected items from the session?"
 L["CONFIRM_BULK_REVOTE"] = "Re-vote on %d selected items?"
 
 -- Make locale available globally
-LOOTHING_LOCALE = L
+Loothing.Locale = L
 
 -- Return for module use
 return L

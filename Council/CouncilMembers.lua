@@ -3,6 +3,8 @@
     Extracted member lifecycle, auto-include logic, and raid helpers.
 ----------------------------------------------------------------------]]
 
+local Loolib = LibStub("Loolib")
+
 LoothingCouncilMixin = LoothingCouncilMixin or {}
 
 --[[--------------------------------------------------------------------
@@ -19,7 +21,8 @@ function LoothingCouncilMixin:AddMember(name)
     self.members[name] = {
         name = name,
         addedTime = time(),
-        addedBy = UnitName("player"),
+        -- FIX(Area4-4): Use SafeUnitName to avoid secret value tainting
+        addedBy = Loolib.SecretUtil.SafeUnitName("player") or "Unknown",
     }
 
     self:SaveToSettings()
@@ -180,7 +183,7 @@ function LoothingCouncilMixin:AddMembersByRank(rankIndex)
     local totalMembers = GetNumGuildMembers()
 
     for i = 1, totalMembers do
-        local name, _, rankIndexMember = GetGuildRosterInfo(i)
+        local name, _, rankIndexMember = Loothing.GetGuildRosterInfo(i)
         if (rankIndexMember + 1) == rankIndex and name then
             name = LoothingUtils.NormalizeName(name)
             if self:AddMember(name) then
@@ -212,8 +215,8 @@ function LoothingCouncilMixin:GetCurrentGroupMembers()
         for i = 1, 4 do
             local unit = "party" .. i
             if UnitExists(unit) then
-                local name = LoolibSecretUtil.SafeUnitName(unit)
-                local _, class = LoolibSecretUtil.SafeUnitClass(unit)
+                local name = Loolib.SecretUtil.SafeUnitName(unit)
+                local _, class = Loolib.SecretUtil.SafeUnitClass(unit)
                 local role = UnitGroupRolesAssigned(unit)
 
                 if name then
@@ -228,7 +231,8 @@ function LoothingCouncilMixin:GetCurrentGroupMembers()
         end
 
         local playerName = LoothingUtils.GetPlayerFullName()
-        local _, playerClass = UnitClass("player")
+        -- FIX(Area4-4): Use SafeUnitClass to avoid secret value tainting
+        local _, playerClass = Loolib.SecretUtil.SafeUnitClass("player")
         local playerRole = UnitGroupRolesAssigned("player")
 
         members[#members + 1] = {
@@ -290,4 +294,3 @@ end
 function LoothingCouncilMixin:OnRosterUpdate()
     self:TriggerEvent("OnRosterChanged")
 end
-

@@ -104,7 +104,7 @@ function LoothingUI_CreateResponseRow(parent, data, yOffset, totalVotes, isWinne
 
         local winnerText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         winnerText:SetPoint("RIGHT", countText, "LEFT", -8, 0)
-        winnerText:SetText(LOOTHING_LOCALE["WINNER"])
+        winnerText:SetText(Loothing.Locale["WINNER"])
         winnerText:SetTextColor(1, 0.82, 0)
     end
 

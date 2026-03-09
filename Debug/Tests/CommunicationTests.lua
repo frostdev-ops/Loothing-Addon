@@ -3,10 +3,12 @@
     CommunicationTests - Test suite for Serializer+Compressor protocol
 
     Tests the encode/decode round-trip via LoothingProtocol, which uses:
-    LoolibSerializer → LoolibCompressor → EncodeForAddonChannel
+    Loolib.Serializer → Loolib.Compressor → EncodeForAddonChannel
 
     Run: /lt test run communication
 ----------------------------------------------------------------------]]
+
+local Loolib = LibStub("Loolib")
 
 local function RunCommunicationTests()
     if not LoothingProtocol then
@@ -72,30 +74,30 @@ local function RunCommunicationTests()
     printGroup("Basic Encode/Decode Round-Trip")
 
     -- Simple encode/decode
-    local encoded = LoothingProtocol:Encode(LOOTHING_MSG_TYPE.SESSION_START, { encounterID = 123, encounterName = "Test Boss" })
+    local encoded = LoothingProtocol:Encode(Loothing.MsgType.SESSION_START, { encounterID = 123, encounterName = "Test Boss" })
     assertNotNil(encoded, "Encode produces a string")
     assert(type(encoded) == "string", "Encode returns string type")
     assert(#encoded > 0, "Encoded string is not empty")
 
     local version, command, data = LoothingProtocol:Decode(encoded)
-    assertEqual(version, LOOTHING_PROTOCOL_VERSION, "Decoded version matches protocol version")
-    assertEqual(command, LOOTHING_MSG_TYPE.SESSION_START, "Decoded command matches SESSION_START")
+    assertEqual(version, Loothing.PROTOCOL_VERSION, "Decoded version matches protocol version")
+    assertEqual(command, Loothing.MsgType.SESSION_START, "Decoded command matches SESSION_START")
     assertNotNil(data, "Decoded data is not nil")
     assertEqual(data.encounterID, 123, "Decoded encounterID preserves number")
     assertEqual(data.encounterName, "Test Boss", "Decoded encounterName preserves string")
 
     -- Empty data table
-    local emptyEncoded = LoothingProtocol:Encode(LOOTHING_MSG_TYPE.SESSION_END, {})
+    local emptyEncoded = LoothingProtocol:Encode(Loothing.MsgType.SESSION_END, {})
     local emptyVersion, emptyCommand, emptyData = LoothingProtocol:Decode(emptyEncoded)
-    assertEqual(emptyVersion, LOOTHING_PROTOCOL_VERSION, "Empty data: version preserved")
-    assertEqual(emptyCommand, LOOTHING_MSG_TYPE.SESSION_END, "Empty data: command preserved")
+    assertEqual(emptyVersion, Loothing.PROTOCOL_VERSION, "Empty data: version preserved")
+    assertEqual(emptyCommand, Loothing.MsgType.SESSION_END, "Empty data: command preserved")
     assertNotNil(emptyData, "Empty data: data table exists")
 
     -- Nil data
-    local nilEncoded = LoothingProtocol:Encode(LOOTHING_MSG_TYPE.SESSION_END, nil)
+    local nilEncoded = LoothingProtocol:Encode(Loothing.MsgType.SESSION_END, nil)
     local nilVersion, nilCommand, nilData = LoothingProtocol:Decode(nilEncoded)
-    assertEqual(nilVersion, LOOTHING_PROTOCOL_VERSION, "Nil data: version preserved")
-    assertEqual(nilCommand, LOOTHING_MSG_TYPE.SESSION_END, "Nil data: command preserved")
+    assertEqual(nilVersion, Loothing.PROTOCOL_VERSION, "Nil data: version preserved")
+    assertEqual(nilCommand, Loothing.MsgType.SESSION_END, "Nil data: command preserved")
 
     --[[--------------------------------------------------------------------
         Test Group 2: Data Type Preservation
@@ -179,56 +181,56 @@ local function RunCommunicationTests()
     printGroup("Message Type Round-Trips")
 
     -- SESSION_START
-    local ss = LoothingProtocol:Encode(LOOTHING_MSG_TYPE.SESSION_START, {
+    local ss = LoothingProtocol:Encode(Loothing.MsgType.SESSION_START, {
         encounterID = 2820,
         encounterName = "Vault of the Incarnates",
         sessionID = "abc-123",
     })
     local ssV, ssC, ssD = LoothingProtocol:Decode(ss)
-    assertEqual(ssC, LOOTHING_MSG_TYPE.SESSION_START, "SESSION_START command")
+    assertEqual(ssC, Loothing.MsgType.SESSION_START, "SESSION_START command")
     assertEqual(ssD.encounterID, 2820, "SESSION_START encounterID")
     assertEqual(ssD.encounterName, "Vault of the Incarnates", "SESSION_START encounterName")
     assertEqual(ssD.sessionID, "abc-123", "SESSION_START sessionID")
 
     -- ITEM_ADD
     local itemLink = "|cff0070dd|Hitem:12345:0:0:0:0:0:0:0:0:0:0:0:0|h[Test Item]|h|r"
-    local ia = LoothingProtocol:Encode(LOOTHING_MSG_TYPE.ITEM_ADD, {
+    local ia = LoothingProtocol:Encode(Loothing.MsgType.ITEM_ADD, {
         itemLink = itemLink,
         guid = "guid-456",
         looter = "Looter-Realm",
     })
     local iaV, iaC, iaD = LoothingProtocol:Decode(ia)
-    assertEqual(iaC, LOOTHING_MSG_TYPE.ITEM_ADD, "ITEM_ADD command")
+    assertEqual(iaC, Loothing.MsgType.ITEM_ADD, "ITEM_ADD command")
     assertEqual(iaD.itemLink, itemLink, "ITEM_ADD itemLink preserved (with pipes)")
     assertEqual(iaD.guid, "guid-456", "ITEM_ADD guid")
     assertEqual(iaD.looter, "Looter-Realm", "ITEM_ADD looter")
 
     -- VOTE_COMMIT with responses array
-    local vc = LoothingProtocol:Encode(LOOTHING_MSG_TYPE.VOTE_COMMIT, {
+    local vc = LoothingProtocol:Encode(Loothing.MsgType.VOTE_COMMIT, {
         itemGUID = "guid-789",
-        responses = { LOOTHING_RESPONSE.NEED, LOOTHING_RESPONSE.GREED, LOOTHING_RESPONSE.OFFSPEC },
+        responses = { Loothing.Response.NEED, Loothing.Response.GREED, Loothing.Response.OFFSPEC },
         sessionID = "session-1",
     })
     local vcV, vcC, vcD = LoothingProtocol:Decode(vc)
-    assertEqual(vcC, LOOTHING_MSG_TYPE.VOTE_COMMIT, "VOTE_COMMIT command")
+    assertEqual(vcC, Loothing.MsgType.VOTE_COMMIT, "VOTE_COMMIT command")
     assertEqual(#vcD.responses, 3, "VOTE_COMMIT responses count")
-    assertEqual(vcD.responses[1], LOOTHING_RESPONSE.NEED, "VOTE_COMMIT response 1")
-    assertEqual(vcD.responses[2], LOOTHING_RESPONSE.GREED, "VOTE_COMMIT response 2")
+    assertEqual(vcD.responses[1], Loothing.Response.NEED, "VOTE_COMMIT response 1")
+    assertEqual(vcD.responses[2], Loothing.Response.GREED, "VOTE_COMMIT response 2")
 
     -- VOTE_AWARD
-    local va = LoothingProtocol:Encode(LOOTHING_MSG_TYPE.VOTE_AWARD, {
+    local va = LoothingProtocol:Encode(Loothing.MsgType.VOTE_AWARD, {
         itemGUID = "guid-111",
         winner = "Winner-Realm",
         sessionID = "s1",
     })
     local vaV, vaC, vaD = LoothingProtocol:Decode(va)
-    assertEqual(vaC, LOOTHING_MSG_TYPE.VOTE_AWARD, "VOTE_AWARD command")
+    assertEqual(vaC, Loothing.MsgType.VOTE_AWARD, "VOTE_AWARD command")
     assertEqual(vaD.winner, "Winner-Realm", "VOTE_AWARD winner")
 
     -- PLAYER_RESPONSE
-    local pr = LoothingProtocol:Encode(LOOTHING_MSG_TYPE.PLAYER_RESPONSE, {
+    local pr = LoothingProtocol:Encode(Loothing.MsgType.PLAYER_RESPONSE, {
         itemGUID = "guid-222",
-        response = LOOTHING_RESPONSE.NEED,
+        response = Loothing.Response.NEED,
         note = "Best in slot for me",
         roll = 95,
         rollMin = 1,
@@ -236,18 +238,18 @@ local function RunCommunicationTests()
         sessionID = "s1",
     })
     local prV, prC, prD = LoothingProtocol:Decode(pr)
-    assertEqual(prC, LOOTHING_MSG_TYPE.PLAYER_RESPONSE, "PLAYER_RESPONSE command")
-    assertEqual(prD.response, LOOTHING_RESPONSE.NEED, "PLAYER_RESPONSE response")
+    assertEqual(prC, Loothing.MsgType.PLAYER_RESPONSE, "PLAYER_RESPONSE command")
+    assertEqual(prD.response, Loothing.Response.NEED, "PLAYER_RESPONSE response")
     assertEqual(prD.note, "Best in slot for me", "PLAYER_RESPONSE note")
     assertEqual(prD.roll, 95, "PLAYER_RESPONSE roll")
 
     -- CANDIDATE_UPDATE with nested candidateData
-    local cu = LoothingProtocol:Encode(LOOTHING_MSG_TYPE.CANDIDATE_UPDATE, {
+    local cu = LoothingProtocol:Encode(Loothing.MsgType.CANDIDATE_UPDATE, {
         itemGUID = "guid-333",
         candidateData = {
             name = "Player-Realm",
             class = "WARRIOR",
-            response = LOOTHING_RESPONSE.NEED,
+            response = Loothing.Response.NEED,
             roll = 88,
             note = "Upgrade",
             gear1 = "|cff0070dd|Hitem:99999|h[Old Item]|h|r",
@@ -259,35 +261,35 @@ local function RunCommunicationTests()
         sessionID = "s1",
     })
     local cuV, cuC, cuD = LoothingProtocol:Decode(cu)
-    assertEqual(cuC, LOOTHING_MSG_TYPE.CANDIDATE_UPDATE, "CANDIDATE_UPDATE command")
+    assertEqual(cuC, Loothing.MsgType.CANDIDATE_UPDATE, "CANDIDATE_UPDATE command")
     assertEqual(cuD.candidateData.name, "Player-Realm", "CANDIDATE_UPDATE name")
     assertEqual(cuD.candidateData.class, "WARRIOR", "CANDIDATE_UPDATE class")
     assertEqual(cuD.candidateData.ilvl1, 450, "CANDIDATE_UPDATE ilvl1")
 
     -- VOTE_UPDATE with voters array
-    local vu = LoothingProtocol:Encode(LOOTHING_MSG_TYPE.VOTE_UPDATE, {
+    local vu = LoothingProtocol:Encode(Loothing.MsgType.VOTE_UPDATE, {
         itemGUID = "guid-444",
         candidateName = "Candidate-Realm",
         voters = { "Voter1-Realm", "Voter2-Realm", "Voter3-Realm" },
         sessionID = "s1",
     })
     local vuV, vuC, vuD = LoothingProtocol:Decode(vu)
-    assertEqual(vuC, LOOTHING_MSG_TYPE.VOTE_UPDATE, "VOTE_UPDATE command")
+    assertEqual(vuC, Loothing.MsgType.VOTE_UPDATE, "VOTE_UPDATE command")
     assertEqual(#vuD.voters, 3, "VOTE_UPDATE voters count")
     assertEqual(vuD.voters[1], "Voter1-Realm", "VOTE_UPDATE voter 1")
 
     -- COUNCIL_ROSTER with members array
-    local cr = LoothingProtocol:Encode(LOOTHING_MSG_TYPE.COUNCIL_ROSTER, {
+    local cr = LoothingProtocol:Encode(Loothing.MsgType.COUNCIL_ROSTER, {
         members = { "Player1-Realm", "Player2-Realm", "Player3-Realm" },
     })
     local crV, crC, crD = LoothingProtocol:Decode(cr)
-    assertEqual(crC, LOOTHING_MSG_TYPE.COUNCIL_ROSTER, "COUNCIL_ROSTER command")
+    assertEqual(crC, Loothing.MsgType.COUNCIL_ROSTER, "COUNCIL_ROSTER command")
     assertEqual(#crD.members, 3, "COUNCIL_ROSTER members count")
 
     -- PLAYER_INFO_RESPONSE
     local slot1Link = "|cff0070dd|Hitem:11111|h[Equipped 1]|h|r"
     local slot2Link = "|cff0070dd|Hitem:22222|h[Equipped 2]|h|r"
-    local pir = LoothingProtocol:Encode(LOOTHING_MSG_TYPE.PLAYER_INFO_RESPONSE, {
+    local pir = LoothingProtocol:Encode(Loothing.MsgType.PLAYER_INFO_RESPONSE, {
         itemGUID = "guid-555",
         slot1Link = slot1Link,
         slot2Link = slot2Link,
@@ -296,16 +298,16 @@ local function RunCommunicationTests()
         sessionID = "s1",
     })
     local pirV, pirC, pirD = LoothingProtocol:Decode(pir)
-    assertEqual(pirC, LOOTHING_MSG_TYPE.PLAYER_INFO_RESPONSE, "PLAYER_INFO_RESPONSE command")
+    assertEqual(pirC, Loothing.MsgType.PLAYER_INFO_RESPONSE, "PLAYER_INFO_RESPONSE command")
     assertEqual(pirD.slot1Link, slot1Link, "PLAYER_INFO_RESPONSE slot1Link")
     assertEqual(pirD.slot1ilvl, 450, "PLAYER_INFO_RESPONSE slot1ilvl")
 
     -- VOTE_RESULTS with nested results table
-    local vr = LoothingProtocol:Encode(LOOTHING_MSG_TYPE.VOTE_RESULTS, {
+    local vr = LoothingProtocol:Encode(Loothing.MsgType.VOTE_RESULTS, {
         itemGUID = "guid-666",
         results = {
             winner = "Player-Realm",
-            response = LOOTHING_RESPONSE.NEED,
+            response = Loothing.Response.NEED,
             votes = 5,
             totalVotes = 8,
             rounds = 2,
@@ -313,20 +315,20 @@ local function RunCommunicationTests()
         sessionID = "s1",
     })
     local vrV, vrC, vrD = LoothingProtocol:Decode(vr)
-    assertEqual(vrC, LOOTHING_MSG_TYPE.VOTE_RESULTS, "VOTE_RESULTS command")
+    assertEqual(vrC, Loothing.MsgType.VOTE_RESULTS, "VOTE_RESULTS command")
     assertEqual(vrD.results.winner, "Player-Realm", "VOTE_RESULTS winner")
     assertEqual(vrD.results.votes, 5, "VOTE_RESULTS votes")
 
     -- XREALM envelope
-    local xr = LoothingProtocol:Encode(LOOTHING_MSG_TYPE.XREALM, {
+    local xr = LoothingProtocol:Encode(Loothing.MsgType.XREALM, {
         target = "Player-OtherRealm",
-        command = LOOTHING_MSG_TYPE.PLAYER_RESPONSE,
+        command = Loothing.MsgType.PLAYER_RESPONSE,
         data = { itemGUID = "guid-777", response = 1 },
     })
     local xrV, xrC, xrD = LoothingProtocol:Decode(xr)
-    assertEqual(xrC, LOOTHING_MSG_TYPE.XREALM, "XREALM command")
+    assertEqual(xrC, Loothing.MsgType.XREALM, "XREALM command")
     assertEqual(xrD.target, "Player-OtherRealm", "XREALM target")
-    assertEqual(xrD.command, LOOTHING_MSG_TYPE.PLAYER_RESPONSE, "XREALM inner command")
+    assertEqual(xrD.command, Loothing.MsgType.PLAYER_RESPONSE, "XREALM inner command")
     assertEqual(xrD.data.itemGUID, "guid-777", "XREALM inner data preserved")
 
     --[[--------------------------------------------------------------------
@@ -344,20 +346,20 @@ local function RunCommunicationTests()
             ilvl = 450 + i,
         }
     end
-    local largeEncoded = LoothingProtocol:Encode(LOOTHING_MSG_TYPE.SYNC_DATA, largeData)
+    local largeEncoded = LoothingProtocol:Encode(Loothing.MsgType.SYNC_DATA, largeData)
     assertNotNil(largeEncoded, "Large data encodes successfully")
 
     local largeV, largeC, largeD = LoothingProtocol:Decode(largeEncoded)
-    assertEqual(largeC, LOOTHING_MSG_TYPE.SYNC_DATA, "Large data: command preserved")
+    assertEqual(largeC, Loothing.MsgType.SYNC_DATA, "Large data: command preserved")
     assertEqual(#largeD.items, 25, "Large data: all 25 items preserved")
     assertEqual(largeD.items[1].ilvl, 451, "Large data: first item ilvl correct")
     assertEqual(largeD.items[25].ilvl, 475, "Large data: last item ilvl correct")
 
     -- Print compression ratio
-    local Serializer = LoolibSerializer
-    local Compressor = LoolibCompressor
+    local Serializer = Loolib.Serializer
+    local Compressor = Loolib.Compressor
     if Serializer and Compressor then
-        local rawSerialized = Serializer:Serialize(LOOTHING_PROTOCOL_VERSION, LOOTHING_MSG_TYPE.SYNC_DATA, largeData)
+        local rawSerialized = Serializer:Serialize(Loothing.PROTOCOL_VERSION, Loothing.MsgType.SYNC_DATA, largeData)
         local ratio = #largeEncoded / #rawSerialized
         print(string.format("  Compression: %d raw -> %d encoded (%.1f%% ratio)", #rawSerialized, #largeEncoded, ratio * 100))
     end
@@ -369,7 +371,7 @@ local function RunCommunicationTests()
 
     -- Very long item link
     local veryLongLink = "|cff0070dd|Hitem:" .. string.rep("1234567890:", 20) .. "0|h[Super Long Item Name That Goes On And On]|h|r"
-    local longLinkEncoded = LoothingProtocol:Encode(LOOTHING_MSG_TYPE.ITEM_ADD, { itemLink = veryLongLink, guid = "g", looter = "l" })
+    local longLinkEncoded = LoothingProtocol:Encode(Loothing.MsgType.ITEM_ADD, { itemLink = veryLongLink, guid = "g", looter = "l" })
     local _, _, longLinkData = LoothingProtocol:Decode(longLinkEncoded)
     assertEqual(longLinkData.itemLink, veryLongLink, "Very long item link preserved")
 
@@ -378,7 +380,7 @@ local function RunCommunicationTests()
     for i = 1, 40 do
         manyMembers[i] = string.format("Player%d-VeryLongRealmName%d", i, i)
     end
-    local manyEncoded = LoothingProtocol:Encode(LOOTHING_MSG_TYPE.COUNCIL_ROSTER, { members = manyMembers })
+    local manyEncoded = LoothingProtocol:Encode(Loothing.MsgType.COUNCIL_ROSTER, { members = manyMembers })
     local _, _, manyData = LoothingProtocol:Decode(manyEncoded)
     assertEqual(#manyData.members, 40, "40 council members preserved")
     assertEqual(manyData.members[40], "Player40-VeryLongRealmName40", "Last member preserved")
@@ -400,12 +402,12 @@ local function RunCommunicationTests()
 
     -- 7a: Normal round-trip should succeed
     local integrityData = { sessionID = "test-session", state = 2, itemCount = 3 }
-    local intEncoded = LoothingProtocol:Encode(LOOTHING_MSG_TYPE.SESSION_START, integrityData)
+    local intEncoded = LoothingProtocol:Encode(Loothing.MsgType.SESSION_START, integrityData)
     assertNotNil(intEncoded, "v3 Encode produces output")
 
     local intV, intC, intD = LoothingProtocol:Decode(intEncoded)
-    assertEqual(intV, LOOTHING_PROTOCOL_VERSION, "v3 round-trip: version correct")
-    assertEqual(intC, LOOTHING_MSG_TYPE.SESSION_START, "v3 round-trip: command correct")
+    assertEqual(intV, Loothing.PROTOCOL_VERSION, "v3 round-trip: version correct")
+    assertEqual(intC, Loothing.MsgType.SESSION_START, "v3 round-trip: command correct")
     assertEqual(intD.sessionID, "test-session", "v3 round-trip: payload preserved")
 
     -- 7b: Tampered message should fail decode (return nil)
@@ -432,21 +434,21 @@ local function RunCommunicationTests()
     local innerMessages = {}
     for i = 1, 5 do
         innerMessages[i] = {
-            command = LOOTHING_MSG_TYPE.VOTE_REQUEST,
+            command = Loothing.MsgType.VOTE_REQUEST,
             data    = { itemGUID = "guid-" .. i, timeout = 30, sessionID = "s1" },
         }
     end
 
-    local batchEncoded = LoothingProtocol:Encode(LOOTHING_MSG_TYPE.BATCH, {
+    local batchEncoded = LoothingProtocol:Encode(Loothing.MsgType.BATCH, {
         messages = innerMessages,
     })
     assertNotNil(batchEncoded, "BATCH: encode produces output")
 
     local batchV, batchC, batchD = LoothingProtocol:Decode(batchEncoded)
-    assertEqual(batchC, LOOTHING_MSG_TYPE.BATCH, "BATCH: command correct")
+    assertEqual(batchC, Loothing.MsgType.BATCH, "BATCH: command correct")
     assertNotNil(batchD, "BATCH: data not nil")
     assertEqual(#batchD.messages, 5, "BATCH: 5 inner messages preserved")
-    assertEqual(batchD.messages[1].command, LOOTHING_MSG_TYPE.VOTE_REQUEST, "BATCH: inner command[1] correct")
+    assertEqual(batchD.messages[1].command, Loothing.MsgType.VOTE_REQUEST, "BATCH: inner command[1] correct")
     assertEqual(batchD.messages[1].data.itemGUID, "guid-1", "BATCH: inner data[1].itemGUID correct")
     assertEqual(batchD.messages[5].data.itemGUID, "guid-5", "BATCH: inner data[5].itemGUID correct")
 
@@ -457,31 +459,31 @@ local function RunCommunicationTests()
 
     local heartbeatPayload = {
         sessionID   = "hb-session-abc",
-        state       = LOOTHING_SESSION_STATE.ACTIVE,
+        state       = Loothing.SessionState.ACTIVE,
         itemCount   = 4,
         itemStates  = {
-            ["guid-a"] = LOOTHING_ITEM_STATE.VOTING,
-            ["guid-b"] = LOOTHING_ITEM_STATE.AWARDED,
-            ["guid-c"] = LOOTHING_ITEM_STATE.PENDING,
-            ["guid-d"] = LOOTHING_ITEM_STATE.TALLIED,
+            ["guid-a"] = Loothing.ItemState.VOTING,
+            ["guid-b"] = Loothing.ItemState.AWARDED,
+            ["guid-c"] = Loothing.ItemState.PENDING,
+            ["guid-d"] = Loothing.ItemState.TALLIED,
         },
         councilHash = 1234567890,
         mldbHash    = 9876543210,
     }
 
-    local hbEncoded = LoothingProtocol:Encode(LOOTHING_MSG_TYPE.HEARTBEAT, heartbeatPayload)
+    local hbEncoded = LoothingProtocol:Encode(Loothing.MsgType.HEARTBEAT, heartbeatPayload)
     assertNotNil(hbEncoded, "Heartbeat: encode produces output")
 
     local hbV, hbC, hbD = LoothingProtocol:Decode(hbEncoded)
-    assertEqual(hbC, LOOTHING_MSG_TYPE.HEARTBEAT, "Heartbeat: command correct")
+    assertEqual(hbC, Loothing.MsgType.HEARTBEAT, "Heartbeat: command correct")
     assertEqual(hbD.sessionID, "hb-session-abc", "Heartbeat: sessionID preserved")
-    assertEqual(hbD.state, LOOTHING_SESSION_STATE.ACTIVE, "Heartbeat: state preserved")
+    assertEqual(hbD.state, Loothing.SessionState.ACTIVE, "Heartbeat: state preserved")
     assertEqual(hbD.itemCount, 4, "Heartbeat: itemCount preserved")
     assertEqual(hbD.councilHash, 1234567890, "Heartbeat: councilHash preserved")
     assertEqual(hbD.mldbHash, 9876543210, "Heartbeat: mldbHash preserved")
     assertNotNil(hbD.itemStates, "Heartbeat: itemStates table present")
-    assertEqual(hbD.itemStates["guid-a"], LOOTHING_ITEM_STATE.VOTING, "Heartbeat: itemStates[guid-a] correct")
-    assertEqual(hbD.itemStates["guid-b"], LOOTHING_ITEM_STATE.AWARDED, "Heartbeat: itemStates[guid-b] correct")
+    assertEqual(hbD.itemStates["guid-a"], Loothing.ItemState.VOTING, "Heartbeat: itemStates[guid-a] correct")
+    assertEqual(hbD.itemStates["guid-b"], Loothing.ItemState.AWARDED, "Heartbeat: itemStates[guid-b] correct")
 
     -- Verify heartbeat is compact (~100 bytes compressed is the target)
     print(string.format("  Heartbeat encoded size: %d bytes", #hbEncoded))
@@ -491,27 +493,27 @@ local function RunCommunicationTests()
     ----------------------------------------------------------------------]]
     printGroup("Backpressure (manual)")
 
-    if LoolibComm then
+    if Loolib.Comm then
         -- Save current queue state
-        local priorCount = LoolibComm:GetQueuedMessageCount()
+        local priorCount = Loolib.Comm:GetQueuedMessageCount()
 
         -- ALERT should always queue regardless of pressure
-        local alertQueued = LoolibComm:SendCommMessage(
-            LOOTHING_ADDON_PREFIX, "test", "PARTY", nil, "ALERT")
+        local alertQueued = Loolib.Comm:SendCommMessage(
+            Loothing.ADDON_PREFIX, "test", "PARTY", nil, "ALERT")
         assert(alertQueued ~= false, "ALERT queues even when pressure is high")
 
         -- Check IsQueueFull and GetQueuePressure exist and return valid types
-        local isFull     = LoolibComm:IsQueueFull()
-        local pressure   = LoolibComm:GetQueuePressure()
+        local isFull     = Loolib.Comm:IsQueueFull()
+        local pressure   = Loolib.Comm:GetQueuePressure()
         assert(type(isFull) == "boolean", "IsQueueFull returns boolean")
         assert(type(pressure) == "number", "GetQueuePressure returns number")
         assert(pressure >= 0.0 and pressure <= 1.0, "GetQueuePressure in [0.0, 1.0]")
 
         -- Restore queue state
-        LoolibComm:ClearSendQueue()
+        Loolib.Comm:ClearSendQueue()
         print("  Queue cleared after backpressure test")
     else
-        assert(true, "Backpressure: LoolibComm not available, skip")
+        assert(true, "Backpressure: Loolib.Comm not available, skip")
     end
 
     --[[--------------------------------------------------------------------

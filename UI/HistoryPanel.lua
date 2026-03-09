@@ -9,14 +9,14 @@ local Loolib = LibStub("Loolib")
     LoothingHistoryPanelMixin
 ----------------------------------------------------------------------]]
 
-LoothingHistoryPanelMixin = LoolibCreateFromMixins(LoolibCallbackRegistryMixin)
+LoothingHistoryPanelMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
 
 local HISTORY_PANEL_EVENTS = {}
 
 --- Initialize the history panel
 -- @param parent Frame - Parent frame
 function LoothingHistoryPanelMixin:Init(parent)
-    LoolibCallbackRegistryMixin.OnLoad(self)
+    Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(HISTORY_PANEL_EVENTS)
     self.parent = parent
     self.historyRows = {}
@@ -38,7 +38,7 @@ end
 
 --- Create UI elements
 function LoothingHistoryPanelMixin:CreateElements()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     -- Three-pane container (starts below filter bar)
     local container = CreateFrame("Frame", nil, self.frame)
@@ -80,7 +80,7 @@ end
 
 --- Create filter bar with response, class, instance, and date range filters
 function LoothingHistoryPanelMixin:CreateFilterBar()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     local filterBar = CreateFrame("Frame", nil, self.frame)
     filterBar:SetPoint("TOPLEFT", 8, -8)
@@ -182,7 +182,7 @@ function LoothingHistoryPanelMixin:ShowResponseFilterDropdown()
         end)
         rootDescription:CreateDivider()
 
-        for id, info in pairs(LOOTHING_RESPONSE_INFO) do
+        for id, info in pairs(Loothing.ResponseInfo) do
             rootDescription:CreateButton(info.name, function()
                 self:SetResponseFilter(id)
             end)
@@ -197,7 +197,7 @@ function LoothingHistoryPanelMixin:SetResponseFilter(responseId)
     filter.response = responseId
 
     if responseId then
-        local info = LOOTHING_RESPONSE_INFO[responseId]
+        local info = Loothing.ResponseInfo[responseId]
         self.responseFilterButton:SetText(info and info.name or "?")
     else
         self.responseFilterButton:SetText("Response")
@@ -258,7 +258,7 @@ function LoothingHistoryPanelMixin:CreateHistoryList()
     headerFrame:SetPoint("TOPRIGHT", -24, -4)
     headerFrame:SetHeight(20)
 
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     local dateHeader = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     dateHeader:SetPoint("LEFT")
@@ -321,7 +321,7 @@ end
 
 --- Create footer
 function LoothingHistoryPanelMixin:CreateFooter()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     local footer = CreateFrame("Frame", nil, self.frame)
     footer:SetPoint("BOTTOMLEFT", 8, 8)
@@ -730,8 +730,8 @@ function LoothingHistoryPanelMixin:SetupHistoryRow(row, entry, yOffset)
     end
 
     -- Response color bar
-    if entry.winnerResponse and LOOTHING_RESPONSE_INFO[entry.winnerResponse] then
-        local info = LOOTHING_RESPONSE_INFO[entry.winnerResponse]
+    if entry.winnerResponse and Loothing.ResponseInfo[entry.winnerResponse] then
+        local info = Loothing.ResponseInfo[entry.winnerResponse]
         row.colorBar:SetColorTexture(info.color.r, info.color.g, info.color.b, 1)
         row.colorBar:Show()
     else
@@ -751,15 +751,15 @@ function LoothingHistoryPanelMixin:SetupHistoryRow(row, entry, yOffset)
         GameTooltip:AddLine(" ")
 
         if entry.winner then
-            GameTooltip:AddLine(string.format(LOOTHING_LOCALE["AWARDED_TO"], entry.winner), 1, 0.82, 0)
+            GameTooltip:AddLine(string.format(Loothing.Locale["AWARDED_TO"], entry.winner), 1, 0.82, 0)
         end
 
         if entry.encounterName then
-            GameTooltip:AddLine(string.format(LOOTHING_LOCALE["FROM_ENCOUNTER"], entry.encounterName), 0.7, 0.7, 0.7)
+            GameTooltip:AddLine(string.format(Loothing.Locale["FROM_ENCOUNTER"], entry.encounterName), 0.7, 0.7, 0.7)
         end
 
         if entry.votes then
-            GameTooltip:AddLine(string.format(LOOTHING_LOCALE["WITH_VOTES"], entry.votes), 0.7, 0.7, 0.7)
+            GameTooltip:AddLine(string.format(Loothing.Locale["WITH_VOTES"], entry.votes), 0.7, 0.7, 0.7)
         end
 
         GameTooltip:Show()
@@ -788,7 +788,7 @@ end
 -- @param row Frame
 -- @param entry table
 function LoothingHistoryPanelMixin:ShowHistoryRowContextMenu(row, entry)
-    local L = LOOTHING_LOCALE or {}
+    local L = Loothing.Locale or {}
 
     MenuUtil.CreateContextMenu(row, function(ownerRegion, rootDescription)
         rootDescription:CreateTitle(entry.itemName or "Unknown")
@@ -845,9 +845,9 @@ function LoothingHistoryPanelMixin:UpdateCount()
     local displayed = self.displayedCount or 0
 
     if total == displayed then
-        self.countText:SetText(string.format(LOOTHING_LOCALE["ENTRIES_COUNT"], total))
+        self.countText:SetText(string.format(Loothing.Locale["ENTRIES_COUNT"], total))
     else
-        self.countText:SetText(string.format(LOOTHING_LOCALE["ENTRIES_FILTERED"], displayed, total))
+        self.countText:SetText(string.format(Loothing.Locale["ENTRIES_FILTERED"], displayed, total))
     end
 end
 
@@ -871,7 +871,7 @@ end
 function LoothingHistoryPanelMixin:ShowWinnerDropdown()
     if not Loothing.History then return end
 
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
     local winners = Loothing.History:GetUniqueWinners()
 
     MenuUtil.CreateContextMenu(self.winnerButton, function(ownerRegion, rootDescription)
@@ -893,7 +893,7 @@ end
 function LoothingHistoryPanelMixin:SetWinnerFilter(winner)
     if not Loothing.History then return end
 
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
     local filter = Loothing.History.filter or {}
     filter.winner = winner
 
@@ -912,7 +912,7 @@ end
 function LoothingHistoryPanelMixin:ClearFilters()
     if not Loothing.History then return end
 
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     -- Restore placeholder state on the search box
     self.filterBar._placeholderActive = true
@@ -941,7 +941,7 @@ end
 function LoothingHistoryPanelMixin:ShowExportDialog()
     if not Loothing.History then return end
 
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     -- Create export frame if it doesn't exist
     if not self.exportFrame then
@@ -1112,7 +1112,7 @@ end
 ----------------------------------------------------------------------]]
 
 function CreateLoothingHistoryPanel(parent)
-    local panel = LoolibCreateFromMixins(LoothingHistoryPanelMixin)
+    local panel = Loolib.CreateFromMixins(LoothingHistoryPanelMixin)
     panel:Init(parent)
     return panel
 end

@@ -9,7 +9,7 @@ local Loolib = LibStub("Loolib")
     LoothingMainFrameMixin
 ----------------------------------------------------------------------]]
 
-LoothingMainFrameMixin = LoolibCreateFromMixins(LoolibCallbackRegistryMixin)
+LoothingMainFrameMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
 
 local MAIN_FRAME_EVENTS = {
     "OnShow",
@@ -23,7 +23,7 @@ local TAB_HEIGHT = 32
 
 --- Initialize the main frame
 function LoothingMainFrameMixin:Init()
-    LoolibCallbackRegistryMixin.OnLoad(self)
+    Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(MAIN_FRAME_EVENTS)
 
     self.tabs = {}
@@ -65,7 +65,7 @@ function LoothingMainFrameMixin:CreateFrame()
     -- Version
     self.versionText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     self.versionText:SetPoint("LEFT", self.titleText, "RIGHT", 8, 0)
-    self.versionText:SetText("v" .. (LOOTHING_VERSION or "1.0.0"))
+    self.versionText:SetText("v" .. (Loothing.VERSION or "1.0.0"))
     self.versionText:SetTextColor(0.5, 0.5, 0.5)
 
     -- Close button
@@ -86,7 +86,7 @@ function LoothingMainFrameMixin:CreateFrame()
     end)
     self.settingsButton:SetScript("OnEnter", function(btn)
         GameTooltip:SetOwner(btn, "ANCHOR_TOP")
-        GameTooltip:SetText(LOOTHING_LOCALE["TAB_SETTINGS"])
+        GameTooltip:SetText(Loothing.Locale["TAB_SETTINGS"])
         GameTooltip:Show()
     end)
     self.settingsButton:SetScript("OnLeave", function()
@@ -140,7 +140,7 @@ end
 
 --- Create tab buttons
 function LoothingMainFrameMixin:CreateTabs()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     local tabDefs = {
         { id = "session", name = L["TAB_SESSION"] },
@@ -481,8 +481,8 @@ end
 
 --- Open the standalone settings dialog
 function LoothingMainFrameMixin:OpenSettings()
-    if LoolibConfig then
-        LoolibConfig:Open("Loothing")
+    if Loolib.Config then
+        Loolib.Config:Open("Loothing")
     end
 end
 
@@ -491,7 +491,7 @@ end
 ----------------------------------------------------------------------]]
 
 function CreateLoothingMainFrame()
-    local mainFrame = LoolibCreateFromMixins(LoothingMainFrameMixin)
+    local mainFrame = Loolib.CreateFromMixins(LoothingMainFrameMixin)
     mainFrame:Init()
     return mainFrame
 end

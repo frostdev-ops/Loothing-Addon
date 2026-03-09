@@ -17,7 +17,7 @@ local Loolib = LibStub("Loolib")
     LoothingRestrictionsMixin
 ----------------------------------------------------------------------]]
 
-LoothingRestrictionsMixin = LoolibCreateFromMixins(LoolibCallbackRegistryMixin)
+LoothingRestrictionsMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
 
 -- Bitmask positions
 local RESTRICTION_ENCOUNTER = 0x2       -- bit 1: encounter active
@@ -31,7 +31,7 @@ local RESTRICTION_EVENTS = {
 
 --- Initialize restriction handler
 function LoothingRestrictionsMixin:Init()
-    LoolibCallbackRegistryMixin.OnLoad(self)
+    Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(RESTRICTION_EVENTS)
 
     self.restrictions = 0               -- Current restriction bitmask
@@ -47,7 +47,7 @@ end
 ----------------------------------------------------------------------]]
 
 function LoothingRestrictionsMixin:RegisterEvents()
-    local Events = Loolib:GetModule("Events")
+    local Events = Loolib.Events
     if not Events or not Events.Registry then return end
 
     -- WoW fires this when addon restrictions change during encounters
@@ -161,7 +161,7 @@ end
 
 --- Queue a critical message for guaranteed delivery
 -- Called by LoothingCommMixin:SendGuaranteed() when restrictions are active
--- @param command string - LOOTHING_MSG_TYPE
+-- @param command string - Loothing.MsgType
 -- @param data table - Message payload
 -- @param target string|nil - Whisper target or nil for group
 -- @param priority string|nil - "ALERT", "NORMAL", or "BULK"
@@ -209,7 +209,7 @@ end
 ----------------------------------------------------------------------]]
 
 function CreateLoothingRestrictions()
-    local restrictions = LoolibCreateFromMixins(LoothingRestrictionsMixin)
+    local restrictions = Loolib.CreateFromMixins(LoothingRestrictionsMixin)
     restrictions:Init()
     return restrictions
 end

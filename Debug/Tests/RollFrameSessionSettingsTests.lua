@@ -234,14 +234,14 @@ TestRunner:Describe("RollFrame Session Buttons", function()
         -- Test SwitchToNextPendingItem logic
         -- Given: 3 items, item 1 awarded, items 2-3 pending
         local mockItems = {
-            { guid = "item1", state = LOOTHING_ITEM_STATE and LOOTHING_ITEM_STATE.AWARDED or 3 },
-            { guid = "item2", state = LOOTHING_ITEM_STATE and LOOTHING_ITEM_STATE.VOTING or 2 },
-            { guid = "item3", state = LOOTHING_ITEM_STATE and LOOTHING_ITEM_STATE.VOTING or 2 },
+            { guid = "item1", state = Loothing.ItemState and Loothing.ItemState.AWARDED or 3 },
+            { guid = "item2", state = Loothing.ItemState and Loothing.ItemState.VOTING or 2 },
+            { guid = "item3", state = Loothing.ItemState and Loothing.ItemState.VOTING or 2 },
         }
 
         local currentIndex = 1
         local nextPendingIndex = nil
-        local AWARDED_STATE = LOOTHING_ITEM_STATE and LOOTHING_ITEM_STATE.AWARDED or 3
+        local AWARDED_STATE = Loothing.ItemState and Loothing.ItemState.AWARDED or 3
 
         -- Find next pending from current+1 onwards
         for i = currentIndex + 1, #mockItems do
@@ -463,8 +463,8 @@ TestRunner:Describe("Session afterRolls Mode Debounce", function()
     end, { category = "unit" })
 
     TestRunner:It("should only prompt when session is inactive", function()
-        local INACTIVE = 0  -- LOOTHING_SESSION_STATE.INACTIVE
-        local ACTIVE = 1    -- LOOTHING_SESSION_STATE.ACTIVE
+        local INACTIVE = 0  -- Loothing.SessionState.INACTIVE
+        local ACTIVE = 1    -- Loothing.SessionState.ACTIVE
 
         local state = INACTIVE
         local shouldPrompt = state == INACTIVE
@@ -754,25 +754,25 @@ end)
 
 TestRunner:Describe("Constants Validation", function()
     TestRunner:It("LOOTHING_SESSION_TRIGGER should have all required values", function()
-        if LOOTHING_SESSION_TRIGGER then
-            Assert.NotNil(LOOTHING_SESSION_TRIGGER.MANUAL, "MANUAL should exist")
-            Assert.NotNil(LOOTHING_SESSION_TRIGGER.AUTO, "AUTO should exist")
-            Assert.NotNil(LOOTHING_SESSION_TRIGGER.PROMPT, "PROMPT should exist")
-            Assert.NotNil(LOOTHING_SESSION_TRIGGER.AFTER_ROLLS, "AFTER_ROLLS should exist")
+        if Loothing.SessionTrigger then
+            Assert.NotNil(Loothing.SessionTrigger.MANUAL, "MANUAL should exist")
+            Assert.NotNil(Loothing.SessionTrigger.AUTO, "AUTO should exist")
+            Assert.NotNil(Loothing.SessionTrigger.PROMPT, "PROMPT should exist")
+            Assert.NotNil(Loothing.SessionTrigger.AFTER_ROLLS, "AFTER_ROLLS should exist")
         end
     end, { category = "integration" })
 
     TestRunner:It("rollFrame defaults should include timeout settings", function()
-        if LOOTHING_DEFAULT_SETTINGS and LOOTHING_DEFAULT_SETTINGS.rollFrame then
-            local rf = LOOTHING_DEFAULT_SETTINGS.rollFrame
+        if Loothing.DefaultSettings and Loothing.DefaultSettings.rollFrame then
+            local rf = Loothing.DefaultSettings.rollFrame
             Assert.NotNil(rf.timeoutEnabled, "timeoutEnabled should be defined")
             Assert.NotNil(rf.timeoutDuration, "timeoutDuration should be defined")
         end
     end, { category = "integration" })
 
     TestRunner:It("settings defaults should include sessionTriggerMode", function()
-        if LOOTHING_DEFAULT_SETTINGS and LOOTHING_DEFAULT_SETTINGS.settings then
-            local s = LOOTHING_DEFAULT_SETTINGS.settings
+        if Loothing.DefaultSettings and Loothing.DefaultSettings.settings then
+            local s = Loothing.DefaultSettings.settings
             Assert.NotNil(s.sessionTriggerMode, "sessionTriggerMode should be defined")
             Assert.Equals("prompt", s.sessionTriggerMode, "Default should be prompt")
         end

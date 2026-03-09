@@ -3,12 +3,12 @@
     Locale - French (frFR) localization
 ----------------------------------------------------------------------]]
 
-local locale = (LOOTHING_FORCE_LOCALE or GetLocale())
+local locale = (Loothing.ForceLocale or GetLocale())
 if locale ~= "frFR" then
     return
 end
 
-local base = LOOTHING_LOCALE or {}
+local base = Loothing.Locale or {}
 local L = setmetatable({}, { __index = base })
 
 -- General
@@ -216,5 +216,5 @@ L["OBSERVER_SEE_NOTES_DESC"] = L["OBSERVER_SEE_NOTES_DESC"] or "Observers can se
 L["CONFIG_OBSERVER_REMOVE_ALL"] = L["CONFIG_OBSERVER_REMOVE_ALL"] or "Remove All Observers"
 L["CONFIG_OBSERVER_REMOVE_ALL_DESC"] = L["CONFIG_OBSERVER_REMOVE_ALL_DESC"] or "Remove all observers from the list"
 
-LOOTHING_LOCALE = L
+Loothing.Locale = L
 return L

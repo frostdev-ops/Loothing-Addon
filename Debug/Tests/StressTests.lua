@@ -3,6 +3,8 @@
     StressTests - Performance and stress tests
 ----------------------------------------------------------------------]]
 
+local Loolib = LibStub("Loolib")
+
 --[[--------------------------------------------------------------------
     Test Infrastructure
 ----------------------------------------------------------------------]]
@@ -230,8 +232,7 @@ end
 local function Test_DataProviderLargeSets()
     SetupTest()
 
-    local Loolib = LibStub("Loolib")
-    local Data = Loolib:GetModule("Data")
+    local Data = Loolib.Data
     local provider = Data.CreateDataProvider()
 
     local addMetrics = NewPerfMetrics("DataProvider Insert", StressTests.performanceThresholds.critical)
@@ -278,14 +279,14 @@ local function Test_FortyPlayerRaid()
     Loothing.Session:StartSession(0, "40-Player Raid")
 
     local item = LoothingTestMode:CreateFakeItem()
-    item:SetState(LOOTHING_ITEM_STATE.VOTING)
+    item:SetState(Loothing.ItemState.VOTING)
 
     local voteMetrics = NewPerfMetrics("Vote Processing (40 voters)", StressTests.performanceThresholds.acceptable)
 
     -- All 40 players vote
     for i = 2, #councilMembers do
         local member = councilMembers[i]
-        local responses = { LOOTHING_RESPONSE.NEED }
+        local responses = { Loothing.Response.NEED }
 
         local duration = Measure(function()
             item:AddVote(member.name, member.class, responses)
@@ -320,7 +321,7 @@ local function Test_RapidVotes()
 
     Loothing.Session:StartSession(0, "Rapid Test")
     local item = LoothingTestMode:CreateFakeItem()
-    item:SetState(LOOTHING_ITEM_STATE.VOTING)
+    item:SetState(Loothing.ItemState.VOTING)
 
     local metrics = NewPerfMetrics("Rapid Vote Processing", StressTests.performanceThresholds.critical)
 
@@ -330,7 +331,7 @@ local function Test_RapidVotes()
         local voterClass = "WARRIOR"
 
         local duration = Measure(function()
-            item:AddVote(voterName, voterClass, { LOOTHING_RESPONSE.NEED })
+            item:AddVote(voterName, voterClass, { Loothing.Response.NEED })
         end)
         RecordOp(metrics, duration)
     end
@@ -379,10 +380,10 @@ local function Test_RapidStateChanges()
         local item = LoothingTestMode:CreateFakeItem()
 
         local duration = Measure(function()
-            item:SetState(LOOTHING_ITEM_STATE.PENDING)
-            item:SetState(LOOTHING_ITEM_STATE.VOTING)
-            item:SetState(LOOTHING_ITEM_STATE.TALLIED)
-            item:SetState(LOOTHING_ITEM_STATE.AWARDED)
+            item:SetState(Loothing.ItemState.PENDING)
+            item:SetState(Loothing.ItemState.VOTING)
+            item:SetState(Loothing.ItemState.TALLIED)
+            item:SetState(Loothing.ItemState.AWARDED)
         end)
         RecordOp(metrics, duration)
     end
@@ -474,14 +475,14 @@ local function Test_VoteAccumulation()
     Loothing.Session:StartSession(0, "Vote Memory Test")
 
     local item = LoothingTestMode:CreateFakeItem()
-    item:SetState(LOOTHING_ITEM_STATE.VOTING)
+    item:SetState(Loothing.ItemState.VOTING)
 
     local startMemory = collectgarbage("count")
 
     -- Add 500 votes
     for i = 1, 500 do
         local voterName = string.format("Voter%d-Realm", i)
-        item:AddVote(voterName, "WARRIOR", { LOOTHING_RESPONSE.NEED })
+        item:AddVote(voterName, "WARRIOR", { Loothing.Response.NEED })
     end
 
     local endMemory = collectgarbage("count")
@@ -516,14 +517,14 @@ local function Test_MessageEncodeDecode()
         local data = {
             sessionID = i,
             itemGUID = "Item-" .. i,
-            response = LOOTHING_RESPONSE.NEED,
+            response = Loothing.Response.NEED,
             timestamp = GetTime(),
         }
 
         -- Encode (Serialize → Compress → EncodeForAddonChannel)
         local encoded
         local encodeDuration = Measure(function()
-            encoded = LoothingProtocol:Encode(LOOTHING_MSG_TYPE.VOTE_COMMIT, data)
+            encoded = LoothingProtocol:Encode(Loothing.MsgType.VOTE_COMMIT, data)
         end)
         RecordOp(encodeMetrics, encodeDuration)
 
@@ -565,7 +566,7 @@ local function Test_LargePayload()
         largeData.items[i] = {
             guid = "Item-" .. i,
             link = string.format("|cffa335ee|Hitem:%d|h[Item %d]|h|r", 19019 + i, i),
-            state = LOOTHING_ITEM_STATE.AWARDED,
+            state = Loothing.ItemState.AWARDED,
             votes = {},
         }
     end
@@ -573,7 +574,7 @@ local function Test_LargePayload()
     local metrics = NewPerfMetrics("Large Payload Encoding", StressTests.performanceThresholds.acceptable)
 
     local duration = Measure(function()
-        local encoded = LoothingProtocol:Encode(LOOTHING_MSG_TYPE.SYNC_DATA, largeData)
+        local encoded = LoothingProtocol:Encode(Loothing.MsgType.SYNC_DATA, largeData)
     end)
     RecordOp(metrics, duration)
 
@@ -607,7 +608,7 @@ local function Test_ThousandHistoryEntries()
             encounterName = "Test Boss",
             itemLink = string.format("|cffa335ee|Hitem:%d|h[Item %d]|h|r", 19019, i),
             winner = string.format("Player%d-Realm", i),
-            response = LOOTHING_RESPONSE.NEED,
+            response = Loothing.Response.NEED,
         }
 
         local duration = Measure(function()
@@ -712,7 +713,7 @@ local function Test_ResultsPanelFortyVoters()
 
     Loothing.Session:StartSession(0, "Results Stress Test")
     local item = LoothingTestMode:CreateFakeItem()
-    item:SetState(LOOTHING_ITEM_STATE.VOTING)
+    item:SetState(Loothing.ItemState.VOTING)
 
     -- Populate candidateManager so ResultsPanel can display candidates
     LoothingTestMode:AddFakeCandidatesToItem(item)
@@ -727,7 +728,7 @@ local function Test_ResultsPanelFortyVoters()
     local councilMembers = LoothingTestMode:GetFakeCouncilMembers()
     for i = 2, #councilMembers do
         local member = councilMembers[i]
-        item:AddVote(member.name, member.class, { LOOTHING_RESPONSE.NEED })
+        item:AddVote(member.name, member.class, { Loothing.Response.NEED })
     end
 
     local results = item:TallyVotes()

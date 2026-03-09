@@ -7,7 +7,7 @@
 Loothing = Loothing or {}
 Loothing.Options = Loothing.Options or {}
 
-local L = LOOTHING_LOCALE
+local L = Loothing.Locale
 
 -- Resolve an options getter by name, returning the group table or nil
 local function resolveOptions(name)

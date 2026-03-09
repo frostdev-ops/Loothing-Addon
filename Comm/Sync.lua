@@ -12,7 +12,7 @@ local Loolib = LibStub("Loolib")
     LoothingSyncMixin
 ----------------------------------------------------------------------]]
 
-LoothingSyncMixin = LoolibCreateFromMixins(LoolibCallbackRegistryMixin)
+LoothingSyncMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
 
 local SYNC_EVENTS = {
     "OnSyncComplete",
@@ -22,7 +22,7 @@ local SYNC_EVENTS = {
 
 --- Initialize sync handler
 function LoothingSyncMixin:Init()
-    LoolibCallbackRegistryMixin.OnLoad(self)
+    Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(SYNC_EVENTS)
 
     self.syncInProgress = false
@@ -97,7 +97,7 @@ function LoothingSyncMixin:RequestSync(masterLooter, retryCount)
     Loothing.Comm:RequestSync(masterLooter)
 
     -- Set timeout with retry on expiry
-    self.syncTimeout = C_Timer.NewTimer(LOOTHING_TIMING.SYNC_TIMEOUT, function()
+    self.syncTimeout = C_Timer.NewTimer(Loothing.Timing.SYNC_TIMEOUT, function()
         if self.syncInProgress then
             Loothing:Debug("Sync timeout, retry", retryCount + 1, "of", MAX_RETRIES,
                 "from", masterLooter)
@@ -183,7 +183,7 @@ function LoothingSyncMixin:ApplySyncData(data)
     if not Loothing.Session then return end
 
     -- Check if there's an active session
-    if data.state == LOOTHING_SESSION_STATE.INACTIVE then
+    if data.state == Loothing.SessionState.INACTIVE then
         -- If the local client still has an active session, clean it up
         if Loothing.Session:IsActive() then
             Loothing:Debug("Sync reports INACTIVE but local session is active, ending stale session")
@@ -232,12 +232,12 @@ end
 function LoothingSyncMixin:GatherSyncData()
     local session = Loothing.Session
 
-    if not session or session:GetState() == LOOTHING_SESSION_STATE.INACTIVE then
+    if not session or session:GetState() == Loothing.SessionState.INACTIVE then
         return {
             sessionID = "",
             encounterID = 0,
             encounterName = "",
-            state = LOOTHING_SESSION_STATE.INACTIVE,
+            state = Loothing.SessionState.INACTIVE,
             items = {},
         }
     end
@@ -340,7 +340,7 @@ function LoothingSyncMixin:CheckNeedSync()
     if Loothing.handleLoot then return end
 
     -- Don't sync if already have a session
-    if Loothing.Session and Loothing.Session:GetState() ~= LOOTHING_SESSION_STATE.INACTIVE then
+    if Loothing.Session and Loothing.Session:GetState() ~= Loothing.SessionState.INACTIVE then
         return
     end
 
@@ -374,7 +374,7 @@ function LoothingSyncMixin:BroadcastObserverRoster()
         openObservation = Loothing.Settings and Loothing.Settings:GetOpenObservation() or false,
         mlIsObserver = Loothing.Settings and Loothing.Settings:GetMLIsObserver() or false,
     }
-    Loothing.Comm:Send(LOOTHING_MSG_TYPE.OBSERVER_ROSTER, data)
+    Loothing.Comm:Send(Loothing.MsgType.OBSERVER_ROSTER, data)
 end
 
 --- Handle received observer roster (non-ML players)
@@ -709,7 +709,7 @@ end
 ----------------------------------------------------------------------]]
 
 function CreateLoothingSync()
-    local sync = LoolibCreateFromMixins(LoothingSyncMixin)
+    local sync = Loolib.CreateFromMixins(LoothingSyncMixin)
     sync:Init()
     return sync
 end

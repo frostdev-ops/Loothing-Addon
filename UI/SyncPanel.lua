@@ -4,13 +4,13 @@
 ----------------------------------------------------------------------]]
 
 local Loolib = LibStub("Loolib")
-local L = LOOTHING_LOCALE
+local L = Loothing.Locale
 
 --[[--------------------------------------------------------------------
     LoothingSyncPanelMixin
 ----------------------------------------------------------------------]]
 
-LoothingSyncPanelMixin = LoolibCreateFromMixins(LoolibCallbackRegistryMixin)
+LoothingSyncPanelMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
 
 local SYNC_EVENTS = {
     "OnSyncStarted",
@@ -23,7 +23,7 @@ local PANEL_HEIGHT = 280
 
 --- Initialize the sync panel
 function LoothingSyncPanelMixin:Init()
-    LoolibCallbackRegistryMixin.OnLoad(self)
+    Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(SYNC_EVENTS)
 
     self.syncType = "settings"  -- "settings" or "history"
@@ -266,7 +266,7 @@ end
 function LoothingSyncPanelMixin:GetOnlineMembers()
     local members = {}
     local seen = {}
-    local playerName = LoolibSecretUtil.SafeUnitName("player")
+    local playerName = Loolib.SecretUtil.SafeUnitName("player")
 
     -- Check raid/party
     local roster = LoothingUtils.GetRaidRoster()
@@ -281,7 +281,7 @@ function LoothingSyncPanelMixin:GetOnlineMembers()
     if IsInGuild() then
         local numGuild = GetNumGuildMembers()
         for i = 1, numGuild do
-            local name, _, _, _, _, _, _, _, online = GetGuildRosterInfo(i)
+            local name, _, _, _, _, _, _, _, online = Loothing.GetGuildRosterInfo(i)
             if online and name and not seen[name] then
                 -- Strip realm from guild roster names
                 local shortName = Ambiguate(name, "short")
@@ -381,7 +381,7 @@ end
 ----------------------------------------------------------------------]]
 
 function CreateLoothingSyncPanel()
-    local panel = LoolibCreateFromMixins(LoothingSyncPanelMixin)
+    local panel = Loolib.CreateFromMixins(LoothingSyncPanelMixin)
     panel:Init()
     return panel
 end

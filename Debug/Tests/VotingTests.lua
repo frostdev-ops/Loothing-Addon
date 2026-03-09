@@ -3,6 +3,8 @@
     Comprehensive test suite for voting mechanics and tallying
 ----------------------------------------------------------------------]]
 
+local Loolib = LibStub("Loolib")
+
 --[[--------------------------------------------------------------------
     Test Framework Setup
 ----------------------------------------------------------------------]]
@@ -112,8 +114,7 @@ local function CreateVoteArray(votes)
 end
 
 local function CreateVoteDataProvider(votes)
-    local Loolib = LibStub("Loolib")
-    local Data = Loolib:GetModule("Data")
+    local Data = Loolib.Data
     local provider = Data.CreateDataProvider()
 
     for _, vote in ipairs(votes) do
@@ -130,76 +131,76 @@ end
 Describe("Simple Voting - Basic Operations", function()
     It("Single vote counted correctly", function()
         local votes = CreateVoteArray({
-            { "Player1", "WARRIOR", { LOOTHING_RESPONSE.NEED } }
+            { "Player1", "WARRIOR", { Loothing.Response.NEED } }
         })
 
         local results = LoothingVotingEngine:TallySimple(votes)
 
         AssertNotNil(results, "Results should not be nil")
-        AssertEquals(results.winningResponse, LOOTHING_RESPONSE.NEED, "NEED should win")
-        AssertEquals(results.counts[LOOTHING_RESPONSE.NEED].count, 1, "NEED should have 1 vote")
+        AssertEquals(results.winningResponse, Loothing.Response.NEED, "NEED should win")
+        AssertEquals(results.counts[Loothing.Response.NEED].count, 1, "NEED should have 1 vote")
         AssertEquals(results.totalVotes, 1, "Total votes should be 1")
     end)
 
     It("Multiple votes accumulated", function()
         local votes = CreateVoteArray({
-            { "Player1", "WARRIOR", { LOOTHING_RESPONSE.NEED } },
-            { "Player2", "MAGE", { LOOTHING_RESPONSE.NEED } },
-            { "Player3", "PRIEST", { LOOTHING_RESPONSE.GREED } }
+            { "Player1", "WARRIOR", { Loothing.Response.NEED } },
+            { "Player2", "MAGE", { Loothing.Response.NEED } },
+            { "Player3", "PRIEST", { Loothing.Response.GREED } }
         })
 
         local results = LoothingVotingEngine:TallySimple(votes)
 
-        AssertEquals(results.counts[LOOTHING_RESPONSE.NEED].count, 2, "NEED should have 2 votes")
-        AssertEquals(results.counts[LOOTHING_RESPONSE.GREED].count, 1, "GREED should have 1 vote")
+        AssertEquals(results.counts[Loothing.Response.NEED].count, 2, "NEED should have 2 votes")
+        AssertEquals(results.counts[Loothing.Response.GREED].count, 1, "GREED should have 1 vote")
         AssertEquals(results.totalVotes, 3, "Total votes should be 3")
     end)
 
     It("Vote counts match response distribution", function()
         local votes = CreateVoteArray({
-            { "P1", "WARRIOR", { LOOTHING_RESPONSE.NEED } },
-            { "P2", "WARRIOR", { LOOTHING_RESPONSE.NEED } },
-            { "P3", "MAGE", { LOOTHING_RESPONSE.GREED } },
-            { "P4", "PRIEST", { LOOTHING_RESPONSE.OFFSPEC } },
-            { "P5", "ROGUE", { LOOTHING_RESPONSE.PASS } }
+            { "P1", "WARRIOR", { Loothing.Response.NEED } },
+            { "P2", "WARRIOR", { Loothing.Response.NEED } },
+            { "P3", "MAGE", { Loothing.Response.GREED } },
+            { "P4", "PRIEST", { Loothing.Response.OFFSPEC } },
+            { "P5", "ROGUE", { Loothing.Response.PASS } }
         })
 
         local results = LoothingVotingEngine:TallySimple(votes)
 
-        AssertEquals(results.counts[LOOTHING_RESPONSE.NEED].count, 2, "NEED count")
-        AssertEquals(results.counts[LOOTHING_RESPONSE.GREED].count, 1, "GREED count")
-        AssertEquals(results.counts[LOOTHING_RESPONSE.OFFSPEC].count, 1, "OFFSPEC count")
-        AssertEquals(results.counts[LOOTHING_RESPONSE.PASS].count, 1, "PASS count")
+        AssertEquals(results.counts[Loothing.Response.NEED].count, 2, "NEED count")
+        AssertEquals(results.counts[Loothing.Response.GREED].count, 1, "GREED count")
+        AssertEquals(results.counts[Loothing.Response.OFFSPEC].count, 1, "OFFSPEC count")
+        AssertEquals(results.counts[Loothing.Response.PASS].count, 1, "PASS count")
         AssertEquals(results.totalVotes, 5, "Total votes")
     end)
 
     It("Highest vote wins", function()
         local votes = CreateVoteArray({
-            { "P1", "WARRIOR", { LOOTHING_RESPONSE.GREED } },
-            { "P2", "MAGE", { LOOTHING_RESPONSE.NEED } },
-            { "P3", "PRIEST", { LOOTHING_RESPONSE.NEED } },
-            { "P4", "ROGUE", { LOOTHING_RESPONSE.NEED } }
+            { "P1", "WARRIOR", { Loothing.Response.GREED } },
+            { "P2", "MAGE", { Loothing.Response.NEED } },
+            { "P3", "PRIEST", { Loothing.Response.NEED } },
+            { "P4", "ROGUE", { Loothing.Response.NEED } }
         })
 
         local results = LoothingVotingEngine:TallySimple(votes)
 
-        AssertEquals(results.winningResponse, LOOTHING_RESPONSE.NEED, "NEED should win with 3 votes")
-        AssertEquals(results.counts[LOOTHING_RESPONSE.NEED].count, 3, "NEED vote count")
+        AssertEquals(results.winningResponse, Loothing.Response.NEED, "NEED should win with 3 votes")
+        AssertEquals(results.counts[Loothing.Response.NEED].count, 3, "NEED vote count")
     end)
 
     It("Voters list is tracked", function()
         local votes = CreateVoteArray({
-            { "Alice", "WARRIOR", { LOOTHING_RESPONSE.NEED } },
-            { "Bob", "MAGE", { LOOTHING_RESPONSE.NEED } }
+            { "Alice", "WARRIOR", { Loothing.Response.NEED } },
+            { "Bob", "MAGE", { Loothing.Response.NEED } }
         })
 
         local results = LoothingVotingEngine:TallySimple(votes)
 
-        AssertEquals(#results.counts[LOOTHING_RESPONSE.NEED].voters, 2, "NEED should have 2 voters")
+        AssertEquals(#results.counts[Loothing.Response.NEED].voters, 2, "NEED should have 2 voters")
 
         local hasAlice = false
         local hasBob = false
-        for _, voter in ipairs(results.counts[LOOTHING_RESPONSE.NEED].voters) do
+        for _, voter in ipairs(results.counts[Loothing.Response.NEED].voters) do
             if voter == "Alice" then hasAlice = true end
             if voter == "Bob" then hasBob = true end
         end
@@ -308,8 +309,8 @@ end)
 Describe("Tie Breaking", function()
     It("Tie detected correctly in simple voting", function()
         local votes = CreateVoteArray({
-            { "P1", "WARRIOR", { LOOTHING_RESPONSE.NEED } },
-            { "P2", "MAGE", { LOOTHING_RESPONSE.GREED } }
+            { "P1", "WARRIOR", { Loothing.Response.NEED } },
+            { "P2", "MAGE", { Loothing.Response.GREED } }
         })
 
         local results = LoothingVotingEngine:TallySimple(votes)
@@ -371,9 +372,9 @@ Describe("Tie Breaking", function()
 
     It("No tie when clear winner", function()
         local votes = CreateVoteArray({
-            { "P1", "WARRIOR", { LOOTHING_RESPONSE.NEED } },
-            { "P2", "MAGE", { LOOTHING_RESPONSE.NEED } },
-            { "P3", "PRIEST", { LOOTHING_RESPONSE.GREED } }
+            { "P1", "WARRIOR", { Loothing.Response.NEED } },
+            { "P2", "MAGE", { Loothing.Response.NEED } },
+            { "P3", "PRIEST", { Loothing.Response.GREED } }
         })
 
         local results = LoothingVotingEngine:TallySimple(votes)
@@ -390,7 +391,7 @@ end)
 Describe("Vote Tallying - Results Structure", function()
     It("TallySimple returns correct structure", function()
         local votes = CreateVoteArray({
-            { "P1", "WARRIOR", { LOOTHING_RESPONSE.NEED } }
+            { "P1", "WARRIOR", { Loothing.Response.NEED } }
         })
 
         local results = LoothingVotingEngine:TallySimple(votes)
@@ -423,23 +424,23 @@ Describe("Vote Tallying - Results Structure", function()
 
     It("GetVotePercentages calculates correctly", function()
         local votes = CreateVoteArray({
-            { "P1", "WARRIOR", { LOOTHING_RESPONSE.NEED } },
-            { "P2", "MAGE", { LOOTHING_RESPONSE.NEED } },
-            { "P3", "PRIEST", { LOOTHING_RESPONSE.GREED } },
-            { "P4", "ROGUE", { LOOTHING_RESPONSE.PASS } }
+            { "P1", "WARRIOR", { Loothing.Response.NEED } },
+            { "P2", "MAGE", { Loothing.Response.NEED } },
+            { "P3", "PRIEST", { Loothing.Response.GREED } },
+            { "P4", "ROGUE", { Loothing.Response.PASS } }
         })
 
         local percentages = LoothingVotingEngine:GetVotePercentages(votes)
 
-        AssertEquals(percentages[LOOTHING_RESPONSE.NEED], 50, "NEED should be 50%")
-        AssertEquals(percentages[LOOTHING_RESPONSE.GREED], 25, "GREED should be 25%")
-        AssertEquals(percentages[LOOTHING_RESPONSE.PASS], 25, "PASS should be 25%")
+        AssertEquals(percentages[Loothing.Response.NEED], 50, "NEED should be 50%")
+        AssertEquals(percentages[Loothing.Response.GREED], 25, "GREED should be 25%")
+        AssertEquals(percentages[Loothing.Response.PASS], 25, "PASS should be 25%")
     end)
 
     It("GetResponseSummary formats correctly", function()
         local votes = CreateVoteArray({
-            { "P1", "WARRIOR", { LOOTHING_RESPONSE.NEED } },
-            { "P2", "MAGE", { LOOTHING_RESPONSE.GREED } }
+            { "P1", "WARRIOR", { Loothing.Response.NEED } },
+            { "P2", "MAGE", { Loothing.Response.GREED } }
         })
 
         local summary = LoothingVotingEngine:GetResponseSummary(votes)
@@ -457,36 +458,36 @@ Describe("Vote Tallying - Results Structure", function()
 
     It("GroupVotersByResponse groups correctly", function()
         local votes = CreateVoteArray({
-            { "Alice", "WARRIOR", { LOOTHING_RESPONSE.NEED } },
-            { "Bob", "MAGE", { LOOTHING_RESPONSE.NEED } },
-            { "Charlie", "PRIEST", { LOOTHING_RESPONSE.GREED } }
+            { "Alice", "WARRIOR", { Loothing.Response.NEED } },
+            { "Bob", "MAGE", { Loothing.Response.NEED } },
+            { "Charlie", "PRIEST", { Loothing.Response.GREED } }
         })
 
         local groups = LoothingVotingEngine:GroupVotersByResponse(votes)
 
-        AssertEquals(#groups[LOOTHING_RESPONSE.NEED], 2, "NEED should have 2 voters")
-        AssertEquals(#groups[LOOTHING_RESPONSE.GREED], 1, "GREED should have 1 voter")
+        AssertEquals(#groups[Loothing.Response.NEED], 2, "NEED should have 2 voters")
+        AssertEquals(#groups[Loothing.Response.GREED], 1, "GREED should have 1 voter")
     end)
 
     It("HasClearWinner detects clear winner", function()
         local votes = CreateVoteArray({
-            { "P1", "WARRIOR", { LOOTHING_RESPONSE.NEED } },
-            { "P2", "MAGE", { LOOTHING_RESPONSE.NEED } },
-            { "P3", "PRIEST", { LOOTHING_RESPONSE.NEED } },
-            { "P4", "ROGUE", { LOOTHING_RESPONSE.GREED } }
+            { "P1", "WARRIOR", { Loothing.Response.NEED } },
+            { "P2", "MAGE", { Loothing.Response.NEED } },
+            { "P3", "PRIEST", { Loothing.Response.NEED } },
+            { "P4", "ROGUE", { Loothing.Response.GREED } }
         })
 
         local hasClear, winner = LoothingVotingEngine:HasClearWinner(votes, 50)
 
         AssertTrue(hasClear, "Should have clear winner at 50% threshold")
-        AssertEquals(winner, LOOTHING_RESPONSE.NEED, "NEED should be the winner")
+        AssertEquals(winner, Loothing.Response.NEED, "NEED should be the winner")
     end)
 
     It("HasClearWinner fails without majority", function()
         local votes = CreateVoteArray({
-            { "P1", "WARRIOR", { LOOTHING_RESPONSE.NEED } },
-            { "P2", "MAGE", { LOOTHING_RESPONSE.GREED } },
-            { "P3", "PRIEST", { LOOTHING_RESPONSE.OFFSPEC } }
+            { "P1", "WARRIOR", { Loothing.Response.NEED } },
+            { "P2", "MAGE", { Loothing.Response.GREED } },
+            { "P3", "PRIEST", { Loothing.Response.OFFSPEC } }
         })
 
         local hasClear, winner = LoothingVotingEngine:HasClearWinner(votes, 50)
@@ -521,41 +522,41 @@ Describe("Edge Cases", function()
 
     It("Single voter", function()
         local votes = CreateVoteArray({
-            { "OnlyVoter", "WARRIOR", { LOOTHING_RESPONSE.NEED } }
+            { "OnlyVoter", "WARRIOR", { Loothing.Response.NEED } }
         })
 
         local results = LoothingVotingEngine:TallySimple(votes)
 
         AssertEquals(results.totalVotes, 1, "Should have 1 vote")
-        AssertEquals(results.winningResponse, LOOTHING_RESPONSE.NEED, "Single vote should win")
+        AssertEquals(results.winningResponse, Loothing.Response.NEED, "Single vote should win")
         AssertFalse(results.isTie, "Single vote is not a tie")
     end)
 
     It("All same response", function()
         local votes = CreateVoteArray({
-            { "P1", "WARRIOR", { LOOTHING_RESPONSE.NEED } },
-            { "P2", "MAGE", { LOOTHING_RESPONSE.NEED } },
-            { "P3", "PRIEST", { LOOTHING_RESPONSE.NEED } }
+            { "P1", "WARRIOR", { Loothing.Response.NEED } },
+            { "P2", "MAGE", { Loothing.Response.NEED } },
+            { "P3", "PRIEST", { Loothing.Response.NEED } }
         })
 
         local results = LoothingVotingEngine:TallySimple(votes)
 
-        AssertEquals(results.winningResponse, LOOTHING_RESPONSE.NEED, "NEED should win")
-        AssertEquals(results.counts[LOOTHING_RESPONSE.NEED].count, 3, "NEED should have all votes")
+        AssertEquals(results.winningResponse, Loothing.Response.NEED, "NEED should win")
+        AssertEquals(results.counts[Loothing.Response.NEED].count, 3, "NEED should have all votes")
         AssertFalse(results.isTie, "Unanimous vote is not a tie")
     end)
 
     It("All pass votes", function()
         local votes = CreateVoteArray({
-            { "P1", "WARRIOR", { LOOTHING_RESPONSE.PASS } },
-            { "P2", "MAGE", { LOOTHING_RESPONSE.PASS } },
-            { "P3", "PRIEST", { LOOTHING_RESPONSE.PASS } }
+            { "P1", "WARRIOR", { Loothing.Response.PASS } },
+            { "P2", "MAGE", { Loothing.Response.PASS } },
+            { "P3", "PRIEST", { Loothing.Response.PASS } }
         })
 
         local results = LoothingVotingEngine:TallySimple(votes)
 
-        AssertEquals(results.winningResponse, LOOTHING_RESPONSE.PASS, "PASS should win")
-        AssertEquals(results.counts[LOOTHING_RESPONSE.PASS].count, 3, "All should be PASS")
+        AssertEquals(results.winningResponse, Loothing.Response.PASS, "PASS should win")
+        AssertEquals(results.counts[Loothing.Response.PASS].count, 3, "All should be PASS")
     end)
 
     It("Empty responses array", function()
@@ -571,8 +572,8 @@ Describe("Edge Cases", function()
 
     It("DataProvider input works same as array", function()
         local votesArray = CreateVoteArray({
-            { "P1", "WARRIOR", { LOOTHING_RESPONSE.NEED } },
-            { "P2", "MAGE", { LOOTHING_RESPONSE.GREED } }
+            { "P1", "WARRIOR", { Loothing.Response.NEED } },
+            { "P2", "MAGE", { Loothing.Response.GREED } }
         })
 
         local votesProvider = CreateVoteDataProvider(votesArray)
@@ -586,8 +587,8 @@ Describe("Edge Cases", function()
 
     It("CountVotes handles both DataProvider and array", function()
         local votesArray = CreateVoteArray({
-            { "P1", "WARRIOR", { LOOTHING_RESPONSE.NEED } },
-            { "P2", "MAGE", { LOOTHING_RESPONSE.GREED } }
+            { "P1", "WARRIOR", { Loothing.Response.NEED } },
+            { "P2", "MAGE", { Loothing.Response.GREED } }
         })
 
         local votesProvider = CreateVoteDataProvider(votesArray)
@@ -648,18 +649,18 @@ Describe("Integration with Item System", function()
 
         item:StartVoting(30)
 
-        AssertTrue(item:AddVote("Voter1", "WARRIOR", { LOOTHING_RESPONSE.NEED }), "Should add vote")
+        AssertTrue(item:AddVote("Voter1", "WARRIOR", { Loothing.Response.NEED }), "Should add vote")
         AssertEquals(item:GetVoteCount(), 1, "Should have 1 vote")
 
         local vote = item:GetVoteByVoter("Voter1")
         AssertNotNil(vote, "Should retrieve vote by voter")
-        AssertEquals(vote.responses[1], LOOTHING_RESPONSE.NEED, "Vote response should match")
+        AssertEquals(vote.responses[1], Loothing.Response.NEED, "Vote response should match")
     end)
 
     It("Cannot add vote when not in VOTING state", function()
         local item = CreateLoothingItem("|cffa335ee|Hitem:212398::::::::80::::::::::|h[Epic Sword]|h|r", "Looter", 123)
 
-        local added = item:AddVote("Voter1", "WARRIOR", { LOOTHING_RESPONSE.NEED })
+        local added = item:AddVote("Voter1", "WARRIOR", { Loothing.Response.NEED })
 
         AssertFalse(added, "Should not add vote when not voting")
         AssertEquals(item:GetVoteCount(), 0, "Should have 0 votes")
@@ -669,25 +670,25 @@ Describe("Integration with Item System", function()
         local item = CreateLoothingItem("|cffa335ee|Hitem:212398::::::::80::::::::::|h[Epic Sword]|h|r", "Looter", 123)
 
         item:StartVoting(30)
-        item:AddVote("Voter1", "WARRIOR", { LOOTHING_RESPONSE.NEED })
-        item:AddVote("Voter1", "WARRIOR", { LOOTHING_RESPONSE.GREED })
+        item:AddVote("Voter1", "WARRIOR", { Loothing.Response.NEED })
+        item:AddVote("Voter1", "WARRIOR", { Loothing.Response.GREED })
 
         AssertEquals(item:GetVoteCount(), 1, "Should still have 1 vote")
 
         local vote = item:GetVoteByVoter("Voter1")
-        AssertEquals(vote.responses[1], LOOTHING_RESPONSE.GREED, "Vote should be updated to GREED")
+        AssertEquals(vote.responses[1], Loothing.Response.GREED, "Vote should be updated to GREED")
     end)
 
     It("GetVotesByResponse filters correctly", function()
         local item = CreateLoothingItem("|cffa335ee|Hitem:212398::::::::80::::::::::|h[Epic Sword]|h|r", "Looter", 123)
 
         item:StartVoting(30)
-        item:AddVote("V1", "WARRIOR", { LOOTHING_RESPONSE.NEED })
-        item:AddVote("V2", "MAGE", { LOOTHING_RESPONSE.NEED })
-        item:AddVote("V3", "PRIEST", { LOOTHING_RESPONSE.GREED })
+        item:AddVote("V1", "WARRIOR", { Loothing.Response.NEED })
+        item:AddVote("V2", "MAGE", { Loothing.Response.NEED })
+        item:AddVote("V3", "PRIEST", { Loothing.Response.GREED })
 
-        local needVotes = item:GetVotesByResponse(LOOTHING_RESPONSE.NEED)
-        local greedVotes = item:GetVotesByResponse(LOOTHING_RESPONSE.GREED)
+        local needVotes = item:GetVotesByResponse(Loothing.Response.NEED)
+        local greedVotes = item:GetVotesByResponse(Loothing.Response.GREED)
 
         AssertEquals(#needVotes, 2, "Should have 2 NEED votes")
         AssertEquals(#greedVotes, 1, "Should have 1 GREED vote")
@@ -697,21 +698,21 @@ Describe("Integration with Item System", function()
         local item = CreateLoothingItem("|cffa335ee|Hitem:212398::::::::80::::::::::|h[Epic Sword]|h|r", "Looter", 123)
 
         item:StartVoting(30)
-        item:AddVote("V1", "WARRIOR", { LOOTHING_RESPONSE.NEED })
-        item:AddVote("V2", "MAGE", { LOOTHING_RESPONSE.NEED })
-        item:AddVote("V3", "PRIEST", { LOOTHING_RESPONSE.GREED })
+        item:AddVote("V1", "WARRIOR", { Loothing.Response.NEED })
+        item:AddVote("V2", "MAGE", { Loothing.Response.NEED })
+        item:AddVote("V3", "PRIEST", { Loothing.Response.GREED })
 
         local results = LoothingVotingEngine:Tally(item:GetVotes())
 
         AssertNotNil(results, "Should have tally results")
-        AssertEquals(results.winningResponse, LOOTHING_RESPONSE.NEED, "NEED should win")
+        AssertEquals(results.winningResponse, Loothing.Response.NEED, "NEED should win")
     end)
 
     It("RemoveVote removes from item", function()
         local item = CreateLoothingItem("|cffa335ee|Hitem:212398::::::::80::::::::::|h[Epic Sword]|h|r", "Looter", 123)
 
         item:StartVoting(30)
-        item:AddVote("Voter1", "WARRIOR", { LOOTHING_RESPONSE.NEED })
+        item:AddVote("Voter1", "WARRIOR", { Loothing.Response.NEED })
 
         AssertEquals(item:GetVoteCount(), 1, "Should have 1 vote")
 

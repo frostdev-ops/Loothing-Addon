@@ -15,7 +15,7 @@ local Loolib = LibStub("Loolib")
 
 LoothingWhisperHandlerMixin = {}
 
-local L = LOOTHING_LOCALE
+local L = Loothing.Locale
 
 -- Frame used to listen for CHAT_MSG_WHISPER
 local whisperFrame = nil
@@ -129,7 +129,7 @@ function LoothingWhisperHandlerMixin:OnWhisperReceived(message, sender)
     end
 
     -- Check for active session
-    if not Loothing.Session or Loothing.Session:GetState() == LOOTHING_SESSION_STATE.INACTIVE then
+    if not Loothing.Session or Loothing.Session:GetState() == Loothing.SessionState.INACTIVE then
         self:SendWhisper(normalizedSender, L["WHISPER_NO_SESSION"])
         return
     end
@@ -194,7 +194,7 @@ end
 --- Match a command string to a response button
 -- Checks: button whisperKeys, button text (lowered), button sort index ("!1", "!2", etc.)
 -- @param command string - Lowercased command
--- @return number|nil responseID - LOOTHING_RESPONSE value or button ID
+-- @return number|nil responseID - Loothing.Response value or button ID
 -- @return string|nil responseName - Display name
 function LoothingWhisperHandlerMixin:MatchCommand(command)
     -- Get the active button set
@@ -237,7 +237,7 @@ function LoothingWhisperHandlerMixin:MatchCommand(command)
     end
 
     -- Also check built-in response names
-    for id, info in pairs(LOOTHING_RESPONSE_INFO) do
+    for id, info in pairs(Loothing.ResponseInfo) do
         if info.name and info.name:lower() == command then
             return id, info.name
         end
@@ -267,7 +267,7 @@ function LoothingWhisperHandlerMixin:FindTargetItem(itemNum)
     -- Collect voting items
     local votingItems = {}
     for _, item in items:Enumerate() do
-        if item:GetState() == LOOTHING_ITEM_STATE.VOTING then
+        if item:GetState() == Loothing.ItemState.VOTING then
             votingItems[#votingItems + 1] = item
         end
     end
@@ -295,7 +295,7 @@ function LoothingWhisperHandlerMixin:GetVotingItemCount()
 
     local count = 0
     for _, item in items:Enumerate() do
-        if item:GetState() == LOOTHING_ITEM_STATE.VOTING then
+        if item:GetState() == Loothing.ItemState.VOTING then
             count = count + 1
         end
     end
@@ -397,7 +397,7 @@ end
 ----------------------------------------------------------------------]]
 
 function CreateLoothingWhisperHandler()
-    local handler = LoolibCreateFromMixins(LoothingWhisperHandlerMixin)
+    local handler = Loolib.CreateFromMixins(LoothingWhisperHandlerMixin)
     handler:Init()
     return handler
 end

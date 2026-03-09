@@ -9,7 +9,7 @@ local Loolib = LibStub("Loolib")
     LoothingCouncilMixin
 ----------------------------------------------------------------------]]
 
-LoothingCouncilMixin = LoolibCreateFromMixins(LoolibCallbackRegistryMixin)
+LoothingCouncilMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
 
 local COUNCIL_EVENTS = {
     "OnMemberAdded",
@@ -20,7 +20,7 @@ local COUNCIL_EVENTS = {
 
 --- Initialize council manager
 function LoothingCouncilMixin:Init()
-    LoolibCallbackRegistryMixin.OnLoad(self)
+    Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(COUNCIL_EVENTS)
 
     -- Local roster (persisted)
@@ -78,7 +78,7 @@ end
 ----------------------------------------------------------------------]]
 
 function CreateLoothingCouncil()
-    local council = LoolibCreateFromMixins(LoothingCouncilMixin)
+    local council = Loolib.CreateFromMixins(LoothingCouncilMixin)
     council:Init()
     return council
 end

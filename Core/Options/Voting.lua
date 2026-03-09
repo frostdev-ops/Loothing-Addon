@@ -3,7 +3,7 @@
     Voting configuration (mode, timeout, triggers, options)
 ----------------------------------------------------------------------]]
 
-local L = LOOTHING_LOCALE
+local L = Loothing.Locale
 local unpack = unpack
 
 -- Shared values function for button set dropdowns
@@ -38,8 +38,8 @@ local function GetVotingOptions()
                         name = L["VOTING_MODE"],
                         order = 1,
                         values = {
-                            [LOOTHING_VOTING_MODE.SIMPLE] = L["SIMPLE_VOTING"],
-                            [LOOTHING_VOTING_MODE.RANKED_CHOICE] = L["RANKED_VOTING"],
+                            [Loothing.VotingMode.SIMPLE] = L["SIMPLE_VOTING"],
+                            [Loothing.VotingMode.RANKED_CHOICE] = L["RANKED_VOTING"],
                         },
                         get = function() return Loothing.Settings:GetVotingMode() end,
                         set = function(_, v) Loothing.Settings:SetVotingMode(v) end,
@@ -49,8 +49,8 @@ local function GetVotingOptions()
                         name = L["VOTING_TIMEOUT"],
                         desc = L["SECONDS"],
                         order = 2,
-                        min = LOOTHING_TIMING.MIN_VOTE_TIMEOUT,
-                        max = LOOTHING_TIMING.MAX_VOTE_TIMEOUT,
+                        min = Loothing.Timing.MIN_VOTE_TIMEOUT,
+                        max = Loothing.Timing.MAX_VOTE_TIMEOUT,
                         step = 5,
                         get = function() return Loothing.Settings:GetVotingTimeout() end,
                         set = function(_, v) Loothing.Settings:SetVotingTimeout(v) end,

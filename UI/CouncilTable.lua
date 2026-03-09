@@ -6,7 +6,7 @@
 
 local Loolib = LibStub("Loolib")
 
-LoothingCouncilTableMixin = LoolibCreateFromMixins(LoolibCallbackRegistryMixin, LoothingCouncilTableMixin)
+LoothingCouncilTableMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin, LoothingCouncilTableMixin)
 
 local COUNCIL_TABLE_EVENTS = {
     "OnCandidateSelected",
@@ -54,7 +54,7 @@ local function IsObserverOnly()
 end
 
 function LoothingCouncilTableMixin:Init(parent)
-    LoolibCallbackRegistryMixin.OnLoad(self)
+    Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(COUNCIL_TABLE_EVENTS)
 
     self.parent = parent
@@ -388,11 +388,11 @@ function LoothingCouncilTableMixin:CreateItemTab(index, item)
     stateIndicator:SetPoint("BOTTOMRIGHT", -2, 2)
     tab.stateIndicator = stateIndicator
 
-    if item.state == LOOTHING_ITEM_STATE.AWARDED then
+    if item.state == Loothing.ItemState.AWARDED then
         stateIndicator:SetTexture("Interface\\RaidFrame\\ReadyCheck-Ready")
-    elseif item.state == LOOTHING_ITEM_STATE.VOTING then
+    elseif item.state == Loothing.ItemState.VOTING then
         stateIndicator:SetTexture("Interface\\COMMON\\Indicator-Green")
-    elseif item.state == LOOTHING_ITEM_STATE.SKIPPED then
+    elseif item.state == Loothing.ItemState.SKIPPED then
         stateIndicator:SetTexture("Interface\\RaidFrame\\ReadyCheck-NotReady")
     else
         stateIndicator:Hide()
@@ -482,7 +482,7 @@ function LoothingCouncilTableMixin:SelectItemTab(itemGUID)
             tab.icon:SetDesaturated(false)
             tab.glow:SetAlpha(0.6)
             tab.accentBar:SetVertexColor(1, 0.82, 0, 1)
-        elseif item.state == LOOTHING_ITEM_STATE.AWARDED then
+        elseif item.state == Loothing.ItemState.AWARDED then
             -- Awarded: green tint, desaturated
             tab.selectBar:Hide()
             tab:SetBackdropBorderColor(0.2, 0.8, 0.2, 1)
@@ -491,7 +491,7 @@ function LoothingCouncilTableMixin:SelectItemTab(itemGUID)
             tab.icon:SetDesaturated(true)
             tab.glow:SetAlpha(0.2)
             tab.accentBar:SetVertexColor(0.2, 0.8, 0.2, 1)
-        elseif item.state == LOOTHING_ITEM_STATE.SKIPPED then
+        elseif item.state == Loothing.ItemState.SKIPPED then
             -- Skipped: gray, dim, desaturated
             tab.selectBar:Hide()
             tab:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
@@ -500,7 +500,7 @@ function LoothingCouncilTableMixin:SelectItemTab(itemGUID)
             tab.icon:SetDesaturated(true)
             tab.glow:SetAlpha(0.1)
             tab.accentBar:SetVertexColor(0.4, 0.4, 0.4, 1)
-        elseif item.state == LOOTHING_ITEM_STATE.VOTING then
+        elseif item.state == Loothing.ItemState.VOTING then
             -- Voting: quality color, full alpha
             tab.selectBar:Hide()
             tab:SetBackdropBorderColor(qr, qg, qb, 1)
@@ -820,15 +820,15 @@ function LoothingCouncilTableMixin:UpdateActionButtons()
 
     local state = self.currentItem.state
 
-    if state == LOOTHING_ITEM_STATE.AWARDED or state == LOOTHING_ITEM_STATE.SKIPPED then
+    if state == Loothing.ItemState.AWARDED or state == Loothing.ItemState.SKIPPED then
         self.awardButton:Disable()
         self.revoteButton:Enable()
         self.skipButton:Disable()
-    elseif state == LOOTHING_ITEM_STATE.TALLIED then
+    elseif state == Loothing.ItemState.TALLIED then
         self.awardButton:Enable()
         self.revoteButton:Enable()
         self.skipButton:Enable()
-    elseif state == LOOTHING_ITEM_STATE.VOTING then
+    elseif state == Loothing.ItemState.VOTING then
         self.awardButton:Disable()
         self.revoteButton:Disable()
         self.skipButton:Enable()
@@ -1123,7 +1123,7 @@ function LoothingCouncilTableMixin:Toggle()
 end
 
 function CreateLoothingCouncilTable(parent)
-    local tbl = LoolibCreateFromMixins(LoothingCouncilTableMixin)
+    local tbl = Loolib.CreateFromMixins(LoothingCouncilTableMixin)
     tbl:Init(parent)
     return tbl
 end

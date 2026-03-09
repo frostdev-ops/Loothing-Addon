@@ -14,7 +14,7 @@ local Loolib = LibStub("Loolib")
     LoothingVersionCheckMixin
 ----------------------------------------------------------------------]]
 
-LoothingVersionCheckMixin = LoolibCreateFromMixins(LoolibCallbackRegistryMixin)
+LoothingVersionCheckMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
 
 local VERSION_EVENTS = {
     "OnVersionReceived",
@@ -29,7 +29,7 @@ local OUTDATED_WARN_THROTTLE = 60
 
 --- Initialize version check
 function LoothingVersionCheckMixin:Init()
-    LoolibCallbackRegistryMixin.OnLoad(self)
+    Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(VERSION_EVENTS)
 
     self.versionCache = {}  -- { playerName = { version, tVersion, timestamp, isOutdated } }
@@ -104,13 +104,13 @@ end
 -- @param version string
 -- @return boolean
 function LoothingVersionCheckMixin:IsOutdated(version)
-    return self:CompareVersions(version, LOOTHING_VERSION) < 0
+    return self:CompareVersions(version, Loothing.VERSION) < 0
 end
 
 --- Get highest version from cache
 -- @return string
 function LoothingVersionCheckMixin:GetHighestVersion()
-    local highest = LOOTHING_VERSION
+    local highest = Loothing.VERSION
 
     for _, data in pairs(self.versionCache) do
         if data.version and self:CompareVersions(data.version, highest) > 0 then
@@ -132,7 +132,7 @@ function LoothingVersionCheckMixin:GroupHasVersion(minVersion)
     if not minVersion then return true end
 
     -- Our own version must meet the minimum
-    if self:CompareVersions(LOOTHING_VERSION, minVersion) < 0 then
+    if self:CompareVersions(Loothing.VERSION, minVersion) < 0 then
         return false
     end
 
@@ -143,11 +143,11 @@ function LoothingVersionCheckMixin:GroupHasVersion(minVersion)
     for i = 1, numMembers do
         local name
         if IsInRaid() then
-            name = LoolibSecretUtil.SafeGetRaidRosterInfo(i)
+            name = Loolib.SecretUtil.SafeGetRaidRosterInfo(i)
         else
             local unit = (i == numMembers) and "player" or ("party" .. i)
             if UnitExists(unit) then
-                name = LoolibSecretUtil.SafeUnitName(unit)
+                name = Loolib.SecretUtil.SafeUnitName(unit)
             end
         end
 
@@ -181,11 +181,11 @@ function LoothingVersionCheckMixin:GetOutdatedMembers(minVersion)
     for i = 1, numMembers do
         local name
         if IsInRaid() then
-            name = LoolibSecretUtil.SafeGetRaidRosterInfo(i)
+            name = Loolib.SecretUtil.SafeGetRaidRosterInfo(i)
         else
             local unit = (i == numMembers) and "player" or ("party" .. i)
             if UnitExists(unit) then
-                local rawName = LoolibSecretUtil.SafeUnitName(unit)
+                local rawName = Loolib.SecretUtil.SafeUnitName(unit)
                 name = rawName
             end
         end
@@ -212,7 +212,7 @@ end
 function LoothingVersionCheckMixin:GetCurrentRosterNames()
     local names = {}
     if not IsInGroup() then
-        local pName = LoolibSecretUtil.SafeUnitName("player")
+        local pName = Loolib.SecretUtil.SafeUnitName("player")
         if pName then
             names[LoothingUtils.NormalizeName(pName)] = true
         end
@@ -311,7 +311,7 @@ function LoothingVersionCheckMixin:Query(target)
     self.queryStartTime = GetTime()
 
     -- Add self to cache (include tVersion if set)
-    self:AddVersionEntry(LoolibSecretUtil.SafeUnitName("player"), LOOTHING_VERSION, self.tVersion)
+    self:AddVersionEntry(Loolib.SecretUtil.SafeUnitName("player"), Loothing.VERSION, self.tVersion)
 
     -- Send request
     if target == "guild" then
@@ -337,7 +337,7 @@ function LoothingVersionCheckMixin:QueryGuild()
     -- Pre-populate with online guild members
     local numMembers = GetNumGuildMembers()
     for i = 1, numMembers do
-        local name, _, _, _, _, _, _, _, online = GetGuildRosterInfo(i)
+        local name, _, _, _, _, _, _, _, online = Loothing.GetGuildRosterInfo(i)
         if online and name then
             name = LoothingUtils.NormalizeName(name)
             self.versionCache[name] = {
@@ -543,12 +543,12 @@ end
     Singleton Instance
 ----------------------------------------------------------------------]]
 
-LoothingVersionCheck = LoolibCreateFromMixins(LoothingVersionCheckMixin)
+LoothingVersionCheck = Loolib.CreateFromMixins(LoothingVersionCheckMixin)
 -- Defer Init() - LoadPersistedVersions() requires Loothing.Settings which is
 -- not available until InitializeModules() has run. The PLAYER_LOGIN handler
 -- in Init.lua calls LoothingVersionCheck:Init() after Settings is ready.
 -- Only set up the callback registry and basic state here.
-LoolibCallbackRegistryMixin.OnLoad(LoothingVersionCheck)
+Loolib.CallbackRegistryMixin.OnLoad(LoothingVersionCheck)
 LoothingVersionCheck:GenerateCallbackEvents(VERSION_EVENTS)
 LoothingVersionCheck.versionCache = {}
 LoothingVersionCheck.queryInProgress = false

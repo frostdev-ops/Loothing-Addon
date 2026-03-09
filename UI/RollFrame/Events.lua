@@ -3,6 +3,7 @@
     Extracted to reduce monolith size in RollFrame.lua
 ----------------------------------------------------------------------]]
 
+local Loolib = LibStub("Loolib")
 LoothingRollFrameMixin = LoothingRollFrameMixin or {}
 
 --- Register for session events to auto-show
@@ -10,7 +11,7 @@ function LoothingRollFrameMixin:RegisterSessionEvents()
     if not Loothing.Session then return end
 
     Loothing.Session:RegisterCallback("OnVotingStarted", function(_, item, timeout)
-        self.responseTimeout = timeout or LOOTHING_TIMING.DEFAULT_VOTE_TIMEOUT or 30
+        self.responseTimeout = timeout or Loothing.Timing.DEFAULT_VOTE_TIMEOUT or 30
 
         local foundIndex = nil
         for i, existingItem in ipairs(self.items) do
@@ -107,13 +108,14 @@ function LoothingRollFrameMixin:OnChatMessage(text)
     local playerName, roll, minRoll, maxRoll = string.match(safeText, "(.+) rolls (%d+) %((%d+)%-(%d+)%)")
     if not playerName then return end
 
-    local myFullName = LoothingUtils and LoothingUtils.GetPlayerFullName and LoothingUtils.GetPlayerFullName() or UnitName("player")
+    -- FIX(Area4-4): Use SafeUnitName to avoid secret value tainting
+    local myFullName = LoothingUtils and LoothingUtils.GetPlayerFullName and LoothingUtils.GetPlayerFullName() or Loolib.SecretUtil.SafeUnitName("player")
     if LoothingUtils and LoothingUtils.IsSamePlayer then
         if not LoothingUtils.IsSamePlayer(playerName, myFullName) then
             return
         end
     else
-        if playerName ~= myFullName and playerName ~= UnitName("player") then
+        if playerName ~= myFullName and playerName ~= Loolib.SecretUtil.SafeUnitName("player") then
             return
         end
     end

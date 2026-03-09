@@ -9,7 +9,7 @@ local Loolib = LibStub("Loolib")
     LoothingRosterPanelMixin
 ----------------------------------------------------------------------]]
 
-LoothingRosterPanelMixin = LoolibCreateFromMixins(LoolibCallbackRegistryMixin)
+LoothingRosterPanelMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
 
 local ROSTER_PANEL_EVENTS = {}
 
@@ -66,7 +66,7 @@ local SORT_COMPARATORS = {
 --- Initialize the roster panel
 -- @param parent Frame - Parent frame
 function LoothingRosterPanelMixin:Init(parent)
-    LoolibCallbackRegistryMixin.OnLoad(self)
+    Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(ROSTER_PANEL_EVENTS)
 
     self.parent = parent
@@ -279,7 +279,7 @@ end
 ----------------------------------------------------------------------]]
 
 function LoothingRosterPanelMixin:CreateFooter()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     local footer = CreateFrame("Frame", nil, self.frame)
     footer:SetPoint("BOTTOMLEFT", 8, 8)
@@ -313,7 +313,7 @@ end
 ----------------------------------------------------------------------]]
 
 function LoothingRosterPanelMixin:CreateEmptyState()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     self.emptyText = self.listContainer:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     self.emptyText:SetPoint("CENTER")
@@ -333,19 +333,19 @@ local function BuildUnitMap()
     if IsInRaid() then
         for i = 1, GetNumGroupMembers() do
             local unit = "raid" .. i
-            local name = LoolibSecretUtil.SafeUnitName(unit)
+            local name = Loolib.SecretUtil.SafeUnitName(unit)
             if name then
                 map[LoothingUtils.NormalizeName(name)] = unit
             end
         end
     elseif IsInGroup() then
-        local playerName = LoolibSecretUtil.SafeUnitName("player")
+        local playerName = Loolib.SecretUtil.SafeUnitName("player")
         if playerName then
             map[LoothingUtils.NormalizeName(playerName)] = "player"
         end
         for i = 1, GetNumSubgroupMembers() do
             local unit = "party" .. i
-            local name = LoolibSecretUtil.SafeUnitName(unit)
+            local name = Loolib.SecretUtil.SafeUnitName(unit)
             if name then
                 map[LoothingUtils.NormalizeName(name)] = unit
             end
@@ -845,7 +845,7 @@ function LoothingRosterPanelMixin:ShowRowTooltip(row, entry)
         end
 
         for resp, count in pairs(responseCounts) do
-            local info = LOOTHING_RESPONSE_INFO and LOOTHING_RESPONSE_INFO[resp]
+            local info = Loothing.ResponseInfo and Loothing.ResponseInfo[resp]
             local respName = info and info.name or tostring(resp)
             GameTooltip:AddLine("  " .. respName .. ": " .. count, 0.7, 0.7, 0.7)
         end
@@ -859,7 +859,7 @@ end
 ----------------------------------------------------------------------]]
 
 function LoothingRosterPanelMixin:ShowRowContextMenu(row, entry)
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
     local playerName = LoothingUtils.GetPlayerFullName()
     local isPlayerLeader = UnitIsGroupLeader("player")
     local isPlayerAssistant = IsInRaid() and UnitIsGroupAssistant("player")
@@ -996,7 +996,7 @@ end
 ----------------------------------------------------------------------]]
 
 function LoothingRosterPanelMixin:UpdateSummary()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     if #self.rosterData == 0 then
         self.summaryText:SetText("")
@@ -1075,7 +1075,7 @@ end
 ----------------------------------------------------------------------]]
 
 function CreateLoothingRosterPanel(parent)
-    local panel = LoolibCreateFromMixins(LoothingRosterPanelMixin)
+    local panel = Loolib.CreateFromMixins(LoothingRosterPanelMixin)
     panel:Init(parent)
     return panel
 end

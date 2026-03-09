@@ -9,7 +9,7 @@ local Loolib = LibStub("Loolib")
     Voting State Constants
 ----------------------------------------------------------------------]]
 
-LOOTHING_VOTING_STATE = {
+Loothing.VotingState = {
     PENDING = 1,     -- Item queued, not yet voting
     VOTING = 2,      -- Actively collecting votes
     TALLYING = 3,    -- Vote collection ended, computing results
@@ -21,7 +21,7 @@ LOOTHING_VOTING_STATE = {
     LoothingVotingSessionMixin
 ----------------------------------------------------------------------]]
 
-LoothingVotingSessionMixin = LoolibCreateFromMixins(LoolibCallbackRegistryMixin)
+LoothingVotingSessionMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
 
 local VOTING_SESSION_EVENTS = {
     "OnStateChanged",
@@ -36,15 +36,15 @@ local VOTING_SESSION_EVENTS = {
 --- Initialize voting session
 -- @param item table - LoothingItem
 function LoothingVotingSessionMixin:Init(item)
-    LoolibCallbackRegistryMixin.OnLoad(self)
+    Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(VOTING_SESSION_EVENTS)
 
     self.item = item
-    self.state = LOOTHING_VOTING_STATE.PENDING
+    self.state = Loothing.VotingState.PENDING
 
     -- Voting configuration
-    self.timeout = LOOTHING_TIMING.DEFAULT_VOTE_TIMEOUT
-    self.votingMode = LOOTHING_VOTING_MODE.SIMPLE
+    self.timeout = Loothing.Timing.DEFAULT_VOTE_TIMEOUT
+    self.votingMode = Loothing.VotingMode.SIMPLE
     self.allowRevote = true
     self.maxRevotes = 2
     self.revoteCount = 0
@@ -69,7 +69,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Get current state
--- @return number - LOOTHING_VOTING_STATE value
+-- @return number - Loothing.VotingState value
 function LoothingVotingSessionMixin:GetState()
     return self.state
 end
@@ -77,17 +77,17 @@ end
 --- Get state name for display
 -- @return string
 function LoothingVotingSessionMixin:GetStateName()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
-    if self.state == LOOTHING_VOTING_STATE.PENDING then
+    if self.state == Loothing.VotingState.PENDING then
         return L["VOTING_STATE_PENDING"]
-    elseif self.state == LOOTHING_VOTING_STATE.VOTING then
+    elseif self.state == Loothing.VotingState.VOTING then
         return L["VOTING_STATE_VOTING"]
-    elseif self.state == LOOTHING_VOTING_STATE.TALLYING then
+    elseif self.state == Loothing.VotingState.TALLYING then
         return L["VOTING_STATE_TALLYING"]
-    elseif self.state == LOOTHING_VOTING_STATE.DECIDED then
+    elseif self.state == Loothing.VotingState.DECIDED then
         return L["VOTING_STATE_DECIDED"]
-    elseif self.state == LOOTHING_VOTING_STATE.REVOTING then
+    elseif self.state == Loothing.VotingState.REVOTING then
         return L["VOTING_STATE_REVOTING"]
     end
 
@@ -116,8 +116,8 @@ end
 -- @param timeout number - Seconds for voting (optional)
 -- @return boolean - True if started successfully
 function LoothingVotingSessionMixin:Start(timeout)
-    if self.state ~= LOOTHING_VOTING_STATE.PENDING and
-       self.state ~= LOOTHING_VOTING_STATE.REVOTING then
+    if self.state ~= Loothing.VotingState.PENDING and
+       self.state ~= Loothing.VotingState.REVOTING then
         Loothing:Debug("Cannot start voting from state:", self.state)
         return false
     end
@@ -128,9 +128,9 @@ function LoothingVotingSessionMixin:Start(timeout)
     end
 
     -- Set timeout
-    self.timeout = timeout or Loothing.Settings:GetVotingTimeout() or LOOTHING_TIMING.DEFAULT_VOTE_TIMEOUT
+    self.timeout = timeout or Loothing.Settings:GetVotingTimeout() or Loothing.Timing.DEFAULT_VOTE_TIMEOUT
     self.startTime = GetTime()
-    if self.timeout == LOOTHING_TIMING.NO_TIMEOUT then
+    if self.timeout == Loothing.Timing.NO_TIMEOUT then
         self.endTime = math.huge
     else
         self.endTime = self.startTime + self.timeout
@@ -142,18 +142,18 @@ function LoothingVotingSessionMixin:Start(timeout)
     end
 
     -- Start timer (skipped when no-timeout)
-    if self.timeout ~= LOOTHING_TIMING.NO_TIMEOUT then
+    if self.timeout ~= Loothing.Timing.NO_TIMEOUT then
         self:StartTimer()
     end
 
-    self:SetState(LOOTHING_VOTING_STATE.VOTING)
+    self:SetState(Loothing.VotingState.VOTING)
     return true
 end
 
 --- Stop voting (early end)
 -- @param skipTally boolean - If true, don't compute results
 function LoothingVotingSessionMixin:Stop(skipTally)
-    if self.state ~= LOOTHING_VOTING_STATE.VOTING then
+    if self.state ~= Loothing.VotingState.VOTING then
         return
     end
 
@@ -166,7 +166,7 @@ function LoothingVotingSessionMixin:Stop(skipTally)
     end
 
     if skipTally then
-        self:SetState(LOOTHING_VOTING_STATE.PENDING)
+        self:SetState(Loothing.VotingState.PENDING)
     else
         self:Tally()
     end
@@ -197,7 +197,7 @@ function LoothingVotingSessionMixin:StartRevote(timeout)
     self.winner = nil
     self.winnerResponse = nil
 
-    self:SetState(LOOTHING_VOTING_STATE.REVOTING)
+    self:SetState(Loothing.VotingState.REVOTING)
     self:TriggerEvent("OnRevoteStarted", self.revoteCount)
 
     -- Start the new vote
@@ -238,7 +238,7 @@ end
 
 --- Handle timer tick
 function LoothingVotingSessionMixin:OnTimerTick()
-    if self.state ~= LOOTHING_VOTING_STATE.VOTING then
+    if self.state ~= Loothing.VotingState.VOTING then
         return
     end
 
@@ -254,7 +254,7 @@ end
 
 --- Handle timer expiration
 function LoothingVotingSessionMixin:OnTimerExpired()
-    if self.state ~= LOOTHING_VOTING_STATE.VOTING then
+    if self.state ~= Loothing.VotingState.VOTING then
         return
     end
 
@@ -274,7 +274,7 @@ end
 --- Get time remaining
 -- @return number - Seconds remaining, or math.huge if no-timeout mode
 function LoothingVotingSessionMixin:GetTimeRemaining()
-    if self.state ~= LOOTHING_VOTING_STATE.VOTING or not self.endTime then
+    if self.state ~= Loothing.VotingState.VOTING or not self.endTime then
         return 0
     end
 
@@ -288,11 +288,11 @@ end
 --- Get progress percentage
 -- @return number - 0-100 (returns 0 in no-timeout mode)
 function LoothingVotingSessionMixin:GetProgress()
-    if self.state ~= LOOTHING_VOTING_STATE.VOTING or not self.startTime then
+    if self.state ~= Loothing.VotingState.VOTING or not self.startTime then
         return 0
     end
 
-    if self.timeout == LOOTHING_TIMING.NO_TIMEOUT then
+    if self.timeout == Loothing.Timing.NO_TIMEOUT then
         return 0
     end
 
@@ -310,7 +310,7 @@ end
 -- @param responses table - Array of response values
 -- @return boolean - True if vote recorded
 function LoothingVotingSessionMixin:RecordVote(voter, voterClass, responses)
-    if self.state ~= LOOTHING_VOTING_STATE.VOTING then
+    if self.state ~= Loothing.VotingState.VOTING then
         Loothing:Debug("Cannot record vote in state:", self.state)
         return false
     end
@@ -389,11 +389,11 @@ end
 
 --- Tally votes and determine results
 function LoothingVotingSessionMixin:Tally()
-    if self.state == LOOTHING_VOTING_STATE.TALLYING then
+    if self.state == Loothing.VotingState.TALLYING then
         return -- Already tallying
     end
 
-    self:SetState(LOOTHING_VOTING_STATE.TALLYING)
+    self:SetState(Loothing.VotingState.TALLYING)
 
     -- Get votes from item
     local votes = self.item and self.item:GetVotes()
@@ -407,7 +407,7 @@ function LoothingVotingSessionMixin:Tally()
     end
 
     -- Tally based on voting mode
-    if self.votingMode == LOOTHING_VOTING_MODE.RANKED_CHOICE then
+    if self.votingMode == Loothing.VotingMode.RANKED_CHOICE then
         -- Get candidates (all players who received votes)
         local candidates = self:GetCandidatesFromVotes(votes)
         self.results = LoothingVotingEngine:TallyRankedChoice(votes, candidates)
@@ -458,7 +458,7 @@ function LoothingVotingSessionMixin:DeclareWinner(winner, response)
         self.item:SetWinner(winner, response)
     end
 
-    self:SetState(LOOTHING_VOTING_STATE.DECIDED)
+    self:SetState(Loothing.VotingState.DECIDED)
     self:TriggerEvent("OnWinnerDeclared", winner, response)
 end
 
@@ -483,7 +483,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Set voting mode
--- @param mode string - LOOTHING_VOTING_MODE value
+-- @param mode string - Loothing.VotingMode value
 function LoothingVotingSessionMixin:SetVotingMode(mode)
     self.votingMode = mode
 end
@@ -513,7 +513,7 @@ end
 --- Get a summary for display
 -- @return table
 function LoothingVotingSessionMixin:GetSummary()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     return {
         state = self.state,
@@ -566,7 +566,7 @@ end
 -- @param item table - LoothingItem
 -- @return table - LoothingVotingSession
 function CreateLoothingVotingSession(item)
-    local session = LoolibCreateFromMixins(LoothingVotingSessionMixin)
+    local session = Loolib.CreateFromMixins(LoothingVotingSessionMixin)
     session:Init(item)
     return session
 end

@@ -11,6 +11,8 @@
     Run: /lt test run restriction
 ----------------------------------------------------------------------]]
 
+local Loolib = LibStub("Loolib")
+
 local function RunRestrictionTests()
     local passed = 0
     local failed = 0
@@ -50,10 +52,10 @@ local function RunRestrictionTests()
         Create a fresh restrictions instance for testing
     ----------------------------------------------------------------------]]
 
-    local restrictions = LoolibCreateFromMixins(LoothingRestrictionsMixin)
+    local restrictions = Loolib.CreateFromMixins(LoothingRestrictionsMixin)
 
     -- Minimal init (skip event registration which needs full Loolib setup)
-    LoolibCallbackRegistryMixin.OnLoad(restrictions)
+    Loolib.CallbackRegistryMixin.OnLoad(restrictions)
     restrictions:GenerateCallbackEvents({
         "OnRestrictionChanged",
         "OnQueuedMessageSent",

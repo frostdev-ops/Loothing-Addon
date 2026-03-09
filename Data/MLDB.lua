@@ -13,7 +13,7 @@ local Loolib = LibStub("Loolib")
     LoothingMLDBMixin
 ----------------------------------------------------------------------]]
 
-LoothingMLDBMixin = LoolibCreateFromMixins(LoolibCallbackRegistryMixin)
+LoothingMLDBMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
 
 local MLDB_EVENTS = {
     "OnMLDBReceived",      -- Fired when ML settings are received
@@ -151,7 +151,7 @@ local LEAF_KEYS = {
 
 --- Initialize MLDB handler
 function LoothingMLDBMixin:Init()
-    LoolibCallbackRegistryMixin.OnLoad(self)
+    Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(MLDB_EVENTS)
 
     self.mldb = nil  -- Current MLDB (nil until received or built)
@@ -267,11 +267,11 @@ function LoothingMLDBMixin:GatherSettings()
 
     -- Announcements (full structure)
     settings.announcements = Loothing.Settings:Get("announcements",
-        LOOTHING_DEFAULT_SETTINGS and LOOTHING_DEFAULT_SETTINGS.announcements or {})
+        Loothing.DefaultSettings and Loothing.DefaultSettings.announcements or {})
 
     -- Ignore items
     settings.ignoreItems = Loothing.Settings:Get("ignoreItems",
-        LOOTHING_DEFAULT_SETTINGS and LOOTHING_DEFAULT_SETTINGS.ignoreItems or {})
+        Loothing.DefaultSettings and Loothing.DefaultSettings.ignoreItems or {})
 
     return settings
 end
@@ -570,7 +570,7 @@ end
 --- Create MLDB instance
 -- @return LoothingMLDBMixin
 function CreateLoothingMLDB()
-    local mldb = LoolibCreateFromMixins(LoothingMLDBMixin)
+    local mldb = Loolib.CreateFromMixins(LoothingMLDBMixin)
     mldb:Init()
     return mldb
 end

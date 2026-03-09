@@ -30,7 +30,7 @@ function LoothingUI_CreateCandidateResultRow(parent, candidate, yOffset, totalVo
     local responseInfo = nil
     local response = candidate.response
     if response then
-        responseInfo = LOOTHING_RESPONSE_INFO[response] or LOOTHING_SYSTEM_RESPONSE_INFO[response]
+        responseInfo = Loothing.ResponseInfo[response] or Loothing.SystemResponseInfo[response]
     end
 
     local rawColor = (responseInfo and responseInfo.color) or { r = 0.5, g = 0.5, b = 0.5 }
@@ -120,7 +120,7 @@ function LoothingUI_CreateCandidateResultRow(parent, candidate, yOffset, totalVo
 
         local winnerBadge = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         winnerBadge:SetPoint("RIGHT", votesText, "LEFT", -8, 0)
-        winnerBadge:SetText(LOOTHING_LOCALE["WINNER"])
+        winnerBadge:SetText(Loothing.Locale["WINNER"])
         winnerBadge:SetTextColor(1, 0.82, 0)
     end
 

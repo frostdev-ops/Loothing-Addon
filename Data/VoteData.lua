@@ -35,7 +35,7 @@ function LoothingVoteMixin:Init(voter, voterClass, responses)
 end
 
 --- Get the first choice response
--- @return number - LOOTHING_RESPONSE value
+-- @return number - Loothing.Response value
 function LoothingVoteMixin:GetFirstChoice()
     return self.responses[1]
 end
@@ -89,7 +89,7 @@ function LoothingVoteMixin:GetResponseInfo(rank)
         return nil
     end
 
-    return LOOTHING_RESPONSE_INFO[response]
+    return Loothing.ResponseInfo[response]
 end
 
 --- Set gear comparison data
@@ -230,7 +230,7 @@ end
 -- @param responses table
 -- @return table
 function CreateLoothingVote(voter, voterClass, responses)
-    local vote = LoolibCreateFromMixins(LoothingVoteMixin)
+    local vote = Loolib.CreateFromMixins(LoothingVoteMixin)
     vote:Init(voter, voterClass, responses)
     return vote
 end
@@ -239,7 +239,7 @@ end
     LoothingVoteCollectionMixin - Collection of votes for an item
 ----------------------------------------------------------------------]]
 
-LoothingVoteCollectionMixin = LoolibCreateFromMixins(LoolibCallbackRegistryMixin)
+LoothingVoteCollectionMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
 
 local VOTE_COLLECTION_EVENTS = {
     "OnVoteAdded",
@@ -249,10 +249,10 @@ local VOTE_COLLECTION_EVENTS = {
 
 --- Initialize the vote collection
 function LoothingVoteCollectionMixin:Init()
-    LoolibCallbackRegistryMixin.OnLoad(self)
+    Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(VOTE_COLLECTION_EVENTS)
 
-    local Data = Loolib:GetModule("Data")
+    local Data = Loolib.Data
     self.votes = Data.CreateDataProvider()
     self.votesByVoter = {}  -- Quick lookup by voter name
 end
@@ -344,7 +344,7 @@ end
 function LoothingVoteCollectionMixin:GetVotesByResponse()
     local grouped = {}
 
-    for _, response in pairs(LOOTHING_RESPONSE) do
+    for _, response in pairs(Loothing.Response) do
         grouped[response] = {}
     end
 
@@ -367,7 +367,7 @@ end
 function LoothingVoteCollectionMixin:GetResponseCounts()
     local counts = {}
 
-    for _, response in pairs(LOOTHING_RESPONSE) do
+    for _, response in pairs(Loothing.Response) do
         counts[response] = 0
     end
 
@@ -440,7 +440,7 @@ end
 --- Create a new vote collection
 -- @return table
 function CreateLoothingVoteCollection()
-    local collection = LoolibCreateFromMixins(LoothingVoteCollectionMixin)
+    local collection = Loolib.CreateFromMixins(LoothingVoteCollectionMixin)
     collection:Init()
     return collection
 end
@@ -457,7 +457,7 @@ LoothingVoteAnalysis = {}
 function LoothingVoteAnalysis.GetLeadingResponse(votes)
     local counts = {}
 
-    for _, response in pairs(LOOTHING_RESPONSE) do
+    for _, response in pairs(Loothing.Response) do
         counts[response] = 0
     end
 
@@ -488,7 +488,7 @@ end
 function LoothingVoteAnalysis.IsTied(votes)
     local counts = {}
 
-    for _, response in pairs(LOOTHING_RESPONSE) do
+    for _, response in pairs(Loothing.Response) do
         counts[response] = 0
     end
 

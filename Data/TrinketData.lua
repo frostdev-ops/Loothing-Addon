@@ -26,7 +26,7 @@ local Loolib = LibStub("Loolib")
     Trinket Categories - Descriptive names for spec flags
 ----------------------------------------------------------------------]]
 
-LOOTHING_TRINKET_CATEGORIES = {
+Loothing.TrinketCategories = {
     ["73F7777777777"] = ALL_CLASSES,
     ["0365002707767"] = ITEM_MOD_STRENGTH_SHORT .. "/" .. ITEM_MOD_AGILITY_SHORT,
     ["0000000700067"] = ITEM_MOD_STRENGTH_SHORT,
@@ -55,7 +55,7 @@ LOOTHING_TRINKET_CATEGORIES = {
     sample. For complete data, copy from RCLootCouncil2/Utils/EncounterJournalData.lua
 ----------------------------------------------------------------------]]
 
-LOOTHING_TRINKET_SPECS = {
+Loothing.TrinketSpecs = {
     -- ================================================================
     -- The War Within Season 1 Trinkets
     -- ================================================================
@@ -101,21 +101,21 @@ local NUM_CLASSES = 13
 -- @param itemID number - Item ID
 -- @return boolean - True if item is a known trinket
 function LoothingTrinketData:IsTrinket(itemID)
-    return LOOTHING_TRINKET_SPECS[itemID] ~= nil
+    return Loothing.TrinketSpecs[itemID] ~= nil
 end
 
 --- Get the spec flag for a trinket
 -- @param itemID number - Item ID
 -- @return string|nil - Spec flag or nil if not found
 function LoothingTrinketData:GetSpecFlag(itemID)
-    return LOOTHING_TRINKET_SPECS[itemID]
+    return Loothing.TrinketSpecs[itemID]
 end
 
 --- Get the category description for a spec flag
 -- @param specFlag string - Spec flag
 -- @return string - Category description or empty string
 function LoothingTrinketData:GetCategory(specFlag)
-    return LOOTHING_TRINKET_CATEGORIES[specFlag] or ""
+    return Loothing.TrinketCategories[specFlag] or ""
 end
 
 --- Get the category description for a trinket
@@ -177,7 +177,8 @@ end
 -- @param itemID number - Item ID
 -- @return boolean - True if player can use the trinket
 function LoothingTrinketData:CanPlayerUse(itemID)
-    local _, _, classID = UnitClass("player")
+    -- FIX(Area4-4): Use SafeUnitClass to avoid secret value tainting
+    local _, _, classID = Loolib.SecretUtil.SafeUnitClass("player")
     local specIndex = GetSpecialization()
 
     if not classID or not specIndex then
@@ -260,7 +261,7 @@ local function InitClassCategories()
                 .. string.format("%X", digit)
                 .. string.rep("0", classID - 1)
 
-            LOOTHING_TRINKET_CATEGORIES[flag] = classInfo.className
+            Loothing.TrinketCategories[flag] = classInfo.className
         end
     end
 end

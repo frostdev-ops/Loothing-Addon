@@ -9,7 +9,7 @@ local Loolib = LibStub("Loolib")
     LoothingSessionPanelMixin
 ----------------------------------------------------------------------]]
 
-LoothingSessionPanelMixin = LoolibCreateFromMixins(LoolibCallbackRegistryMixin)
+LoothingSessionPanelMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin)
 
 local SESSION_PANEL_EVENTS = {
     "OnItemSelected",
@@ -20,7 +20,7 @@ local SESSION_PANEL_EVENTS = {
 --- Initialize the session panel
 -- @param parent Frame - Parent frame (usually a tab content area)
 function LoothingSessionPanelMixin:Init(parent)
-    LoolibCallbackRegistryMixin.OnLoad(self)
+    Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(SESSION_PANEL_EVENTS)
 
     self.parent = parent
@@ -45,7 +45,7 @@ end
 
 --- Create UI elements
 function LoothingSessionPanelMixin:CreateElements()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     -- Header area
     self:CreateHeader()
@@ -65,7 +65,7 @@ end
 
 --- Create header
 function LoothingSessionPanelMixin:CreateHeader()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     local header = CreateFrame("Frame", nil, self.frame)
     header:SetPoint("TOPLEFT", 8, -8)
@@ -98,7 +98,7 @@ end
 function LoothingSessionPanelMixin:CreateFilterBar()
     -- Initialize filters if not already done
     if not Loothing.Filters then
-        Loothing.Filters = LoolibCreateAndInitFromMixin(LoothingFiltersMixin)
+        Loothing.Filters = Loolib.CreateAndInitFromMixin(LoothingFiltersMixin)
     end
 
     -- Create filter bar
@@ -130,7 +130,7 @@ end
 
 --- Create item list
 function LoothingSessionPanelMixin:CreateItemList()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     -- List container
     local container = CreateFrame("Frame", nil, self.frame, "BackdropTemplate")
@@ -226,7 +226,7 @@ function LoothingSessionPanelMixin:GetSelectedCount()
 end
 
 --- Get selected items filtered by state
--- @param state number - LOOTHING_ITEM_STATE value
+-- @param state number - Loothing.ItemState value
 -- @return table - Array of items matching state
 function LoothingSessionPanelMixin:GetSelectedItemsByState(state)
     local items = {}
@@ -345,7 +345,7 @@ end
 
 --- Create the bulk action bar (hidden by default)
 function LoothingSessionPanelMixin:CreateBulkActionBar()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     local bar = CreateFrame("Frame", nil, self.listContainer, "BackdropTemplate")
     bar:SetPoint("TOPLEFT", 0, -25)
@@ -473,7 +473,7 @@ end
 function LoothingSessionPanelMixin:UpdateBulkBarButtons()
     if not self.bulkBar then return end
 
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
     local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
     local count = self:GetSelectedCount()
 
@@ -481,9 +481,9 @@ function LoothingSessionPanelMixin:UpdateBulkBarButtons()
     self.bulkCountLabel:SetText(string.format(L["N_SELECTED"], count))
 
     -- Count items by state
-    local pendingItems = self:GetSelectedItemsByState(LOOTHING_ITEM_STATE.PENDING)
-    local votingItems = self:GetSelectedItemsByState(LOOTHING_ITEM_STATE.VOTING)
-    local talliedItems = self:GetSelectedItemsByState(LOOTHING_ITEM_STATE.TALLIED)
+    local pendingItems = self:GetSelectedItemsByState(Loothing.ItemState.PENDING)
+    local votingItems = self:GetSelectedItemsByState(Loothing.ItemState.VOTING)
+    local talliedItems = self:GetSelectedItemsByState(Loothing.ItemState.TALLIED)
     local nPending = #pendingItems
     local nVoting = #votingItems
     local nTallied = #talliedItems
@@ -550,7 +550,7 @@ end
 function LoothingSessionPanelMixin:OnBulkStartVote()
     if not Loothing.Session then return end
 
-    local items = self:GetSelectedItemsByState(LOOTHING_ITEM_STATE.PENDING)
+    local items = self:GetSelectedItemsByState(Loothing.ItemState.PENDING)
     for _, item in ipairs(items) do
         Loothing.Session:StartVoting(item.guid)
     end
@@ -563,7 +563,7 @@ end
 function LoothingSessionPanelMixin:OnBulkEndVote()
     if not Loothing.Session then return end
 
-    local items = self:GetSelectedItemsByState(LOOTHING_ITEM_STATE.VOTING)
+    local items = self:GetSelectedItemsByState(Loothing.ItemState.VOTING)
     for _, item in ipairs(items) do
         Loothing.Session:EndVoting(item.guid)
     end
@@ -576,9 +576,9 @@ end
 function LoothingSessionPanelMixin:OnBulkSkip()
     if not Loothing.Session then return end
 
-    local L = LOOTHING_LOCALE
-    local pending = self:GetSelectedItemsByState(LOOTHING_ITEM_STATE.PENDING)
-    local voting = self:GetSelectedItemsByState(LOOTHING_ITEM_STATE.VOTING)
+    local L = Loothing.Locale
+    local pending = self:GetSelectedItemsByState(Loothing.ItemState.PENDING)
+    local voting = self:GetSelectedItemsByState(Loothing.ItemState.VOTING)
     local count = #pending + #voting
     if count == 0 then return end
 
@@ -602,8 +602,8 @@ end
 function LoothingSessionPanelMixin:OnBulkRemove()
     if not Loothing.Session then return end
 
-    local L = LOOTHING_LOCALE
-    local items = self:GetSelectedItemsByState(LOOTHING_ITEM_STATE.PENDING)
+    local L = Loothing.Locale
+    local items = self:GetSelectedItemsByState(Loothing.ItemState.PENDING)
     if #items == 0 then return end
 
     LoothingPopups:Confirm(
@@ -623,8 +623,8 @@ end
 function LoothingSessionPanelMixin:OnBulkRevote()
     if not Loothing.Session then return end
 
-    local L = LOOTHING_LOCALE
-    local items = self:GetSelectedItemsByState(LOOTHING_ITEM_STATE.TALLIED)
+    local L = Loothing.Locale
+    local items = self:GetSelectedItemsByState(Loothing.ItemState.TALLIED)
     if #items == 0 then return end
 
     LoothingPopups:Confirm(
@@ -661,7 +661,7 @@ end
 --- Show context menu for multi-selected items
 -- @param row table - The right-clicked row
 function LoothingSessionPanelMixin:ShowBulkContextMenu(row)
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
     local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
     local count = self:GetSelectedCount()
 
@@ -669,9 +669,9 @@ function LoothingSessionPanelMixin:ShowBulkContextMenu(row)
         rootDescription:CreateTitle(string.format(L["N_SELECTED"], count))
 
         if isML then
-            local pending = self:GetSelectedItemsByState(LOOTHING_ITEM_STATE.PENDING)
-            local voting = self:GetSelectedItemsByState(LOOTHING_ITEM_STATE.VOTING)
-            local tallied = self:GetSelectedItemsByState(LOOTHING_ITEM_STATE.TALLIED)
+            local pending = self:GetSelectedItemsByState(Loothing.ItemState.PENDING)
+            local voting = self:GetSelectedItemsByState(Loothing.ItemState.VOTING)
+            local tallied = self:GetSelectedItemsByState(Loothing.ItemState.TALLIED)
 
             if #pending > 0 then
                 rootDescription:CreateButton(string.format(L["BULK_START_VOTE"], #pending), function()
@@ -713,7 +713,7 @@ end
 
 --- Create footer with controls
 function LoothingSessionPanelMixin:CreateFooter()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     local footer = CreateFrame("Frame", nil, self.frame)
     footer:SetPoint("BOTTOMLEFT", 8, 8)
@@ -861,7 +861,7 @@ end
 
 --- Update header display
 function LoothingSessionPanelMixin:UpdateHeader()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
 
     if not Loothing.Session then
         self.statusText:SetText(L["NO_SESSION"])
@@ -874,12 +874,12 @@ function LoothingSessionPanelMixin:UpdateHeader()
 
     local state = Loothing.Session:GetState()
 
-    if state == LOOTHING_SESSION_STATE.INACTIVE then
+    if state == Loothing.SessionState.INACTIVE then
         self.statusText:SetText(L["NO_SESSION"])
         self.statusText:SetTextColor(0.5, 0.5, 0.5)
         self.encounterText:SetText("")
         self.itemCountText:SetText("")
-    elseif state == LOOTHING_SESSION_STATE.ACTIVE then
+    elseif state == Loothing.SessionState.ACTIVE then
         self.statusText:SetText(L["SESSION_ACTIVE"])
         self.statusText:SetTextColor(0, 1, 0)
 
@@ -899,18 +899,18 @@ function LoothingSessionPanelMixin:UpdateHeader()
             local completed = 0
 
             for _, item in items:Enumerate() do
-                if item.state == LOOTHING_ITEM_STATE.PENDING then
+                if item.state == Loothing.ItemState.PENDING then
                     pending = pending + 1
-                elseif item.state == LOOTHING_ITEM_STATE.VOTING then
+                elseif item.state == Loothing.ItemState.VOTING then
                     voting = voting + 1
-                elseif item.state == LOOTHING_ITEM_STATE.AWARDED or item.state == LOOTHING_ITEM_STATE.SKIPPED then
+                elseif item.state == Loothing.ItemState.AWARDED or item.state == Loothing.ItemState.SKIPPED then
                     completed = completed + 1
                 end
             end
 
             self.itemCountText:SetText(string.format(L["ITEMS_COUNT"], total, pending, voting, completed))
         end
-    elseif state == LOOTHING_SESSION_STATE.CLOSED then
+    elseif state == Loothing.SessionState.CLOSED then
         self.statusText:SetText(L["SESSION_CLOSED"])
         self.statusText:SetTextColor(0.5, 0.5, 0.5)
     end
@@ -933,7 +933,7 @@ end
 
 --- Update footer buttons
 function LoothingSessionPanelMixin:UpdateFooter()
-    local L = LOOTHING_LOCALE
+    local L = Loothing.Locale
     local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
 
     if not Loothing.Session then
@@ -949,13 +949,13 @@ function LoothingSessionPanelMixin:UpdateFooter()
     if isML then
         self.sessionButton:Show()
 
-        if state == LOOTHING_SESSION_STATE.INACTIVE then
+        if state == Loothing.SessionState.INACTIVE then
             self.sessionButton:SetText(L["START_SESSION"])
             self.sessionButton:Enable()
             self.startAllButton:Hide()
             self.addItemBtn:Hide()
             self.awardLaterCheck:Hide()
-        elseif state == LOOTHING_SESSION_STATE.ACTIVE then
+        elseif state == Loothing.SessionState.ACTIVE then
             self.sessionButton:SetText(L["END_SESSION"])
             self.sessionButton:Enable()
 
@@ -968,7 +968,7 @@ function LoothingSessionPanelMixin:UpdateFooter()
             local hasPending = false
             if items then
                 for _, item in items:Enumerate() do
-                    if item.state == LOOTHING_ITEM_STATE.PENDING then
+                    if item.state == Loothing.ItemState.PENDING then
                         hasPending = true
                         break
                     end
@@ -1178,7 +1178,7 @@ function LoothingSessionPanelMixin:AddMLControls(row, item)
     if not frame then return end
 
     -- Only add controls for PENDING items
-    if item.state ~= LOOTHING_ITEM_STATE.PENDING then return end
+    if item.state ~= Loothing.ItemState.PENDING then return end
 
     -- Delete button (remove item from session)
     if not frame._deleteButton then
@@ -1351,7 +1351,7 @@ function LoothingSessionPanelMixin:OnSessionButtonClick()
 
     local state = Loothing.Session:GetState()
 
-    if state == LOOTHING_SESSION_STATE.INACTIVE then
+    if state == Loothing.SessionState.INACTIVE then
         Loothing.Session:StartSession()
         self:TriggerEvent("OnStartSession")
     else
@@ -1370,7 +1370,7 @@ function LoothingSessionPanelMixin:OnStartAllClick()
     if not items then return end
 
     for _, item in items:Enumerate() do
-        if item.state == LOOTHING_ITEM_STATE.PENDING then
+        if item.state == Loothing.ItemState.PENDING then
             Loothing.Session:StartVoting(item.guid)
         end
     end
@@ -1400,7 +1400,7 @@ end
 ----------------------------------------------------------------------]]
 
 function CreateLoothingSessionPanel(parent)
-    local panel = LoolibCreateFromMixins(LoothingSessionPanelMixin)
+    local panel = Loolib.CreateFromMixins(LoothingSessionPanelMixin)
     panel:Init(parent)
     return panel
 end
