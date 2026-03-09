@@ -89,6 +89,7 @@ end
 --- Parse roll message from chat
 function LoothingRollFrameMixin:OnChatMessage(text)
     if not text then return end
+    local safeText = tostring(text)
 
     local hasPendingItem = self.pendingRollGUID ~= nil
     if not hasPendingItem and (not self.frame or not self.frame:IsShown()) then
@@ -103,7 +104,7 @@ function LoothingRollFrameMixin:OnChatMessage(text)
         end
     end
 
-    local playerName, roll, minRoll, maxRoll = text:match("(.+) rolls (%d+) %((%d+)%-(%d+)%)")
+    local playerName, roll, minRoll, maxRoll = string.match(safeText, "(.+) rolls (%d+) %((%d+)%-(%d+)%)")
     if not playerName then return end
 
     local myFullName = LoothingUtils and LoothingUtils.GetPlayerFullName and LoothingUtils.GetPlayerFullName() or UnitName("player")

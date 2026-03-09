@@ -32,13 +32,17 @@ end
 function LoothingRollTrackerMixin:OnChatMessage(text)
     if not text then return end
 
+    -- Convert to untainted string - CHAT_MSG_SYSTEM text is hardware-tainted
+    -- and calling methods on tainted strings errors during combat
+    local safeText = tostring(text)
+
     -- Pattern for roll messages
     -- Handles both "Player rolls X (Y-Z)" and localized versions
-    local playerName, roll, minRoll, maxRoll = text:match("(.+) rolls (%d+) %((%d+)%-(%d+)%)")
+    local playerName, roll, minRoll, maxRoll = string.match(safeText, "(.+) rolls (%d+) %((%d+)%-(%d+)%)")
 
     if not playerName then
         -- Try alternate pattern without "rolls" keyword (for localization)
-        playerName, roll, minRoll, maxRoll = text:match("(.+)%s+(%d+)%s+%((%d+)%-(%d+)%)")
+        playerName, roll, minRoll, maxRoll = string.match(safeText, "(.+)%s+(%d+)%s+%((%d+)%-(%d+)%)")
     end
 
     if playerName and roll then

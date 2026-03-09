@@ -88,6 +88,10 @@ function LoothingWhisperHandlerMixin:OnWhisperReceived(message, sender)
         return
     end
 
+    -- Detaint event payload strings for combat safety
+    message = tostring(message)
+    sender = tostring(sender)
+
     -- Trim whitespace and normalize
     message = strtrim(message)
 

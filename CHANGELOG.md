@@ -2,6 +2,15 @@
 
 All notable changes to Loothing will be documented in this file.
 
+## [1.1.7] - 2026-03-08
+
+### Fixed
+
+#### Taint-unsafe string method calls on event payloads
+- **`CHAT_MSG_SYSTEM` roll parsing crashed during combat**: `RollFrame/Events.lua` called `text:match()` on the tainted event payload string, triggering "attempt to index local 'text' (a secret string value tainted by 'Loothing')" errors when another player `/roll`ed during combat. Fixed with `tostring()` detaint + `string.match()` global function call (same pattern as RollTracker fix in v1.1.6)
+- **`CHAT_MSG_WHISPER` handler crashed during combat**: `WhisperHandler.lua` called `strtrim(message)`, `message:sub()`, `text:gmatch()`, and `parts[1]:lower()` on tainted event payload strings. Both `message` and `sender` are now detainted with `tostring()` at the handler entry point, making all downstream string operations safe
+- **Defensive `string.sub()` in Announcer**: `Announcer.lua` used `text:sub(1, 40)` in a debug log inside `SendToChannel()`. While `text` is internally constructed (not from an event), changed to `string.sub(text, 1, 40)` for consistency with the project's taint-safe pattern
+
 ## [1.1.6] - 2026-03-08
 
 ### Fixed

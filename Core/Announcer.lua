@@ -327,7 +327,7 @@ function LoothingAnnouncerMixin:SendToChannel(text, channel)
 
     -- Check combat/encounter restrictions - queue instead of dropping
     if self:IsRestricted() then
-        Loothing:Debug("Announcement queued (combat/encounter restriction):", text:sub(1, 40))
+        Loothing:Debug("Announcement queued (combat/encounter restriction):", string.sub(text, 1, 40))
         self.announcementQueue[#self.announcementQueue + 1] = { text = text, channel = channel }
         return
     end
