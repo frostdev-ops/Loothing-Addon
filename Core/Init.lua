@@ -1255,10 +1255,7 @@ local function RegisterSlashCommands()
         end
     end
 
-    SLASH_LOOTHING1 = "/loothing"
-    SLASH_LOOTHING2 = "/lt"
-
-    SlashCmdList["LOOTHING"] = function(msg)
+    Loolib.Compat.RegisterSlashCommand("LOOTHING", "/loothing", "/lt", function(msg)
         local token, rest = msg:match("^(%S*)%s*(.*)$")
         token = (token or ""):lower()
         rest = rest or ""
@@ -1288,7 +1285,7 @@ local function RegisterSlashCommands()
         end
 
         command.handler(rest, command, commands)
-    end
+    end)
 end
 
 --[[--------------------------------------------------------------------

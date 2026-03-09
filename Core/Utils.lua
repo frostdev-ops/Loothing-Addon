@@ -513,47 +513,29 @@ end
 ----------------------------------------------------------------------]]
 
 --- Deep copy a table
+-- Delegates to Loolib.TableUtil.DeepCopy (handles circular references).
 -- @param orig table
 -- @return table
 function LoothingUtils.DeepCopy(orig)
-    local copy
-    if type(orig) == "table" then
-        copy = {}
-        for key, value in next, orig, nil do
-            copy[LoothingUtils.DeepCopy(key)] = LoothingUtils.DeepCopy(value)
-        end
-        setmetatable(copy, LoothingUtils.DeepCopy(getmetatable(orig)))
-    else
-        copy = orig
-    end
-    return copy
+    return Loolib.TableUtil.DeepCopy(orig)
 end
 
---- Check if a value exists in an array
--- @param tbl table - Array to search
+--- Check if a value exists in a table
+-- Delegates to Loolib.TableUtil.Contains (uses pairs, works on arrays and maps).
+-- @param tbl table - Table to search
 -- @param value any - Value to find
 -- @return boolean
 function LoothingUtils.Contains(tbl, value)
-    for _, v in ipairs(tbl) do
-        if v == value then
-            return true
-        end
-    end
-    return false
+    return Loolib.TableUtil.Contains(tbl, value)
 end
 
 --- Remove a value from an array
+-- Delegates to Loolib.TableUtil.RemoveByValue.
 -- @param tbl table - Array to modify
 -- @param value any - Value to remove
 -- @return boolean - True if removed
 function LoothingUtils.RemoveValue(tbl, value)
-    for i, v in ipairs(tbl) do
-        if v == value then
-            table.remove(tbl, i)
-            return true
-        end
-    end
-    return false
+    return Loolib.TableUtil.RemoveByValue(tbl, value)
 end
 
 --[[--------------------------------------------------------------------

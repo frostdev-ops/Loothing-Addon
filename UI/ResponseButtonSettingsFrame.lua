@@ -213,7 +213,7 @@ function LoothingResponseButtonSettingsMixin:BuildFrame()
     renameBtn:SetScript("OnClick", function()
         local id  = self:GetActiveSetId()
         local set = Loothing.Settings:GetResponseSetById(id)
-        StaticPopupDialogs["LOOTHING_RENAME_SET"] = {
+        Loolib.Compat.RegisterStaticPopup("LOOTHING_RENAME_SET", {
             text         = "Enter new name for set:",
             button1      = "OK",
             button2      = "Cancel",
@@ -229,7 +229,7 @@ function LoothingResponseButtonSettingsMixin:BuildFrame()
             timeout      = 0,
             whileDead    = true,
             hideOnEscape = true,
-        }
+        })
         local dialog = StaticPopup_Show("LOOTHING_RENAME_SET")
         if dialog and set then
             dialog.EditBox:SetText(set.name)
@@ -251,7 +251,7 @@ function LoothingResponseButtonSettingsMixin:BuildFrame()
             Loothing:Print("Cannot delete the last response set.")
             return
         end
-        StaticPopupDialogs["LOOTHING_DEL_SET"] = {
+        Loolib.Compat.RegisterStaticPopup("LOOTHING_DEL_SET", {
             text         = "Delete this response set? This cannot be undone.",
             button1      = "Delete",
             button2      = "Cancel",
@@ -262,7 +262,7 @@ function LoothingResponseButtonSettingsMixin:BuildFrame()
             timeout      = 0,
             whileDead    = true,
             hideOnEscape = true,
-        }
+        })
         StaticPopup_Show("LOOTHING_DEL_SET")
     end)
 
@@ -280,7 +280,7 @@ function LoothingResponseButtonSettingsMixin:BuildFrame()
     resetBtn:SetPoint("BOTTOMLEFT", 12, 10)
     resetBtn:SetText("Reset to Defaults")
     resetBtn:SetScript("OnClick", function()
-        StaticPopupDialogs["LOOTHING_RESET_SETS"] = {
+        Loolib.Compat.RegisterStaticPopup("LOOTHING_RESET_SETS", {
             text         = "Reset ALL response sets to defaults? This cannot be undone.",
             button1      = "Reset",
             button2      = "Cancel",
@@ -293,7 +293,7 @@ function LoothingResponseButtonSettingsMixin:BuildFrame()
             timeout      = 0,
             whileDead    = true,
             hideOnEscape = true,
-        }
+        })
         StaticPopup_Show("LOOTHING_RESET_SETS")
     end)
 
@@ -738,7 +738,7 @@ function LoothingResponseButtonSettingsMixin:PopulateRow(row, setId, btnData, id
             Loothing:Print("Cannot delete the last button in a set.")
             return
         end
-        StaticPopupDialogs["LOOTHING_DEL_BTN"] = {
+        Loolib.Compat.RegisterStaticPopup("LOOTHING_DEL_BTN", {
             text         = "Delete this response button?",
             button1      = "Delete",
             button2      = "Cancel",
@@ -750,7 +750,7 @@ function LoothingResponseButtonSettingsMixin:PopulateRow(row, setId, btnData, id
             timeout      = 0,
             whileDead    = true,
             hideOnEscape = true,
-        }
+        })
         StaticPopup_Show("LOOTHING_DEL_BTN")
     end)
 

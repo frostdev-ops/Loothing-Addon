@@ -3,13 +3,12 @@
     Compat - Compatibility shims for deprecated/changed WoW APIs
 ----------------------------------------------------------------------]]
 
+local Loolib = LibStub("Loolib")
+
 local GetLootMethod = GetLootMethod
-local GetGuildRosterInfo = GetGuildRosterInfo
 local GetLootRollItemInfo = GetLootRollItemInfo
-local GuildRoster = GuildRoster
 local UnitIsInMyGuild = UnitIsInMyGuild
 
-local C_GuildInfo = C_GuildInfo
 local C_PartyInfo = C_PartyInfo
 local Enum = Enum
 
@@ -22,8 +21,9 @@ local enumLootMethod = Enum and Enum.LootMethod or {
     Personal = 5,
 }
 
-Loothing.GuildRoster = (C_GuildInfo and C_GuildInfo.GuildRoster) or GuildRoster
-Loothing.GetGuildRosterInfo = (C_GuildInfo and C_GuildInfo.GetGuildRosterInfo) or GetGuildRosterInfo
+-- Delegate to Loolib.Compat instead of reimplementing
+Loothing.GuildRoster = Loolib.Compat.GuildRoster
+Loothing.GetGuildRosterInfo = Loolib.Compat.GetGuildRosterInfo
 Loothing.UnitIsInMyGuild = UnitIsInMyGuild
 
 function Loothing.GetLootMethod()
