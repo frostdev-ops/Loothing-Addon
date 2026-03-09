@@ -1,9 +1,9 @@
 --[[--------------------------------------------------------------------
     Loothing - Loot Council Addon for WoW 12.0+
-    SecretValueTests - Tests for issecretvalue guard functions
+    SecretValueTests - Tests for LoolibSecretUtil and LoothingUtils delegates
 
-    Verifies that LoothingUtils.IsSecretValue() and related guards
-    correctly handle WoW 12.0 secret values returned by unit APIs.
+    Verifies that LoolibSecretUtil core functions and the LoothingUtils
+    backward-compatible delegates correctly handle WoW 12.0 secret values.
 ----------------------------------------------------------------------]]
 
 local TestRunner = LoothingTestRunner
@@ -34,13 +34,30 @@ local function RemoveMock()
 end
 
 --[[--------------------------------------------------------------------
-    Tests
+    Tests - LoolibSecretUtil (library level)
 ----------------------------------------------------------------------]]
 
-TestRunner:Describe("SecretValue Guards", function()
+TestRunner:Describe("LoolibSecretUtil", function()
 
     TestRunner:AfterEach(function()
         RemoveMock()
+    end)
+
+    ------------------------------------------------------------------
+    -- IsAvailable
+    ------------------------------------------------------------------
+
+    TestRunner:Describe("IsAvailable", function()
+
+        TestRunner:It("returns false when issecretvalue is nil", function()
+            issecretvalue = nil
+            Assert.IsFalse(LoolibSecretUtil.IsAvailable())
+        end, { category = "unit" })
+
+        TestRunner:It("returns true when issecretvalue exists", function()
+            InstallMock()
+            Assert.IsTrue(LoolibSecretUtil.IsAvailable())
+        end, { category = "unit" })
     end)
 
     ------------------------------------------------------------------
@@ -51,34 +68,34 @@ TestRunner:Describe("SecretValue Guards", function()
 
         TestRunner:It("returns false when issecretvalue is not available", function()
             issecretvalue = nil
-            Assert.IsFalse(LoothingUtils.IsSecretValue("hello"))
-            Assert.IsFalse(LoothingUtils.IsSecretValue(42))
-            Assert.IsFalse(LoothingUtils.IsSecretValue(nil))
+            Assert.IsFalse(LoolibSecretUtil.IsSecretValue("hello"))
+            Assert.IsFalse(LoolibSecretUtil.IsSecretValue(42))
+            Assert.IsFalse(LoolibSecretUtil.IsSecretValue(nil))
         end, { category = "unit" })
 
         TestRunner:It("returns false for normal values", function()
             InstallMock()
-            Assert.IsFalse(LoothingUtils.IsSecretValue("PlayerName"))
-            Assert.IsFalse(LoothingUtils.IsSecretValue(123))
-            Assert.IsFalse(LoothingUtils.IsSecretValue(nil))
-            Assert.IsFalse(LoothingUtils.IsSecretValue(true))
+            Assert.IsFalse(LoolibSecretUtil.IsSecretValue("PlayerName"))
+            Assert.IsFalse(LoolibSecretUtil.IsSecretValue(123))
+            Assert.IsFalse(LoolibSecretUtil.IsSecretValue(nil))
+            Assert.IsFalse(LoolibSecretUtil.IsSecretValue(true))
         end, { category = "unit" })
 
         TestRunner:It("returns true for secret values", function()
             InstallMock()
-            Assert.IsTrue(LoothingUtils.IsSecretValue(SECRET_SENTINEL))
+            Assert.IsTrue(LoolibSecretUtil.IsSecretValue(SECRET_SENTINEL))
         end, { category = "unit" })
 
         TestRunner:It("returns true if any argument is secret (varargs)", function()
             InstallMock()
-            Assert.IsTrue(LoothingUtils.IsSecretValue("normal", SECRET_SENTINEL))
-            Assert.IsTrue(LoothingUtils.IsSecretValue(SECRET_SENTINEL, "normal"))
-            Assert.IsFalse(LoothingUtils.IsSecretValue("a", "b", "c"))
+            Assert.IsTrue(LoolibSecretUtil.IsSecretValue("normal", SECRET_SENTINEL))
+            Assert.IsTrue(LoolibSecretUtil.IsSecretValue(SECRET_SENTINEL, "normal"))
+            Assert.IsFalse(LoolibSecretUtil.IsSecretValue("a", "b", "c"))
         end, { category = "unit" })
 
         TestRunner:It("handles zero arguments", function()
             InstallMock()
-            Assert.IsFalse(LoothingUtils.IsSecretValue())
+            Assert.IsFalse(LoolibSecretUtil.IsSecretValue())
         end, { category = "unit" })
     end)
 
@@ -90,14 +107,14 @@ TestRunner:Describe("SecretValue Guards", function()
 
         TestRunner:It("passes through normal values when issecretvalue unavailable", function()
             issecretvalue = nil
-            local a, b = LoothingUtils.SecretsForPrint("hello", 42)
+            local a, b = LoolibSecretUtil.SecretsForPrint("hello", 42)
             Assert.Equals("hello", a)
             Assert.Equals(42, b)
         end, { category = "unit" })
 
         TestRunner:It("replaces secret values with <secret>", function()
             InstallMock()
-            local a, b, c = LoothingUtils.SecretsForPrint("normal", SECRET_SENTINEL, 123)
+            local a, b, c = LoolibSecretUtil.SecretsForPrint("normal", SECRET_SENTINEL, 123)
             Assert.Equals("normal", a)
             Assert.Equals("<secret>", b)
             Assert.Equals("123", c)
@@ -105,8 +122,114 @@ TestRunner:Describe("SecretValue Guards", function()
 
         TestRunner:It("handles zero arguments", function()
             InstallMock()
-            local result = { LoothingUtils.SecretsForPrint() }
+            local result = { LoolibSecretUtil.SecretsForPrint() }
             Assert.Equals(0, #result)
+        end, { category = "unit" })
+    end)
+
+    ------------------------------------------------------------------
+    -- Guard
+    ------------------------------------------------------------------
+
+    TestRunner:Describe("Guard", function()
+
+        TestRunner:It("returns value when not secret", function()
+            InstallMock()
+            Assert.Equals("hello", LoolibSecretUtil.Guard("hello"))
+            Assert.Equals(42, LoolibSecretUtil.Guard(42))
+        end, { category = "unit" })
+
+        TestRunner:It("returns nil for secret value (no fallback)", function()
+            InstallMock()
+            Assert.IsNil(LoolibSecretUtil.Guard(SECRET_SENTINEL))
+        end, { category = "unit" })
+
+        TestRunner:It("returns fallback for secret value", function()
+            InstallMock()
+            Assert.Equals("fallback", LoolibSecretUtil.Guard(SECRET_SENTINEL, "fallback"))
+        end, { category = "unit" })
+
+        TestRunner:It("passthrough when issecretvalue is nil", function()
+            issecretvalue = nil
+            Assert.Equals("test", LoolibSecretUtil.Guard("test"))
+        end, { category = "unit" })
+    end)
+
+    ------------------------------------------------------------------
+    -- GuardToString
+    ------------------------------------------------------------------
+
+    TestRunner:Describe("GuardToString", function()
+
+        TestRunner:It("returns tostring for non-secret", function()
+            InstallMock()
+            Assert.Equals("42", LoolibSecretUtil.GuardToString(42))
+            Assert.Equals("hello", LoolibSecretUtil.GuardToString("hello"))
+        end, { category = "unit" })
+
+        TestRunner:It("returns <secret> for secret value", function()
+            InstallMock()
+            Assert.Equals("<secret>", LoolibSecretUtil.GuardToString(SECRET_SENTINEL))
+        end, { category = "unit" })
+
+        TestRunner:It("returns custom placeholder for secret value", function()
+            InstallMock()
+            Assert.Equals("???", LoolibSecretUtil.GuardToString(SECRET_SENTINEL, "???"))
+        end, { category = "unit" })
+
+        TestRunner:It("passthrough when issecretvalue is nil", function()
+            issecretvalue = nil
+            Assert.Equals("42", LoolibSecretUtil.GuardToString(42))
+        end, { category = "unit" })
+    end)
+end)
+
+--[[--------------------------------------------------------------------
+    Tests - LoothingUtils Delegates (backward compatibility)
+----------------------------------------------------------------------]]
+
+TestRunner:Describe("SecretValue Guards (LoothingUtils delegates)", function()
+
+    TestRunner:AfterEach(function()
+        RemoveMock()
+    end)
+
+    ------------------------------------------------------------------
+    -- IsSecretValue delegation
+    ------------------------------------------------------------------
+
+    TestRunner:Describe("IsSecretValue (delegate)", function()
+
+        TestRunner:It("delegates to LoolibSecretUtil", function()
+            InstallMock()
+            Assert.IsTrue(LoothingUtils.IsSecretValue(SECRET_SENTINEL))
+            Assert.IsFalse(LoothingUtils.IsSecretValue("normal"))
+        end, { category = "unit" })
+
+        TestRunner:It("returns false when issecretvalue is nil", function()
+            issecretvalue = nil
+            Assert.IsFalse(LoothingUtils.IsSecretValue("hello"))
+        end, { category = "unit" })
+    end)
+
+    ------------------------------------------------------------------
+    -- SecretsForPrint delegation
+    ------------------------------------------------------------------
+
+    TestRunner:Describe("SecretsForPrint (delegate)", function()
+
+        TestRunner:It("delegates to LoolibSecretUtil", function()
+            InstallMock()
+            local a, b = LoothingUtils.SecretsForPrint("normal", SECRET_SENTINEL)
+            Assert.Equals("normal", a)
+            Assert.Equals("<secret>", b)
+        end, { category = "unit" })
+
+        TestRunner:It("passes through when issecretvalue is nil", function()
+            issecretvalue = nil
+            local a, b = LoothingUtils.SecretsForPrint("a", "b")
+            Assert.Equals("a", a)
+            Assert.Equals("b", b)
         end, { category = "unit" })
     end)
 
@@ -174,27 +297,8 @@ TestRunner:Describe("SecretValue Guards", function()
 
         TestRunner:It("still works for normal names", function()
             InstallMock()
-            -- Can't fully test without GetNormalizedRealmName, but ensure no error
             local result = LoothingUtils.IsSamePlayer("Player-Realm", "Player-Realm")
             Assert.IsTrue(result)
-        end, { category = "unit" })
-    end)
-
-    ------------------------------------------------------------------
-    -- GetPlayerFullName with secret values
-    ------------------------------------------------------------------
-
-    TestRunner:Describe("GetPlayerFullName (secret guard)", function()
-
-        TestRunner:It("returns nil if UnitName returns secret", function()
-            InstallMock()
-            -- This test requires mocking UnitName which isn't straightforward
-            -- in the test framework, so we verify the guard function itself
-            -- handles secrets correctly through the utility functions
-            local secretName = SECRET_SENTINEL
-            if LoothingUtils.IsSecretValue(secretName) then
-                Assert.IsTrue(true) -- Guard correctly detects secret
-            end
         end, { category = "unit" })
     end)
 
@@ -206,7 +310,6 @@ TestRunner:Describe("SecretValue Guards", function()
 
         TestRunner:It("all guards are no-ops when issecretvalue is nil", function()
             issecretvalue = nil
-            -- None of these should error
             Assert.IsFalse(LoothingUtils.IsSecretValue("test"))
             Assert.Equals("Name", LoothingUtils.GetShortName("Name-Realm"))
             Assert.IsNotNil(LoothingUtils.NormalizeName("Name"))

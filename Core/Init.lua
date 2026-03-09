@@ -373,8 +373,8 @@ local function DetermineML()
     -- In retail WoW 12.0+, the group/raid leader is treated as ML
     if IsInRaid() then
         for i = 1, GetNumGroupMembers() do
-            local name, rank = GetRaidRosterInfo(i)
-            if rank == 2 and not LoothingUtils.IsSecretValue(name) then -- Raid leader
+            local name, rank = LoolibSecretUtil.SafeGetRaidRosterInfo(i)
+            if rank == 2 and name then -- Raid leader
                 return LoothingUtils.NormalizeName(name)
             end
         end
@@ -385,8 +385,8 @@ local function DetermineML()
         for i = 1, 4 do
             local unit = "party" .. i
             if UnitExists(unit) and UnitIsGroupLeader(unit) then
-                local name, realm = UnitName(unit)
-                if LoothingUtils.IsSecretValue(name) then return nil end
+                local name, realm = LoolibSecretUtil.SafeUnitName(unit)
+                if not name then return nil end
                 if realm and realm ~= "" then
                     return name .. "-" .. realm
                 end
@@ -1409,16 +1409,16 @@ Loothing.debug = false
 
 function Loothing:Debug(...)
     if self.debug then
-        print("|cff00ff00[Loothing Debug]|r", LoothingUtils.SecretsForPrint(...))
+        print("|cff00ff00[Loothing Debug]|r", LoolibSecretUtil.SecretsForPrint(...))
     end
 end
 
 function Loothing:Error(...)
-    print("|cffff0000[Loothing Error]|r", LoothingUtils.SecretsForPrint(...))
+    print("|cffff0000[Loothing Error]|r", LoolibSecretUtil.SecretsForPrint(...))
 end
 
 function Loothing:Print(...)
-    print("|cff00ccff[Loothing]|r", LoothingUtils.SecretsForPrint(...))
+    print("|cff00ccff[Loothing]|r", LoolibSecretUtil.SecretsForPrint(...))
 end
 
 --[[--------------------------------------------------------------------

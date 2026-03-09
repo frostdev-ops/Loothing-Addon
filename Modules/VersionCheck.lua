@@ -143,14 +143,11 @@ function LoothingVersionCheckMixin:GroupHasVersion(minVersion)
     for i = 1, numMembers do
         local name
         if IsInRaid() then
-            name = GetRaidRosterInfo(i)
+            name = LoolibSecretUtil.SafeGetRaidRosterInfo(i)
         else
             local unit = (i == numMembers) and "player" or ("party" .. i)
             if UnitExists(unit) then
-                local rawName = UnitName(unit)
-                if not LoothingUtils.IsSecretValue(rawName) then
-                    name = rawName
-                end
+                name = LoolibSecretUtil.SafeUnitName(unit)
             end
         end
 
@@ -184,14 +181,12 @@ function LoothingVersionCheckMixin:GetOutdatedMembers(minVersion)
     for i = 1, numMembers do
         local name
         if IsInRaid() then
-            name = GetRaidRosterInfo(i)
+            name = LoolibSecretUtil.SafeGetRaidRosterInfo(i)
         else
             local unit = (i == numMembers) and "player" or ("party" .. i)
             if UnitExists(unit) then
-                local rawName = UnitName(unit)
-                if not LoothingUtils.IsSecretValue(rawName) then
-                    name = rawName
-                end
+                local rawName = LoolibSecretUtil.SafeUnitName(unit)
+                name = rawName
             end
         end
 
@@ -217,8 +212,8 @@ end
 function LoothingVersionCheckMixin:GetCurrentRosterNames()
     local names = {}
     if not IsInGroup() then
-        local pName = UnitName("player")
-        if not LoothingUtils.IsSecretValue(pName) then
+        local pName = LoolibSecretUtil.SafeUnitName("player")
+        if pName then
             names[LoothingUtils.NormalizeName(pName)] = true
         end
         return names
@@ -316,7 +311,7 @@ function LoothingVersionCheckMixin:Query(target)
     self.queryStartTime = GetTime()
 
     -- Add self to cache (include tVersion if set)
-    self:AddVersionEntry(UnitName("player"), LOOTHING_VERSION, self.tVersion)
+    self:AddVersionEntry(LoolibSecretUtil.SafeUnitName("player"), LOOTHING_VERSION, self.tVersion)
 
     -- Send request
     if target == "guild" then

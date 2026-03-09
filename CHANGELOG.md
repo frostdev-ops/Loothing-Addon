@@ -6,60 +6,98 @@ All notable changes to Loothing will be documented in this file.
 
 ### Added
 
-#### `issecretvalue` remediation for WoW 12.0 secret values
-WoW 12.0 introduced "secret values" — opaque Lua values returned by unit APIs on tainted execution paths during combat. Any operation (`==`, `string.find()`, `#`, table key) on a secret value errors. Loothing had zero checks despite targeting WoW 12.0. This release adds comprehensive guards across 14 files.
+#### `LoolibSecretUtil` — Library-level secret value handling
+WoW 12.0 introduced "secret values" — opaque Lua values returned by unit APIs (`UnitName`, `UnitClass`, `GetRaidRosterInfo`, `GetPlayerInfoByGUID`) on tainted execution paths during combat. Any operation (`==`, `string.find()`, `#`, table key) on a secret value errors. The `issecretvalue(value)` global detects them.
 
-- **`LoothingUtils.IsSecretValue(...)`**: Variadic check — returns `true` if any argument is a WoW secret value. No-op when `issecretvalue` global is unavailable (backward compatible with older WoW builds)
-- **`LoothingUtils.SecretsForPrint(...)`**: Replaces secret values with `"<secret>"` for safe `print()` output. Passthrough when `issecretvalue` is unavailable
-- **`Debug/Tests/SecretValueTests.lua`**: Unit tests with mock `issecretvalue` covering `IsSecretValue`, `SecretsForPrint`, `NormalizeName`, `GetShortName`, `IsSamePlayer` with secret inputs, and backward compatibility when `issecretvalue` is nil
+v1.1.8 initially added `LoothingUtils.IsSecretValue()` and `LoothingUtils.SecretsForPrint()` at the addon level. This release **elevates** that functionality into Loolib as `LoolibSecretUtil` — a proper reusable module any Loolib consumer can use — then migrates all 14+ Loothing files to the library version.
+
+##### Core Detection Functions
+- **`LoolibSecretUtil.IsAvailable()`**: Returns `true` if `issecretvalue` global exists (WoW 12.0+)
+- **`LoolibSecretUtil.IsSecretValue(...)`**: Variadic check — returns `true` if any argument is a WoW secret value. No-op when `issecretvalue` is unavailable
+- **`LoolibSecretUtil.SecretsForPrint(...)`**: Replaces secret values with `"<secret>"` for safe output. Passthrough when `issecretvalue` is unavailable
+- **`LoolibSecretUtil.Guard(value, fallback?)`**: Returns `fallback` (default `nil`) if value is secret
+- **`LoolibSecretUtil.GuardToString(value, placeholder?)`**: Returns `tostring(value)` or `placeholder` (default `"<secret>"`) if secret
+
+##### Safe Unit API Wrappers
+- **`LoolibSecretUtil.SafeUnitName(unit, showServerName?)`**: Wraps `UnitName`/`GetUnitName` — returns `nil, nil` when name is secret
+- **`LoolibSecretUtil.SafeUnitClass(unit)`**: Wraps `UnitClass` — replaces secret returns with `nil`
+- **`LoolibSecretUtil.SafeGetRaidRosterInfo(index)`**: Wraps `GetRaidRosterInfo` — returns `nil` when name is secret, guards class/fileName/zone
+- **`LoolibSecretUtil.SafeGetPlayerInfoByGUID(guid)`**: Wraps `GetPlayerInfoByGUID` — returns `nil` when name is secret, guards class/race/realm
+
+##### Module Registration
+- **`Loolib/Utils/SecretUtil.lua`** (NEW): ~182 lines, registered via `Loolib:RegisterModule("SecretUtil", LoolibSecretUtil)`
+- **`Loolib/loolib.toc`**: Added `Utils\SecretUtil.lua` before `Utils\Transmog.lua` in the Utils section
+- All functions are pre-12.0 compatible (early-return raw API results when `issecretvalue` is nil)
+
+##### Backward Compatibility
+- **`LoothingUtils.IsSecretValue`** and **`LoothingUtils.SecretsForPrint`** retained as thin delegates to `LoolibSecretUtil` equivalents
+- **`Debug/Tests/SecretValueTests.lua`**: Added `LoolibSecretUtil` test suite (IsAvailable, IsSecretValue, SecretsForPrint, Guard, GuardToString) alongside existing delegation verification tests
+
+### Changed
+
+#### Migration from manual guards to `LoolibSecretUtil` safe wrappers (14 files)
+All raw `UnitName`/`UnitClass`/`GetRaidRosterInfo`/`GetPlayerInfoByGUID` calls with manual `IsSecretValue` guards replaced with single `LoolibSecretUtil.Safe*` wrapper calls across the codebase:
+
+- **`Core/Utils.lua`**: `GetPlayerFullName`, `NormalizeName`, `GetShortName`, `IsSamePlayer`, `GetRaidRoster`, `IsGuildGroup` — all migrated to `LoolibSecretUtil` calls
+- **`Core/Init.lua`**: `DetermineML` raid/party branches, `Debug`/`Error`/`Print` varargs
+- **`Core/SettingsVoting.lua`**: `GetMasterLooter` raid/party branches
+- **`Core/AutoAward.lua`**: `FindDisenchanter`, `IsPlayerInRaid` (solo + loop)
+- **`Comm/Handlers/Core.lua`**: `isGroupLeaderOrAssistant` raid/party branches
+- **`Council/CouncilMembers.lua`**: `GetCurrentGroupMembers` party branch
+- **`Modules/VersionCheck.lua`**: `GroupHasVersion`, `GetOutdatedMembers`, `GetCurrentRosterNames`, `Query`
+- **`Data/Session.lua`**: `OnLootReceived` ownership check
+- **`Data/PlayerCache.lua`**: `Get`, `GetOrCreate`, `FetchFromGUID`, `Invalidate`, `SplitNameRealm`
+- **`Debug/ErrorHandler.lua`**: `CaptureError` defensive guard
+- **`UI/RosterPanel.lua`**: `BuildUnitMap` all 3 branches
+- **`UI/TradePanel.lua`**: `FindUnitIdForPlayer` group loop + target
+- **`UI/VersionCheckPanel.lua`**: `QueryVersions` solo branch
+- **`UI/SyncPanel.lua`**: `GetOnlineMembers` player name
 
 ### Fixed
 
 #### Name-handling functions crash on secret values
-- **`GetPlayerFullName()`**: `UnitName("player")` can return a secret value during combat on tainted paths. Now returns `nil` instead of crashing on string concatenation
+- **`GetPlayerFullName()`**: `UnitName("player")` can return a secret value during combat on tainted paths. Now uses `SafeUnitName` and returns `nil` instead of crashing
 - **`NormalizeName(name)`**: Secret name input caused `name:find("-")` to error. Now returns `nil` for secret inputs
 - **`GetShortName(fullName)`**: Secret input caused `fullName:match()` to error. Now returns `nil` for secret inputs
 - **`IsSamePlayer(name1, name2)`**: Either name being secret caused comparison crash. Now returns `false` for secret inputs
-- **`GetRaidRoster()` raid branch**: `GetRaidRosterInfo` name guarded — secret names skip the roster entry
-- **`GetRaidRoster()` party branch**: `UnitName(unit)` and `UnitClass(unit)` guarded — secret names skip the entry, secret class sets class fields to nil
+- **`GetRaidRoster()` raid branch**: Uses `SafeGetRaidRosterInfo` — secret names skip the roster entry
+- **`GetRaidRoster()` party branch**: Uses `SafeUnitName`/`SafeUnitClass` — secret names skip the entry, secret class sets class fields to nil
+- **`IsGuildGroup()`**: Raw `GetRaidRosterInfo` call migrated to `SafeGetRaidRosterInfo` with nil guard on name
 
 #### ML detection crash on secret values during combat
-- **`DetermineML()` in `Init.lua`**: Raid leader name from `GetRaidRosterInfo` now skipped if secret; party leader name from `UnitName` returns `nil` (triggers ML retry) if secret
-- **`GetMasterLooter()` in `SettingsVoting.lua`**: Same guard pattern as `DetermineML` — raid branch skips secret names, party branch wraps name usage in secret check
+- **`DetermineML()` in `Init.lua`**: Uses `SafeGetRaidRosterInfo`/`SafeUnitName` — nil name triggers ML retry
+- **`GetMasterLooter()` in `SettingsVoting.lua`**: Uses `SafeGetRaidRosterInfo`/`SafeUnitName` — skips secret names
 
 #### Comm handler crash on secret values
-- **`isGroupLeaderOrAssistant()` in `Comm/Handlers/Core.lua`**: Both raid branch (`GetRaidRosterInfo` name) and party branch (`UnitName`) now skip secret values before `IsSamePlayer` comparison, preventing combat-time message rejection crashes
+- **`isGroupLeaderOrAssistant()` in `Comm/Handlers/Core.lua`**: Uses `SafeGetRaidRosterInfo`/`SafeUnitName` — prevents combat-time message rejection crashes
 
 #### AutoAward crash on secret values
-- **`FindDisenchanter()`**: `GetUnitName(unit, true)` result guarded — secret names set to nil. Fixed secondary bug where a nil name with a matching DE note would return nil early, preventing the guild roster fallback from running
-- **`IsPlayerInRaid()` solo check**: `UnitName("player")` guarded — returns `false` if secret
-- **`IsPlayerInRaid()` loop**: `GetUnitName(unit, true)` guarded — secret names skip the comparison
+- **`FindDisenchanter()`**: Uses `SafeUnitName(unit, true)` and `SafeGetRaidRosterInfo` — nil name safely handled by `note = publicNote or ""`
+- **`IsPlayerInRaid()`**: Uses `SafeUnitName` for both solo check and group loop
 
 #### UI panel crashes on secret values during combat
-- **`BuildUnitMap()` in `RosterPanel.lua`**: All 3 `UnitName` calls (raid, player, party branches) guarded — secret names skip the map entry
-- **`FindUnitIdForPlayer()` in `TradePanel.lua`**: Both group loop and target `UnitName` calls extracted to local variables and guarded before comparison
-- **`QueryVersions()` solo branch in `VersionCheckPanel.lua`**: `UnitName("player")` guarded — skips self-entry creation if secret
-- **`GetOnlineMembers()` in `SyncPanel.lua`**: `UnitName("player")` guarded — sets to nil if secret, preventing self-exclusion filter from crashing
+- **`BuildUnitMap()` in `RosterPanel.lua`**: All 3 `UnitName` calls replaced with `SafeUnitName`
+- **`FindUnitIdForPlayer()` in `TradePanel.lua`**: Uses `SafeUnitName` with nil checks
+- **`QueryVersions()` solo branch in `VersionCheckPanel.lua`**: Uses `SafeUnitName`/`SafeUnitClass`
+- **`GetOnlineMembers()` in `SyncPanel.lua`**: Uses `SafeUnitName` — single call replaces raw API + guard
 
 #### Council/module crashes on secret values
-- **`GetCurrentGroupMembers()` in `CouncilMembers.lua`**: Party branch `UnitName` and `UnitClass` guarded — secret names skip the member, secret class set to nil
-- **`GroupHasVersion()` in `VersionCheck.lua`**: Party branch `UnitName` wrapped in secret check before assignment
-- **`GetOutdatedMembers()` in `VersionCheck.lua`**: Same pattern as `GroupHasVersion`
-- **`GetCurrentRosterNames()` in `VersionCheck.lua`**: Solo `UnitName("player")` guarded before normalization and table key insertion
-- **`OnLootReceived()` in `Session.lua`**: Fallback `UnitName("player")` comparison guarded — prevents crash in the legacy comparison branch
+- **`GetCurrentGroupMembers()` in `CouncilMembers.lua`**: Uses `SafeUnitName`/`SafeUnitClass`
+- **`GroupHasVersion()`/`GetOutdatedMembers()`/`GetCurrentRosterNames()`/`Query()` in `VersionCheck.lua`**: All migrated to `SafeGetRaidRosterInfo`/`SafeUnitName`
+- **`OnLootReceived()` in `Session.lua`**: Uses `SafeUnitName` for ownership check
 
 #### PlayerCache crashes on secret value inputs
-- **`Get(nameOrGUID)`**: Early return `nil` if input is a secret value (prevents `:match()` crash)
+- **`Get(nameOrGUID)`**: Early return `nil` via `LoolibSecretUtil.IsSecretValue`
 - **`GetOrCreate(nameOrGUID)`**: Early return `nil` before creating entries with secret keys
-- **`FetchFromGUID(guid)`**: Guards `GetPlayerInfoByGUID()` returns — secret name returns nil, secret class/realm set to nil
+- **`FetchFromGUID(guid)`**: Uses `SafeGetPlayerInfoByGUID` — replaces raw call + 3 manual guards
 - **`Invalidate(nameOrGUID)`**: Early return `false` if input is secret
 - **`SplitNameRealm(fullName)`**: Early return `nil, nil` if input is secret
 
 #### Error handler crash on secret error messages
-- **`CaptureError(msg)` in `ErrorHandler.lua`**: Defensive check replaces secret error messages with `"<secret error>"` before `tostring()` and pattern matching. Uses `LoothingUtils and LoothingUtils.IsSecretValue` guard since ErrorHandler loads early
+- **`CaptureError(msg)` in `ErrorHandler.lua`**: Uses `LoolibSecretUtil.IsSecretValue` for defensive guard
 
 #### Debug/Print output safety
-- **`Loothing:Debug()`**, **`Loothing:Error()`**, **`Loothing:Print()`** in `Init.lua`: All three now pass varargs through `LoothingUtils.SecretsForPrint()`, replacing secret values with `"<secret>"` in chat output instead of crashing
+- **`Loothing:Debug()`**, **`Loothing:Error()`**, **`Loothing:Print()`** in `Init.lua`: Pass varargs through `LoolibSecretUtil.SecretsForPrint()`
 
 ## [1.1.7] - 2026-03-08
 

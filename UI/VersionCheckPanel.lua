@@ -182,9 +182,9 @@ function LoothingVersionCheckPanelMixin:QueryVersions()
         end
     else
         -- Solo - show self
-        local playerName = UnitName("player")
-        if not LoothingUtils.IsSecretValue(playerName) then
-            local _, playerClass = UnitClass("player")
+        local playerName = LoolibSecretUtil.SafeUnitName("player")
+        if playerName then
+            local _, playerClass = LoolibSecretUtil.SafeUnitClass("player")
             self.entries[playerName] = {
                 name = playerName,
                 class = playerClass,

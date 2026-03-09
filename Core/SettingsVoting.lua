@@ -75,8 +75,8 @@ function LoothingSettingsMixin:GetMasterLooter()
 
     if IsInRaid() then
         for i = 1, GetNumGroupMembers() do
-            local name, rank = GetRaidRosterInfo(i)
-            if rank == 2 and not LoothingUtils.IsSecretValue(name) then
+            local name, rank = LoolibSecretUtil.SafeGetRaidRosterInfo(i)
+            if rank == 2 and name then
                 return name
             end
         end
@@ -87,8 +87,8 @@ function LoothingSettingsMixin:GetMasterLooter()
         for i = 1, 4 do
             local unit = "party" .. i
             if UnitExists(unit) and UnitIsGroupLeader(unit) then
-                local name, realm = UnitName(unit)
-                if not LoothingUtils.IsSecretValue(name) then
+                local name, realm = LoolibSecretUtil.SafeUnitName(unit)
+                if name then
                     if realm and realm ~= "" then
                         return name .. "-" .. realm
                     end

@@ -212,12 +212,11 @@ function LoothingCouncilMixin:GetCurrentGroupMembers()
         for i = 1, 4 do
             local unit = "party" .. i
             if UnitExists(unit) then
-                local name = UnitName(unit)
-                local _, class = UnitClass(unit)
-                if LoothingUtils.IsSecretValue(class) then class = nil end
+                local name = LoolibSecretUtil.SafeUnitName(unit)
+                local _, class = LoolibSecretUtil.SafeUnitClass(unit)
                 local role = UnitGroupRolesAssigned(unit)
 
-                if name and not LoothingUtils.IsSecretValue(name) then
+                if name then
                     name = LoothingUtils.NormalizeName(name)
                     members[#members + 1] = {
                         name = name,

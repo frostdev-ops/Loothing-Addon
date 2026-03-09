@@ -101,13 +101,12 @@ function LoothingAutoAwardMixin:FindDisenchanter()
         for i = 1, numMembers do
             local unit = isRaid and ("raid" .. i) or ("party" .. i)
             if UnitExists(unit) then
-                local name = GetUnitName(unit, true)
-                if LoothingUtils.IsSecretValue(name) then name = nil end
+                local name = LoolibSecretUtil.SafeUnitName(unit, true)
                 local note = ""
 
                 -- Get player's raid note if available
                 if isRaid then
-                    local _, _, _, _, _, _, _, publicNote = GetRaidRosterInfo(i)
+                    local _, _, _, _, _, _, _, publicNote = LoolibSecretUtil.SafeGetRaidRosterInfo(i)
                     note = publicNote or ""
                 end
 
@@ -156,8 +155,8 @@ function LoothingAutoAwardMixin:IsPlayerInRaid(playerName)
 
     if numMembers == 0 then
         -- Solo, check if it's us
-        local myName = UnitName("player")
-        if LoothingUtils.IsSecretValue(myName) then return false end
+        local myName = LoolibSecretUtil.SafeUnitName("player")
+        if not myName then return false end
         return normalized == LoothingUtils.NormalizeName(myName)
     end
 
@@ -165,8 +164,8 @@ function LoothingAutoAwardMixin:IsPlayerInRaid(playerName)
     for i = 1, numMembers do
         local unit = isRaid and ("raid" .. i) or ("party" .. i)
         if UnitExists(unit) then
-            local name = GetUnitName(unit, true)
-            if not LoothingUtils.IsSecretValue(name) and LoothingUtils.NormalizeName(name) == normalized then
+            local name = LoolibSecretUtil.SafeUnitName(unit, true)
+            if name and LoothingUtils.NormalizeName(name) == normalized then
                 return true
             end
         end
