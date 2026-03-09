@@ -299,8 +299,9 @@ function LoothingPlayerCacheMixin:FetchFromGUID(guid)
     end
 
     -- Use current realm if not returned
+    -- (GetNormalizedRealmName can return nil before PLAYER_LOGIN; fall back to GetRealmName)
     if not realmName or realmName == "" then
-        realmName = GetNormalizedRealmName()
+        realmName = GetNormalizedRealmName() or GetRealmName()
     end
 
     -- Check if we already have this entry
@@ -425,7 +426,7 @@ function LoothingPlayerCacheMixin:GetShortName(nameOrGUID)
     end
 
     -- Strip realm if same as player's realm
-    local myRealm = GetNormalizedRealmName()
+    local myRealm = GetNormalizedRealmName() or GetRealmName()
     if player.realm and player.realm == myRealm then
         return player.name
     end

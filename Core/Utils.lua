@@ -139,7 +139,10 @@ end
 -- @return string - "Name-Realm" format
 function LoothingUtils.GetPlayerFullName()
     local name = UnitName("player")
-    local realm = GetNormalizedRealmName()
+    local realm = GetNormalizedRealmName() or GetRealmName() or ""
+    if realm == "" then
+        return name
+    end
     return name .. "-" .. realm
 end
 
@@ -154,8 +157,11 @@ function LoothingUtils.NormalizeName(name)
         return name
     end
 
-    -- Add current realm
-    local realm = GetNormalizedRealmName()
+    -- Add current realm (nil-safe: GetNormalizedRealmName can return nil before PLAYER_LOGIN)
+    local realm = GetNormalizedRealmName() or GetRealmName() or ""
+    if realm == "" then
+        return name
+    end
     return name .. "-" .. realm
 end
 

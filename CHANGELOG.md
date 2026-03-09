@@ -2,6 +2,19 @@
 
 All notable changes to Loothing will be documented in this file.
 
+## [1.1.6] - 2026-03-08
+
+### Fixed
+
+#### Nil-realm crash on early addon load
+- **`GetPlayerFullName()` crashed before PLAYER_LOGIN completed**: `GetNormalizedRealmName()` returns `nil` during early initialization (before PLAYER_LOGIN fires or on first load). The function naively concatenated `name .. "-" .. nil`, producing a Lua error that propagated up through `Session:IsMasterLooter()` → `SessionPanel:UpdateHeader()` → `MainFrame:Init()`, preventing the addon from loading at all
+- **`NormalizeName()` had the identical crash**: Any call path that normalized a name without an existing realm suffix (roster building, ML detection, `IsSamePlayer()`) would also crash with a nil concatenation when both realm APIs returned nil
+- **`PlayerCache` could store nil realm and crash on index key**: When `GetPlayerInfoByGUID` returned an empty realm and `GetNormalizedRealmName()` was also nil, the fallback assigned nil to `realmName`. A subsequent `byName[name .. "-" .. realmName]` index write then crashed identically
+- **Fix (all three sites)**: Replaced bare `GetNormalizedRealmName()` with the nil-safe fallback chain `GetNormalizedRealmName() or GetRealmName() or ""`. An empty-string guard avoids a trailing `-` when both APIs return nil/empty. `PlayerCache:GetShortName()` same-realm comparison updated to use the same fallback so same-realm players aren't shown with a redundant realm suffix after first load
+
+#### Removed stale temp file
+- **`Core/Constants.lua.tmp`** (empty 1-line leftover) deleted from the repository
+
 ## [1.1.5] - 2026-03-08
 
 ### Added
