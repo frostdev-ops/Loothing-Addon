@@ -766,7 +766,7 @@ function LoothingAddItemFrameMixin:OnAddClick()
     if #self.itemQueue == 0 then return end
 
     if not Loothing.Session then
-        print("|cffff0000[Loothing]|r Session module not available.")
+        Loothing:Error("Session module not available.")
         return
     end
 
@@ -783,7 +783,7 @@ function LoothingAddItemFrameMixin:OnAddClick()
         Loothing:Print(added .. " item(s) added to session.")
         self:Hide()
     else
-        print("|cffff0000[Loothing]|r Failed to add items to session.")
+        Loothing:Error("Failed to add items to session.")
     end
 end
 

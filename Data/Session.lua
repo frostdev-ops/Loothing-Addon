@@ -2153,14 +2153,14 @@ function LoothingSessionMixin:HandleRemoteCandidateUpdate(data)
     if cData.roll and cData.roll > 0 then
         candidate:SetRoll(cData.roll, 1, 100) -- Range assumed 1-100 for now
     end
-    
+
     -- Update gear
     if cData.gear1 or cData.gear2 then
         candidate.gear1Link = cData.gear1
         candidate.gear2Link = cData.gear2
         candidate.gear1ilvl = cData.ilvl1
         candidate.gear2ilvl = cData.ilvl2
-        
+
         -- Recalculate ilvl diff if item has ilvl
         if item.itemLevel and item.itemLevel > 0 then
             local avgEquip = 0
@@ -2173,7 +2173,7 @@ function LoothingSessionMixin:HandleRemoteCandidateUpdate(data)
             candidate.ilvlDiff = item.itemLevel - avgEquip
         end
     end
-    
+
     candidate:SetItemsWon(cData.itemsWon)
 
     self:TriggerEvent("OnCandidateUpdated", item, candidate)
@@ -2248,18 +2248,18 @@ function LoothingSessionMixin:HandleRemoteVoteUpdate(data)
 
     local candidateName = data.candidateName
     local voters = data.voters
-    
+
     -- Ensure CandidateManager exists
     local candidateManager = item:GetCandidateManager()
     if not candidateManager then
         item.candidateManager = CreateLoothingCandidateManager()
         candidateManager = item.candidateManager
     end
-    
+
     -- Use GetOrCreateCandidate to handle concurrent updates
     -- Fallback to UNKNOWN class, will be updated when CandidateUpdate arrives
     local candidate = candidateManager:GetOrCreateCandidate(candidateName, "UNKNOWN")
-    
+
     if candidate then
         candidate.voters = voters
         candidate.councilVotes = #voters

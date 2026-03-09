@@ -641,7 +641,7 @@ function LoothingVotePanelMixin:SubmitVote()
 
     -- Check for observe mode
     if Loothing.Settings and Loothing.Settings:GetObserveMode() then
-        print("|cff00ccff[Loothing]|r You are in observe mode and cannot cast votes.")
+        Loothing:Print("You are in observe mode and cannot cast votes.")
         return
     end
 
@@ -649,7 +649,7 @@ function LoothingVotePanelMixin:SubmitVote()
     local note = self:GetNote()
     if Loothing.Settings and Loothing.Settings:GetRequireNotes() then
         if note == "" then
-            print("|cff00ccff[Loothing]|r You must add a note with your vote.")
+            Loothing:Print("You must add a note with your vote.")
             if self.noteInput then
                 self.noteInput:SetFocus()
             end

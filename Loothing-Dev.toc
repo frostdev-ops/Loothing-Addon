@@ -41,12 +41,6 @@ Core\SettingsVoting.lua
 Core\Options\SessionSettings.lua
 Core\Options\LocalPreferences.lua
 Core\OptionsTable.lua
-# Legacy options files (kept for reference, replaced by SessionSettings + LocalPreferences)
-# Core\Options\Voting.lua
-# Core\Options\Council.lua
-# Core\Options\Announcements.lua
-# Core\Options\Advanced.lua
-# Core\Options\AwardReasons.lua
 Core\ItemFilter.lua
 Core\ResponseManager.lua
 Core\AutoAward.lua
