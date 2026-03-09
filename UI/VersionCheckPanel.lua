@@ -183,13 +183,15 @@ function LoothingVersionCheckPanelMixin:QueryVersions()
     else
         -- Solo - show self
         local playerName = UnitName("player")
-        local _, playerClass = UnitClass("player")
-        self.entries[playerName] = {
-            name = playerName,
-            class = playerClass,
-            version = Loothing.version or LOOTHING_VERSION,
-            status = "current",
-        }
+        if not LoothingUtils.IsSecretValue(playerName) then
+            local _, playerClass = UnitClass("player")
+            self.entries[playerName] = {
+                name = playerName,
+                class = playerClass,
+                version = Loothing.version or LOOTHING_VERSION,
+                status = "current",
+            }
+        end
     end
 
     -- Register for version responses (once)

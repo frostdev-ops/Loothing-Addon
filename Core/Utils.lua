@@ -7,6 +7,39 @@ local Loolib = LibStub("Loolib")
 
 LoothingUtils = {}
 
+--[[--------------------------------------------------------------------
+    Secret Value Guards (WoW 12.0+)
+    WoW can return opaque "secret values" from unit APIs during combat.
+    Any operation (==, string ops, table key) on a secret value errors.
+    Use these guards before processing unit API returns.
+----------------------------------------------------------------------]]
+
+--- Check if any of the given values are WoW secret values
+-- @param ... - Values to check
+-- @return boolean - True if any value is secret
+function LoothingUtils.IsSecretValue(...)
+    if not issecretvalue then return false end
+    for i = 1, select("#", ...) do
+        if issecretvalue(select(i, ...)) then return true end
+    end
+    return false
+end
+
+--- Replace secret values with "<secret>" for safe printing
+-- @param ... - Values to sanitize
+-- @return ... - Sanitized values
+function LoothingUtils.SecretsForPrint(...)
+    if not issecretvalue then return ... end
+    local n = select("#", ...)
+    if n == 0 then return end
+    local ret = {}
+    for i = 1, n do
+        local v = select(i, ...)
+        ret[i] = issecretvalue(v) and "<secret>" or tostring(v)
+    end
+    return unpack(ret, 1, n)
+end
+
 local function IsTestModeEnabled()
     return (Loothing and Loothing.TestMode and Loothing.TestMode:IsActive())
         or (LoothingTestMode and LoothingTestMode:IsEnabled())
@@ -139,6 +172,7 @@ end
 -- @return string - "Name-Realm" format
 function LoothingUtils.GetPlayerFullName()
     local name = UnitName("player")
+    if LoothingUtils.IsSecretValue(name) then return nil end
     local realm = GetNormalizedRealmName() or GetRealmName() or ""
     if realm == "" then
         return name
@@ -150,7 +184,7 @@ end
 -- @param name string - Player name (may or may not include realm)
 -- @return string - Normalized "Name-Realm" format
 function LoothingUtils.NormalizeName(name)
-    if not name then return nil end
+    if not name or LoothingUtils.IsSecretValue(name) then return nil end
 
     -- Already has realm
     if name:find("-") then
@@ -169,7 +203,7 @@ end
 -- @param fullName string - "Name-Realm" format
 -- @return string - Just the name portion
 function LoothingUtils.GetShortName(fullName)
-    if not fullName then return nil end
+    if not fullName or LoothingUtils.IsSecretValue(fullName) then return nil end
     return fullName:match("^([^-]+)") or fullName
 end
 
@@ -179,6 +213,7 @@ end
 -- @return boolean
 function LoothingUtils.IsSamePlayer(name1, name2)
     if not name1 or not name2 then return false end
+    if LoothingUtils.IsSecretValue(name1, name2) then return false end
     return LoothingUtils.NormalizeName(name1) == LoothingUtils.NormalizeName(name2)
 end
 
@@ -378,7 +413,7 @@ function LoothingUtils.GetRaidRoster()
             local name, rank, subgroup, level, class, fileName, zone,
                   online, isDead, role, isML, assignedRole = GetRaidRosterInfo(i)
 
-            if name then
+            if name and not LoothingUtils.IsSecretValue(name) then
                 roster[#roster + 1] = {
                     name = LoothingUtils.NormalizeName(name),
                     shortName = name,
@@ -402,8 +437,11 @@ function LoothingUtils.GetRaidRoster()
         end
         for _, unit in ipairs(units) do
             local name = UnitName(unit)
-            if name then
+            if name and not LoothingUtils.IsSecretValue(name) then
                 local localizedClass, classFile = UnitClass(unit)
+                if LoothingUtils.IsSecretValue(localizedClass) then
+                    localizedClass, classFile = nil, nil
+                end
                 local isLeader = UnitIsGroupLeader(unit)
                 local isAssistant = UnitIsGroupAssistant(unit)
                 roster[#roster + 1] = {

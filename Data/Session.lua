@@ -1413,7 +1413,8 @@ function LoothingSessionMixin:OnLootReceived(encounterID, itemID, itemLink, quan
         else
             -- Fallback: simple comparison
             local myName = LoothingUtils.GetPlayerFullName()
-            isMyLoot = playerName == myName or playerName == UnitName("player")
+            local rawPlayerName = UnitName("player")
+            isMyLoot = playerName == myName or (not LoothingUtils.IsSecretValue(rawPlayerName) and playerName == rawPlayerName)
         end
 
         if isMyLoot then

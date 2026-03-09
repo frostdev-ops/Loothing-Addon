@@ -70,6 +70,7 @@ function LoothingPlayerCacheMixin:Get(nameOrGUID)
     if not nameOrGUID or nameOrGUID == "" then
         return nil
     end
+    if LoothingUtils.IsSecretValue(nameOrGUID) then return nil end
 
     -- Check if it's a GUID
     if nameOrGUID:match(GUID_PATTERN) then
@@ -103,6 +104,7 @@ function LoothingPlayerCacheMixin:GetOrCreate(nameOrGUID)
     if player then
         return player
     end
+    if LoothingUtils.IsSecretValue(nameOrGUID) then return nil end
 
     -- Create new empty entry
     if nameOrGUID:match(GUID_PATTERN) then
@@ -150,6 +152,7 @@ function LoothingPlayerCacheMixin:Invalidate(nameOrGUID)
     if not nameOrGUID or nameOrGUID == "" then
         return false
     end
+    if LoothingUtils.IsSecretValue(nameOrGUID) then return false end
 
     local guid
 
@@ -288,9 +291,11 @@ function LoothingPlayerCacheMixin:FetchFromGUID(guid)
 
     local _, englishClass, _, _, _, name, realmName = GetPlayerInfoByGUID(guid)
 
-    if not name then
+    if not name or LoothingUtils.IsSecretValue(name) then
         return nil
     end
+    if LoothingUtils.IsSecretValue(englishClass) then englishClass = nil end
+    if LoothingUtils.IsSecretValue(realmName) then realmName = nil end
 
     -- Handle null-byte bug in GetPlayerInfoByGUID
     name = self:StripNullBytes(name)
@@ -361,7 +366,7 @@ end
 -- @param fullName string - "Name-Realm" or just "Name"
 -- @return string, string|nil - name, realm
 function LoothingPlayerCacheMixin:SplitNameRealm(fullName)
-    if not fullName then
+    if not fullName or LoothingUtils.IsSecretValue(fullName) then
         return nil, nil
     end
     local name, realm = fullName:match("^(.+)-(.+)$")

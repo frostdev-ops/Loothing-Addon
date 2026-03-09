@@ -118,7 +118,11 @@ end
 -- @param stack string|nil - Optional pre-captured stack trace
 function LoothingErrorHandlerMixin:CaptureError(msg, stack)
     if not msg then return end
-    msg = tostring(msg)
+    if LoothingUtils and LoothingUtils.IsSecretValue and LoothingUtils.IsSecretValue(msg) then
+        msg = "<secret error>"
+    else
+        msg = tostring(msg)
+    end
 
     -- Only capture Loothing-related errors (or all in debug mode)
     local isOurs = msg:find("Loothing") or msg:find("loothing") or msg:find("Loolib")

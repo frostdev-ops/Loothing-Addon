@@ -517,11 +517,13 @@ function LoothingTradePanelMixin:CreateRow()
             local shortName = Ambiguate(playerName, "short")
             for i = 1, GetNumGroupMembers() do
                 local unit = IsInRaid() and ("raid" .. i) or ("party" .. i)
-                if UnitExists(unit) and UnitName(unit) == shortName then
+                local uName = UnitName(unit)
+                if UnitExists(unit) and not LoothingUtils.IsSecretValue(uName) and uName == shortName then
                     return unit
                 end
             end
-            if UnitExists("target") and UnitName("target") == shortName then
+            local tName = UnitName("target")
+            if UnitExists("target") and not LoothingUtils.IsSecretValue(tName) and tName == shortName then
                 return "target"
             end
             return nil

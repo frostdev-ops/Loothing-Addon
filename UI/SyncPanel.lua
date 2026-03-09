@@ -267,6 +267,7 @@ function LoothingSyncPanelMixin:GetOnlineMembers()
     local members = {}
     local seen = {}
     local playerName = UnitName("player")
+    if LoothingUtils.IsSecretValue(playerName) then playerName = nil end
 
     -- Check raid/party
     local roster = LoothingUtils.GetRaidRoster()

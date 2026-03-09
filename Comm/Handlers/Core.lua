@@ -48,7 +48,7 @@ local function isGroupLeaderOrAssistant(sender)
         local numMembers = GetNumGroupMembers()
         for i = 1, numMembers do
             local name, rank = GetRaidRosterInfo(i)
-            if name and LoothingUtils.IsSamePlayer(name, normalizedSender) then
+            if name and not LoothingUtils.IsSecretValue(name) and LoothingUtils.IsSamePlayer(name, normalizedSender) then
                 -- rank: 0 = member, 1 = assistant, 2 = leader
                 return rank == 1 or rank == 2
             end
@@ -60,7 +60,7 @@ local function isGroupLeaderOrAssistant(sender)
         end
         for _, unit in ipairs(units) do
             local name = UnitName(unit)
-            if name and LoothingUtils.IsSamePlayer(name, normalizedSender) then
+            if name and not LoothingUtils.IsSecretValue(name) and LoothingUtils.IsSamePlayer(name, normalizedSender) then
                 return UnitIsGroupLeader(unit) or UnitIsGroupAssistant(unit)
             end
         end

@@ -147,7 +147,10 @@ function LoothingVersionCheckMixin:GroupHasVersion(minVersion)
         else
             local unit = (i == numMembers) and "player" or ("party" .. i)
             if UnitExists(unit) then
-                name = UnitName(unit)
+                local rawName = UnitName(unit)
+                if not LoothingUtils.IsSecretValue(rawName) then
+                    name = rawName
+                end
             end
         end
 
@@ -185,7 +188,10 @@ function LoothingVersionCheckMixin:GetOutdatedMembers(minVersion)
         else
             local unit = (i == numMembers) and "player" or ("party" .. i)
             if UnitExists(unit) then
-                name = UnitName(unit)
+                local rawName = UnitName(unit)
+                if not LoothingUtils.IsSecretValue(rawName) then
+                    name = rawName
+                end
             end
         end
 
@@ -211,7 +217,10 @@ end
 function LoothingVersionCheckMixin:GetCurrentRosterNames()
     local names = {}
     if not IsInGroup() then
-        names[LoothingUtils.NormalizeName(UnitName("player"))] = true
+        local pName = UnitName("player")
+        if not LoothingUtils.IsSecretValue(pName) then
+            names[LoothingUtils.NormalizeName(pName)] = true
+        end
         return names
     end
     local roster = LoothingUtils.GetRaidRoster()

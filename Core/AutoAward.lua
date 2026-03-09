@@ -102,6 +102,7 @@ function LoothingAutoAwardMixin:FindDisenchanter()
             local unit = isRaid and ("raid" .. i) or ("party" .. i)
             if UnitExists(unit) then
                 local name = GetUnitName(unit, true)
+                if LoothingUtils.IsSecretValue(name) then name = nil end
                 local note = ""
 
                 -- Get player's raid note if available
@@ -110,11 +111,13 @@ function LoothingAutoAwardMixin:FindDisenchanter()
                     note = publicNote or ""
                 end
 
-                -- Check for DE/Disenchanter keyword
-                local lowerNote = note:lower()
-                if lowerNote:find("disenchant") or lowerNote:find(" de ") or
-                   lowerNote:find("^de ") or lowerNote:find(" de$") or lowerNote == "de" then
-                    return LoothingUtils.NormalizeName(name)
+                -- Check for DE/Disenchanter keyword (skip if name is secret/nil)
+                if name then
+                    local lowerNote = note:lower()
+                    if lowerNote:find("disenchant") or lowerNote:find(" de ") or
+                       lowerNote:find("^de ") or lowerNote:find(" de$") or lowerNote == "de" then
+                        return LoothingUtils.NormalizeName(name)
+                    end
                 end
             end
         end
@@ -154,6 +157,7 @@ function LoothingAutoAwardMixin:IsPlayerInRaid(playerName)
     if numMembers == 0 then
         -- Solo, check if it's us
         local myName = UnitName("player")
+        if LoothingUtils.IsSecretValue(myName) then return false end
         return normalized == LoothingUtils.NormalizeName(myName)
     end
 
@@ -162,7 +166,7 @@ function LoothingAutoAwardMixin:IsPlayerInRaid(playerName)
         local unit = isRaid and ("raid" .. i) or ("party" .. i)
         if UnitExists(unit) then
             local name = GetUnitName(unit, true)
-            if LoothingUtils.NormalizeName(name) == normalized then
+            if not LoothingUtils.IsSecretValue(name) and LoothingUtils.NormalizeName(name) == normalized then
                 return true
             end
         end

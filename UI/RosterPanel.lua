@@ -334,19 +334,19 @@ local function BuildUnitMap()
         for i = 1, GetNumGroupMembers() do
             local unit = "raid" .. i
             local name = UnitName(unit)
-            if name then
+            if name and not LoothingUtils.IsSecretValue(name) then
                 map[LoothingUtils.NormalizeName(name)] = unit
             end
         end
     elseif IsInGroup() then
         local playerName = UnitName("player")
-        if playerName then
+        if playerName and not LoothingUtils.IsSecretValue(playerName) then
             map[LoothingUtils.NormalizeName(playerName)] = "player"
         end
         for i = 1, GetNumSubgroupMembers() do
             local unit = "party" .. i
             local name = UnitName(unit)
-            if name then
+            if name and not LoothingUtils.IsSecretValue(name) then
                 map[LoothingUtils.NormalizeName(name)] = unit
             end
         end
