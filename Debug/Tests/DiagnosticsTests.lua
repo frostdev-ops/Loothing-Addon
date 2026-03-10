@@ -102,4 +102,44 @@ TestRunner:Describe("Diagnostics", function()
         end
         Assert.IsFalse(found)
     end, { category = "unit" })
+
+    TestRunner:It("marks tracked globals changed from baseline and reports secure state", function()
+        local baselineUnitGUID = function() return "baseline" end
+        local changedUnitGUID = function() return "changed" end
+
+        SetTemporaryGlobal("UnitGUID", baselineUnitGUID)
+        SetTemporaryGlobal("issecurevariable", function(name)
+            if name == "UnitGUID" then
+                return false, "Loothing"
+            end
+            return true, nil
+        end)
+
+        local diagnostics = CreateDiagnostics()
+        SetTemporaryGlobal("UnitGUID", changedUnitGUID)
+
+        local report = diagnostics:RunScan("unit")
+        local status
+        for _, entry in ipairs(report.trackedGlobals) do
+            if entry.name == "UnitGUID" then
+                status = entry
+                break
+            end
+        end
+
+        Assert.TypeOf(status, "table")
+        Assert.IsTrue(status.changedFromBaseline)
+        Assert.IsFalse(status.secure)
+        Assert.Equals("Loothing", status.taintedBy)
+    end, { category = "unit" })
+
+    TestRunner:It("reports missing expected globals", function()
+        SetTemporaryGlobal("SLASH_LOOTHING1", "/loothing")
+        local diagnostics = CreateDiagnostics()
+        SetTemporaryGlobal("SLASH_LOOTHING1", nil)
+
+        local report = diagnostics:RunScan("unit")
+
+        Assert.Contains(report.missingExpectedGlobals, "SLASH_LOOTHING1")
+    end, { category = "unit" })
 end)

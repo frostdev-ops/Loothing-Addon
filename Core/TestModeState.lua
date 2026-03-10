@@ -167,7 +167,7 @@ function TestModeState:ApplySessionTag(sessionID)
 end
 
 function TestModeState:OnSimulatorToggled(enabled)
-    self.active = enabled or self.active
+    self.active = not not enabled
     if not enabled then
         self.persistenceAllowed = false
     end

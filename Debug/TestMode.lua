@@ -1136,31 +1136,26 @@ end
 --- Handle test mode slash commands
 -- @param args string - Command arguments
 function TestMode:HandleCommand(args)
-    local state = Loothing and Loothing.TestMode
+    local state = ns.TestModeState
     local cmd, param = args:match("^(%S*)%s*(.*)$")
     cmd = cmd and cmd:lower() or ""
     param = param or ""
+    local force = param:lower() == "force"
 
     if cmd == "" or cmd == "toggle" then
-        if state then
-            state:Toggle()
-        else
-            self:Toggle()
+        if not self.enabled and state and not state:CheckPrerequisites({ force = force }) then
+            return
         end
+        self:Toggle()
         return
     elseif cmd == "on" or cmd == "enable" then
-        if state then
-            state:Enter()
-        else
-            self:Enable()
+        if state and not state:CheckPrerequisites({ force = force }) then
+            return
         end
+        self:Enable()
         return
     elseif cmd == "off" or cmd == "disable" then
-        if state then
-            state:Exit()
-        else
-            self:Disable()
-        end
+        self:Disable()
         return
     elseif cmd == "status" then
         if state and state.Status then

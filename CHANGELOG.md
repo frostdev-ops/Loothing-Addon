@@ -50,14 +50,18 @@ Council table vote buttons and row click handler are now aware of voting mode:
 #### Secret-Value And Unsafe Runtime Callers
 
 - `Loolib/Data/SavedVariables.lua` now guards scope-key generation against secret or missing unit API returns, falling back to stable placeholder values instead of crashing on tainted paths
+- `Loolib/Data/SavedVariables.lua` now waits for its actual saved-variable table before initializing on `ADDON_LOADED`, avoiding session-long attachment to a fresh empty table during unrelated addon loads
 - `Core/Migration.lua` no longer rebuilds profile keys from raw `UnitName("player")`; it now uses `SafeUnitName("player")` while preserving the SavedVariables character-key format (`"Name - Realm"`)
 - `Data/TradeQueue.lua` no longer makes the invalid `UnitName("NPC")` call when the trade recipient label is empty
 - Production-loaded `Debug/TestMode.lua` now uses safe player-name accessors instead of raw `UnitName("player")`
+- `Debug/TestMode.lua` once again routes `/lt test on|off|toggle` through the real simulator lifecycle while still honoring `TestModeState` prerequisite checks
 
 #### Namespace And Global-Surface Cleanup
 
 - Added the expected-global allowlist to diagnostics without tripping the architecture audit
 - Removed the remaining repo-owned bare global factory exports from optional Loolib popup/canvas modules by keeping those factory functions local to their modules
+- `Loolib/UI/Widgets/PopupMenu.lua` now preserves explicit `false` item values and propagates parent `OnSelect` callbacks into nested submenus
+- Optional popup examples and the popup test harness now use `Loolib.UI` module exports instead of the removed bare globals
 
 #### `CHAT_MSG_SYSTEM` Secret-String Crash (`Data/RollTracker.lua`, `UI/RollFrame/Events.lua`)
 
@@ -84,12 +88,13 @@ Council table vote buttons and row click handler are now aware of voting mode:
 ### Tests
 
 - Added `Debug/Tests/VotingTests.lua` with coverage for winner-determination modes (highest-votes, ML-confirm, auto-confirm), tie-breaker selection, and unanimous auto-award logic
-- Added `Debug/Tests/DiagnosticsTests.lua` to cover unexpected-global detection, allowlist handling, blocked-action capture, and audit reset behavior
+- Added `Debug/Tests/DiagnosticsTests.lua` to cover unexpected-global detection, allowlist handling, blocked-action capture, tracked-global secure-state/baseline reporting, missing-expected-global detection, and audit reset behavior
 - Extended `Debug/Tests/SecretValueTests.lua` with regression coverage for SavedVariables scope-key fallbacks and migration profile-key lookup
 
 ### Validation
 
 - `luac -p` passes on all edited Lua files
+- `./lint.sh --audit` passes with 0 errors and 0 warnings
 
 ## [1.2.1] - 2026-03-10
 
