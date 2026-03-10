@@ -316,7 +316,7 @@ function TestMode:GenerateFakeCouncil(count)
     local _, playerClass = UnitClass("player")
     table.insert(self.fakeCouncilMembers, 1, {
         name = playerName,
-        shortName = UnitName("player"),
+        shortName = Loolib.SecretUtil.SafeUnitName("player"),
         class = playerClass,
         rank = 2,  -- Player is the leader
         online = true,
@@ -994,7 +994,7 @@ function TestMode:RegisterFullWorkflowCallbacks()
     rollFrame:RegisterCallback("OnResponseSubmitted", function(_, item, response, note, roll)
         -- Add player as a candidate with their response
         if item and item.GetCandidateManager then
-            local playerName = UnitName("player")
+            local playerName = Loolib.SecretUtil.SafeUnitName("player")
             local _, playerClass = UnitClass("player")
             local manager = item:GetCandidateManager()
             if manager then
@@ -1201,27 +1201,36 @@ function TestMode:HandleCommand(args)
         self:StartTestSession()
     elseif cmd == "end" or cmd == "stop" then
         self:EndTestSession()
-    -- Test Suite Commands
-    elseif cmd == "run" or cmd == "suite" then
-        self:RunTestSuite(param)
-    elseif cmd == "runall" then
-        self:RunAllTests()
-    elseif cmd == "unit" then
-        self:RunTestCategory("unit")
-    elseif cmd == "integration" then
-        self:RunTestCategory("integration")
-    elseif cmd == "stress" then
-        self:RunTestCategory("stress")
-    elseif cmd == "list" then
-        self:ListTestSuites()
-    elseif cmd == "scenario" then
-        self:RunScenario(param)
-    elseif cmd == "scenarios" then
-        self:ListScenarios()
-    elseif cmd == "report" then
-        self:ShowLastReport()
-    elseif cmd == "benchmark" then
-        self:RunBenchmarks()
+    -- Test Suite Commands (requires test infrastructure from Dev TOC)
+    elseif cmd == "run" or cmd == "suite" or cmd == "runall"
+        or cmd == "unit" or cmd == "integration" or cmd == "stress"
+        or cmd == "list" or cmd == "scenario" or cmd == "scenarios"
+        or cmd == "report" or cmd == "benchmark" then
+        if not GetTestRunner() then
+            print("|cffff6600[Loothing Test]|r Test suite commands require the Dev build. These commands are not available in release.")
+            return
+        end
+        if cmd == "run" or cmd == "suite" then
+            self:RunTestSuite(param)
+        elseif cmd == "runall" then
+            self:RunAllTests()
+        elseif cmd == "unit" then
+            self:RunTestCategory("unit")
+        elseif cmd == "integration" then
+            self:RunTestCategory("integration")
+        elseif cmd == "stress" then
+            self:RunTestCategory("stress")
+        elseif cmd == "list" then
+            self:ListTestSuites()
+        elseif cmd == "scenario" then
+            self:RunScenario(param)
+        elseif cmd == "scenarios" then
+            self:ListScenarios()
+        elseif cmd == "report" then
+            self:ShowLastReport()
+        elseif cmd == "benchmark" then
+            self:RunBenchmarks()
+        end
     elseif cmd == "help" then
         self:PrintHelp()
     else

@@ -14,6 +14,11 @@ local Utils = ns.Utils
 local TestRunner = ns.TestRunner
 local Assert = ns.Assert
 
+local savedGetRealmName = GetRealmName
+local savedGetAddonData = Loolib.Data.SavedVariables.GetAddonData
+local savedSafeUnitName = Loolib.SecretUtil.SafeUnitName
+local savedLoothingSettings = Loothing.Settings
+
 --[[--------------------------------------------------------------------
     Mock Setup
 ----------------------------------------------------------------------]]
@@ -36,6 +41,53 @@ end
 --- Remove the mock
 local function RemoveMock()
     issecretvalue = savedIssecretvalue
+end
+
+local savedVariablesUpvalues = {}
+
+local function ReplaceUpvalue(func, upvalueName, replacement)
+    if not debug or not debug.getupvalue or not debug.setupvalue then
+        return false
+    end
+
+    for index = 1, 20 do
+        local name, value = debug.getupvalue(func, index)
+        if not name then
+            break
+        end
+        if name == upvalueName then
+            savedVariablesUpvalues[#savedVariablesUpvalues + 1] = {
+                func = func,
+                index = index,
+                value = value,
+            }
+            debug.setupvalue(func, index, replacement)
+            return true
+        end
+    end
+
+    return false
+end
+
+local function RestoreSavedVariablesUpvalues()
+    if not debug or not debug.setupvalue then
+        wipe(savedVariablesUpvalues)
+        return
+    end
+
+    for index = #savedVariablesUpvalues, 1, -1 do
+        local entry = savedVariablesUpvalues[index]
+        debug.setupvalue(entry.func, entry.index, entry.value)
+        savedVariablesUpvalues[index] = nil
+    end
+end
+
+local function RestoreMocks()
+    GetRealmName = savedGetRealmName
+    Loolib.Data.SavedVariables.GetAddonData = savedGetAddonData
+    Loolib.SecretUtil.SafeUnitName = savedSafeUnitName
+    Loothing.Settings = savedLoothingSettings
+    RestoreSavedVariablesUpvalues()
 end
 
 --[[--------------------------------------------------------------------
@@ -324,4 +376,95 @@ TestRunner:Describe("SecretValue Guards (Utils delegates)", function()
             Assert.Equals("b", b)
         end, { category = "unit" })
     end)
+end)
+
+TestRunner:Describe("Runtime Secret Guard Regressions", function()
+
+    TestRunner:AfterEach(function()
+        RemoveMock()
+        RestoreMocks()
+    end)
+
+    TestRunner:It("SavedVariables scope generation falls back when unit APIs return secrets", function()
+        if not debug or not debug.getupvalue or not debug.setupvalue then
+            TestRunner:Skip("debug upvalue patching unavailable")
+        end
+
+        InstallMock()
+
+        local generateScopeKeys = Loolib.Data.SavedVariables.Mixin.GenerateScopeKeys
+        Assert.IsTrue(ReplaceUpvalue(generateScopeKeys, "UnitName", function() return SECRET_SENTINEL end))
+        Assert.IsTrue(ReplaceUpvalue(generateScopeKeys, "GetRealmName", function() return "TestRealm" end))
+        Assert.IsTrue(ReplaceUpvalue(generateScopeKeys, "UnitClass", function() return "Mage", SECRET_SENTINEL end))
+        Assert.IsTrue(ReplaceUpvalue(generateScopeKeys, "UnitRace", function() return "Human", SECRET_SENTINEL end))
+        Assert.IsTrue(ReplaceUpvalue(generateScopeKeys, "UnitFactionGroup", function() return SECRET_SENTINEL end))
+
+        local store = Loolib.CreateFromMixins(Loolib.Data.SavedVariables.Mixin)
+        store.scopeKeys = {}
+        store:GenerateScopeKeys()
+
+        Assert.Equals("Player - TestRealm", store.scopeKeys.char)
+        Assert.Equals("UNKNOWNCLASS", store.scopeKeys.class)
+        Assert.Equals("UNKNOWNRACE", store.scopeKeys.race)
+        Assert.Equals("Neutral", store.scopeKeys.faction)
+    end, { category = "unit" })
+
+    TestRunner:It("Migration profile lookup preserves the saved-variable char key format", function()
+        Loothing.Settings = nil
+
+        Loolib.SecretUtil.SafeUnitName = function()
+            return "Player"
+        end
+        GetRealmName = function()
+            return "Realm"
+        end
+        Loolib.Data.SavedVariables.GetAddonData = function()
+            return {
+                profiles = {
+                    Profile1 = {
+                        migrated = true,
+                    },
+                },
+                profileKeys = {
+                    ["Player - Realm"] = "Profile1",
+                },
+                global = {
+                    migrations = {},
+                },
+            }
+        end
+
+        local profileDB, globalDB = ns.Migration:GetDataScopes()
+
+        Assert.TypeOf(profileDB, "table")
+        Assert.TypeOf(globalDB, "table")
+        Assert.IsTrue(profileDB.migrated == true)
+    end, { category = "unit" })
+
+    TestRunner:It("Migration profile lookup falls back cleanly when player name is unavailable", function()
+        Loothing.Settings = nil
+
+        Loolib.SecretUtil.SafeUnitName = function()
+            return nil
+        end
+        Loolib.Data.SavedVariables.GetAddonData = function()
+            return {
+                profiles = {
+                    Default = {
+                        migrated = true,
+                    },
+                },
+                profileKeys = {},
+                global = {
+                    migrations = {},
+                },
+            }
+        end
+
+        local profileDB, globalDB = ns.Migration:GetDataScopes()
+
+        Assert.TypeOf(profileDB, "table")
+        Assert.TypeOf(globalDB, "table")
+        Assert.IsTrue(profileDB.migrated ~= true)
+    end, { category = "unit" })
 end)

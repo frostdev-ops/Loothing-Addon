@@ -3,7 +3,7 @@
 ## Title: Loothing (Dev)
 ## Notes: Development build with test harness and debug tooling
 ## Author: James Kueller
-## Version: 1.2.1
+## Version: 1.2.2
 ## SavedVariables: LoolibDB
 ## Dependencies: Loolib
 ## IconTexture: Interface\AddOns\Loothing\Media\logo
@@ -46,6 +46,7 @@ Core\ResponseManager.lua
 Core\AutoAward.lua
 Core\Announcer.lua
 Core\TooltipScan.lua
+Core\Diagnostics.lua
 
 # Utilities
 Utils\AutoPass.lua
@@ -145,3 +146,4 @@ Debug\Tests\IntegrationTests.lua
 Debug\Tests\StressTests.lua
 Debug\Tests\RollFrameSessionSettingsTests.lua
 Debug\Tests\SecretValueTests.lua
+Debug\Tests\DiagnosticsTests.lua

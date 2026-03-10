@@ -255,20 +255,25 @@ end
 function TradeQueueMixin:OnTradeShow()
     -- Get trade target from Blizzard UI
     local target = TradeFrameRecipientNameText:GetText()
-    if not target or target == "" then
-        target = UnitName("NPC") or "Unknown"
+    local normalizedTarget = nil
+
+    if target and target ~= "" then
+        -- Remove "(*)" for cross-realm (use plain find to avoid pattern errors)
+        if target:find("(*)", 1, true) then
+            target = target:gsub(" ?%(%*%)", "")
+        end
+        normalizedTarget = Utils.NormalizeName(target)
     end
 
-    -- Remove "(*)" for cross-realm (use plain find to avoid pattern errors)
-    if target:find("(*)", 1, true) then
-        target = target:gsub(" ?%(%*%)", "")
-    end
-
-    self.tradeTarget = Utils.NormalizeName(target)
+    self.tradeTarget = normalizedTarget
     self.isTrading = true
     wipe(self.itemsInTradeWindow)
 
-    Loothing:Debug("Trade opened with:", self.tradeTarget)
+    Loothing:Debug("Trade opened with:", self.tradeTarget or "<unknown>")
+
+    if not self.tradeTarget then
+        return
+    end
 
     -- Check if we have items for this player
     local pending = self:GetPendingForPlayer(self.tradeTarget)

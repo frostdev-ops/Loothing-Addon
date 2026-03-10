@@ -933,6 +933,32 @@ L["CONFIRM_BULK_SKIP"] = "Skip %d selected items?"
 L["CONFIRM_BULK_REMOVE"] = "Remove %d selected items from the session?"
 L["CONFIRM_BULK_REVOTE"] = "Re-vote on %d selected items?"
 
+-- ============================================================================
+-- RCV (Ranked Choice Voting) Audit Strings
+-- ============================================================================
+
+-- RCV Settings
+L["RCV_SETTINGS"] = "Ranked Choice Settings"
+L["MAX_RANKS"] = "Maximum Rankings"
+L["MIN_RANKS"] = "Minimum Rankings"
+L["MAX_RANKS_DESC"] = "Maximum number of choices a voter can rank (0 = unlimited)"
+L["MIN_RANKS_DESC"] = "Minimum number of choices required to submit a vote"
+L["RANK_LIMIT_REACHED"] = "Maximum %d ranks reached"
+L["RANK_MINIMUM_REQUIRED"] = "Rank at least %d choices"
+L["UNLIMITED"] = "Unlimited"
+L["MAX_REVOTES"] = "Maximum Re-votes"
+
+-- ML Sees Votes
+L["ML_SEES_VOTES"] = "ML Sees Votes"
+L["ML_SEES_VOTES_DESC"] = "Master Looter can see votes even when anonymous"
+
+-- IRV Round Visualization
+L["SHOW_IRV_ROUNDS"] = "Show IRV Rounds (%d rounds)"
+L["HIDE_IRV_ROUNDS"] = "Hide IRV Rounds"
+L["IRV_ROUND"] = "Round %d"
+L["IRV_ELIMINATED"] = "eliminated"
+L["IRV_WINNER_FOUND"] = "WINNER"
+
 -- Make locale available globally
 Loothing.Locale = L
 

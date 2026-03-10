@@ -251,6 +251,70 @@ local function GetSessionSettingsOptions()
                 },
             },
             -- ============================================================
+            -- Winner Determination
+            -- ============================================================
+            winnerDetermination = {
+                type = "group",
+                name = L["WINNER_DETERMINATION"] or "Winner Determination",
+                desc = L["WINNER_DETERMINATION_DESC"] or "Configure how winners are selected when voting ends",
+                order = 3,
+                args = {
+                    mode = {
+                        type = "select",
+                        name = L["WINNER_MODE"] or "Winner Mode",
+                        desc = L["WINNER_MODE_DESC"] or "How the winner is determined after voting",
+                        order = 1,
+                        values = {
+                            HIGHEST_VOTES = L["WINNER_MODE_HIGHEST_VOTES"] or "Highest Council Votes",
+                            ML_CONFIRM = L["WINNER_MODE_ML_CONFIRM"] or "ML Confirms Winner",
+                            AUTO_HIGHEST_CONFIRM = L["WINNER_MODE_AUTO_CONFIRM"] or "Auto-select Highest + Confirm",
+                        },
+                        get = function() return Loothing.Settings:Get("winnerDetermination.mode", "ML_CONFIRM") end,
+                        set = function(_, v) Loothing.Settings:Set("winnerDetermination.mode", v) end,
+                    },
+                    tieBreaker = {
+                        type = "select",
+                        name = L["WINNER_TIE_BREAKER"] or "Tie Breaker",
+                        desc = L["WINNER_TIE_BREAKER_DESC"] or "How ties are resolved when candidates have equal votes",
+                        order = 2,
+                        values = {
+                            ROLL = L["WINNER_TIE_USE_ROLL"] or "Random (Simulated Roll)",
+                            ML_CHOICE = L["WINNER_TIE_ML_CHOICE"] or "ML Decides",
+                            REVOTE = L["WINNER_TIE_REVOTE"] or "Force Re-Vote",
+                        },
+                        get = function() return Loothing.Settings:GetTieBreakerMode() end,
+                        set = function(_, v) Loothing.Settings:Set("winnerDetermination.tieBreaker", v) end,
+                    },
+                    autoAwardOnUnanimous = {
+                        type = "toggle",
+                        name = L["WINNER_AUTO_AWARD_UNANIMOUS"] or "Auto-award on Unanimous",
+                        desc = L["WINNER_AUTO_AWARD_UNANIMOUS_DESC"] or "Automatically award when all council members vote for the same candidate",
+                        order = 3,
+                        get = function() return Loothing.Settings:GetAutoAwardOnUnanimous() end,
+                        set = function(_, v) Loothing.Settings:Set("winnerDetermination.autoAwardOnUnanimous", v) end,
+                    },
+                    requireConfirmation = {
+                        type = "toggle",
+                        name = L["WINNER_REQUIRE_CONFIRMATION"] or "Require Confirmation",
+                        desc = L["WINNER_REQUIRE_CONFIRMATION_DESC"] or "Show confirmation dialog before awarding items",
+                        order = 4,
+                        get = function() return Loothing.Settings:GetRequireConfirmation() end,
+                        set = function(_, v) Loothing.Settings:Set("winnerDetermination.requireConfirmation", v) end,
+                    },
+                    maxRevotes = {
+                        type = "range",
+                        name = L["MAX_REVOTES"] or "Maximum Re-votes",
+                        desc = "Maximum number of re-votes allowed per item (0 = no re-votes)",
+                        order = 5,
+                        min = 0,
+                        max = 10,
+                        step = 1,
+                        get = function() return Loothing.Settings:GetMaxRevotes() end,
+                        set = function(_, v) Loothing.Settings:SetMaxRevotes(v) end,
+                    },
+                },
+            },
+            -- ============================================================
             -- Council
             -- ============================================================
             council = {
@@ -443,6 +507,85 @@ local function GetSessionSettingsOptions()
                                 set = function(_, v) Loothing.Settings:SetNumAwardReasons(v) end,
                             },
                         },
+                    },
+                },
+            },
+            -- ============================================================
+            -- Observer Permissions
+            -- ============================================================
+            observerPermissions = {
+                type = "group",
+                name = L["OBSERVER_PERMISSIONS"] or "Observer Permissions",
+                order = 6,
+                args = {
+                    desc = {
+                        type = "description",
+                        name = "Control what observers can see during voting sessions.",
+                        order = 0,
+                    },
+                    seeVoteCounts = {
+                        type = "toggle",
+                        name = L["OBSERVER_SEE_VOTE_COUNTS"] or "See Vote Counts",
+                        desc = L["OBSERVER_SEE_VOTE_COUNTS_DESC"] or "Observers can see how many votes each candidate has",
+                        order = 1,
+                        get = function()
+                            local perms = Loothing.Settings:GetObserverPermissions()
+                            return perms.seeVoteCounts
+                        end,
+                        set = function(_, v)
+                            Loothing.Settings:SetObserverPermission("seeVoteCounts", v)
+                            if Loothing.MLDB and Loothing.MLDB:IsML() then
+                                Loothing.MLDB:BroadcastToRaid()
+                            end
+                        end,
+                    },
+                    seeVoterIdentities = {
+                        type = "toggle",
+                        name = L["OBSERVER_SEE_VOTER_IDS"] or "See Voter Identities",
+                        desc = L["OBSERVER_SEE_VOTER_IDS_DESC"] or "Observers can see who voted for each candidate",
+                        order = 2,
+                        get = function()
+                            local perms = Loothing.Settings:GetObserverPermissions()
+                            return perms.seeVoterIdentities
+                        end,
+                        set = function(_, v)
+                            Loothing.Settings:SetObserverPermission("seeVoterIdentities", v)
+                            if Loothing.MLDB and Loothing.MLDB:IsML() then
+                                Loothing.MLDB:BroadcastToRaid()
+                            end
+                        end,
+                    },
+                    seeResponses = {
+                        type = "toggle",
+                        name = L["OBSERVER_SEE_RESPONSES"] or "See Responses",
+                        desc = L["OBSERVER_SEE_RESPONSES_DESC"] or "Observers can see what response each candidate selected",
+                        order = 3,
+                        get = function()
+                            local perms = Loothing.Settings:GetObserverPermissions()
+                            return perms.seeResponses
+                        end,
+                        set = function(_, v)
+                            Loothing.Settings:SetObserverPermission("seeResponses", v)
+                            if Loothing.MLDB and Loothing.MLDB:IsML() then
+                                Loothing.MLDB:BroadcastToRaid()
+                            end
+                        end,
+                    },
+                    seeNotes = {
+                        type = "toggle",
+                        name = L["OBSERVER_SEE_NOTES"] or "See Notes",
+                        desc = L["OBSERVER_SEE_NOTES_DESC"] or "Observers can see candidate notes",
+                        order = 4,
+                        get = function()
+                            local perms = Loothing.Settings:GetObserverPermissions()
+                            return perms.seeNotes
+                        end,
+                        set = function(_, v)
+                            Loothing.Settings:SetObserverPermission("seeNotes", v)
+                            if Loothing.MLDB and Loothing.MLDB:IsML() then
+                                Loothing.MLDB:BroadcastToRaid()
+                            end
+                        end,
                     },
                 },
             },

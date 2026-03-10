@@ -9,6 +9,7 @@ local Loothing = ns.Addon
 local Utils = ns.Utils
 local RollFrameMixin = ns.RollFrameMixin or {}
 ns.RollFrameMixin = RollFrameMixin
+local SecretUtil = Loolib.SecretUtil
 
 --- Register for session events to auto-show
 function RollFrameMixin:RegisterSessionEvents()
@@ -94,6 +95,8 @@ end
 --- Parse roll message from chat
 function RollFrameMixin:OnChatMessage(text)
     if not text then return end
+    -- Skip hardware-tainted secret values (death messages etc.)
+    if SecretUtil.IsSecretValue(text) then return end
     local safeText = tostring(text)
 
     local hasPendingItem = self.pendingRollGUID ~= nil

@@ -9,6 +9,7 @@ local Loothing = ns.Addon
 local Utils = ns.Utils
 local CreateFromMixins = Loolib.CreateFromMixins
 local Events = Loolib.Events
+local SecretUtil = Loolib.SecretUtil
 
 --[[--------------------------------------------------------------------
     RollTrackerMixin
@@ -36,6 +37,11 @@ end
 -- @param text string - Chat message text
 function RollTrackerMixin:OnChatMessage(text)
     if not text then return end
+
+    -- Skip hardware-tainted secret values (death messages, system events).
+    -- tostring() itself is a string-conversion op that throws on secret strings
+    -- in WoW 12.0; roll messages are never secret-valued.
+    if SecretUtil.IsSecretValue(text) then return end
 
     -- Convert to untainted string - CHAT_MSG_SYSTEM text is hardware-tainted
     -- and calling methods on tainted strings errors during combat

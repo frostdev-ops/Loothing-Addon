@@ -396,7 +396,10 @@ function Migration:GetDataScopes()
 
     if not profileDB then
         local store = Loolib.Data.SavedVariables.GetAddonData("Loothing", false)
-        profileDB = store and store.profiles and store.profileKeys and store.profiles[(store.profileKeys[(UnitName("player") or "") .. " - " .. (GetRealmName() or "")] or "Default")] or {}
+        local playerName = Loolib.SecretUtil.SafeUnitName("player")
+        local realmName = GetRealmName()
+        local charKey = playerName and realmName and (playerName .. " - " .. realmName) or nil
+        profileDB = store and store.profiles and store.profileKeys and store.profiles[(store.profileKeys[charKey or ""] or "Default")] or {}
     end
 
     if not globalDB then

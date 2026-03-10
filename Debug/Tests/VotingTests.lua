@@ -728,6 +728,93 @@ Describe("Integration with Item System", function()
 end)
 
 --[[--------------------------------------------------------------------
+    7. RCV Algorithm Fix Tests
+----------------------------------------------------------------------]]
+
+Describe("RCV Algorithm Fixes", function()
+    It("Candidate only in 2nd position IS included in election", function()
+        local votes = CreateVoteArray({
+            { "P1", "WARRIOR", { "Alice", "Charlie" } },
+            { "P2", "MAGE", { "Bob", "Charlie" } },
+            { "P3", "PRIEST", { "Alice", "Bob" } },
+        })
+
+        local candidates = VotingEngine:GetCandidatesFromVotes(votes)
+
+        local hasCharlie = false
+        for _, c in ipairs(candidates) do
+            if c == "Charlie" then hasCharlie = true end
+        end
+
+        AssertTrue(hasCharlie, "Charlie (only 2nd choice) should be included as a candidate")
+        AssertGreaterOrEqual(#candidates, 3, "Should have at least 3 candidates")
+    end)
+
+    It("Backward tiebreaker resolves last-place tie using prior round data", function()
+        -- Round 1: A=3, B=1, C=1 (B and C tied for last)
+        -- If B had 0 in a hypothetical prior round and C had 1, B should be eliminated
+        -- We test via the helper directly
+        local tiedForLast = { "bob", "charlie" }
+        local rounds = {
+            { counts = { alice = 2, bob = 0, charlie = 1, dave = 1 } },  -- prior round
+        }
+
+        local result = VotingEngine:ResolveTiedElimination(tiedForLast, rounds)
+
+        AssertEquals(#result, 1, "Should eliminate exactly one candidate")
+        AssertEquals(result[1], "bob", "Bob should be eliminated (fewer votes in prior round)")
+    end)
+
+    It("Batch elimination fires when backward tiebreaker cannot resolve", function()
+        local tiedForLast = { "bob", "charlie" }
+        local rounds = {
+            { counts = { alice = 2, bob = 1, charlie = 1 } },  -- same counts, can't resolve
+        }
+
+        local result = VotingEngine:ResolveTiedElimination(tiedForLast, rounds)
+
+        AssertEquals(#result, 2, "Should batch eliminate both when tied in all rounds")
+    end)
+
+    It("ROLL tiebreaker produces a non-nil winner", function()
+        local votes = CreateVoteArray({
+            { "P1", "WARRIOR", { "Alice" } },
+            { "P2", "MAGE", { "Bob" } },
+        })
+
+        local candidates = { "Alice", "Bob" }
+        local results = VotingEngine:TallyRankedChoice(votes, candidates, { tieBreakerMode = "ROLL" })
+
+        AssertNotNil(results.winner, "ROLL tiebreaker should produce a winner")
+    end)
+
+    It("ML_CHOICE tiebreaker returns nil winner", function()
+        local votes = CreateVoteArray({
+            { "P1", "WARRIOR", { "Alice" } },
+            { "P2", "MAGE", { "Bob" } },
+        })
+
+        local candidates = { "Alice", "Bob" }
+        local results = VotingEngine:TallyRankedChoice(votes, candidates, { tieBreakerMode = "ML_CHOICE" })
+
+        AssertNil(results.winner, "ML_CHOICE should return nil (manual resolution)")
+    end)
+
+    It("REVOTE tiebreaker sets needsRevote flag", function()
+        local votes = CreateVoteArray({
+            { "P1", "WARRIOR", { "Alice" } },
+            { "P2", "MAGE", { "Bob" } },
+        })
+
+        local candidates = { "Alice", "Bob" }
+        local results = VotingEngine:TallyRankedChoice(votes, candidates, { tieBreakerMode = "REVOTE" })
+
+        AssertTrue(results.needsRevote, "REVOTE should set needsRevote flag")
+        AssertNil(results.winner, "REVOTE should not produce a winner")
+    end)
+end)
+
+--[[--------------------------------------------------------------------
     Run All Tests
 ----------------------------------------------------------------------]]
 

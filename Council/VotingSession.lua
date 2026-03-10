@@ -51,7 +51,7 @@ function VotingSessionMixin:Init(item)
     self.timeout = Loothing.Timing.DEFAULT_VOTE_TIMEOUT
     self.votingMode = Loothing.VotingMode.SIMPLE
     self.allowRevote = true
-    self.maxRevotes = 2
+    self.maxRevotes = Loothing.Settings and Loothing.Settings:GetMaxRevotes() or 2
     self.revoteCount = 0
 
     -- Timing

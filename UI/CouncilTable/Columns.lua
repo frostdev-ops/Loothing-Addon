@@ -589,6 +589,10 @@ CouncilTableMixin.CellUpdaters.vote = function(_, cell, candidate)
 
     -- Vote toggle button
     if cell.voteButton then
+        -- RCV mode: show "Rank" / "Ranked" instead of "Vote" / "Voted"
+        local votingMode = Loothing.Settings and Loothing.Settings:GetVotingMode()
+        local isRCV = votingMode == Loothing.VotingMode.RANKED_CHOICE
+
         local canVote = Loothing.Council and Loothing.Council:CanPlayerVote()
         local hasVoted = candidate.hasMyVote
 
@@ -601,12 +605,12 @@ CouncilTableMixin.CellUpdaters.vote = function(_, cell, candidate)
                 cell.voteButton:Show()
                 cell.voteButton:SetAlpha(0.4)
                 cell.voteButton:Disable()
-                cell.voteButton:SetText("Vote")
+                cell.voteButton:SetText(isRCV and "Rank" or "Vote")
             else
                 cell.voteButton:Show()
                 cell.voteButton:SetAlpha(1)
                 cell.voteButton:Enable()
-                cell.voteButton:SetText(hasVoted and "|cff33ee33Voted|r" or "Vote")
+                cell.voteButton:SetText(hasVoted and (isRCV and "|cff33ee33Ranked|r" or "|cff33ee33Voted|r") or (isRCV and "Rank" or "Vote"))
             end
         else
             local isObserver = Loothing.Observer and (Loothing.Observer:IsPlayerObserver() or Loothing.Observer:IsMLObserver())
@@ -614,7 +618,7 @@ CouncilTableMixin.CellUpdaters.vote = function(_, cell, candidate)
                 cell.voteButton:Show()
                 cell.voteButton:SetAlpha(0.4)
                 cell.voteButton:Disable()
-                cell.voteButton:SetText("Vote")
+                cell.voteButton:SetText(isRCV and "Rank" or "Vote")
             else
                 cell.voteButton:Hide()
             end

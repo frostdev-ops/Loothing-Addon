@@ -182,6 +182,38 @@ function ResultsPanelMixin:CreateResultsArea()
     self.resultsContainer = container
     self.resultsContent = content
     self.responseRows = {}
+
+    -- IRV rounds toggle button
+    self.roundsToggle = CreateFrame("Button", nil, content)
+    self.roundsToggle:SetSize(360, 20)
+    self.roundsToggle:SetPoint("TOPLEFT", self.responseSummaryText, "BOTTOMLEFT", 0, -6)
+    self.roundsToggle:SetNormalFontObject("GameFontNormalSmall")
+    self.roundsToggle:SetHighlightFontObject("GameFontHighlightSmall")
+    self.roundsToggle:Hide()
+
+    self.roundsToggle:SetScript("OnClick", function()
+        local L = Loothing.Locale
+        if self.roundsContainer and self.roundsContainer:IsShown() then
+            self.roundsContainer:Hide()
+            self.roundsToggle:SetText(string.format(L and L["SHOW_IRV_ROUNDS"] or "Show IRV Rounds (%d rounds)", self._roundCount or 0))
+        else
+            if self.roundsContainer then
+                self.roundsContainer:Show()
+            end
+            self.roundsToggle:SetText(L and L["HIDE_IRV_ROUNDS"] or "Hide IRV Rounds")
+        end
+        -- Recalculate candidate row positions
+        self:LayoutCandidateRows()
+    end)
+
+    -- Rounds container (initially hidden)
+    self.roundsContainer = CreateFrame("Frame", nil, content)
+    self.roundsContainer:SetPoint("TOPLEFT", self.roundsToggle, "BOTTOMLEFT", 0, -4)
+    self.roundsContainer:SetPoint("RIGHT", content, "RIGHT", 0, 0)
+    self.roundsContainer:SetHeight(1)
+    self.roundsContainer:Hide()
+
+    self.roundFontStrings = {}
 end
 
 --- Create action buttons
@@ -307,6 +339,22 @@ function ResultsPanelMixin:DisplayResults(_results)
 
     -- Update response summary
     local summaryOffset = self:UpdateResponseSummary(cm)
+
+    -- Build IRV rounds visualization if available
+    if self.results and self.results.rounds and #self.results.rounds > 0 then
+        self:BuildRoundsVisualization(self.results)
+        local L = Loothing.Locale
+        self.roundsToggle:SetText(string.format(L and L["SHOW_IRV_ROUNDS"] or "Show IRV Rounds (%d rounds)", #self.results.rounds))
+        self.roundsToggle:Show()
+        -- Adjust starting offset for candidate rows
+        summaryOffset = summaryOffset - 26  -- space for toggle button
+        if self.roundsContainer:IsShown() then
+            summaryOffset = summaryOffset - self.roundsContainer:GetHeight() - 4
+        end
+    else
+        if self.roundsToggle then self.roundsToggle:Hide() end
+        if self.roundsContainer then self.roundsContainer:Hide() end
+    end
 
     -- Create candidate rows (start below header + summary)
     local yOffset = summaryOffset - 8
@@ -454,6 +502,125 @@ function ResultsPanelMixin:UpdateResponseSummary(cm)
     -- Return yOffset for the first candidate row (after winnerText + summary)
     -- winnerText is at y=0, summary is below it; estimate total header height
     return -40
+end
+
+--- Build round-by-round IRV visualization
+-- @param results table - Tally results with rounds data
+function ResultsPanelMixin:BuildRoundsVisualization(results)
+    -- Hide existing round text
+    for _, fs in ipairs(self.roundFontStrings) do
+        fs:Hide()
+    end
+
+    if not results or not results.rounds or #results.rounds == 0 then
+        self._roundCount = 0
+        return
+    end
+
+    self._roundCount = #results.rounds
+    local lineHeight = 18
+    local prevCounts = nil
+
+    for i, round in ipairs(results.rounds) do
+        -- Reuse or create FontString
+        local fs = self.roundFontStrings[i]
+        if not fs then
+            fs = self.roundsContainer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            self.roundFontStrings[i] = fs
+        end
+
+        fs:ClearAllPoints()
+        fs:SetPoint("TOPLEFT", 0, -(i - 1) * lineHeight)
+        fs:SetPoint("RIGHT", -4, 0)
+        fs:SetJustifyH("LEFT")
+
+        -- Build round text
+        local parts = {}
+        local sortedCandidates = {}
+        for candidate, count in pairs(round.counts) do
+            sortedCandidates[#sortedCandidates + 1] = { name = candidate, count = count }
+        end
+        table.sort(sortedCandidates, function(a, b) return a.count > b.count end)
+
+        for _, entry in ipairs(sortedCandidates) do
+            local transfer = ""
+            if prevCounts and prevCounts[entry.name] then
+                local diff = entry.count - prevCounts[entry.name]
+                if diff > 0 then
+                    transfer = string.format(" |cff88ff88(+%d)|r", diff)
+                end
+            end
+
+            -- Check if eliminated this round
+            local wasEliminated = false
+            if round.eliminated then
+                for _, elim in ipairs(round.eliminated) do
+                    if elim == entry.name then
+                        wasEliminated = true
+                        break
+                    end
+                end
+            end
+
+            local shortName = entry.name:match("^([^%-]+)") or entry.name
+            if wasEliminated then
+                parts[#parts + 1] = string.format("|cff888888%s: %d%s|r", shortName, entry.count, transfer)
+            else
+                parts[#parts + 1] = string.format("%s: %d%s", shortName, entry.count, transfer)
+            end
+        end
+
+        local roundLabel = string.format("|cffffcc00Round %d:|r  ", i)
+        local suffix = ""
+
+        -- Check if this round found the winner
+        if results.winner and i == #results.rounds then
+            suffix = "  |cffffd700<- WINNER|r"
+        elseif round.eliminated and #round.eliminated > 0 then
+            local elimNames = {}
+            for _, e in ipairs(round.eliminated) do
+                elimNames[#elimNames + 1] = (e:match("^([^%-]+)") or e)
+            end
+            suffix = string.format("  |cff888888<- %s eliminated|r", table.concat(elimNames, ", "))
+        end
+
+        fs:SetText(roundLabel .. table.concat(parts, "  |  ") .. suffix)
+        fs:Show()
+
+        prevCounts = round.counts
+    end
+
+    -- Set container height
+    self.roundsContainer:SetHeight(#results.rounds * lineHeight + 8)
+end
+
+--- Recalculate candidate row positions based on rounds visibility
+function ResultsPanelMixin:LayoutCandidateRows()
+    local yStart = -40  -- Base offset after winner/summary text
+
+    -- Account for rounds toggle button
+    if self.roundsToggle and self.roundsToggle:IsShown() then
+        yStart = yStart - 26  -- toggle button height + spacing
+    end
+
+    -- Account for expanded rounds container
+    if self.roundsContainer and self.roundsContainer:IsShown() then
+        yStart = yStart - self.roundsContainer:GetHeight() - 4
+    end
+
+    local rowHeight = 60
+    local padding = 8
+    local yOffset = yStart
+
+    for _, row in ipairs(self.responseRows) do
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", self.resultsContent, "TOPLEFT", 0, yOffset)
+        row:SetPoint("RIGHT", self.resultsContent, "RIGHT", 0, 0)
+        yOffset = yOffset - rowHeight - padding
+    end
+
+    -- Update content height
+    self.resultsContent:SetHeight(math.abs(yOffset) + padding)
 end
 
 --[[--------------------------------------------------------------------

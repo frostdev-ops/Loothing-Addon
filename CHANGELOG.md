@@ -2,6 +2,95 @@
 
 All notable changes to Loothing will be documented in this file.
 
+## [1.2.2] - 2026-03-10
+
+### Added
+
+#### Runtime Taint Audit And Diagnostics
+
+- Added `Core/Diagnostics.lua` with a lightweight runtime audit that tracks:
+  - `ADDON_ACTION_BLOCKED` / `ADDON_ACTION_FORBIDDEN` events
+  - secure-state checks for `UnitGUID`, `NotifyInspect`, `UnitName`, `GetRaidRosterInfo`, `GetPlayerInfoByGUID`, `SlashCmdList`, and `StaticPopupDialogs`
+  - unexpected `Loothing*` / `Loolib*` globals outside the explicit allowlist
+- Added dev-only `/lt taint`, `/lt taint scan`, and `/lt taint clear` commands
+- Diagnostics reuse the existing structured log buffer through the `TaintAudit` module name; no new SavedVariables were added
+
+#### Winner Determination Settings (`Core/Options/SessionSettings.lua`)
+
+New **Winner Determination** settings group in Session Settings:
+- **Winner Mode** — `HIGHEST_VOTES` (auto-award top candidate), `ML_CONFIRM` (ML confirms from shortlist), `AUTO_HIGHEST_CONFIRM` (auto-select highest then show confirmation)
+- **Tie Breaker** — `ROLL` (simulated random roll), `ML_CHOICE` (ML decides), `REVOTE` (force another vote round)
+- **Auto-award on Unanimous** — automatically award when every council member votes for the same candidate
+- **Require Confirmation** — show a confirmation dialog before the award is applied
+- **Maximum Re-votes** slider (0–10); `VotingSession` now reads this at init instead of using a hardcoded value of 2
+
+#### IRV Rounds Visualization (`UI/ResultsPanel.lua`)
+
+When IRV (Instant-Runoff Voting) results include round data, the Results Panel shows a collapsible round-by-round breakdown:
+- Toggle button below the response summary shows "Show IRV Rounds (N rounds)"
+- Expanding the container shows per-round vote tallies and eliminations
+- Candidate rows reflow correctly when the rounds container is toggled
+
+#### Interactive Ranked Choice Display (`UI/VotePanel.lua`)
+
+`CreateRankedDisplay` rewritten from a static text field to an interactive reorderable panel:
+- Candidate rows can be dragged to reorder rankings
+- Helper text enforces min/max rank constraints inline ("Rank at least 2 choices", "Maximum 5 ranks reached")
+- Clear button resets all rankings instantly
+- Locale lookups use safe fallbacks throughout
+
+#### RCV-Aware Vote Button Labels (`UI/CouncilTable`)
+
+Council table vote buttons and row click handler are now aware of voting mode:
+- Button text shows **Rank** / **Ranked** (green) in `RANKED_CHOICE` mode, **Vote** / **Voted** in `SIMPLE` mode
+- Clicking the Vote button in RCV mode opens the `VotePanel` for ranking instead of toggling a simple vote
+
+### Fixed
+
+#### Secret-Value And Unsafe Runtime Callers
+
+- `Loolib/Data/SavedVariables.lua` now guards scope-key generation against secret or missing unit API returns, falling back to stable placeholder values instead of crashing on tainted paths
+- `Core/Migration.lua` no longer rebuilds profile keys from raw `UnitName("player")`; it now uses `SafeUnitName("player")` while preserving the SavedVariables character-key format (`"Name - Realm"`)
+- `Data/TradeQueue.lua` no longer makes the invalid `UnitName("NPC")` call when the trade recipient label is empty
+- Production-loaded `Debug/TestMode.lua` now uses safe player-name accessors instead of raw `UnitName("player")`
+
+#### Namespace And Global-Surface Cleanup
+
+- Added the expected-global allowlist to diagnostics without tripping the architecture audit
+- Removed the remaining repo-owned bare global factory exports from optional Loolib popup/canvas modules by keeping those factory functions local to their modules
+
+#### `CHAT_MSG_SYSTEM` Secret-String Crash (`Data/RollTracker.lua`, `UI/RollFrame/Events.lua`)
+
+**Symptom**: `[Loolib Error] Callback error for event CHAT_MSG_SYSTEM : attempt to perform string conversion on a secret string value (tainted by 'Loothing')` — fired twice per death/system message in a raid.
+
+**Root cause**: In WoW 12.0, hardware-protected system messages (player deaths, `[You died.]`) arrive as secret-valued strings. `tostring()` itself is a string-conversion operation that throws on secret strings in untrusted addon code. Two separate `Events.Registry` registrations (one in `RollTracker:Init()`, one in `Core/Init.lua`) both invoked `OnChatMessage`, doubling every error.
+
+**Fix**:
+- Added `if SecretUtil.IsSecretValue(text) then return end` guard before `tostring()` in both `RollTrackerMixin:OnChatMessage` and `RollFrameMixin:OnChatMessage`. Roll messages are never secret-valued, so legitimate rolls are unaffected.
+- Removed the redundant `CHAT_MSG_SYSTEM` registration from `Core/Init.lua`; `RollTracker:Init()` self-registers and is the sole listener.
+- Cached `local SecretUtil = Loolib.SecretUtil` at module level in both files to avoid repeated table traversal on a hot event path.
+
+#### Loolib Note Modules: `SecretUtil` Wrappers (`Loolib/UI/Note/`)
+
+`NoteRenderer.lua` and `NoteMarkup.lua` called `GetRaidRosterInfo()`, `UnitName()`, and `UnitClass()` without secret-value protection, creating taint risk on any tainted code path in combat.
+
+- **`NoteRenderer.lua`** — `UpdateRaidRoster()`: replaced 7 raw API calls with `SecretUtil.SafeGetRaidRosterInfo()`, `SecretUtil.SafeUnitName()`, and `SecretUtil.SafeUnitClass()`
+- **`NoteMarkup.lua`** — `UpdatePlayerContext()`: replaced 4 raw API calls with safe wrappers; consolidated the two `SafeUnitClass("player")` calls into one (`local _, classToken, classID = SecretUtil.SafeUnitClass("player")`); added `if not fullName then return end` guard to prevent `nil:match()` when the player name is secret
+
+#### `GroupLootDisplay`: Taint-Safe Frame Removal (`Loot/GroupLootDisplay.lua`)
+
+`GroupLootContainer_RemoveFrame(GroupLootContainer, frame)` is now wrapped in `pcall` so that if Blizzard secures or removes `GroupLootContainer` in a future patch, the error is silently swallowed rather than propagating up the call stack. The loot frame may remain visible in that edge case, which is preferable to an unhandled Lua error.
+
+### Tests
+
+- Added `Debug/Tests/VotingTests.lua` with coverage for winner-determination modes (highest-votes, ML-confirm, auto-confirm), tie-breaker selection, and unanimous auto-award logic
+- Added `Debug/Tests/DiagnosticsTests.lua` to cover unexpected-global detection, allowlist handling, blocked-action capture, and audit reset behavior
+- Extended `Debug/Tests/SecretValueTests.lua` with regression coverage for SavedVariables scope-key fallbacks and migration profile-key lookup
+
+### Validation
+
+- `luac -p` passes on all edited Lua files
+
 ## [1.2.1] - 2026-03-10
 
 ### Performance

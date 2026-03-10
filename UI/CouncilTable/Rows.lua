@@ -566,6 +566,17 @@ end
 function CouncilTableMixin:OnVoteClick(candidate)
     Loothing:Debug("OnVoteClick: candidate =", candidate and candidate.name, "item =", self.currentItem and self.currentItem.guid)
 
+    -- In RCV mode, open the VotePanel instead of toggling a vote
+    local votingMode = Loothing.Settings and Loothing.Settings:GetVotingMode()
+    if votingMode == Loothing.VotingMode.RANKED_CHOICE then
+        if Loothing.VotePanel then
+            Loothing.VotePanel:SetVotingMode(Loothing.VotingMode.RANKED_CHOICE)
+            Loothing.VotePanel:SetItem(self.currentItem)
+            Loothing.VotePanel:Show()
+        end
+        return
+    end
+
     if not Loothing.Session then
         Loothing:Debug("OnVoteClick: no Session")
         return

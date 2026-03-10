@@ -21,7 +21,7 @@ function GroupLootMixin:HideGroupLootFrame(rollID)
     for i = 1, 4 do
         local frame = _G["GroupLootFrame" .. i]
         if frame and frame:IsShown() and frame.rollID == rollID then
-            GroupLootContainer_RemoveFrame(GroupLootContainer, frame)
+            pcall(GroupLootContainer_RemoveFrame, GroupLootContainer, frame)
             break
         end
     end

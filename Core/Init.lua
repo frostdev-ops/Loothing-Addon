@@ -60,6 +60,7 @@ Loothing.PlayerCache = nil
 Loothing.ItemStorage = nil
 Loothing.WhisperHandler = nil
 Loothing.ErrorHandler = nil
+Loothing.Diagnostics = nil
 Loothing.Announcer = nil
 Loothing.AutoAward = nil
 Loothing.ResponseButtonSettings = nil
@@ -247,6 +248,11 @@ local function InitializeModules()
     if ns.CreateErrorHandler then
         Loothing.ErrorHandler = ns.CreateErrorHandler()
         Loothing.ErrorHandler:LoadFromDatabase()
+    end
+
+    -- Initialize runtime diagnostics after the error handler so it can reuse the log buffer
+    if ns.CreateDiagnostics then
+        Loothing.Diagnostics = ns.CreateDiagnostics()
     end
 
     -- Initialize MLDB (Master Looter Database)
@@ -801,13 +807,7 @@ local function RegisterEvents()
         end, Loothing)
     end
 
-    -- Roll tracking
-    Events.Registry:RegisterEventCallback("CHAT_MSG_SYSTEM", function(_, text)
-        if Loothing.RollTracker then
-            Loothing.RollTracker:OnChatMessage(text)
-        end
-    end, Loothing)
-
+    -- NOTE: CHAT_MSG_SYSTEM for roll tracking is registered by RollTracker:Init()
     -- NOTE: Trade window events (TRADE_SHOW, TRADE_CLOSED, TRADE_ACCEPT_UPDATE, UI_INFO_MESSAGE)
     -- are registered internally by TradeQueue:RegisterEvents()
 end
@@ -1200,6 +1200,43 @@ local function RegisterSlashCommands()
             end,
         },
         {
+            key = "taint",
+            devOnly = true,
+            description = "Run Loothing taint/global audit",
+            usage = { "/lt taint", "/lt taint scan", "/lt taint clear" },
+            handler = function(args)
+                if not requireDebug("/lt taint") then
+                    return
+                end
+
+                if not Loothing.Diagnostics then
+                    printError("Diagnostics not available.")
+                    return
+                end
+
+                local action = (args or ""):lower()
+                if action == "" then
+                    local report = Loothing.Diagnostics:GetReport() or Loothing.Diagnostics:RunScan("slash")
+                    Loothing.Diagnostics:PrintReport(report, printLine)
+                    return
+                end
+
+                if action == "scan" then
+                    local report = Loothing.Diagnostics:RunScan("slash")
+                    Loothing.Diagnostics:PrintReport(report, printLine)
+                    return
+                end
+
+                if action == "clear" then
+                    Loothing.Diagnostics:Clear()
+                    printLine("Taint diagnostics cleared and baseline reset.")
+                    return
+                end
+
+                printError("Usage: /lt taint [scan|clear]")
+            end,
+        },
+        {
             key = "test",
             devOnly = true,
             description = L["SLASH_DESC_TEST"] or "Test mode utilities",
@@ -1208,7 +1245,7 @@ local function RegisterSlashCommands()
                 if not requireDebug("/lt test") then
                     return
                 end
-                local TestMode = ns.TestModeState
+                local TestMode = ns.TestMode
                 if TestMode and TestMode.HandleCommand then
                     TestMode:HandleCommand(args or "")
                 else
@@ -1341,6 +1378,10 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
 
             -- Register slash commands
             RegisterSlashCommands()
+
+            if Loothing.Diagnostics then
+                Loothing.Diagnostics:MarkRuntimeReady()
+            end
 
             Loothing.initialized = true
         end

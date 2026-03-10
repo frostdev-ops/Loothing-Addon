@@ -365,10 +365,8 @@ function VotePanelMixin:UpdateButtonVisibility()
     end
 end
 
---- Create ranked choice display
+--- Create ranked choice display with interactive rows
 function VotePanelMixin:CreateRankedDisplay()
-    local L = Loothing.Locale
-
     local container = CreateFrame("Frame", nil, self.frame)
     container:SetPoint("TOPLEFT", 20, -280)
     container:SetPoint("TOPRIGHT", -20, -280)
@@ -378,26 +376,190 @@ function VotePanelMixin:CreateRankedDisplay()
     -- Label
     local label = container:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     label:SetPoint("TOPLEFT")
-    label:SetText(L["YOUR_RANKING"])
+    label:SetText((Loothing.Locale and Loothing.Locale["YOUR_RANKING"]) or "Your Ranking")
     label:SetTextColor(0.7, 0.7, 0.7)
-
-    -- Ranking text
-    self.rankingText = container:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    self.rankingText:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -4)
-    self.rankingText:SetPoint("RIGHT", -8, 0)
-    self.rankingText:SetJustifyH("LEFT")
-    self.rankingText:SetWordWrap(true)
 
     -- Clear button
     local clearButton = CreateFrame("Button", nil, container, "UIPanelButtonTemplate")
     clearButton:SetSize(60, 20)
     clearButton:SetPoint("TOPRIGHT")
-    clearButton:SetText(L["CLEAR"])
+    clearButton:SetText((Loothing.Locale and Loothing.Locale["CLEAR"]) or "Clear")
     clearButton:SetScript("OnClick", function()
         self:ClearRanking()
     end)
 
+    -- Helper text for max/min rank messages
+    self.rankHelperText = container:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    self.rankHelperText:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -2)
+    self.rankHelperText:SetTextColor(1, 0.5, 0.2)
+    self.rankHelperText:Hide()
+
     self.rankedContainer = container
+    self.rankRowFrames = {}
+end
+
+--- Create a single interactive rank row
+-- @param parent Frame
+-- @param index number - Rank position
+-- @return Frame
+function VotePanelMixin:CreateRankRow(parent, index)
+    local row = CreateFrame("Frame", nil, parent)
+    row:SetSize(280, 22)
+
+    -- Rank number
+    local rankNum = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    rankNum:SetPoint("LEFT", 0, 0)
+    rankNum:SetWidth(20)
+    rankNum:SetJustifyH("CENTER")
+    row.rankNum = rankNum
+
+    -- Color bar
+    local colorBar = row:CreateTexture(nil, "ARTWORK")
+    colorBar:SetSize(4, 18)
+    colorBar:SetPoint("LEFT", rankNum, "RIGHT", 4, 0)
+    row.colorBar = colorBar
+
+    -- Response name
+    local nameText = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    nameText:SetPoint("LEFT", colorBar, "RIGHT", 6, 0)
+    nameText:SetWidth(150)
+    nameText:SetJustifyH("LEFT")
+    nameText:SetWordWrap(false)
+    row.nameText = nameText
+
+    -- Up arrow button
+    local upBtn = CreateFrame("Button", nil, row)
+    upBtn:SetSize(16, 16)
+    upBtn:SetPoint("LEFT", nameText, "RIGHT", 4, 0)
+    upBtn:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollUp-Up")
+    upBtn:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollUp-Highlight")
+    upBtn:SetScript("OnClick", function()
+        self:MoveRank(row.rankIndex, row.rankIndex - 1)
+    end)
+    row.upBtn = upBtn
+
+    -- Down arrow button
+    local downBtn = CreateFrame("Button", nil, row)
+    downBtn:SetSize(16, 16)
+    downBtn:SetPoint("LEFT", upBtn, "RIGHT", 2, 0)
+    downBtn:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up")
+    downBtn:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Highlight")
+    downBtn:SetScript("OnClick", function()
+        self:MoveRank(row.rankIndex, row.rankIndex + 1)
+    end)
+    row.downBtn = downBtn
+
+    -- Remove button
+    local removeBtn = CreateFrame("Button", nil, row)
+    removeBtn:SetSize(16, 16)
+    removeBtn:SetPoint("LEFT", downBtn, "RIGHT", 2, 0)
+    removeBtn:SetNormalTexture("Interface\\Buttons\\UI-StopButton")
+    removeBtn:SetHighlightTexture("Interface\\Buttons\\UI-StopButton")
+    removeBtn:SetScript("OnClick", function()
+        table.remove(self.selectedResponses, row.rankIndex)
+        self:RefreshRankDisplay()
+        self:UpdateResponseButtons()
+    end)
+    row.removeBtn = removeBtn
+
+    return row
+end
+
+--- Swap two rank positions
+-- @param fromIndex number
+-- @param toIndex number
+function VotePanelMixin:MoveRank(fromIndex, toIndex)
+    if toIndex < 1 or toIndex > #self.selectedResponses then
+        return
+    end
+    self.selectedResponses[fromIndex], self.selectedResponses[toIndex] =
+        self.selectedResponses[toIndex], self.selectedResponses[fromIndex]
+    self:RefreshRankDisplay()
+    self:UpdateResponseButtons()
+end
+
+--- Rebuild rank row display from selectedResponses
+function VotePanelMixin:RefreshRankDisplay()
+    -- Hide all existing rows
+    for _, row in ipairs(self.rankRowFrames) do
+        row:Hide()
+    end
+
+    if not self.rankedContainer then return end
+
+    local count = #self.selectedResponses
+    local rowHeight = 24
+    local yOffset = -20  -- Below the label
+
+    for i, buttonId in ipairs(self.selectedResponses) do
+        -- Reuse or create row
+        local row = self.rankRowFrames[i]
+        if not row then
+            row = self:CreateRankRow(self.rankedContainer, i)
+            self.rankRowFrames[i] = row
+        end
+
+        row.rankIndex = i
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", 0, yOffset - (i - 1) * rowHeight)
+        row:SetPoint("RIGHT", -8, 0)
+
+        -- Rank number with gradient color (gold -> gray)
+        local t = count > 1 and (i - 1) / (count - 1) or 0
+        local r = 1.0 - t * 0.4
+        local g = 0.82 - t * 0.42
+        local b = 0.0 + t * 0.4
+        row.rankNum:SetText(tostring(i))
+        row.rankNum:SetTextColor(r, g, b)
+
+        -- Response info
+        local button = self.responseButtons[buttonId]
+        if button and button.buttonData then
+            local btnData = button.buttonData
+            local cr, cg, cb = 0.5, 0.5, 0.5
+            if btnData.color then
+                cr, cg, cb = unpack(Utils.ColorToArray(btnData.color))
+            end
+            row.colorBar:SetColorTexture(cr, cg, cb, 1)
+            row.nameText:SetText(btnData.text)
+            row.nameText:SetTextColor(cr, cg, cb)
+        end
+
+        -- Show/hide arrows based on position
+        row.upBtn:SetShown(i > 1)
+        row.downBtn:SetShown(i < count)
+
+        row:Show()
+    end
+
+    -- Update container height
+    local height = math.max(50, count * rowHeight + 28)
+    self.rankedContainer:SetHeight(height)
+
+    -- Update helper text
+    self:UpdateRankHelperText()
+end
+
+--- Update helper text for rank limits
+function VotePanelMixin:UpdateRankHelperText()
+    if not self.rankHelperText then return end
+
+    local L = Loothing.Locale
+    local count = #self.selectedResponses
+    local maxRanks = Loothing.Settings and Loothing.Settings:GetMaxRanks() or 0
+    local minRanks = Loothing.Settings and Loothing.Settings:GetMinRanks() or 1
+
+    if maxRanks > 0 and count >= maxRanks then
+        self.rankHelperText:SetText(string.format(L and L["RANK_LIMIT_REACHED"] or "Maximum %d ranks reached", maxRanks))
+        self.rankHelperText:SetTextColor(1, 0.5, 0.2)
+        self.rankHelperText:Show()
+    elseif count < minRanks then
+        self.rankHelperText:SetText(string.format(L and L["RANK_MINIMUM_REQUIRED"] or "Rank at least %d choices", minRanks))
+        self.rankHelperText:SetTextColor(1, 0.3, 0.3)
+        self.rankHelperText:Show()
+    else
+        self.rankHelperText:Hide()
+    end
 end
 
 --- Create timer bar
@@ -551,6 +713,12 @@ function VotePanelMixin:AddToRanking(buttonId)
         end
     end
 
+    -- Enforce maxRanks limit
+    local maxRanks = Loothing.Settings and Loothing.Settings:GetMaxRanks() or 0
+    if maxRanks > 0 and #self.selectedResponses >= maxRanks then
+        return
+    end
+
     -- Add to end of ranking
     self.selectedResponses[#self.selectedResponses + 1] = buttonId
     self:UpdateResponseButtons()
@@ -586,8 +754,8 @@ function VotePanelMixin:UpdateResponseButtons()
             end
         end
 
-        -- Update ranking text
-        self:UpdateRankingText()
+        -- Update interactive rank display
+        self:RefreshRankDisplay()
         self.rankedContainer:Show()
     else
         -- Simple mode - show selection
@@ -622,8 +790,15 @@ end
 
 --- Update submit button state
 function VotePanelMixin:UpdateSubmitButton()
-    local hasSelection = #self.selectedResponses > 0
-    self.submitButton:SetEnabled(hasSelection)
+    local count = #self.selectedResponses
+    local hasSelection = count > 0
+
+    if self.votingMode == Loothing.VotingMode.RANKED_CHOICE then
+        local minRanks = Loothing.Settings and Loothing.Settings:GetMinRanks() or 1
+        self.submitButton:SetEnabled(count >= minRanks)
+    else
+        self.submitButton:SetEnabled(hasSelection)
+    end
 end
 
 --[[--------------------------------------------------------------------
