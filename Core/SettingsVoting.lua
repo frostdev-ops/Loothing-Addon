@@ -115,3 +115,36 @@ function SettingsMixin:IsMasterLooter()
     local playerName = Utils.GetPlayerFullName()
     return Utils.NormalizeName(ml) == Utils.NormalizeName(playerName)
 end
+
+-- Ranked choice rank limits
+function SettingsMixin:GetMaxRanks()
+    return self:Get("voting.maxRanks", 0)
+end
+
+function SettingsMixin:SetMaxRanks(n)
+    self:Set("voting.maxRanks", math.max(0, math.floor(n)))
+end
+
+function SettingsMixin:GetMinRanks()
+    return self:Get("voting.minRanks", 1)
+end
+
+function SettingsMixin:SetMinRanks(n)
+    self:Set("voting.minRanks", math.max(1, math.floor(n)))
+end
+
+function SettingsMixin:GetMaxRevotes()
+    return self:Get("voting.maxRevotes", 2)
+end
+
+function SettingsMixin:SetMaxRevotes(n)
+    self:Set("voting.maxRevotes", math.max(0, math.floor(n)))
+end
+
+function SettingsMixin:GetMlSeesVotes()
+    return self:Get("voting.mlSeesVotes", false)
+end
+
+function SettingsMixin:SetMlSeesVotes(v)
+    self:Set("voting.mlSeesVotes", v == true)
+end

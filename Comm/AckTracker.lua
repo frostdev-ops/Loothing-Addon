@@ -1,3 +1,5 @@
+local _, ns = ...
+
 --[[--------------------------------------------------------------------
     Loothing - Loot Council Addon for WoW 12.0+
     AckTracker - ML heartbeat and client auto-recovery
@@ -19,8 +21,6 @@
         councilHash = number (Adler-32 of sorted council member names)
         mldbHash    = number (Adler-32 of serialized MLDB)
 ----------------------------------------------------------------------]]
-
-local _, ns = ...
 local Loothing = ns.Addon
 local Loolib = LibStub("Loolib")
 local CreateFromMixins = Loolib.CreateFromMixins

@@ -13,6 +13,7 @@
 
 local _, ns = ...
 local Loothing = ns.Addon
+local TestRunner = ns.TestRunner
 
 local function RunReconnectTests()
     local passed = 0

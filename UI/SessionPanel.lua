@@ -1038,7 +1038,7 @@ end
 --- Release all active rows back to the pool
 function SessionPanelMixin:ReleaseAllItemRows()
     for _, row in ipairs(self.itemRows) do
-        ItemRow_Reset(nil, row)
+        ns.ResetItemRow(nil, row)
         self.itemRowPool[#self.itemRowPool + 1] = row
     end
     wipe(self.itemRows)

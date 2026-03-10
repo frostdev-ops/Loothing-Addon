@@ -415,7 +415,14 @@ function VotingSessionMixin:Tally()
     if self.votingMode == Loothing.VotingMode.RANKED_CHOICE then
         -- Get candidates (all players who received votes)
         local candidates = self:GetCandidatesFromVotes(votes)
-        self.results = ns.VotingEngine:TallyRankedChoice(votes, candidates)
+        local tieBreakerMode = Loothing.Settings and Loothing.Settings:GetTieBreakerMode() or "ROLL"
+        self.results = ns.VotingEngine:TallyRankedChoice(votes, candidates, { tieBreakerMode = tieBreakerMode })
+
+        -- If tiebreaker requests a revote, auto-trigger it
+        if self.results and self.results.needsRevote then
+            self:StartRevote()
+            return
+        end
     else
         self.results = ns.VotingEngine:TallySimple(votes)
     end
@@ -423,22 +430,11 @@ function VotingSessionMixin:Tally()
     self:TriggerEvent("OnResultsReady", self.results)
 end
 
---- Get candidates from votes (for ranked choice)
--- @param votes table - DataProvider
--- @return table - Array of unique first-choice responses
+--- Get candidates from votes — Delegates to VotingEngine
+-- @param votes table - DataProvider or array of votes
+-- @return table - Array of unique candidate names across all ranked positions
 function VotingSessionMixin:GetCandidatesFromVotes(votes)
-    local seen = {}
-    local candidates = {}
-
-    for _, vote in votes:Enumerate() do
-        local firstChoice = vote.responses and vote.responses[1]
-        if firstChoice and not seen[firstChoice] then
-            seen[firstChoice] = true
-            candidates[#candidates + 1] = tostring(firstChoice)
-        end
-    end
-
-    return candidates
+    return ns.VotingEngine:GetCandidatesFromVotes(votes)
 end
 
 --- Get results

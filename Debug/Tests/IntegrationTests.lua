@@ -6,6 +6,7 @@
 local _, ns = ...
 local Loothing = ns.Addon
 local Utils = ns.Utils
+local TestMode = ns.TestMode
 
 --[[--------------------------------------------------------------------
     Test Infrastructure
@@ -717,5 +718,4 @@ end
     Global Access
 ----------------------------------------------------------------------]]
 
-_G.IntegrationTests = IntegrationTests
-
+ns.IntegrationTests = IntegrationTests

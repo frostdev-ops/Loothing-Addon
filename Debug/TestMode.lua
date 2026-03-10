@@ -9,11 +9,15 @@ local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local Utils = ns.Utils
 
+local function GetTestRunner()
+    return ns.TestRunner
+end
+
 --[[--------------------------------------------------------------------
     Test Mode State
 ----------------------------------------------------------------------]]
 
-TestMode = {
+local TestMode = ns.TestMode or {
     enabled = false,
     fakeCouncilMembers = {},
     fakeItems = {},
@@ -1233,6 +1237,7 @@ end
 --- Run a specific test suite (Describe/It or standalone)
 -- @param suiteName string - Name of the suite to run
 function TestMode:RunTestSuite(suiteName)
+    local TestRunner = GetTestRunner()
     if not suiteName or suiteName == "" then
         print("|cffff0000[Loothing Test]|r Please specify a suite name.")
         print("  Use |cffffffff/lt test list|r to see available suites.")
@@ -1260,6 +1265,7 @@ end
 
 --- Run all registered test suites (Describe/It + standalone)
 function TestMode:RunAllTests()
+    local TestRunner = GetTestRunner()
     if not TestRunner then
         print("|cffff0000[Loothing Test]|r TestRunner not loaded.")
         return
@@ -1282,6 +1288,7 @@ end
 --- Run tests in a specific category
 -- @param category string - "unit", "integration", or "stress"
 function TestMode:RunTestCategory(category)
+    local TestRunner = GetTestRunner()
     if not TestRunner then
         print("|cffff0000[Loothing Test]|r TestRunner not loaded.")
         return
@@ -1294,6 +1301,7 @@ end
 
 --- List all available test suites (Describe/It + standalone)
 function TestMode:ListTestSuites()
+    local TestRunner = GetTestRunner()
     if not TestRunner then
         print("|cffff0000[Loothing Test]|r TestRunner not loaded.")
         return

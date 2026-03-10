@@ -8,6 +8,8 @@ local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local Utils = ns.Utils
 local SavedVariables = Loolib.Data.SavedVariables
+local TooltipScan = ns.TooltipScan
+local C_Timer = C_Timer
 
 --[[--------------------------------------------------------------------
     ItemStorageMixin
@@ -155,6 +157,15 @@ function ItemStorageMixin:Init()
 
     -- Storage arrays
     self.items = {}  -- Active tracked items
+    self.pendingItemWatches = {}
+    self.pendingItemWatchOrder = {}
+    self.nextItemWatchID = 0
+    self.itemWatchTicker = nil
+    self.itemWatchEventFrame = self.itemWatchEventFrame or CreateFrame("Frame")
+    self.itemWatchEventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
+    self.itemWatchEventFrame:SetScript("OnEvent", function()
+        self:ProcessPendingItemWatches(false)
+    end)
 
     -- Set singleton reference for ItemClass methods
     ItemStorageMixin._instance = self
@@ -289,7 +300,6 @@ end
 -- @return number - Number of items removed
 function ItemStorageMixin:RemoveExpired()
     local removed = 0
-    local currentTime = time()
 
     for i = #self.items, 1, -1 do
         local item = self.items[i]
@@ -377,16 +387,9 @@ end
 -- @param slot number - Slot index
 -- @return number|nil - Seconds remaining, or nil if not tradeable
 function ItemStorageMixin:GetTradeTimeRemainingFromSlot(bag, slot)
-    -- Use Blizzard's built-in function if available
-    if C_Container.GetContainerItemInfo then
-        local info = C_Container.GetContainerItemInfo(bag, slot)
-        if info then
-            -- Trade-window items ARE bound but still tradeable within the 2-hour window.
-            -- Always parse tooltip to check for BIND_TRADE_TIME_REMAINING.
-            return self:ParseTradeTimeFromTooltip(bag, slot)
-        end
+    if TooltipScan then
+        return TooltipScan:GetContainerItemTradeTimeRemaining(bag, slot)
     end
-
     return nil
 end
 
@@ -397,77 +400,9 @@ end
 -- @param slot number - Slot index
 -- @return number|nil - Seconds remaining, or nil
 function ItemStorageMixin:ParseTradeTimeFromTooltip(bag, slot)
-    -- Delegate to TradeQueue's more robust parser if available
-    if Loothing and Loothing.TradeQueue and Loothing.TradeQueue.GetContainerItemTradeTimeRemaining then
-        local result = Loothing.TradeQueue:GetContainerItemTradeTimeRemaining(bag, slot)
-        if result and result > 0 then
-            return result
-        elseif result == 0 then
-            return nil  -- Soulbound
-        end
+    if TooltipScan then
+        return TooltipScan:GetContainerItemTradeTimeRemaining(bag, slot)
     end
-
-    -- Fallback: create a scanning tooltip
-    local tooltipName = "LoothingItemStorageScanTooltip"
-    local tooltip = _G[tooltipName]
-    if not tooltip then
-        tooltip = CreateFrame("GameTooltip", tooltipName, nil, "GameTooltipTemplate")
-    end
-
-    tooltip:SetOwner(UIParent, "ANCHOR_NONE")
-    tooltip:SetBagItem(bag, slot)
-
-    -- Use Blizzard's localized constants for locale-independent tooltip parsing
-    local tradePattern = BIND_TRADE_TIME_REMAINING
-    local boeText = ITEM_BIND_ON_EQUIP
-
-    for i = 1, tooltip:NumLines() do
-        local line = _G[tooltipName .. "TextLeft" .. i]
-        if line then
-            local text = line:GetText()
-            if text then
-                -- Check for trade time remaining using Blizzard's localized constant
-                if tradePattern then
-                    local anchor = tradePattern:match("^(.-)%%s")
-                    if anchor and anchor ~= "" then
-                        local anchorStart, anchorEnd = text:find(anchor, 1, true)
-                        if anchorStart then
-                            local timeStr = text:sub(anchorEnd + 1)
-                            local hours = 0
-                            local minutes = 0
-                            local h, m = timeStr:match("(%d+).-(%d+)")
-                            if h then
-                                hours = tonumber(h) or 0
-                                minutes = tonumber(m) or 0
-                            else
-                                hours = tonumber(timeStr:match("(%d+)")) or 0
-                            end
-                            local result = hours * 3600 + minutes * 60
-                            if result == 0 then result = 60 end
-                            tooltip:Hide()
-                            return result
-                        end
-                    end
-                end
-
-                -- Fallback: direct time patterns
-                local hours = text:match("(%d+)%s*hour") or text:match("(%d+)%s*hr")
-                local minutes = text:match("(%d+)%s*min")
-                if hours or minutes then
-                    tooltip:Hide()
-                    return (tonumber(hours) or 0) * 3600 + (tonumber(minutes) or 0) * 60
-                end
-
-                -- BoE items using localized constant
-                if boeText and text:find(boeText, 1, true) then
-                    tooltip:Hide()
-                    return math.huge
-                end
-            end
-        end
-    end
-
-    tooltip:Hide()
     return nil
 end
 
@@ -497,6 +432,13 @@ end
 -- @param maxAttempts number|nil - Max polling attempts (default: 3)
 function ItemStorageMixin:WatchForItem(itemLink, onFound, onFail, maxAttempts)
     maxAttempts = maxAttempts or 3
+    local targetItemID = Utils.GetItemID(itemLink)
+    if not targetItemID then
+        if onFail then
+            onFail()
+        end
+        return
+    end
 
     -- Create temporary item for tracking
     local item = self:New(itemLink, "TEMP", {
@@ -505,74 +447,115 @@ function ItemStorageMixin:WatchForItem(itemLink, onFound, onFail, maxAttempts)
             currentAttempt = 1,
             onFound = onFound or function() end,
             onFail = onFail or function() end,
+            targetItemID = targetItemID,
         }
     })
 
     Loothing:Debug("ItemStorage:WatchForItem", itemLink, "attempts:", maxAttempts)
 
-    -- Start watching
-    self:ScheduleItemWatch(item)
+    self.nextItemWatchID = self.nextItemWatchID + 1
+    local watchID = self.nextItemWatchID
+    self.pendingItemWatches[watchID] = item
+    self.pendingItemWatchOrder[#self.pendingItemWatchOrder + 1] = watchID
+    self:EnsureItemWatchTicker()
 end
 
---- Schedule next item watch attempt
--- @param item table - Item object with itemWatch args
-function ItemStorageMixin:ScheduleItemWatch(item)
-    C_Timer.After(ITEM_WATCH_DELAY, function()
-        self:CheckItemWatch(item)
+function ItemStorageMixin:EnsureItemWatchTicker()
+    if self.itemWatchTicker or #self.pendingItemWatchOrder == 0 then
+        return
+    end
+
+    self.itemWatchTicker = C_Timer.NewTicker(ITEM_WATCH_DELAY, function()
+        self:ProcessPendingItemWatches(true)
     end)
 end
 
---- Check if watched item has appeared
--- @param item table - Item object with itemWatch args
-function ItemStorageMixin:CheckItemWatch(item)
-    local bag, slot, timeRemaining = self:FindInBags(item.link)
+function ItemStorageMixin:StopItemWatchTickerIfIdle()
+    if self.itemWatchTicker and #self.pendingItemWatchOrder == 0 then
+        self.itemWatchTicker:Cancel()
+        self.itemWatchTicker = nil
+    end
+end
 
-    if bag and slot then
-        -- Found it!
-        item.inBags = true
-        item:SetUpdateTime(timeRemaining or 0)
-        item.timeAdded = time()
+function ItemStorageMixin:ProcessPendingItemWatches(countAttempt)
+    if #self.pendingItemWatchOrder == 0 then
+        self:StopItemWatchTickerIfIdle()
+        return
+    end
 
-        Loothing:Debug("ItemStorage:WatchForItem - found", item.link, "at", bag, slot)
+    local remaining = {}
+    local pendingItemIDs = {}
+    local foundByItemID = {}
 
-        -- Trigger callback
-        local watchData = item.args.itemWatch
-        if watchData and watchData.onFound then
-            watchData.onFound(item, bag, slot, timeRemaining)
-        end
-
-        self:TriggerEvent("OnItemFound", item, bag, slot, timeRemaining)
-
-        -- Cleanup watch data
-        item.args.itemWatch = nil
-
-    else
-        -- Not found yet
-        local watchData = item.args.itemWatch
-        if not watchData then
-            return
-        end
-
-        watchData.currentAttempt = watchData.currentAttempt + 1
-
-        if watchData.currentAttempt > watchData.maxAttempts then
-            -- Max attempts reached
-            Loothing:Debug("ItemStorage:WatchForItem - failed after", watchData.maxAttempts, "attempts")
-
-            if watchData.onFail then
-                watchData.onFail(item)
-            end
-
-            -- Cleanup watch data and remove item
-            item.args.itemWatch = nil
-            self:RemoveItem(item)
-
-        else
-            -- Try again
-            Loothing:Debug("ItemStorage:WatchForItem - attempt", watchData.currentAttempt, "/", watchData.maxAttempts)
-            self:ScheduleItemWatch(item)
+    for _, watchID in ipairs(self.pendingItemWatchOrder) do
+        local item = self.pendingItemWatches[watchID]
+        local watchData = item and item.args and item.args.itemWatch
+        if watchData and watchData.targetItemID then
+            pendingItemIDs[watchData.targetItemID] = true
         end
     end
+
+    for bag = 0, NUM_BAG_SLOTS do
+        local numSlots = C_Container.GetContainerNumSlots(bag)
+        for slot = 1, numSlots do
+            local bagItemLink = C_Container.GetContainerItemLink(bag, slot)
+            local foundID = bagItemLink and Utils.GetItemID(bagItemLink)
+            if foundID and pendingItemIDs[foundID] and not foundByItemID[foundID] then
+                foundByItemID[foundID] = {
+                    bag = bag,
+                    slot = slot,
+                    timeRemaining = self:GetTradeTimeRemainingFromSlot(bag, slot),
+                }
+            end
+        end
+    end
+
+    for _, watchID in ipairs(self.pendingItemWatchOrder) do
+        local item = self.pendingItemWatches[watchID]
+        local watchData = item and item.args and item.args.itemWatch
+
+        if item and watchData then
+            local found = foundByItemID[watchData.targetItemID]
+            local bag = found and found.bag or nil
+            local slot = found and found.slot or nil
+            local timeRemaining = found and found.timeRemaining or nil
+
+            if bag and slot then
+                item.inBags = true
+                item:SetUpdateTime(timeRemaining or 0)
+                item.timeAdded = time()
+
+                Loothing:Debug("ItemStorage:WatchForItem - found", item.link, "at", bag, slot)
+
+                if watchData.onFound then
+                    watchData.onFound(item, bag, slot, timeRemaining)
+                end
+
+                self:TriggerEvent("OnItemFound", item, bag, slot, timeRemaining)
+                item.args.itemWatch = nil
+                self.pendingItemWatches[watchID] = nil
+            else
+                if countAttempt then
+                    watchData.currentAttempt = watchData.currentAttempt + 1
+                end
+
+                if countAttempt and watchData.currentAttempt > watchData.maxAttempts then
+                    Loothing:Debug("ItemStorage:WatchForItem - failed after", watchData.maxAttempts, "attempts")
+                    if watchData.onFail then
+                        watchData.onFail(item)
+                    end
+                    item.args.itemWatch = nil
+                    self.pendingItemWatches[watchID] = nil
+                    self:RemoveItem(item)
+                else
+                    remaining[#remaining + 1] = watchID
+                end
+            end
+        end
+    end
+
+    self.pendingItemWatchOrder = remaining
+    self:StopItemWatchTickerIfIdle()
 end
 
 --[[--------------------------------------------------------------------

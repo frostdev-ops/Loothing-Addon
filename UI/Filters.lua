@@ -7,19 +7,8 @@ local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local Utils = ns.Utils
-
--- Reusable tooltip for item scanning - created once, reused via ClearLines()
-local FILTER_TOOLTIP_NAME = "LTFilterTooltip"
-local filterTooltip = ns.FilterTooltip
-
-local function GetFilterTooltip()
-    if not filterTooltip then
-        filterTooltip = CreateFrame("GameTooltip", FILTER_TOOLTIP_NAME, UIParent, "GameTooltipTemplate")
-        filterTooltip:SetOwner(UIParent, "ANCHOR_NONE")
-        ns.FilterTooltip = filterTooltip
-    end
-    return filterTooltip
-end
+local TrinketData = ns.TrinketData
+local TooltipScan = ns.TooltipScan
 
 --[[--------------------------------------------------------------------
     FiltersMixin
@@ -162,37 +151,10 @@ end
 -- @param itemLink string - Item link
 -- @return table|nil - Array of class IDs that can use the item, or nil if unrestricted
 function FiltersMixin:GetItemClassRestrictions(itemLink)
-    if not itemLink then return nil end
-
-    -- Reuse the file-scope tooltip; clear previous content before scanning
-    local tooltip = GetFilterTooltip()
-    tooltip:ClearLines()
-    tooltip:SetHyperlink(itemLink)
-
-    local restrictions = nil
-
-    for i = 1, tooltip:NumLines() do
-        local line = _G[FILTER_TOOLTIP_NAME .. "TextLeft" .. i]
-        if line then
-            local text = line:GetText()
-            if text and text:find("^Classes:") then
-                restrictions = {}
-                -- Parse the class names
-                local classNames = text:gsub("Classes:%s*", "")
-                for className in classNames:gmatch("([^,]+)") do
-                    className = className:match("^%s*(.-)%s*$")  -- Trim
-                    local classID = self:GetClassIDByName(className)
-                    if classID then
-                        restrictions[#restrictions + 1] = classID
-                    end
-                end
-                break
-            end
-        end
+    if not TooltipScan then
+        return nil
     end
-
-    tooltip:Hide()
-    return restrictions
+    return TooltipScan:GetItemClassRestrictions(itemLink)
 end
 
 --- Get class ID by localized class name

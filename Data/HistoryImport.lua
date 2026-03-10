@@ -468,45 +468,70 @@ function HistoryImportMixin:ImportEntries(entries, overwrite)
         conflictMap[key] = conflict.existing
     end
 
-    for i, entry in ipairs(entries) do
-        local key = string.format("%s_%d", entry.winner, entry.timestamp or 0)
-        local existingEntry = conflictMap[key]
+    local bulkOpened = false
+    local ok, importErr = xpcall(function()
+        Loothing.History:BeginBulkUpdate()
+        bulkOpened = true
 
-        if existingEntry and overwrite then
-            -- Remove existing entry first
-            Loothing.History:RemoveEntry(existingEntry.guid)
+        for i, entry in ipairs(entries) do
+            local key = string.format("%s_%d", entry.winner, entry.timestamp or 0)
+            local existingEntry = conflictMap[key]
+
+            if existingEntry and overwrite then
+                Loothing.History:RemoveEntry(existingEntry.guid)
+            end
+
+            local success, entryErr = pcall(function()
+                Loothing.History:AddEntry({
+                    guid = entry.guid,
+                    itemLink = entry.itemLink,
+                    itemID = entry.itemID,
+                    itemName = entry.itemName,
+                    itemLevel = entry.itemLevel,
+                    quality = entry.quality,
+                    winner = entry.winner,
+                    winnerResponse = entry.winnerResponse,
+                    encounterID = entry.encounterID,
+                    encounterName = entry.encounterName,
+                    votes = entry.votes,
+                    timestamp = entry.timestamp,
+                    notes = entry.notes,
+                    class = entry.class or entry.winnerClass,
+                    winnerClass = entry.winnerClass,
+                    instance = entry.instance,
+                    difficultyID = entry.difficultyID,
+                    mapID = entry.mapID,
+                    groupSize = entry.groupSize,
+                    winnerGear1 = entry.winnerGear1,
+                    winnerGear2 = entry.winnerGear2,
+                    winnerNote = entry.winnerNote,
+                    subType = entry.subType,
+                    equipSlot = entry.equipSlot,
+                    owner = entry.owner,
+                })
+            end)
+
+            if success then
+                private.stats.imported = private.stats.imported + 1
+            else
+                private.stats.errors = private.stats.errors + 1
+                Loothing:Debug("Import error for entry", i, ":", entryErr)
+            end
+
+            if i % 10 == 0 then
+                self:TriggerEvent("OnImportProgress", i, #entries)
+            end
         end
+    end, debugstack)
 
-        -- Import entry
-        local success, importErr = pcall(function()
-            Loothing.History:AddEntry({
-                guid = entry.guid,
-                itemLink = entry.itemLink,
-                itemID = entry.itemID,
-                itemName = entry.itemName,
-                itemLevel = entry.itemLevel,
-                quality = entry.quality,
-                winner = entry.winner,
-                winnerResponse = entry.winnerResponse,
-                encounterID = entry.encounterID,
-                encounterName = entry.encounterName,
-                votes = entry.votes,
-                timestamp = entry.timestamp,
-                notes = entry.notes,
-            })
-        end)
+    if bulkOpened then
+        Loothing.History:EndBulkUpdate()
+    end
 
-        if success then
-            private.stats.imported = private.stats.imported + 1
-        else
-            private.stats.errors = private.stats.errors + 1
-            Loothing:Debug("Import error for entry", i, ":", importErr)
-        end
-
-        -- Report progress every 10 entries
-        if i % 10 == 0 then
-            self:TriggerEvent("OnImportProgress", i, #entries)
-        end
+    if not ok then
+        private.importing = false
+        self:TriggerEvent("OnImportError", importErr)
+        return false, importErr
     end
 
     private.importing = false

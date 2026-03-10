@@ -13,9 +13,9 @@
 local _, ns = ...
 local Loothing = ns.Addon
 
-local TestRunner = TestRunner
-local Assert = Assert
-local TestHelpers = TestHelpers
+local TestRunner = ns.TestRunner
+local Assert = ns.Assert
+local TestHelpers = ns.TestHelpers
 
 --[[--------------------------------------------------------------------
     Mock/Stub Helpers

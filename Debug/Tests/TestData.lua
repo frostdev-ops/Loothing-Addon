@@ -1,3 +1,5 @@
+local _, ns = ...
+
 --[[--------------------------------------------------------------------
     Loothing - Loot Council Addon for WoW 12.0+
     TestData - Comprehensive test fixtures and mock data for testing
@@ -18,8 +20,6 @@
         local tank = TestData.Players.Tank
         local scenario = TestData.VoteScenarios.SimpleMajority
 ----------------------------------------------------------------------]]
-
-local _, ns = ...
 local Loothing = ns.Addon
 local Utils = ns.Utils
 
@@ -27,8 +27,8 @@ local Utils = ns.Utils
     Global TestData Table
 ----------------------------------------------------------------------]]
 
-TestData = {}
-local TestData = TestData
+local TestData = ns.TestData or {}
+ns.TestData = TestData
 
 --[[====================================================================
     ITEM DATA - Modern TWW/DF Items
@@ -1085,7 +1085,6 @@ end
 
 -- Initialize on load
 if Loothing then
-    Loothing.TestData = TestData
     Loothing:Debug("TestData module loaded")
 end
 

@@ -3,6 +3,9 @@
     Locale - French (frFR) localization
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
+local Loothing = ns.Addon
+
 local locale = (Loothing.ForceLocale or GetLocale())
 if locale ~= "frFR" then
     return
@@ -217,4 +220,5 @@ L["CONFIG_OBSERVER_REMOVE_ALL"] = L["CONFIG_OBSERVER_REMOVE_ALL"] or "Remove All
 L["CONFIG_OBSERVER_REMOVE_ALL_DESC"] = L["CONFIG_OBSERVER_REMOVE_ALL_DESC"] or "Remove all observers from the list"
 
 Loothing.Locale = L
+ns.Locale = L
 return L

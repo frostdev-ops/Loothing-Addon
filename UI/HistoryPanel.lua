@@ -7,7 +7,6 @@ local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local Utils = ns.Utils
-local Loothing = ns.Addon
 local Popups = ns.Popups
 
 --[[--------------------------------------------------------------------
@@ -19,6 +18,10 @@ ns.HistoryPanelMixin = HistoryPanelMixin
 
 local HISTORY_PANEL_EVENTS = {}
 
+-- Exports larger than this byte threshold are routed to a single-line EditBox
+-- to avoid the MultiLineEditBox layout freeze for >40KB of text
+local HUGE_EXPORT_THRESHOLD = 40000
+
 --- Initialize the history panel
 -- @param parent Frame - Parent frame
 function HistoryPanelMixin:Init(parent)
@@ -26,12 +29,23 @@ function HistoryPanelMixin:Init(parent)
     self:GenerateCallbackEvents(HISTORY_PANEL_EVENTS)
     self.parent = parent
     self.historyRows = {}
+    self.dateButtons = {}
+    self.playerButtons = {}
     self.selectedDate = nil
     self.selectedPlayer = nil
     self.displayedCount = 0
+    self.viewState = nil
 
     self:CreateFrame()
     self:CreateElements()
+
+    if Loothing.History then
+        Loothing.History:RegisterCallback("OnHistoryChanged", function()
+            if self.frame and self.frame:IsShown() then
+                self:Refresh()
+            end
+        end, self)
+    end
 end
 
 --- Create the main frame
@@ -377,8 +391,6 @@ function HistoryPanelMixin:CreateDateList()
 
     self.dateScroll = scroll
     self.dateContent = content
-    self.dateButtonPool = CreateFramePool("Button", content)
-
     -- "All Dates" button at top
     local allBtn = CreateFrame("Button", nil, content)
     allBtn:SetSize(72, 20)
@@ -416,8 +428,6 @@ function HistoryPanelMixin:CreatePlayerList()
 
     self.playerScroll = scroll
     self.playerContent = content
-    self.playerButtonPool = CreateFramePool("Button", content)
-
     -- "All Players" button at top
     local allBtn = CreateFrame("Button", nil, content)
     allBtn:SetSize(92, 20)
@@ -439,33 +449,92 @@ end
 
 --- Refresh the history display
 function HistoryPanelMixin:Refresh()
+    self.viewState = self:BuildViewState()
     self:RefreshDateList()
     self:RefreshPlayerList()
     self:RefreshList()
     self:UpdateCount()
 end
 
---- Refresh the date list in the left pane
-function HistoryPanelMixin:RefreshDateList()
-    self.dateButtonPool:ReleaseAll()
+local function AcquireIndexedButton(buttons, parent)
+    local index = #buttons + 1
+    local button = buttons[index]
+    if button then
+        return button
+    end
 
-    if not Loothing.History then return end
+    button = CreateFrame("Button", nil, parent)
+    button.text = button:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    button.text:SetAllPoints()
+    button:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+    buttons[index] = button
+    return button
+end
 
-    local dates = {}
-    local seen = {}
+function HistoryPanelMixin:BuildViewState()
+    local state = {
+        dates = {},
+        players = {},
+        allDateEntries = {},
+        entriesByPlayer = {},
+        visibleEntries = {},
+    }
 
-    for _, entry in Loothing.History:GetEntries():Enumerate() do
-        if entry.timestamp then
-            local d = date("%Y-%m-%d", entry.timestamp)
-            if not seen[d] then
-                seen[d] = true
-                dates[#dates + 1] = d
+    if not Loothing.History then
+        return state
+    end
+
+    local seenDates = {}
+    local seenPlayers = {}
+
+    for _, entry in Loothing.History:GetFilteredEntries():Enumerate() do
+        local entryDate = entry.timestamp and date("%Y-%m-%d", entry.timestamp)
+        if entryDate and not seenDates[entryDate] then
+            seenDates[entryDate] = true
+            state.dates[#state.dates + 1] = entryDate
+        end
+
+        if not self.selectedDate or entryDate == self.selectedDate then
+            state.allDateEntries[#state.allDateEntries + 1] = entry
+
+            if entry.winner and not seenPlayers[entry.winner] then
+                seenPlayers[entry.winner] = true
+                state.players[#state.players + 1] = {
+                    name = entry.winner,
+                    class = entry.class or entry.winnerClass,
+                }
+            end
+
+            if entry.winner then
+                local bucket = state.entriesByPlayer[entry.winner]
+                if not bucket then
+                    bucket = {}
+                    state.entriesByPlayer[entry.winner] = bucket
+                end
+                bucket[#bucket + 1] = entry
             end
         end
     end
 
-    -- Newest first
-    table.sort(dates, function(a, b) return a > b end)
+    table.sort(state.dates, function(a, b) return a > b end)
+    table.sort(state.players, function(a, b) return a.name < b.name end)
+
+    if self.selectedPlayer and not state.entriesByPlayer[self.selectedPlayer] then
+        self.selectedPlayer = nil
+    end
+
+    if self.selectedPlayer then
+        state.visibleEntries = state.entriesByPlayer[self.selectedPlayer] or {}
+    else
+        state.visibleEntries = state.allDateEntries
+    end
+
+    return state
+end
+
+--- Refresh the date list in the left pane
+function HistoryPanelMixin:RefreshDateList()
+    local state = self.viewState or self:BuildViewState()
 
     -- Update "All Dates" highlight
     if not self.selectedDate then
@@ -475,16 +544,12 @@ function HistoryPanelMixin:RefreshDateList()
     end
 
     local yOffset = -24  -- Below "All Dates" button
-    for _, d in ipairs(dates) do
-        local btn = self.dateButtonPool:Acquire()
+    local used = 0
+    for _, d in ipairs(state.dates) do
+        used = used + 1
+        local btn = self.dateButtons[used] or AcquireIndexedButton(self.dateButtons, self.dateContent)
         btn:SetSize(72, 18)
         btn:SetPoint("TOPLEFT", self.dateContent, "TOPLEFT", 2, yOffset)
-
-        if not btn.text then
-            btn.text = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-            btn.text:SetAllPoints()
-            btn:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
-        end
 
         local isSelected = self.selectedDate == d
         btn.text:SetText(isSelected and ("|cffffd700" .. d .. "|r") or d)
@@ -499,40 +564,16 @@ function HistoryPanelMixin:RefreshDateList()
         yOffset = yOffset - 18
     end
 
+    for index = used + 1, #self.dateButtons do
+        self.dateButtons[index]:Hide()
+    end
+
     self.dateContent:SetHeight(math.abs(yOffset) + 4)
 end
 
 --- Refresh the player list in the center pane
 function HistoryPanelMixin:RefreshPlayerList()
-    self.playerButtonPool:ReleaseAll()
-
-    if not Loothing.History then return end
-
-    local players = {}
-    local seen = {}
-
-    for _, entry in Loothing.History:GetEntries():Enumerate() do
-        -- Apply date filter from left pane
-        local passesDate = true
-        if self.selectedDate then
-            local entryDate = entry.timestamp and date("%Y-%m-%d", entry.timestamp)
-            if entryDate ~= self.selectedDate then
-                passesDate = false
-            end
-        end
-
-        if passesDate and entry.winner and not seen[entry.winner] then
-            seen[entry.winner] = true
-            players[#players + 1] = { name = entry.winner, class = entry.class }
-        end
-    end
-
-    table.sort(players, function(a, b) return a.name < b.name end)
-
-    -- Auto-deselect player if no longer in list
-    if self.selectedPlayer and not seen[self.selectedPlayer] then
-        self.selectedPlayer = nil
-    end
+    local state = self.viewState or self:BuildViewState()
 
     -- Update "All Players" highlight
     if not self.selectedPlayer then
@@ -542,16 +583,12 @@ function HistoryPanelMixin:RefreshPlayerList()
     end
 
     local yOffset = -24  -- Below "All Players" button
-    for _, player in ipairs(players) do
-        local btn = self.playerButtonPool:Acquire()
+    local used = 0
+    for _, player in ipairs(state.players) do
+        used = used + 1
+        local btn = self.playerButtons[used] or AcquireIndexedButton(self.playerButtons, self.playerContent)
         btn:SetSize(92, 18)
         btn:SetPoint("TOPLEFT", self.playerContent, "TOPLEFT", 2, yOffset)
-
-        if not btn.text then
-            btn.text = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-            btn.text:SetAllPoints()
-            btn:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
-        end
 
         -- Class-color the name
         local displayName = player.name
@@ -576,24 +613,28 @@ function HistoryPanelMixin:RefreshPlayerList()
         yOffset = yOffset - 18
     end
 
+    for index = used + 1, #self.playerButtons do
+        self.playerButtons[index]:Hide()
+    end
+
     self.playerContent:SetHeight(math.abs(yOffset) + 4)
 end
 
 --- Refresh the history list
 function HistoryPanelMixin:RefreshList()
-    self.rowPool:ReleaseAll()
-    wipe(self.historyRows)
-
+    local state = self.viewState or self:BuildViewState()
     if not Loothing.History then
         self.emptyText:Show()
         self.displayedCount = 0
         return
     end
 
-    local entries = Loothing.History:GetFilteredEntries()
-    if not entries or entries:GetSize() == 0 then
+    if not state.visibleEntries or #state.visibleEntries == 0 then
         self.emptyText:Show()
         self.displayedCount = 0
+        for _, row in ipairs(self.historyRows) do
+            row:Hide()
+        end
         return
     end
 
@@ -601,33 +642,21 @@ function HistoryPanelMixin:RefreshList()
     local rowHeight = 36
     local spacing = 2
 
-    for _, entry in entries:Enumerate() do
-        local passesFilter = true
-
-        -- Date pane filter
-        if self.selectedDate and passesFilter then
-            local entryDate = entry.timestamp and date("%Y-%m-%d", entry.timestamp)
-            if entryDate ~= self.selectedDate then
-                passesFilter = false
-            end
+    for index, entry in ipairs(state.visibleEntries) do
+        local row = self.historyRows[index]
+        if not row then
+            row = CreateFrame("Button", nil, self.listContent)
+            self.historyRows[index] = row
         end
-
-        -- Player pane filter
-        if self.selectedPlayer and passesFilter then
-            if entry.winner ~= self.selectedPlayer then
-                passesFilter = false
-            end
-        end
-
-        if passesFilter then
-            local row = self.rowPool:Acquire()
-            self:SetupHistoryRow(row, entry, yOffset)
-            self.historyRows[#self.historyRows + 1] = row
-            yOffset = yOffset - rowHeight - spacing
-        end
+        self:SetupHistoryRow(row, entry, yOffset)
+        yOffset = yOffset - rowHeight - spacing
     end
 
-    self.displayedCount = #self.historyRows
+    for index = #state.visibleEntries + 1, #self.historyRows do
+        self.historyRows[index]:Hide()
+    end
+
+    self.displayedCount = #state.visibleEntries
 
     if self.displayedCount > 0 then
         self.emptyText:Hide()
@@ -821,7 +850,7 @@ function HistoryPanelMixin:ShowHistoryRowContextMenu(row, entry)
             rootDescription:CreateButton(string.format("Filter by %s", entry.encounterName), function()
                 if Loothing.History then
                     local filter = Loothing.History.filter or {}
-                    filter.instance = entry.encounterName
+                    filter.encounterName = entry.encounterName
                     Loothing.History:SetFilter(filter)
                     self:Refresh()
                 end
@@ -832,8 +861,8 @@ function HistoryPanelMixin:ShowHistoryRowContextMenu(row, entry)
 
         -- Delete entry
         rootDescription:CreateButton(L["DELETE_ENTRY"] or "Delete Entry", function()
-            if Loothing.History and entry.id then
-                Loothing.History:DeleteEntry(entry.id)
+            if Loothing.History and entry.guid then
+                Loothing.History:DeleteEntry(entry.guid)
                 self:Refresh()
             end
         end)
@@ -943,6 +972,81 @@ end
     Export
 ----------------------------------------------------------------------]]
 
+-- Lazy singleton: a narrow single-line frame for large exports.
+-- MultiLineEditBox freezes WoW when rendering >40KB; single-line avoids the layout pass.
+local function GetOrCreateHugeExportFrame()
+    if HistoryPanelMixin._hugeExportFrame then
+        return HistoryPanelMixin._hugeExportFrame
+    end
+
+    local frame = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+    frame:SetSize(700, 80)
+    frame:SetPoint("CENTER")
+    frame:SetFrameStrata("DIALOG")
+    frame:SetMovable(true)
+    frame:EnableMouse(true)
+    frame:SetBackdrop({
+        bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
+        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+        tile = true, tileSize = 32, edgeSize = 32,
+        insets = { left = 11, right = 12, top = 12, bottom = 11 },
+    })
+
+    local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    title:SetPoint("TOP", 0, -8)
+    title:SetText("Export (large - Ctrl+A, Ctrl+C to copy)")
+    title:SetTextColor(1, 0.82, 0)
+
+    local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
+    close:SetPoint("TOPRIGHT", -5, -5)
+    close:SetScript("OnClick", function() frame:Hide() end)
+
+    local editBox = CreateFrame("EditBox", nil, frame)
+    editBox:SetMultiLine(false)
+    editBox:SetAutoFocus(false)
+    editBox:SetFontObject(GameFontHighlightSmall)
+    editBox:SetMaxLetters(0)
+    editBox:SetPoint("TOPLEFT", 16, -28)
+    editBox:SetPoint("BOTTOMRIGHT", -36, 12)
+    editBox:SetScript("OnEscapePressed", function() frame:Hide() end)
+
+    -- Guard against user edits overwriting the export text
+    local _locked = false
+    editBox:SetScript("OnTextChanged", function(self, userInput)
+        if userInput and not _locked then
+            _locked = true
+            self:SetText(self._exportText or "")
+            self:HighlightText()
+            _locked = false
+        end
+    end)
+
+    frame.editBox = editBox
+    HistoryPanelMixin._hugeExportFrame = frame
+    return frame
+end
+
+--- Route export text to the appropriate EditBox based on size
+-- Large (>=40KB): single-line frame to avoid MultiLineEditBox layout freeze
+-- Normal: existing multiline scrollable EditBox
+-- @param text string
+function HistoryPanelMixin:SetExportText(text)
+    if #text >= HUGE_EXPORT_THRESHOLD then
+        if self.exportFrame then self.exportFrame:Hide() end
+        local hugeFrame = GetOrCreateHugeExportFrame()
+        hugeFrame.editBox._exportText = text
+        hugeFrame.editBox:SetText(text)
+        hugeFrame.editBox:HighlightText()
+        hugeFrame:Show()
+    else
+        if HistoryPanelMixin._hugeExportFrame then
+            HistoryPanelMixin._hugeExportFrame:Hide()
+        end
+        self.exportEditBox:SetText(text)
+        self.exportEditBox:HighlightText()
+    end
+end
+
 --- Show export dialog
 function HistoryPanelMixin:ShowExportDialog()
     if not Loothing.History then return end
@@ -997,8 +1101,7 @@ function HistoryPanelMixin:ShowExportDialog()
         csvButton:SetPoint("BOTTOMLEFT", 16, 16)
         csvButton:SetText("CSV")
         csvButton:SetScript("OnClick", function()
-            editBox:SetText(Loothing.History:ExportCSV())
-            editBox:HighlightText()
+            self:SetExportText(Loothing.History:ExportCSV())
         end)
 
         local tsvButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
@@ -1006,8 +1109,7 @@ function HistoryPanelMixin:ShowExportDialog()
         tsvButton:SetPoint("LEFT", csvButton, "RIGHT", 4, 0)
         tsvButton:SetText("TSV")
         tsvButton:SetScript("OnClick", function()
-            editBox:SetText(Loothing.History:ExportTSV())
-            editBox:HighlightText()
+            self:SetExportText(Loothing.History:ExportTSV())
         end)
 
         local luaButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
@@ -1015,8 +1117,7 @@ function HistoryPanelMixin:ShowExportDialog()
         luaButton:SetPoint("LEFT", tsvButton, "RIGHT", 4, 0)
         luaButton:SetText("Lua")
         luaButton:SetScript("OnClick", function()
-            editBox:SetText(Loothing.History:ExportLua())
-            editBox:HighlightText()
+            self:SetExportText(Loothing.History:ExportLua())
         end)
 
         local bbcodeButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
@@ -1024,8 +1125,7 @@ function HistoryPanelMixin:ShowExportDialog()
         bbcodeButton:SetPoint("LEFT", luaButton, "RIGHT", 4, 0)
         bbcodeButton:SetText("BBCode")
         bbcodeButton:SetScript("OnClick", function()
-            editBox:SetText(Loothing.History:ExportBBCode())
-            editBox:HighlightText()
+            self:SetExportText(Loothing.History:ExportBBCode())
         end)
 
         local discordButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
@@ -1033,8 +1133,7 @@ function HistoryPanelMixin:ShowExportDialog()
         discordButton:SetPoint("LEFT", bbcodeButton, "RIGHT", 4, 0)
         discordButton:SetText("Discord")
         discordButton:SetScript("OnClick", function()
-            editBox:SetText(Loothing.History:ExportDiscord())
-            editBox:HighlightText()
+            self:SetExportText(Loothing.History:ExportDiscord())
         end)
 
         local jsonButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
@@ -1042,8 +1141,7 @@ function HistoryPanelMixin:ShowExportDialog()
         jsonButton:SetPoint("LEFT", discordButton, "RIGHT", 4, 0)
         jsonButton:SetText("JSON")
         jsonButton:SetScript("OnClick", function()
-            editBox:SetText(Loothing.History:ExportJSON())
-            editBox:HighlightText()
+            self:SetExportText(Loothing.History:ExportJSON())
         end)
 
         local eqdkpButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
@@ -1051,8 +1149,7 @@ function HistoryPanelMixin:ShowExportDialog()
         eqdkpButton:SetPoint("LEFT", jsonButton, "RIGHT", 4, 0)
         eqdkpButton:SetText(L["EXPORT_EQDKP"] or "EQdkp")
         eqdkpButton:SetScript("OnClick", function()
-            editBox:SetText(Loothing.History:ExportEQdkp())
-            editBox:HighlightText()
+            self:SetExportText(Loothing.History:ExportEQdkp())
         end)
 
         local webButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
@@ -1060,8 +1157,7 @@ function HistoryPanelMixin:ShowExportDialog()
         webButton:SetPoint("LEFT", eqdkpButton, "RIGHT", 4, 0)
         webButton:SetText("Web")
         webButton:SetScript("OnClick", function()
-            editBox:SetText(Loothing.History:ExportCompact())
-            editBox:HighlightText()
+            self:SetExportText(Loothing.History:ExportCompact())
         end)
 
         local selectAll = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
@@ -1078,9 +1174,14 @@ function HistoryPanelMixin:ShowExportDialog()
     end
 
     -- Show with CSV by default
-    self.exportEditBox:SetText(Loothing.History:ExportCSV())
-    self.exportEditBox:HighlightText()
     self.exportFrame:Show()
+    self:SetExportText(Loothing.History:ExportCSV())
+end
+
+--- Open the export dialog pre-loaded with the Web (compact) export string
+function HistoryPanelMixin:ShowWebExport()
+    self:ShowExportDialog()
+    self:SetExportText(Loothing.History:ExportCompact())
 end
 
 --- Confirm and clear history

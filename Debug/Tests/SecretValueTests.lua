@@ -11,8 +11,8 @@ local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local Utils = ns.Utils
 
-local TestRunner = TestRunner
-local Assert = Assert
+local TestRunner = ns.TestRunner
+local Assert = ns.Assert
 
 --[[--------------------------------------------------------------------
     Mock Setup

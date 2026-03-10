@@ -4,6 +4,9 @@
     roll, council votes, and winner highlight.
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
+local Loothing = ns.Addon
+
 --- Create a candidate result row and return the frame
 -- @param parent Frame - Scroll content parent
 -- @param candidate table - CandidateMixin
@@ -11,7 +14,7 @@
 -- @param totalVotes number - Total council votes for percentage
 -- @param isWinner boolean - Whether this candidate is the winner
 -- @param onClick function|nil - Called with (candidate, row) on click
-function CreateCandidateResultRow(parent, candidate, yOffset, totalVotes, isWinner, onClick)
+local function CreateCandidateResultRow(parent, candidate, yOffset, totalVotes, isWinner, onClick)
     local row = CreateFrame("Button", nil, parent, "BackdropTemplate")
     row:SetPoint("TOPLEFT", 0, yOffset)
     row:SetPoint("TOPRIGHT", 0, yOffset)
@@ -171,3 +174,5 @@ function CreateCandidateResultRow(parent, candidate, yOffset, totalVotes, isWinn
 
     return row
 end
+
+ns.CreateCandidateResultRow = CreateCandidateResultRow

@@ -6,16 +6,13 @@
 local _, ns = ...
 local Loothing = ns.Addon
 local Utils = ns.Utils
+local TestMode = ns.TestMode
 
 local Loolib = LibStub("Loolib")
 
 --[[--------------------------------------------------------------------
     Test Infrastructure
 ----------------------------------------------------------------------]]
-
-local _, ns = ...
-local Loothing = ns.Addon
-local Utils = ns.Utils
 
 local StressTests = {
     name = "Stress Tests",
@@ -897,5 +894,5 @@ end
     Global Access
 ----------------------------------------------------------------------]]
 
-_G.StressTests = StressTests
+ns.StressTests = StressTests
 

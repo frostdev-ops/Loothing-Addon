@@ -1,3 +1,5 @@
+local _, ns = ...
+
 --[[--------------------------------------------------------------------
     Loothing - Loot Council Addon for WoW 12.0+
     AutoPassTests - Test suite for automatic pass logic
@@ -12,6 +14,9 @@
 
     Run: /lt test run autopass
 ----------------------------------------------------------------------]]
+local AutoPass = ns.AutoPass
+local TestData = ns.TestData
+local TestRunner = ns.TestRunner
 
 local function RunAutoPassTests()
     local passed = 0

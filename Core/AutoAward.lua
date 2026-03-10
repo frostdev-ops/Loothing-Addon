@@ -181,6 +181,23 @@ end
 -- Reusable tooltip for scanning (created once, reused)
 local scanTooltip
 
+local function TooltipContainsText(tooltip, targetText)
+    if not tooltip or not targetText then
+        return false
+    end
+
+    for _, region in ipairs({ tooltip:GetRegions() }) do
+        if region and region.GetObjectType and region:GetObjectType() == "FontString" then
+            local text = region:GetText()
+            if text and text:find(targetText, 1, true) then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
 --- Check if an item is Bind on Equip
 -- @param itemLink string - Full item link
 -- @return boolean - True if item is BoE
@@ -192,22 +209,15 @@ function AutoAwardMixin:IsBindOnEquip(itemLink)
 
     -- Create tooltip once, reuse it
     if not scanTooltip then
-        scanTooltip = CreateFrame("GameTooltip", "LoothingAutoAwardTooltip", UIParent, "GameTooltipTemplate")
+        scanTooltip = CreateFrame("GameTooltip", nil, UIParent, "GameTooltipTemplate")
     end
     scanTooltip:SetOwner(UIParent, "ANCHOR_NONE")
     scanTooltip:ClearLines()
     scanTooltip:SetHyperlink(itemLink)
 
-    -- Scan tooltip for localized BoE text
-    for i = 1, scanTooltip:NumLines() do
-        local line = _G["LoothingAutoAwardTooltipTextLeft" .. i]
-        if line then
-            local text = line:GetText()
-            if text and BOE_TEXT and text:find(BOE_TEXT, 1, true) then
-                scanTooltip:Hide()
-                return true
-            end
-        end
+    if TooltipContainsText(scanTooltip, BOE_TEXT) then
+        scanTooltip:Hide()
+        return true
     end
 
     scanTooltip:Hide()

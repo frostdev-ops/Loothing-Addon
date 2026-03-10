@@ -639,7 +639,7 @@ ns.CreateItemRow = CreateItemRow
 --- Reset function for frame pool
 -- @param pool table - Pool reference
 -- @param row table - Row to reset
-function ItemRow_Reset(_, row)
+local function ResetItemRow(_, row)
     if row.Clear then
         row:Clear()
     end
@@ -650,3 +650,5 @@ function ItemRow_Reset(_, row)
     frame:Hide()
     frame:ClearAllPoints()
 end
+
+ns.ResetItemRow = ResetItemRow

@@ -7,6 +7,8 @@ local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local Popups = ns.Popups
+local CandidateSorting = ns.CandidateSorting
+local CreateCandidateResultRow = ns.CreateCandidateResultRow
 
 --[[--------------------------------------------------------------------
     ResultsPanelMixin

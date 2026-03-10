@@ -1,3 +1,5 @@
+local _, ns = ...
+
 --[[--------------------------------------------------------------------
     Loothing - Loot Council Addon for WoW 12.0+
     TestRunner - Lightweight testing framework for WoW addons
@@ -30,12 +32,10 @@
     Global Namespace
 ----------------------------------------------------------------------]]
 
-TestRunner = {}
-Assert = {}
-
--- Local references for cleaner code
-local TestRunner = TestRunner
-local Assert = Assert
+local TestRunner = ns.TestRunner or {}
+local Assert = ns.Assert or {}
+ns.TestRunner = TestRunner
+ns.Assert = Assert
 
 --[[--------------------------------------------------------------------
     Color Codes

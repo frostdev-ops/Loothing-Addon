@@ -1,3 +1,5 @@
+local _, ns = ...
+
 --[[--------------------------------------------------------------------
     Loothing - Loot Council Addon for WoW 12.0+
     TestHelpers - Comprehensive testing utilities
@@ -12,10 +14,9 @@
     - Mock/spy utilities
     - Data cleanup and state management
 ----------------------------------------------------------------------]]
-
-local _, ns = ...
 local Loothing = ns.Addon
 local Utils = ns.Utils
+local TestMode = ns.TestMode
 
 local Loolib = LibStub("Loolib")
 
@@ -23,8 +24,8 @@ local Loolib = LibStub("Loolib")
     TestHelpers Singleton
 ----------------------------------------------------------------------]]
 
-TestHelpers = {}
-local TestHelpers = TestHelpers
+local TestHelpers = ns.TestHelpers or {}
+ns.TestHelpers = TestHelpers
 
 --[[--------------------------------------------------------------------
     Class and Spec Data (WoW 12.0 / The War Within)
@@ -1185,7 +1186,7 @@ function TestHelpers:PrintInfo()
     print("  |cffffffffMocking:|r MockFunction, RestoreMock, SpyOn, GetSpyCalls")
     print("  |cffffffffCleanup:|r CleanupSession, CleanupAll, SaveState, RestoreState")
     print(" ")
-    print("  Use |cffffffff/dump TestHelpers|r to see all methods")
+    print("  Use |cffffffff/dump ns.TestHelpers|r to see all methods")
 end
 
 --[[--------------------------------------------------------------------
@@ -1193,4 +1194,4 @@ end
 ----------------------------------------------------------------------]]
 
 -- Print initialization message
-print("|cff00ff00[Loothing]|r TestHelpers loaded. Use |cffffffffTestHelpers:PrintInfo()|r for help.")
+print("|cff00ff00[Loothing]|r TestHelpers loaded. Use |cffffffffns.TestHelpers:PrintInfo()|r for help.")

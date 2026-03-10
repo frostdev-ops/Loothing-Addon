@@ -784,6 +784,23 @@ local function RegisterEvents()
         end, Loothing)
     end
 
+    -- Auto-show Web export when session ends (opt-in setting)
+    if Loothing.Session then
+        Loothing.Session:RegisterCallback("OnSessionEnded", function()
+            if Loothing.Settings:Get("historySettings.autoExportWeb")
+                and Loothing.History
+                and Loothing.History:GetFilteredCount() > 0
+                and Loothing.MainFrame then
+                Loothing.MainFrame:Show()
+                Loothing.MainFrame:SelectTab("history")
+                local historyPanel = Loothing.MainFrame:GetHistoryPanel()
+                if historyPanel then
+                    historyPanel:ShowWebExport()
+                end
+            end
+        end, Loothing)
+    end
+
     -- Roll tracking
     Events.Registry:RegisterEventCallback("CHAT_MSG_SYSTEM", function(_, text)
         if Loothing.RollTracker then

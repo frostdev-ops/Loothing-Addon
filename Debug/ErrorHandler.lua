@@ -1,3 +1,5 @@
+local _, ns = ...
+
 --[[--------------------------------------------------------------------
     Loothing - Loot Council Addon for WoW 12.0+
     ErrorHandler - Error capture, dedup, and storage
@@ -14,8 +16,6 @@
 
     Factory: CreateErrorHandler()
 ----------------------------------------------------------------------]]
-
-local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 
@@ -53,7 +53,8 @@ local LOG_LEVEL_COLOR = {
     ErrorHandlerMixin
 ----------------------------------------------------------------------]]
 
-ErrorHandlerMixin = {}
+local ErrorHandlerMixin = ns.ErrorHandlerMixin or {}
+ns.ErrorHandlerMixin = ErrorHandlerMixin
 
 --- Initialize the error handler
 function ErrorHandlerMixin:Init()
@@ -502,11 +503,12 @@ end
 
 --- Create a new error handler instance
 -- @return ErrorHandlerMixin
-function CreateErrorHandler()
+local function CreateErrorHandler()
     local handler = Loolib.CreateFromMixins(ErrorHandlerMixin)
     handler:Init()
     return handler
 end
+ns.CreateErrorHandler = CreateErrorHandler
 
 --[[--------------------------------------------------------------------
     Expose Constants

@@ -3,6 +3,9 @@
     Locale - Portuguese (Brazilian) localization
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
+local Loothing = ns.Addon
+
 local locale = (Loothing.ForceLocale or GetLocale())
 if locale ~= "ptBR" then
     return
@@ -734,6 +737,7 @@ L["CONFIG_OBSERVER_REMOVE_ALL_DESC"] = L["CONFIG_OBSERVER_REMOVE_ALL_DESC"] or "
 
 -- Make locale available globally
 Loothing.Locale = L
+ns.Locale = L
 
 -- Return for module use
 return L

@@ -3,14 +3,24 @@
 ## Title: Loothing
 ## Notes: Loot Council addon for WoW 12.0+ with ranked choice voting
 ## Author: James Kueller
-## Version: 1.2.0
-## SavedVariables: LoolibDB, LoothingDB
+## Version: 1.2.1
+## SavedVariables: LoolibDB
 ## Dependencies: Loolib
 ## IconTexture: Interface\AddOns\Loothing\Media\logo
 ## AddonCompartmentFunc: Loolib_GlobalBridge_Loothing_OnAddonCompartmentClick
 ## AddonCompartmentFuncOnEnter: Loolib_GlobalBridge_Loothing_OnAddonCompartmentEnter
 ## AddonCompartmentFuncOnLeave: Loolib_GlobalBridge_Loothing_OnAddonCompartmentLeave
-## X-Category: Raid
+## Category-enUS: Loot
+## Category-deDE: Beute
+## Category-esES: Botín
+## Category-esMX: Botín
+## Category-frFR: Butin
+## Category-itIT: Bottino
+## Category-koKR: 전리품
+## Category-ptBR: Saque
+## Category-ruRU: Добыча
+## Category-zhCN: 战利品
+## Category-zhTW: 戰利品
 ## X-Website: https://github.com/jkueller/loothing
 ## X-License: MIT
 
@@ -45,6 +55,7 @@ Core\ItemFilter.lua
 Core\ResponseManager.lua
 Core\AutoAward.lua
 Core\Announcer.lua
+Core\TooltipScan.lua
 
 # Utilities
 Utils\AutoPass.lua

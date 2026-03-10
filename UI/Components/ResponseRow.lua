@@ -3,13 +3,17 @@
     Shared row builder for results lists.
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
+local Utils = ns.Utils
+local Loothing = ns.Addon
+
 -- Create a response row and return the frame
 -- @param parent Frame - Scroll content parent
 -- @param data table - { response, count, voters, info }
 -- @param yOffset number - Vertical offset
 -- @param totalVotes number - Total vote count for percentage
 -- @param isWinner boolean - whether this response is the winner
-function CreateResponseRow(parent, data, yOffset, totalVotes, isWinner)
+local function CreateResponseRow(parent, data, yOffset, totalVotes, isWinner)
     local row = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     row:SetPoint("TOPLEFT", 0, yOffset)
     row:SetPoint("TOPRIGHT", 0, yOffset)
@@ -111,3 +115,4 @@ function CreateResponseRow(parent, data, yOffset, totalVotes, isWinner)
     return row
 end
 
+ns.CreateResponseRow = CreateResponseRow

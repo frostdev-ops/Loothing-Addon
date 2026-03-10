@@ -3,12 +3,12 @@
     VersionCheckPanel - Displays addon version status for group/guild
 ----------------------------------------------------------------------]]
 
-local ADDON_NAME, ns = ...
+local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
-local Utils = ns.Utils
 local L = ns.Locale
 local VersionCheck = ns.VersionCheck
+local C_Timer = C_Timer
 
 --[[--------------------------------------------------------------------
     VersionCheckPanelMixin
@@ -33,9 +33,37 @@ function VersionCheckPanelMixin:Init()
 
     self.entries = {}
     self.versionCallbackRegistered = false
+    self.rowsByName = {}
+    self.refreshToken = 0
 
     self:CreateFrame()
     self:CreateElements()
+    self:RegisterVersionCallbacks()
+end
+
+function VersionCheckPanelMixin:RegisterVersionCallbacks()
+    if self.versionCallbackRegistered or not VersionCheck then
+        return
+    end
+
+    VersionCheck:RegisterCallback("OnVersionReceived", function()
+        self:ScheduleRefresh(0.1)
+    end, self)
+    VersionCheck:RegisterCallback("OnQueryComplete", function()
+        self:ScheduleRefresh(0)
+        self:TriggerEvent("OnQueryComplete")
+    end, self)
+    self.versionCallbackRegistered = true
+end
+
+function VersionCheckPanelMixin:ScheduleRefresh(delay)
+    self.refreshToken = (self.refreshToken or 0) + 1
+    local token = self.refreshToken
+    C_Timer.After(delay or 0, function()
+        if self.refreshToken == token and self.frame and self.frame:IsShown() then
+            self:RefreshList()
+        end
+    end)
 end
 
 --- Create the main frame
@@ -173,73 +201,18 @@ end
 
 --- Query versions from group/guild members
 function VersionCheckPanelMixin:QueryVersions()
-    wipe(self.entries)
-
-    -- Gather current group members
-    local roster = Utils.GetRaidRoster()
-    if #roster > 0 then
-        for _, member in ipairs(roster) do
-            self.entries[member.name] = {
-                name = member.name,
-                class = member.classFile,
-                version = nil,
-                status = "querying",
-            }
-        end
-    else
-        -- Solo - show self
-        local playerName = Loolib.SecretUtil.SafeUnitName("player")
-        if playerName then
-            local _, playerClass = Loolib.SecretUtil.SafeUnitClass("player")
-            self.entries[playerName] = {
-                name = playerName,
-                class = playerClass,
-                version = Loothing.version or Loothing.VERSION,
-                status = "current",
-            }
-        end
+    if not VersionCheck then
+        return
     end
 
-    -- Register for version responses (once)
-    if not self.versionCallbackRegistered and VersionCheck then
-        VersionCheck:RegisterCallback("OnVersionReceived", function(_, name, version)
-            if self.entries[name] then
-                self.entries[name].version = version
-                self.entries[name].status = self:GetVersionStatus(version)
-                self:RefreshList()
-            end
-        end, self)
-        self.versionCallbackRegistered = true
-    end
-
-    -- Also pull any already-cached data from VersionCheck
-    if VersionCheck then
-        local cached = VersionCheck:GetSortedVersions()
-        for _, entry in ipairs(cached) do
-            if self.entries[entry.name] then
-                self.entries[entry.name].version = entry.version
-                self.entries[entry.name].status = self:GetVersionStatus(entry.version)
-            end
-        end
-
-        -- Trigger the query
+    if IsInRaid() or IsInGroup() then
         VersionCheck:Query("raid")
+    elseif IsInGuild() then
+        VersionCheck:Query("guild")
     end
 
     self:RefreshList()
     self:TriggerEvent("OnQueryStarted")
-
-    -- Timeout: mark remaining as "not installed" after 5 seconds
-    C_Timer.After(5, function()
-        for _, entry in pairs(self.entries) do
-            if entry.status == "querying" then
-                entry.version = L["NOT_INSTALLED"] or "N/A"
-                entry.status = "not_installed"
-            end
-        end
-        self:RefreshList()
-        self:TriggerEvent("OnQueryComplete")
-    end)
 end
 
 --- Determine version status relative to our version
@@ -270,24 +243,23 @@ end
 
 --- Refresh the version list display
 function VersionCheckPanelMixin:RefreshList()
-    self.rowPool:ReleaseAll()
-
-    -- Sort entries by name
-    local sorted = {}
-    for _, entry in pairs(self.entries) do
-        sorted[#sorted + 1] = entry
-    end
-    table.sort(sorted, function(a, b)
-        return a.name < b.name
-    end)
+    local snapshot = VersionCheck and VersionCheck.GetRosterSnapshot and VersionCheck:GetRosterSnapshot() or {
+        entries = {},
+        counts = { total = 0, current = 0, outdated = 0, notInstalled = 0 },
+    }
+    local sorted = snapshot.entries
+    local activeRows = {}
 
     local yOffset = 0
-    local total, current, outdated, missing = #sorted, 0, 0, 0
-
     for _, entry in ipairs(sorted) do
-        local row = self.rowPool:Acquire()
+        local row = self.rowsByName[entry.name]
+        if not row then
+            row = CreateFrame("Frame", nil, self.scrollContent)
+            self.rowsByName[entry.name] = row
+        end
         row:SetSize(self.scrollContent:GetWidth(), ROW_HEIGHT)
         row:SetPoint("TOPLEFT", 0, -yOffset)
+        activeRows[entry.name] = true
 
         -- Lazily create font strings on first use
         if not row.nameText then
@@ -326,27 +298,25 @@ function VersionCheckPanelMixin:RefreshList()
             not_installed = { text = L["NOT_INSTALLED"] or "Not Installed", color = "|cffff0000" },
             querying      = { text = "...",                           color = "|cff888888" },
         }
-        local info = statusMap[entry.status] or statusMap.querying
+        local status = entry.version and self:GetVersionStatus(entry.version) or (VersionCheck and VersionCheck.queryInProgress and "querying" or "not_installed")
+        local info = statusMap[status] or statusMap.querying
         row.statusText:SetText(info.color .. info.text .. "|r")
-
-        -- Tally counts
-        if entry.status == "current" then
-            current = current + 1
-        elseif entry.status == "outdated" then
-            outdated = outdated + 1
-        elseif entry.status == "not_installed" then
-            missing = missing + 1
-        end
 
         row:Show()
         yOffset = yOffset + ROW_HEIGHT
+    end
+
+    for name, row in pairs(self.rowsByName) do
+        if not activeRows[name] then
+            row:Hide()
+        end
     end
 
     self.scrollContent:SetHeight(math.max(1, yOffset + 4))
 
     self.countText:SetText(string.format(
         "%d total | %d current | %d outdated | %d missing",
-        total, current, outdated, missing
+        snapshot.counts.total, snapshot.counts.current, snapshot.counts.outdated, snapshot.counts.notInstalled
     ))
 end
 
@@ -356,6 +326,7 @@ end
 
 function VersionCheckPanelMixin:Show()
     self.frame:Show()
+    self:RefreshList()
 end
 
 function VersionCheckPanelMixin:Hide()

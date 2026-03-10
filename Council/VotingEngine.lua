@@ -33,8 +33,9 @@ end
 --- Tally votes using the configured voting mode
 -- @param votes table - DataProvider or array of votes
 -- @param mode string|nil - Optional voting mode override (defaults to settings)
+-- @param opts table|nil - Optional tally options (e.g. { tieBreakerMode = "ROLL" })
 -- @return table - Results from the appropriate tally method
-function VotingEngine:Tally(votes, mode)
+function VotingEngine:Tally(votes, mode, opts)
     -- Get mode from settings if not provided
     mode = mode or (Loothing.Settings and Loothing.Settings:GetVotingMode()) or Loothing.VotingMode.SIMPLE
 
@@ -46,24 +47,27 @@ function VotingEngine:Tally(votes, mode)
     if mode == Loothing.VotingMode.RANKED_CHOICE then
         -- For ranked choice, we need to extract candidates from the votes
         local candidates = self:GetCandidatesFromVotes(votes)
-        return self:TallyRankedChoice(votes, candidates)
+        return self:TallyRankedChoice(votes, candidates, opts)
     else
         return self:TallySimple(votes)
     end
 end
 
---- Extract unique candidates from votes (for ranked choice)
+--- Extract unique candidates from all ballot positions
 -- @param votes table - DataProvider or array of votes
--- @return table - Array of unique voter names who cast first-choice votes
+-- @return table - Array of unique candidate names across all ranked positions
 function VotingEngine:GetCandidatesFromVotes(votes)
     local candidateSet = {}
     local candidates = {}
 
     for _, vote in EnumerateVotes(votes) do
-        local firstChoice = vote.responses and vote.responses[1]
-        if firstChoice and not candidateSet[firstChoice] then
-            candidateSet[firstChoice] = true
-            candidates[#candidates + 1] = firstChoice
+        if vote.responses then
+            for _, choice in ipairs(vote.responses) do
+                if choice and not candidateSet[choice] then
+                    candidateSet[choice] = true
+                    candidates[#candidates + 1] = choice
+                end
+            end
         end
     end
 
@@ -139,11 +143,49 @@ end
     Ranked Choice Voting - Instant Runoff
 ----------------------------------------------------------------------]]
 
+--- Resolve a last-place tie by looking back at previous rounds
+-- @param tiedForLast table - Array of candidate names tied for last
+-- @param rounds table - Array of completed round data
+-- @return table - Array of candidates to eliminate (ideally just one)
+function VotingEngine:ResolveTiedElimination(tiedForLast, rounds)
+    if #tiedForLast <= 1 then
+        return tiedForLast
+    end
+
+    -- Walk previous rounds in reverse to find differentiation
+    for i = #rounds, 1, -1 do
+        local priorCounts = rounds[i].counts
+        if priorCounts then
+            local minCount = math.huge
+            local worstInRound = {}
+
+            for _, candidate in ipairs(tiedForLast) do
+                local count = priorCounts[candidate] or 0
+                if count < minCount then
+                    minCount = count
+                    worstInRound = { candidate }
+                elseif count == minCount then
+                    worstInRound[#worstInRound + 1] = candidate
+                end
+            end
+
+            -- If we narrowed it down, return the reduced set
+            if #worstInRound < #tiedForLast then
+                return worstInRound
+            end
+        end
+    end
+
+    -- Could not resolve — fall back to batch elimination
+    return tiedForLast
+end
+
 --- Tally votes using ranked choice (instant runoff)
 -- @param votes table - DataProvider or array of votes
 -- @param candidates table - Array of candidate names
+-- @param opts table|nil - Optional tally options (e.g. { tieBreakerMode = "ROLL" })
 -- @return table - { winner, rounds, eliminated }
-function VotingEngine:TallyRankedChoice(votes, candidates)
+function VotingEngine:TallyRankedChoice(votes, candidates, opts)
     if not candidates or #candidates == 0 then
         return { winner = nil, rounds = {}, eliminated = {} }
     end
@@ -207,19 +249,20 @@ function VotingEngine:TallyRankedChoice(votes, candidates)
             end
         end
 
-        -- Handle tie for last place - eliminate all tied
+        -- Handle tie for last place — use backward tiebreaker
         if #tiedForLast > 1 then
-            for _, candidate in ipairs(tiedForLast) do
+            local toRemove = self:ResolveTiedElimination(tiedForLast, rounds)
+            for _, candidate in ipairs(toRemove) do
                 activeCandidates[candidate] = nil
                 eliminated[#eliminated + 1] = {
                     candidate = candidate,
                     round = round,
                     count = minCount,
-                    reason = "tied_for_last",
+                    reason = #toRemove < #tiedForLast and "backward_tiebreaker" or "tied_for_last",
                 }
             end
-            rounds[#rounds].eliminated = tiedForLast
-        else
+            rounds[#rounds].eliminated = toRemove
+        elseif toEliminate then
             activeCandidates[toEliminate] = nil
             eliminated[#eliminated + 1] = {
                 candidate = toEliminate,
@@ -252,6 +295,39 @@ function VotingEngine:TallyRankedChoice(votes, candidates)
             -- All candidates eliminated (shouldn't happen with proper data)
             return {
                 winner = nil,
+                rounds = rounds,
+                eliminated = eliminated,
+                totalVotes = totalVoters,
+            }
+        end
+    end
+
+    -- Final tiebreaker: 2+ candidates remain with no majority after all rounds
+    local remaining = {}
+    for candidate in pairs(activeCandidates) do
+        remaining[#remaining + 1] = candidate
+    end
+
+    if #remaining >= 2 and opts and opts.tieBreakerMode then
+        local mappedMode
+        if opts.tieBreakerMode == "ROLL" then
+            mappedMode = "random"
+        elseif opts.tieBreakerMode == "ML_CHOICE" then
+            mappedMode = "manual"
+        elseif opts.tieBreakerMode == "REVOTE" then
+            return {
+                winner = nil,
+                rounds = rounds,
+                eliminated = eliminated,
+                totalVotes = totalVoters,
+                needsRevote = true,
+            }
+        end
+
+        if mappedMode then
+            local tieWinner = self:BreakTie(remaining, votes, mappedMode)
+            return {
+                winner = tieWinner,
                 rounds = rounds,
                 eliminated = eliminated,
                 totalVotes = totalVoters,

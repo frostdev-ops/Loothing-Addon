@@ -603,6 +603,16 @@ local function GetLocalPreferencesOptions()
                         get = function() return Loothing.Settings:Get("historySettings.savePersonalLoot") end,
                         set = function(_, v) Loothing.Settings:Set("historySettings.savePersonalLoot", v) end,
                     },
+                    autoExportWeb = {
+                        type = "toggle",
+                        name = L["CONFIG_HISTORY_AUTO_EXPORT_WEB"] or "Auto-Show Web Export",
+                        desc = L["CONFIG_HISTORY_AUTO_EXPORT_WEB_DESC"]
+                            or "When a loot session ends, automatically open the export dialog with the Web export ready to copy. Upload at loothing.xyz",
+                        order = 6,
+                        width = "full",
+                        get = function() return Loothing.Settings:Get("historySettings.autoExportWeb") end,
+                        set = function(_, v) Loothing.Settings:Set("historySettings.autoExportWeb", v) end,
+                    },
                 },
             },
             -- ============================================================

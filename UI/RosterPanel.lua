@@ -7,8 +7,8 @@ local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local Utils = ns.Utils
-local Loothing = ns.Addon
 local VersionCheck = ns.VersionCheck
+local C_Timer = C_Timer
 
 --[[--------------------------------------------------------------------
     RosterPanelMixin
@@ -80,9 +80,47 @@ function RosterPanelMixin:Init(parent)
     self.sortColumn = "name"
     self.sortAscending = true
     self.versionCallbackRegistered = false
+    self.refreshPending = false
+    self.refreshToken = 0
+    self.historyCounts = {}
+    self.historyResponseBreakdown = {}
 
     self:CreateFrame()
     self:CreateElements()
+    self:RegisterDataCallbacks()
+end
+
+function RosterPanelMixin:RegisterDataCallbacks()
+    if self.versionCallbackRegistered then
+        return
+    end
+
+    if VersionCheck then
+        VersionCheck:RegisterCallback("OnVersionReceived", function()
+            self:ScheduleRefresh(0.1)
+        end, self)
+        VersionCheck:RegisterCallback("OnQueryComplete", function()
+            self:ScheduleRefresh(0)
+        end, self)
+    end
+
+    if Loothing.History then
+        Loothing.History:RegisterCallback("OnHistoryChanged", function()
+            self:ScheduleRefresh(0)
+        end, self)
+    end
+
+    self.versionCallbackRegistered = true
+end
+
+function RosterPanelMixin:ScheduleRefresh(delay)
+    self.refreshToken = (self.refreshToken or 0) + 1
+    local token = self.refreshToken
+    C_Timer.After(delay or 0, function()
+        if self.refreshToken == token and self.frame and self.frame:IsShown() then
+            self:Refresh()
+        end
+    end)
 end
 
 --- Create the main frame
@@ -400,18 +438,31 @@ function RosterPanelMixin:GatherRosterData()
     -- Resolve ML name once (not per member)
     local mlName = Loothing.Settings and Loothing.Settings:GetMasterLooter() or nil
 
-    -- Build history counts in a single O(H) pass
     local playerCounts = {}
+    local responseBreakdown = {}
     if Loothing.History then
         for _, entry in Loothing.History:GetEntries():Enumerate() do
             if entry.winner then
                 local name = Utils.NormalizeName(entry.winner)
                 if name then
                     playerCounts[name] = (playerCounts[name] or 0) + 1
+                    if entry.winnerResponse then
+                        local breakdown = responseBreakdown[name]
+                        if not breakdown then
+                            breakdown = {}
+                            responseBreakdown[name] = breakdown
+                        end
+                        breakdown[entry.winnerResponse] = (breakdown[entry.winnerResponse] or 0) + 1
+                    end
                 end
             end
         end
     end
+
+    self.historyCounts = playerCounts
+    self.historyResponseBreakdown = responseBreakdown
+    local rosterSnapshot = VersionCheck and VersionCheck.GetRosterSnapshot and VersionCheck:GetRosterSnapshot()
+    local rosterVersions = rosterSnapshot and rosterSnapshot.byName or {}
 
     local data = {}
     for _, member in ipairs(roster) do
@@ -447,13 +498,11 @@ function RosterPanelMixin:GatherRosterData()
         end
 
         -- Version data
-        if VersionCheck and VersionCheck.versionCache then
-            local vData = VersionCheck.versionCache[member.name]
-            if vData then
-                entry.versionStr = vData.version
-                entry.tVersion = vData.tVersion
-                entry.isOutdated = vData.isOutdated
-            end
+        local vData = rosterVersions[member.name]
+        if vData then
+            entry.versionStr = vData.version
+            entry.tVersion = vData.tVersion
+            entry.isOutdated = vData.isOutdated
         end
 
         -- Council (uses GetMembersInRaid lookup for test mode + auto-include support)
@@ -467,6 +516,7 @@ function RosterPanelMixin:GatherRosterData()
 
         -- History
         entry.historyCount = playerCounts[member.name] or 0
+        entry.historyBreakdown = responseBreakdown[member.name]
 
         data[#data + 1] = entry
     end
@@ -840,17 +890,7 @@ function RosterPanelMixin:ShowRowTooltip(row, entry)
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine("Loot History: " .. entry.historyCount .. " items", 1, 0.82, 0)
 
-        -- Build response breakdown
-        local responseCounts = {}
-        for _, histEntry in Loothing.History:GetEntries():Enumerate() do
-            if histEntry.winner then
-                local hName = Utils.NormalizeName(histEntry.winner)
-                if hName == entry.name and histEntry.winnerResponse then
-                    local resp = histEntry.winnerResponse
-                    responseCounts[resp] = (responseCounts[resp] or 0) + 1
-                end
-            end
-        end
+        local responseCounts = self.historyResponseBreakdown[entry.name] or {}
 
         for resp, count in pairs(responseCounts) do
             local info = Loothing.ResponseInfo and Loothing.ResponseInfo[resp]
@@ -980,17 +1020,6 @@ end
 
 function RosterPanelMixin:QueryVersions()
     if not VersionCheck then return end
-
-    -- Register for callbacks on first query
-    if not self.versionCallbackRegistered then
-        VersionCheck:RegisterCallback("OnVersionReceived", function()
-            self:Refresh()
-        end, self)
-        VersionCheck:RegisterCallback("OnQueryComplete", function()
-            self:Refresh()
-        end, self)
-        self.versionCallbackRegistered = true
-    end
 
     if IsInRaid() or IsInGroup() then
         VersionCheck:Query("raid")

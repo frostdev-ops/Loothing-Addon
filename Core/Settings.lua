@@ -14,11 +14,9 @@
 local ADDON_NAME, ns = ...
 local Loolib = LibStub("Loolib")
 local SavedVariables = Loolib.Data.SavedVariables
-local DeepCopy = Loolib.TableUtil.DeepCopy
 local Loothing = ns.Addon
 local Utils = ns.Utils
 local ipairs, pairs, tonumber = ipairs, pairs, tonumber
-local wipe = wipe
 
 --[[--------------------------------------------------------------------
     Default Values (split by scope for Loolib SavedVariables)
@@ -86,38 +84,6 @@ local SV_DEFAULTS = {
 local SettingsMixin = ns.SettingsMixin or {}
 ns.SettingsMixin = SettingsMixin
 
-local function CopyTableInto(target, source)
-    wipe(target)
-    for key, value in pairs(source or {}) do
-        target[key] = type(value) == "table" and DeepCopy(value) or value
-    end
-    return target
-end
-
-local function MigrateLegacySavedVariables()
-    local existing = SavedVariables.GetAddonData("Loothing", false)
-    if existing then
-        rawset(_G, "LoothingDB", nil)
-        return existing, false
-    end
-
-    local legacy = rawget(_G, "LoothingDB")
-    if type(legacy) ~= "table" then
-        return nil, false
-    end
-
-    local target = SavedVariables.GetAddonData("Loothing", true)
-    CopyTableInto(target, legacy)
-    target.global = target.global or {}
-    target.global.migrations = target.global.migrations or {}
-    target.global.migrations.savedVariablesRoot = "LoolibDB"
-    target.global.migrations.legacyLoothingDBMigrated = true
-    target.global.migrations.legacyLoothingDBVersion = Loothing.VERSION or "unknown"
-
-    rawset(_G, "LoothingDB", nil)
-    return target, true
-end
-
 local function allowTestPersistence(context)
     local TestMode = ns.TestModeState
     if TestMode and TestMode.GuardPersistence then
@@ -128,8 +94,6 @@ end
 
 --- Initialize settings with Loolib SavedVariables multi-profile support
 function SettingsMixin:Init()
-    MigrateLegacySavedVariables()
-
     -- Create Loolib SavedVariables database with profile + global scopes
     self.sv = SavedVariables.CreateAddonStore("Loothing", SV_DEFAULTS, "Default")
 
@@ -764,6 +728,19 @@ end
 function SettingsMixin:AddHistoryEntry(entry)
     local history = self:GetHistoryRef()
     history[#history + 1] = entry
+end
+
+--- Add multiple history entries to global scope.
+-- @param entries table
+function SettingsMixin:AddHistoryEntries(entries)
+    if not entries or #entries == 0 then
+        return
+    end
+
+    local history = self:GetHistoryRef()
+    for _, entry in ipairs(entries) do
+        history[#history + 1] = entry
+    end
 end
 
 --- Remove a history entry by GUID from the live shared history table.

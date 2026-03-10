@@ -22,6 +22,7 @@ local HISTORY_EVENTS = {
     "OnHistoryCleared",
     "OnBulkEntriesRemoved",
     "OnFilterChanged",
+    "OnHistoryChanged",
 }
 
 --- Initialize history manager
@@ -44,6 +45,9 @@ function HistoryMixin:Init()
 
     -- Filtered view
     self.filteredEntries = Data.CreateDataProvider()
+    self.bulkDepth = 0
+    self.bulkPendingAdditions = nil
+    self.bulkPendingRemovals = nil
 
     -- Load from SavedVariables
     self:LoadFromSaved()
@@ -74,14 +78,20 @@ function HistoryMixin:AddEntry(entry)
     -- Add to data provider
     self.entries:Insert(entry)
 
-    -- Save to SavedVariables
-    self:SaveEntry(entry)
-    self:PruneSavedHistory()
+    if self:IsBulkUpdating() then
+        local pending = self.bulkPendingAdditions or {}
+        pending[#pending + 1] = entry
+        self.bulkPendingAdditions = pending
+    else
+        self:SaveEntry(entry)
+        self:PruneSavedHistory()
+        self:ApplyFilter()
+    end
 
-    -- Refresh filtered view
-    self:ApplyFilter()
-
-    self:TriggerEvent("OnEntryAdded", entry)
+    if not self:IsBulkUpdating() then
+        self:TriggerEvent("OnEntryAdded", entry)
+        self:TriggerEvent("OnHistoryChanged", "add", entry)
+    end
 end
 
 --- Remove a history entry
@@ -95,14 +105,62 @@ function HistoryMixin:RemoveEntry(guid)
 
     self.entries:Remove(entry)
 
-    -- Remove from SavedVariables
-    self:RemoveSavedEntry(guid)
+    if self:IsBulkUpdating() then
+        local pending = self.bulkPendingRemovals or {}
+        pending[guid] = true
+        self.bulkPendingRemovals = pending
+    else
+        self:RemoveSavedEntry(guid)
+        self:ApplyFilter()
+    end
 
-    -- Refresh filtered view
-    self:ApplyFilter()
-
-    self:TriggerEvent("OnEntryRemoved", entry)
+    if not self:IsBulkUpdating() then
+        self:TriggerEvent("OnEntryRemoved", entry)
+        self:TriggerEvent("OnHistoryChanged", "remove", entry)
+    end
     return true
+end
+
+function HistoryMixin:IsBulkUpdating()
+    return (self.bulkDepth or 0) > 0
+end
+
+function HistoryMixin:BeginBulkUpdate()
+    self.bulkDepth = (self.bulkDepth or 0) + 1
+    if self.bulkDepth == 1 then
+        self.bulkPendingAdditions = {}
+        self.bulkPendingRemovals = {}
+    end
+end
+
+function HistoryMixin:EndBulkUpdate()
+    if not self:IsBulkUpdating() then
+        return
+    end
+
+    self.bulkDepth = self.bulkDepth - 1
+    if self.bulkDepth > 0 then
+        return
+    end
+
+    local added = self.bulkPendingAdditions or {}
+    local removed = self.bulkPendingRemovals or {}
+    self.bulkPendingAdditions = nil
+    self.bulkPendingRemovals = nil
+
+    if next(removed) then
+        self:RemoveSavedEntries(removed)
+    end
+    if #added > 0 then
+        self:SaveEntries(added)
+    end
+
+    self:PruneSavedHistory()
+    self:ApplyFilter()
+    self:TriggerEvent("OnHistoryChanged", "bulk", {
+        added = #added,
+        removed = removed,
+    })
 end
 
 --- Get entry by GUID
@@ -152,6 +210,7 @@ function HistoryMixin:ClearHistory()
     end
 
     self:TriggerEvent("OnHistoryCleared")
+    self:TriggerEvent("OnHistoryChanged", "clear")
 end
 
 --[[--------------------------------------------------------------------
@@ -190,6 +249,7 @@ function HistoryMixin:DeleteByPlayer(playerName)
     if #toRemove > 0 then
         self:ApplyFilter()
         self:TriggerEvent("OnBulkEntriesRemoved", #toRemove, "player", playerName)
+        self:TriggerEvent("OnHistoryChanged", "bulk-remove", { count = #toRemove, kind = "player", value = playerName })
     end
 
     return #toRemove
@@ -223,6 +283,7 @@ function HistoryMixin:DeleteByAge(days)
     if #toRemove > 0 then
         self:ApplyFilter()
         self:TriggerEvent("OnBulkEntriesRemoved", #toRemove, "age", days)
+        self:TriggerEvent("OnHistoryChanged", "bulk-remove", { count = #toRemove, kind = "age", value = days })
     end
 
     return #toRemove
@@ -255,6 +316,7 @@ function HistoryMixin:DeleteByEncounter(encounterName)
     if #toRemove > 0 then
         self:ApplyFilter()
         self:TriggerEvent("OnBulkEntriesRemoved", #toRemove, "encounter", encounterName)
+        self:TriggerEvent("OnHistoryChanged", "bulk-remove", { count = #toRemove, kind = "encounter", value = encounterName })
     end
 
     return #toRemove
@@ -290,6 +352,7 @@ function HistoryMixin:DeleteByQuality(minQuality, maxQuality)
     if #toRemove > 0 then
         self:ApplyFilter()
         self:TriggerEvent("OnBulkEntriesRemoved", #toRemove, "quality", minQuality)
+        self:TriggerEvent("OnHistoryChanged", "bulk-remove", { count = #toRemove, kind = "quality", value = minQuality })
     end
 
     return #toRemove
@@ -324,6 +387,7 @@ function HistoryMixin:DeleteByDateRange(startTime, endTime)
     if #toRemove > 0 then
         self:ApplyFilter()
         self:TriggerEvent("OnBulkEntriesRemoved", #toRemove, "dateRange", startTime)
+        self:TriggerEvent("OnHistoryChanged", "bulk-remove", { count = #toRemove, kind = "dateRange", value = startTime })
     end
 
     return #toRemove
@@ -385,9 +449,9 @@ end
 function HistoryMixin:MatchesFilter(entry)
     -- Search text (matches item name or winner)
     if self.filter.searchText and self.filter.searchText ~= "" then
-        local search = self.filter.searchText:lower()
-        local matchesName = entry.itemName and entry.itemName:lower():find(search, 1, true)
-        local matchesWinner = entry.winner and entry.winner:lower():find(search, 1, true)
+        local search = string.lower(self.filter.searchText)
+        local matchesName = entry.itemName and string.find(string.lower(entry.itemName), search, 1, true)
+        local matchesWinner = entry.winner and string.find(string.lower(entry.winner), search, 1, true)
 
         if not matchesName and not matchesWinner then
             return false
@@ -406,6 +470,14 @@ function HistoryMixin:MatchesFilter(entry)
         if entry.encounterName ~= self.filter.encounterName then
             return false
         end
+    end
+
+    if self.filter.response and entry.winnerResponse ~= self.filter.response then
+        return false
+    end
+
+    if self.filter.class and entry.class ~= self.filter.class and entry.winnerClass ~= self.filter.class then
+        return false
     end
 
     -- Date range
@@ -598,6 +670,23 @@ function HistoryMixin:SaveEntry(entry)
     Loothing.Settings:AddHistoryEntry(persistable)
 end
 
+function HistoryMixin:SaveEntries(entries)
+    if not Loothing.Settings or not entries or #entries == 0 then
+        return
+    end
+
+    local persistables = {}
+    for _, entry in ipairs(entries) do
+        local persistable = {}
+        for k, v in pairs(entry) do
+            persistable[k] = v
+        end
+        persistables[#persistables + 1] = persistable
+    end
+
+    Loothing.Settings:AddHistoryEntries(persistables)
+end
+
 --- Remove a saved entry
 -- @param guid string
 function HistoryMixin:RemoveSavedEntry(guid)
@@ -616,6 +705,22 @@ function HistoryMixin:RemoveSavedEntries(guids)
     end
 
     Loothing.Settings:RemoveHistoryEntries(guids)
+end
+
+function HistoryMixin:GetAllEntries()
+    local entries = {}
+    for _, entry in self.entries:Enumerate() do
+        entries[#entries + 1] = entry
+    end
+    return entries
+end
+
+function HistoryMixin:Clear()
+    self:ClearHistory()
+end
+
+function HistoryMixin:DeleteEntry(guid)
+    return self:RemoveEntry(guid)
 end
 
 --- Enforce the configured shared history cap in memory and SavedVariables.
@@ -672,6 +777,24 @@ function HistoryMixin:GetExportMetadata()
         guildRank = guildRank or "",
         entryCount = self:GetFilteredCount(),
     }
+end
+
+--- Build response definitions from the active response button set.
+-- Returns an array of { id, name } for all configured response buttons,
+-- allowing the web importer to resolve candidate numeric response IDs
+-- to the guild's custom response names without hardcoded mappings.
+-- @return table - Array of { id = number, name = string }
+function HistoryMixin:GetResponseDefs()
+    local defs = {}
+    if Loothing.ResponseInfo then
+        for id, info in pairs(Loothing.ResponseInfo) do
+            if type(id) == "number" and info.name then
+                defs[#defs + 1] = { id = id, name = info.name }
+            end
+        end
+        table.sort(defs, function(a, b) return a.id < b.id end)
+    end
+    return defs
 end
 
 --- Format metadata as comment-style header lines
@@ -1082,6 +1205,7 @@ function HistoryMixin:ExportJSON()
         guild = guildDisplay,
         guildRank = rankDisplay,
         entryCount = meta.entryCount,
+        responseDefs = self:GetResponseDefs(),
     }, "  ") .. ","
     parts[#parts + 1] = '  "entries": ['
     for i, e in ipairs(entries) do
@@ -1092,6 +1216,131 @@ function HistoryMixin:ExportJSON()
     parts[#parts + 1] = "}"
 
     return table.concat(parts, "\n")
+end
+
+--- Export history as compact (no-indent, no-sort) JSON for web import
+-- Faster than ExportJSON: flat string.format template, no recursion, no intermediate tables
+-- @return string
+function HistoryMixin:ExportCompactJSON()
+    local buf = {}
+
+    -- Inline JSON string escaping (no recursion, no table allocation)
+    local function esc(s)
+        s = tostring(s)
+        s = s:gsub("\\", "\\\\")
+        s = s:gsub('"', '\\"')
+        s = s:gsub("\n", "\\n")
+        s = s:gsub("\r", "\\r")
+        s = s:gsub("\t", "\\t")
+        return s
+    end
+
+    -- Serialize a shallow array (candidates / councilVotes are 1-2 levels deep)
+    local function serializeArray(arr)
+        if not arr or #arr == 0 then return "[]" end
+        local parts = {}
+        for _, v in ipairs(arr) do
+            local t = type(v)
+            if t == "string" then
+                parts[#parts + 1] = '"' .. esc(v) .. '"'
+            elseif t == "number" or t == "boolean" then
+                parts[#parts + 1] = tostring(v)
+            elseif t == "table" then
+                local fields = {}
+                for k, fv in pairs(v) do
+                    local ft = type(fv)
+                    if ft == "string" then
+                        fields[#fields + 1] = '"' .. esc(k) .. '":"' .. esc(fv) .. '"'
+                    elseif ft == "number" or ft == "boolean" then
+                        fields[#fields + 1] = '"' .. esc(k) .. '":' .. tostring(fv)
+                    end
+                end
+                parts[#parts + 1] = "{" .. table.concat(fields, ",") .. "}"
+            else
+                parts[#parts + 1] = "null"
+            end
+        end
+        return "[" .. table.concat(parts, ",") .. "]"
+    end
+
+    local meta = self:GetExportMetadata()
+    local guildDisplay = (meta.guildName ~= "") and meta.guildName or "N/A"
+    local rankDisplay  = (meta.guildRank ~= "") and meta.guildRank or "N/A"
+
+    -- Serialize responseDefs as compact JSON array: [{"id":1,"name":"NEED"},...]
+    local responseDefs = self:GetResponseDefs()
+    local rdefParts = {}
+    for _, def in ipairs(responseDefs) do
+        rdefParts[#rdefParts + 1] = string.format('{"id":%d,"name":"%s"}', def.id, esc(def.name))
+    end
+    local rdefJson = "[" .. table.concat(rdefParts, ",") .. "]"
+
+    -- Write metadata header + open entries array
+    buf[#buf + 1] = string.format(
+        '{"metadata":{"addon":"%s","version":"%s","exportDate":"%s","exportTime":"%s","character":"%s","realm":"%s","guild":"%s","guildRank":"%s","entryCount":%d,"responseDefs":%s},"entries":[',
+        esc(meta.addonName), esc(meta.version), esc(meta.exportDate), esc(meta.exportTime),
+        esc(meta.playerName), esc(meta.realmName), esc(guildDisplay), esc(rankDisplay),
+        meta.entryCount, rdefJson
+    )
+
+    local first = true
+    for _, entry in self.filteredEntries:Enumerate() do
+        local responseName = ""
+        if entry.winnerResponse and Loothing.ResponseInfo and Loothing.ResponseInfo[entry.winnerResponse] then
+            responseName = Loothing.ResponseInfo[entry.winnerResponse].name
+        end
+        local ts = entry.timestamp or 0
+        local dateStr = ts > 0 and date("%Y-%m-%d %H:%M:%S", ts) or ""
+
+        if not first then
+            buf[#buf + 1] = ","
+        end
+        first = false
+
+        -- Fixed template: 34 scalar fields + 2 array fields
+        buf[#buf + 1] = string.format(
+            '{"guid":"%s","date":"%s","timestamp":%d,"itemID":%d,"itemName":"%s","itemLevel":%d,"quality":%d,"equipSlot":"%s","typeCode":"%s","subType":"%s","bindType":%d,"isBoe":%s,"winner":"%s","winnerClass":"%s","response":"%s","responseID":%d,"winnerNote":"%s","winnerRoll":%d,"winnerGear1":"%s","winnerGear2":"%s","winnerGear1ilvl":%d,"winnerGear2ilvl":%d,"winnerIlvlDiff":%d,"encounterID":%d,"encounterName":"%s","instance":"%s","difficultyID":%d,"difficultyName":"%s","groupSize":%d,"mapID":%d,"votes":%d,"awardReasonId":%d,"awardReason":"%s","owner":"%s","candidates":%s,"councilVotes":%s}',
+            esc(entry.guid or ""),
+            esc(dateStr),
+            ts,
+            entry.itemID or 0,
+            esc(entry.itemName or ""),
+            entry.itemLevel or 0,
+            entry.quality or 0,
+            esc(entry.equipSlot or ""),
+            esc(entry.typeCode or ""),
+            esc(entry.subType or ""),
+            entry.bindType or 0,
+            tostring(entry.isBoe or false),
+            esc(entry.winner or ""),
+            esc(entry.winnerClass or ""),
+            esc(responseName),
+            entry.winnerResponse or 0,
+            esc(entry.winnerNote or ""),
+            entry.winnerRoll or 0,
+            esc(entry.winnerGear1 or ""),
+            esc(entry.winnerGear2 or ""),
+            entry.winnerGear1ilvl or 0,
+            entry.winnerGear2ilvl or 0,
+            entry.winnerIlvlDiff or 0,
+            entry.encounterID or 0,
+            esc(entry.encounterName or ""),
+            esc(entry.instance or ""),
+            entry.difficultyID or 0,
+            esc(entry.difficultyName or ""),
+            entry.groupSize or 0,
+            entry.mapID or 0,
+            entry.votes or 0,
+            entry.awardReasonId or 0,
+            esc(entry.awardReason or ""),
+            esc(entry.owner or ""),
+            serializeArray(entry.candidates or {}),
+            serializeArray(entry.councilVotes or {})
+        )
+    end
+
+    buf[#buf + 1] = "]}"
+    return table.concat(buf)
 end
 
 --- Export history to EQdkp-Plus XML format
@@ -1233,8 +1482,8 @@ end
 -- Format: LOOTHING:1:<base64(zlib(json))>
 -- @return string
 function HistoryMixin:ExportCompact()
-    local jsonStr = self:ExportJSON()
-    local compressed = Loolib.Compressor:CompressZlib(jsonStr, 9)
+    local jsonStr = self:ExportCompactJSON()
+    local compressed = Loolib.Compressor:CompressZlib(jsonStr, 6)
     local encoded = Loolib.Compressor:EncodeForPrint(compressed)
     return "LOOTHING:1:" .. encoded
 end

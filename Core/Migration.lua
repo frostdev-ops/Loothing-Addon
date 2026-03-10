@@ -1,3 +1,5 @@
+local ADDON_NAME, ns = ...
+
 --[[--------------------------------------------------------------------
     Loothing - Loot Council Addon for WoW 12.0+
     Migration - Version-stamped database schema migrations
@@ -19,8 +21,6 @@
         Migration:RunOnLoad()         -- Execute pending migrations
         Migration:HasRun("1.0.0")     -- Check if migration ran
 ----------------------------------------------------------------------]]
-
-local ADDON_NAME, ns = ...
 
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon

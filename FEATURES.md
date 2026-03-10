@@ -47,7 +47,7 @@ The session start behavior is configurable:
 | `afterRolls` | Session starts after the group loot roll phase completes |
 
 ### Settings & Multi-Profile Support
-All settings are stored in `LoothingDB` via Loolib's `SavedVariables` system. Data is split into two scopes:
+All settings are stored in `LoolibDB` via Loolib's `SavedVariables` system. Data is split into two scopes:
 
 - **Profile scope** — per-character preferences (voting mode, council list, response buttons, announcements, filters, etc.)
 - **Global scope** — shared across profiles (loot history, trade queue, item storage, player GUID cache, migration state)
@@ -229,7 +229,7 @@ Announcement messages support dynamic substitution:
 ## History
 
 ### Storage
-All loot awards are persisted to `LoothingDB` in the global scope (shared across profiles). Each entry includes: timestamp, GUID, item link, winner, response, notes, encounter, voter data, and award reason.
+All loot awards are persisted to `LoolibDB` in the global scope (shared across profiles). Each entry includes: timestamp, GUID, item link, winner, response, notes, encounter, voter data, and award reason.
 
 A `LoolibDataProvider` backs the history list for reactive UI updates. Filter state (text search, winner, encounter name, date range) drives a separate filtered `DataProvider` view.
 
@@ -240,7 +240,7 @@ Historical loot data from other addons (RCLootCouncil, etc.) can be imported via
 
 ## Version Management
 
-`VersionCheck` queries all raid members for their installed Loothing version and caches results (persisted to `LoothingDB`). Features:
+`VersionCheck` queries all raid members for their installed Loothing version and caches results (persisted to `LoolibDB`). Features:
 - Outdated member warnings (throttled to 60s between warnings)
 - Roster check throttling (minimum 30s between full checks)
 - `GroupHasVersion(minVersion)` — gate features behind a minimum group-wide version

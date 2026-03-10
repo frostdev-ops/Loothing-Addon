@@ -12,6 +12,8 @@ local CreateFromMixins = Loolib.CreateFromMixins
 local Data = Loolib.Data
 local Events = Loolib.Events
 local SavedVariables = Loolib.Data.SavedVariables
+local TooltipScan = ns.TooltipScan
+local C_Timer = C_Timer
 
 --[[--------------------------------------------------------------------
     TradeQueueMixin
@@ -39,6 +41,7 @@ local TRADE_WARNING_5MIN = 5 * 60
 
 -- How often to check trade timers (seconds)
 local TRADE_TIMER_CHECK_INTERVAL = 60
+local ITEM_WATCH_DELAY = 0.5
 
 --- Initialize the trade queue
 function TradeQueueMixin:Init()
@@ -55,6 +58,11 @@ function TradeQueueMixin:Init()
 
     -- Tracks which warnings have already been shown (itemGUID -> { warned20 = bool, warned5 = bool })
     self.warningsSent = {}
+    self.pendingBagWatches = {}
+    self.pendingBagWatchOrder = {}
+    self.nextBagWatchID = 0
+    self.tradeTimerTicker = nil
+    self.bagWatchTicker = nil
 
     -- Register for WoW trade events
     self:RegisterEvents()
@@ -86,6 +94,10 @@ function TradeQueueMixin:RegisterEvents()
 
     Events.Registry:RegisterEventCallback("UI_INFO_MESSAGE", function(messageType, _message)
         self:OnUIInfoMessage(messageType)
+    end, self)
+
+    Events.Registry:RegisterEventCallback("BAG_UPDATE_DELAYED", function()
+        self:OnBagUpdateDelayed()
     end, self)
 end
 
@@ -384,13 +396,13 @@ end
 -- @param itemLink string - Item link to find
 -- @return number, number - Bag and slot, or nil if not found
 function TradeQueueMixin:FindItemInBags(itemLink)
+    local targetID = Utils.GetItemID(itemLink)
     for bag = 0, NUM_BAG_SLOTS do
         local numSlots = C_Container.GetContainerNumSlots(bag)
         for slot = 1, numSlots do
             local info = C_Container.GetContainerItemInfo(bag, slot)
             if info and info.hyperlink then
                 -- Compare item IDs (links may have different bonus IDs)
-                local targetID = Utils.GetItemID(itemLink)
                 local foundID = Utils.GetItemID(info.hyperlink)
 
                 if targetID == foundID then
@@ -459,91 +471,10 @@ end
 -- @param slot number - Slot index
 -- @return number - Seconds remaining: math.huge for unbound, 0 for soulbound, >0 for tradeable
 function TradeQueueMixin:GetContainerItemTradeTimeRemaining(container, slot)
-    if not container or not slot then
+    if not TooltipScan then
         return 0
     end
-
-    -- Check basic item info first
-    local info = C_Container.GetContainerItemInfo(container, slot)
-    if not info then
-        return 0
-    end
-
-    -- Create a scanning tooltip
-    local tooltipName = "LoothingTradeQueueScanTooltip"
-    local tooltip = _G[tooltipName]
-    if not tooltip then
-        tooltip = CreateFrame("GameTooltip", tooltipName, nil, "GameTooltipTemplate")
-    end
-
-    tooltip:SetOwner(UIParent, "ANCHOR_NONE")
-    tooltip:SetBagItem(container, slot)
-
-    local result = 0
-
-    -- Use Blizzard's BIND_TRADE_TIME_REMAINING global constant for locale-independent
-    -- tooltip parsing. The constant contains a format string like "You may trade this
-    -- item with players that were also eligible to loot this item for %s."
-    -- We search for its presence and extract the time string from the tooltip text.
-    local tradePattern = BIND_TRADE_TIME_REMAINING
-    local boeText = ITEM_BIND_ON_EQUIP
-    local soulboundText = ITEM_SOULBOUND
-
-    for i = 1, tooltip:NumLines() do
-        local line = _G[tooltipName .. "TextLeft" .. i]
-        if line then
-            local text = line:GetText()
-            if text then
-                -- Check for trade time remaining using Blizzard's localized constant
-                if tradePattern then
-                    -- Build a plain-text anchor from the constant (text before the %s placeholder)
-                    local anchor = tradePattern:match("^(.-)%%s")
-                    if anchor and anchor ~= "" then
-                        local anchorStart, anchorEnd = text:find(anchor, 1, true)
-                        if anchorStart then
-                            -- Extract the time portion after the anchor
-                            local timeStr = text:sub(anchorEnd + 1)
-                            -- Parse hours and minutes from the time string
-                            local hours = timeStr:match("(%d+)%s*%a") and tonumber(timeStr:match("(%d+)")) or 0
-                            local minutes = 0
-                            -- Try to extract a second number for minutes
-                            local h, m = timeStr:match("(%d+).-(%d+)")
-                            if h then
-                                hours = tonumber(h) or 0
-                                minutes = tonumber(m) or 0
-                            end
-                            result = hours * 3600 + minutes * 60
-                            if result == 0 then result = 60 end -- At least 1 minute if pattern matched
-                            break
-                        end
-                    end
-                end
-
-                -- Fallback: try direct time patterns for any edge cases
-                local hours = text:match("(%d+)%s*hour") or text:match("(%d+)%s*hr")
-                local minutes = text:match("(%d+)%s*min")
-                if hours or minutes then
-                    result = (tonumber(hours) or 0) * 3600 + (tonumber(minutes) or 0) * 60
-                    break
-                end
-
-                -- Check for BoE items using localized constant
-                if boeText and text:find(boeText, 1, true) then
-                    result = math.huge
-                    break
-                end
-
-                -- Check for soulbound using localized constant
-                if soulboundText and text:find(soulboundText, 1, true) then
-                    result = 0
-                    break
-                end
-            end
-        end
-    end
-
-    tooltip:Hide()
-    return result
+    return TooltipScan:GetContainerItemTradeTimeRemaining(container, slot)
 end
 
 --[[--------------------------------------------------------------------
@@ -558,46 +489,116 @@ end
 -- @param maxAttempts number|nil - Max attempts (default: 20, at 0.5s intervals)
 function TradeQueueMixin:WatchForItemInBags(itemLink, onFound, onFail, maxAttempts)
     maxAttempts = maxAttempts or 20
-    local attempt = 0
-    local delay = 0.5
-
-    local function check()
-        attempt = attempt + 1
-
-        -- Scan bags for the item
-        for bag = 0, NUM_BAG_SLOTS do
-            local numSlots = C_Container.GetContainerNumSlots(bag)
-            for slot = 1, numSlots do
-                local bagItemLink = C_Container.GetContainerItemLink(bag, slot)
-                if bagItemLink then
-                    local targetID = Utils.GetItemID(itemLink)
-                    local foundID = Utils.GetItemID(bagItemLink)
-
-                    if targetID and foundID and targetID == foundID then
-                        local timeRemaining = self:GetContainerItemTradeTimeRemaining(bag, slot)
-
-                        Loothing:Debug("WatchForItemInBags: found", itemLink, "at", bag, slot)
-                        if onFound then
-                            onFound(bag, slot, timeRemaining)
-                        end
-                        return
-                    end
-                end
-            end
+    local targetItemID = Utils.GetItemID(itemLink)
+    if not targetItemID then
+        if onFail then
+            onFail()
         end
+        return
+    end
 
-        -- Not found yet
-        if attempt < maxAttempts then
-            C_Timer.After(delay, check)
-        else
-            Loothing:Debug("WatchForItemInBags: failed after", maxAttempts, "attempts for", itemLink)
-            if onFail then
-                onFail()
+    self.nextBagWatchID = self.nextBagWatchID + 1
+    local watchID = self.nextBagWatchID
+    self.pendingBagWatches[watchID] = {
+        id = watchID,
+        itemLink = itemLink,
+        targetItemID = targetItemID,
+        onFound = onFound,
+        onFail = onFail,
+        attempts = 0,
+        maxAttempts = maxAttempts,
+    }
+    self.pendingBagWatchOrder[#self.pendingBagWatchOrder + 1] = watchID
+    self:EnsureBagWatchTicker()
+end
+
+function TradeQueueMixin:OnBagUpdateDelayed()
+    if TooltipScan then
+        TooltipScan:InvalidateBagCache()
+    end
+    self:ProcessPendingBagWatches(false)
+end
+
+function TradeQueueMixin:EnsureBagWatchTicker()
+    if self.bagWatchTicker or #self.pendingBagWatchOrder == 0 then
+        return
+    end
+
+    self.bagWatchTicker = C_Timer.NewTicker(ITEM_WATCH_DELAY, function()
+        self:ProcessPendingBagWatches(true)
+    end)
+end
+
+function TradeQueueMixin:StopBagWatchTickerIfIdle()
+    if self.bagWatchTicker and #self.pendingBagWatchOrder == 0 then
+        self.bagWatchTicker:Cancel()
+        self.bagWatchTicker = nil
+    end
+end
+
+function TradeQueueMixin:ProcessPendingBagWatches(countAttempt)
+    if #self.pendingBagWatchOrder == 0 then
+        self:StopBagWatchTickerIfIdle()
+        return
+    end
+
+    local remaining = {}
+    local pendingItemIDs = {}
+    local foundByItemID = {}
+
+    for _, watchID in ipairs(self.pendingBagWatchOrder) do
+        local watch = self.pendingBagWatches[watchID]
+        if watch then
+            pendingItemIDs[watch.targetItemID] = true
+        end
+    end
+
+    for bag = 0, NUM_BAG_SLOTS do
+        local numSlots = C_Container.GetContainerNumSlots(bag)
+        for slot = 1, numSlots do
+            local bagItemLink = C_Container.GetContainerItemLink(bag, slot)
+            if bagItemLink then
+                local foundID = Utils.GetItemID(bagItemLink)
+                if foundID and pendingItemIDs[foundID] and not foundByItemID[foundID] then
+                    foundByItemID[foundID] = {
+                        bag = bag,
+                        slot = slot,
+                        timeRemaining = self:GetContainerItemTradeTimeRemaining(bag, slot),
+                    }
+                end
             end
         end
     end
 
-    C_Timer.After(delay, check)
+    for _, watchID in ipairs(self.pendingBagWatchOrder) do
+        local watch = self.pendingBagWatches[watchID]
+        if watch then
+            local found = foundByItemID[watch.targetItemID]
+            if found then
+                self.pendingBagWatches[watchID] = nil
+                if watch.onFound then
+                    watch.onFound(found.bag, found.slot, found.timeRemaining)
+                end
+            else
+                if countAttempt then
+                    watch.attempts = watch.attempts + 1
+                end
+
+                if countAttempt and watch.attempts >= watch.maxAttempts then
+                    self.pendingBagWatches[watchID] = nil
+                    Loothing:Debug("WatchForItemInBags: failed after", watch.maxAttempts, "attempts for", watch.itemLink)
+                    if watch.onFail then
+                        watch.onFail()
+                    end
+                else
+                    remaining[#remaining + 1] = watchID
+                end
+            end
+        end
+    end
+
+    self.pendingBagWatchOrder = remaining
+    self:StopBagWatchTickerIfIdle()
 end
 
 --[[--------------------------------------------------------------------
@@ -657,7 +658,11 @@ end
 --- Start periodic trade timer checking
 -- Checks all queued items for approaching trade window expiry
 function TradeQueueMixin:StartTimerCheck()
-    C_Timer.NewTicker(TRADE_TIMER_CHECK_INTERVAL, function()
+    if self.tradeTimerTicker then
+        self.tradeTimerTicker:Cancel()
+    end
+
+    self.tradeTimerTicker = C_Timer.NewTicker(TRADE_TIMER_CHECK_INTERVAL, function()
         self:CheckTradeTimers()
     end)
 end
@@ -668,9 +673,7 @@ function TradeQueueMixin:CheckTradeTimers()
         if not entry.traded then
             local remaining = self:GetTimeRemaining(entry)
 
-            if remaining <= 0 then
-                -- Already expired, skip
-            else
+            if remaining > 0 then
                 local warnings = self.warningsSent[entry.itemGUID]
                 if not warnings then
                     warnings = {}

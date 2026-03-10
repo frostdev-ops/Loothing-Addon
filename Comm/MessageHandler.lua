@@ -24,6 +24,7 @@ local Utils = ns.Utils
 local TestMode = ns.TestMode
 
 ---@class CommMixin
+---@field GenerateCallbackEvents fun(self: CommMixin, events: table)
 ---@field Send fun(self: CommMixin, command: string, data: table|nil, target: string|nil, priority: string|nil)
 local CommMixin = ns.CommMixin
 

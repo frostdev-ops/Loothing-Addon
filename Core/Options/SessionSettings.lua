@@ -177,6 +177,51 @@ local function GetSessionSettingsOptions()
                         get = function() return Loothing.Settings:GetRequireNotes() end,
                         set = function(_, v) Loothing.Settings:SetRequireNotes(v) end,
                     },
+                    mlSeesVotes = {
+                        type = "toggle",
+                        name = L["CONFIG_VOTING_MLSEESVOTES"] or "ML Sees Votes",
+                        desc = L["CONFIG_VOTING_MLSEESVOTES_DESC"] or "Master Looter can see votes even when anonymous",
+                        order = 18,
+                        width = "half",
+                        get = function() return Loothing.Settings:GetMlSeesVotes() end,
+                        set = function(_, v) Loothing.Settings:SetMlSeesVotes(v) end,
+                    },
+                    rcvSettingsHeader = {
+                        type = "header",
+                        name = L["RCV_SETTINGS"] or "Ranked Choice Settings",
+                        order = 19,
+                        hidden = function()
+                            return Loothing.Settings:GetVotingMode() ~= Loothing.VotingMode.RANKED_CHOICE
+                        end,
+                    },
+                    maxRanks = {
+                        type = "range",
+                        name = L["MAX_RANKS"] or "Maximum Rankings",
+                        desc = L["MAX_RANKS_DESC"] or "Maximum number of choices a voter can rank (0 = unlimited)",
+                        order = 20,
+                        min = 0,
+                        max = 10,
+                        step = 1,
+                        hidden = function()
+                            return Loothing.Settings:GetVotingMode() ~= Loothing.VotingMode.RANKED_CHOICE
+                        end,
+                        get = function() return Loothing.Settings:GetMaxRanks() end,
+                        set = function(_, v) Loothing.Settings:SetMaxRanks(v) end,
+                    },
+                    minRanks = {
+                        type = "range",
+                        name = L["MIN_RANKS"] or "Minimum Rankings",
+                        desc = L["MIN_RANKS_DESC"] or "Minimum number of choices required to submit a vote",
+                        order = 21,
+                        min = 1,
+                        max = 10,
+                        step = 1,
+                        hidden = function()
+                            return Loothing.Settings:GetVotingMode() ~= Loothing.VotingMode.RANKED_CHOICE
+                        end,
+                        get = function() return Loothing.Settings:GetMinRanks() end,
+                        set = function(_, v) Loothing.Settings:SetMinRanks(v) end,
+                    },
                 },
             },
             -- ============================================================

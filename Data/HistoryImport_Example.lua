@@ -1,3 +1,5 @@
+local _, ns = ...
+
 --[[--------------------------------------------------------------------
     Loothing - Loot Council Addon for WoW 12.0+
     HistoryImport_Example - Usage examples for HistoryImport module
@@ -5,6 +7,9 @@
     This file demonstrates how to use the HistoryImport module.
     It is not loaded by the addon - it's for documentation purposes.
 ----------------------------------------------------------------------]]
+
+local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
 
 --[[--------------------------------------------------------------------
     EXAMPLE 1: Basic CSV Import
@@ -122,7 +127,7 @@ local function Example_AutoDetectWithConflicts()
         end
 
         -- Ask user if they want to overwrite
-        StaticPopupDialogs["LOOTHING_IMPORT_OVERWRITE"] = {
+        Loolib.Compat.RegisterStaticPopup("LOOTHING_IMPORT_OVERWRITE", {
             text = string.format("Import contains %d conflicts. Overwrite existing entries?", #conflicts),
             button1 = "Overwrite",
             button2 = "Cancel",
@@ -132,7 +137,7 @@ local function Example_AutoDetectWithConflicts()
             timeout = 0,
             whileDead = true,
             hideOnEscape = true,
-        }
+        })
         StaticPopup_Show("LOOTHING_IMPORT_OVERWRITE")
     else
         -- No conflicts, import directly
@@ -315,8 +320,7 @@ end
 -- /lt import - Show import dialog
 -- /lt import csv <data> - Import CSV data directly
 
-SLASH_LOOTHING_IMPORT1 = "/ltimport"
-SlashCmdList["LOOTHING_IMPORT"] = function(msg)
+Loolib.Compat.RegisterSlashCommand("LOOTHING_IMPORT", "/ltimport", nil, function(msg)
     if msg == "" then
         -- Show import dialog (would need UI implementation)
         print("Opening import dialog...")
@@ -338,4 +342,4 @@ SlashCmdList["LOOTHING_IMPORT"] = function(msg)
             print("Parse error:", err)
         end
     end
-end
+end)

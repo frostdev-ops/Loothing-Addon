@@ -3,7 +3,10 @@
     Locale - English (US) localization
 ----------------------------------------------------------------------]]
 
-local L = {}
+local _, ns = ...
+local Loothing = ns.Addon
+
+local L = ns.Locale
 
 -- General
 L["ADDON_NAME"] = "Loothing"

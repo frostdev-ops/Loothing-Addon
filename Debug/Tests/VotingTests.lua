@@ -13,10 +13,6 @@ local Loolib = LibStub("Loolib")
     Test Framework Setup
 ----------------------------------------------------------------------]]
 
-local _, ns = ...
-local Loothing = ns.Addon
-local Utils = ns.Utils
-
 local Tests = {
     passed = 0,
     failed = 0,

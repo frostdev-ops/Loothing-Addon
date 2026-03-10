@@ -16,6 +16,7 @@ local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local Utils = ns.Utils
 local TrinketData = ns.TrinketData
+local TooltipScan = ns.TooltipScan
 
 local AutoPass = {}
 ns.AutoPass = AutoPass
@@ -225,69 +226,8 @@ AutoPass.autopassOverride = {
 -- @param itemLink string - Item link
 -- @return number - Bitwise class flag (ALL_CLASSES_FLAG if no restriction)
 function AutoPass:GetItemClassesAllowedFlag(itemLink)
-    if not itemLink then return ALL_CLASSES_FLAG end
-
-    -- Create a scanning tooltip
-    local tooltipName = "LoothingAutoPassTooltip"
-    local tooltip = _G[tooltipName]
-    if not tooltip then
-        tooltip = CreateFrame("GameTooltip", tooltipName, nil, "GameTooltipTemplate")
-        tooltip:SetOwner(WorldFrame, "ANCHOR_NONE")
-    end
-
-    tooltip:ClearLines()
-    tooltip:SetHyperlink(itemLink)
-
-    -- Scan tooltip lines for "Classes: ..." pattern
-    local numLines = tooltip:NumLines()
-    for i = 1, numLines do
-        local textObj = _G[tooltipName .. "TextLeft" .. i]
-        if textObj then
-            local text = textObj:GetText()
-            if text then
-                -- Match "Classes: Warrior, Mage, Paladin"
-                -- Use plain string find() to avoid pattern-special characters in ITEM_CLASSES_ALLOWED
-                local classList
-                if ITEM_CLASSES_ALLOWED then
-                    local startPos, endPos = text:find(ITEM_CLASSES_ALLOWED, 1, true)
-                    if startPos == 1 then
-                        classList = text:sub(endPos + 1):match("^:%s*(.+)$")
-                    end
-                end
-                if not classList then
-                    -- Fallback: try English pattern
-                    classList = text:match("^Classes:%s*(.+)$")
-                end
-
-                if classList then
-                    local flag = 0
-                    -- Parse each class name
-                    for className in classList:gmatch("[^,]+") do
-                        className = strtrim(className)
-                        -- Look up class ID by localized name
-                        for classFile, classID in pairs(CLASS_NAME_TO_ID) do
-                            local localizedName = LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[classFile]
-                            if localizedName and localizedName == className then
-                                flag = bit.bor(flag, bit.lshift(1, classID - 1))
-                                break
-                            end
-                            -- Also check English class file name
-                            if classFile:lower() == className:lower() then
-                                flag = bit.bor(flag, bit.lshift(1, classID - 1))
-                                break
-                            end
-                        end
-                    end
-
-                    if flag > 0 then
-                        return flag
-                    end
-                end
-            end
-        end
-    end
-
-    return ALL_CLASSES_FLAG
+    if not itemLink or not TooltipScan then return ALL_CLASSES_FLAG end
+    return TooltipScan:GetItemClassRestrictionFlag(itemLink)
 end
 
 --- Check if a class is allowed by a class flag

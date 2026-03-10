@@ -3,8 +3,8 @@
 ## Title: Loothing (Dev)
 ## Notes: Development build with test harness and debug tooling
 ## Author: James Kueller
-## Version: 1.2.0
-## SavedVariables: LoolibDB, LoothingDB
+## Version: 1.2.1
+## SavedVariables: LoolibDB
 ## Dependencies: Loolib
 ## IconTexture: Interface\AddOns\Loothing\Media\logo
 ## AddonCompartmentFunc: Loolib_GlobalBridge_Loothing_OnAddonCompartmentClick
@@ -45,6 +45,7 @@ Core\ItemFilter.lua
 Core\ResponseManager.lua
 Core\AutoAward.lua
 Core\Announcer.lua
+Core\TooltipScan.lua
 
 # Utilities
 Utils\AutoPass.lua

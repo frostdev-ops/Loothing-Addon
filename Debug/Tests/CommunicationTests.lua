@@ -10,6 +10,8 @@
 
 local _, ns = ...
 local Loothing = ns.Addon
+local Protocol = ns.Protocol
+local TestRunner = ns.TestRunner
 
 local Loolib = LibStub("Loolib")
 

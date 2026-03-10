@@ -8,7 +8,7 @@
     Supports test versions (tVersion) that don't trigger outdated warnings.
 ----------------------------------------------------------------------]]
 
-local ADDON_NAME, ns = ...
+local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local Utils = ns.Utils
@@ -54,9 +54,46 @@ function VersionCheckMixin:Init()
 
     -- Test version (set to a string like "alpha1" for pre-release builds, nil for release)
     self.tVersion = nil
+    self.rosterSnapshot = nil
+    self.rosterSnapshotDirty = true
+    self.persistDebounceToken = 0
+    self.rosterScopeNames = nil
+    self.lastQueryTarget = nil
 
     -- Load persisted version data from global SavedVariables
     self:LoadPersistedVersions()
+end
+
+function VersionCheckMixin:MarkRosterSnapshotDirty()
+    self.rosterSnapshotDirty = true
+end
+
+function VersionCheckMixin:SchedulePersistedSave()
+    self.persistDebounceToken = (self.persistDebounceToken or 0) + 1
+    local token = self.persistDebounceToken
+
+    C_Timer.After(0.25, function()
+        if self.persistDebounceToken == token and not self.queryInProgress then
+            self:SavePersistedVersions()
+        end
+    end)
+end
+
+function VersionCheckMixin:SetRosterScopeNames(names)
+    self.rosterScopeNames = names
+    self:MarkRosterSnapshotDirty()
+end
+
+function VersionCheckMixin:GetSnapshotRosterNames()
+    if self.queryInProgress then
+        return self.rosterScopeNames or self:GetCurrentRosterNames()
+    end
+
+    if self.lastQueryTarget == "guild" and self.rosterScopeNames then
+        return self.rosterScopeNames
+    end
+
+    return self:GetCurrentRosterNames()
 end
 
 --[[--------------------------------------------------------------------
@@ -76,6 +113,7 @@ function VersionCheckMixin:LoadPersistedVersions()
             end
         end
     end
+    self:MarkRosterSnapshotDirty()
 end
 
 --- Save version data to SavedVariables global scope
@@ -247,6 +285,10 @@ end
 function VersionCheckMixin:OnGroupRosterUpdate()
     if not IsInGroup() then return end
 
+    if self.lastQueryTarget ~= "guild" then
+        self:SetRosterScopeNames(self:GetCurrentRosterNames())
+    end
+
     local now = GetTime()
     if (now - self.lastRosterCheck) < ROSTER_CHECK_THROTTLE then
         return
@@ -316,13 +358,15 @@ function VersionCheckMixin:Query(target)
     end
 
     -- Reset version for roster members so they must re-respond
-    for name, entry in pairs(self.versionCache) do
+    for _, entry in pairs(self.versionCache) do
         entry.version = nil
         entry.tVersion = nil
         entry.isOutdated = false
     end
     self.queryInProgress = true
     self.queryStartTime = GetTime()
+    self.lastQueryTarget = target
+    self:SetRosterScopeNames(rosterNames)
 
     -- Add self to cache (include tVersion if set)
     self:AddVersionEntry(Loolib.SecretUtil.SafeUnitName("player"), Loothing.VERSION, self.tVersion)
@@ -348,12 +392,15 @@ function VersionCheckMixin:QueryGuild()
         return
     end
 
+    local guildRosterNames = {}
+
     -- Pre-populate with online guild members
     local numMembers = GetNumGuildMembers()
     for i = 1, numMembers do
         local name, _, _, _, _, _, _, _, online = Loothing.GetGuildRosterInfo(i)
         if online and name then
             name = Utils.NormalizeName(name)
+            guildRosterNames[name] = true
             self.versionCache[name] = {
                 version = nil,
                 tVersion = nil,
@@ -362,6 +409,8 @@ function VersionCheckMixin:QueryGuild()
             }
         end
     end
+
+    self:SetRosterScopeNames(guildRosterNames)
 
     -- Send request via GUILD channel
     Loothing.Comm:SendVersionRequest("guild")
@@ -375,10 +424,13 @@ function VersionCheckMixin:QueryRaid()
         return
     end
 
+    local raidRosterNames = {}
+
     -- Pre-populate with group members
     local roster = Utils.GetRaidRoster()
     for _, member in ipairs(roster) do
         if member.online and member.name then
+            raidRosterNames[member.name] = true
             self.versionCache[member.name] = {
                 version = nil,
                 tVersion = nil,
@@ -387,6 +439,8 @@ function VersionCheckMixin:QueryRaid()
             }
         end
     end
+
+    self:SetRosterScopeNames(raidRosterNames)
 
     -- Send request via RAID channel
     Loothing.Comm:SendVersionRequest()
@@ -397,18 +451,18 @@ function VersionCheckMixin:CompleteQuery()
     if not self.queryInProgress then return end
 
     self.queryInProgress = false
-    self:TriggerEvent("OnQueryComplete", self.versionCache)
 
     -- Mark unknown versions as "Not Installed"
-    for name, data in pairs(self.versionCache) do
+    for _, data in pairs(self.versionCache) do
         if not data.version then
             data.version = "Not Installed"
             data.isOutdated = true
         end
     end
 
-    -- Persist updated version data
+    self:MarkRosterSnapshotDirty()
     self:SavePersistedVersions()
+    self:TriggerEvent("OnQueryComplete", self:GetRosterSnapshot())
 end
 
 --[[--------------------------------------------------------------------
@@ -429,11 +483,15 @@ end
 function VersionCheckMixin:HandleResponse(version, sender, tVersion)
     sender = Utils.NormalizeName(sender)
     self:AddVersionEntry(sender, version, tVersion)
+    self:MarkRosterSnapshotDirty()
 
     self:TriggerEvent("OnVersionReceived", sender, version)
 
-    -- Persist on each response
-    self:SavePersistedVersions()
+    if self.queryInProgress then
+        return
+    end
+
+    self:SchedulePersistedSave()
 end
 
 --- Add a version entry to cache
@@ -450,6 +508,68 @@ function VersionCheckMixin:AddVersionEntry(name, version, tVersion)
         -- Test versions are never considered outdated for warning purposes
         isOutdated = tVersion and false or self:IsOutdated(version),
     }
+    self:MarkRosterSnapshotDirty()
+end
+
+function VersionCheckMixin:GetRosterSnapshot()
+    if not self.rosterSnapshotDirty and self.rosterSnapshot then
+        return self.rosterSnapshot
+    end
+
+    local rosterNames = self:GetSnapshotRosterNames()
+    local rosterClasses = {}
+    for _, member in ipairs(Utils.GetRaidRoster()) do
+        rosterClasses[member.name] = member.classFile
+    end
+    local entries = {}
+    local byName = {}
+    local counts = {
+        total = 0,
+        current = 0,
+        outdated = 0,
+        notInstalled = 0,
+        testVersions = 0,
+    }
+
+    for name in pairs(rosterNames) do
+        local data = self.versionCache[name] or {}
+        local version = data.version or (self.queryInProgress and nil or "Not Installed")
+        local entry = {
+            name = name,
+            class = rosterClasses[name],
+            version = version,
+            tVersion = data.tVersion,
+            isOutdated = data.isOutdated and version ~= "Not Installed" and not data.tVersion or false,
+        }
+
+        entries[#entries + 1] = entry
+        byName[name] = entry
+        counts.total = counts.total + 1
+
+        if version == "Not Installed" then
+            counts.notInstalled = counts.notInstalled + 1
+        elseif version ~= nil then
+            if data.tVersion then
+                counts.testVersions = counts.testVersions + 1
+            elseif entry.isOutdated then
+                counts.outdated = counts.outdated + 1
+            else
+                counts.current = counts.current + 1
+            end
+        end
+    end
+
+    tsort(entries, function(a, b)
+        return a.name < b.name
+    end)
+
+    self.rosterSnapshot = {
+        entries = entries,
+        byName = byName,
+        counts = counts,
+    }
+    self.rosterSnapshotDirty = false
+    return self.rosterSnapshot
 end
 
 --[[--------------------------------------------------------------------
@@ -459,95 +579,38 @@ end
 --- Get version data sorted by name, scoped to current roster
 -- @return table - Array of { name, version, tVersion, isOutdated }
 function VersionCheckMixin:GetSortedVersions()
-    local rosterNames = self:GetCurrentRosterNames()
-    local versions = {}
-
-    for name, data in pairs(self.versionCache) do
-        if rosterNames[name] then
-            versions[#versions + 1] = {
-                name = name,
-                version = data.version or "Unknown",
-                tVersion = data.tVersion,
-                isOutdated = data.isOutdated,
-            }
-        end
-    end
-
-    tsort(versions, function(a, b)
-        return a.name < b.name
-    end)
-
-    return versions
+    return self:GetRosterSnapshot().entries
 end
 
 --- Get count of outdated versions, scoped to current roster
 -- @return number
 function VersionCheckMixin:GetOutdatedCount()
-    local rosterNames = self:GetCurrentRosterNames()
-    local count = 0
-
-    for name, data in pairs(self.versionCache) do
-        if rosterNames[name] and data.isOutdated and data.version ~= "Not Installed" and not data.tVersion then
-            count = count + 1
-        end
-    end
-
-    return count
+    return self:GetRosterSnapshot().counts.outdated
 end
 
 --- Get count of not installed, scoped to current roster
 -- @return number
 function VersionCheckMixin:GetNotInstalledCount()
-    local rosterNames = self:GetCurrentRosterNames()
-    local count = 0
-
-    for name, data in pairs(self.versionCache) do
-        if rosterNames[name] and data.version == "Not Installed" then
-            count = count + 1
-        end
-    end
-
-    return count
+    return self:GetRosterSnapshot().counts.notInstalled
 end
 
 --- Print summary to chat, scoped to current roster
 function VersionCheckMixin:PrintSummary()
-    local rosterNames = self:GetCurrentRosterNames()
-    local total = 0
-    local current = 0
-    local outdated = 0
-    local notInstalled = 0
-    local testVersions = 0
+    local counts = self:GetRosterSnapshot().counts
 
-    for name, data in pairs(self.versionCache) do
-        if rosterNames[name] then
-            total = total + 1
+    Loothing:Print(string.format("Version Check Results: %d total", counts.total))
+    Loothing:Print(string.format("  Up to date: %d", counts.current))
 
-            if data.version == "Not Installed" then
-                notInstalled = notInstalled + 1
-            elseif data.tVersion then
-                testVersions = testVersions + 1
-            elseif data.isOutdated then
-                outdated = outdated + 1
-            else
-                current = current + 1
-            end
-        end
+    if counts.testVersions > 0 then
+        Loothing:Print(string.format("  |cff00ff00Test versions: %d|r", counts.testVersions))
     end
 
-    Loothing:Print(string.format("Version Check Results: %d total", total))
-    Loothing:Print(string.format("  Up to date: %d", current))
-
-    if testVersions > 0 then
-        Loothing:Print(string.format("  |cff00ff00Test versions: %d|r", testVersions))
+    if counts.outdated > 0 then
+        Loothing:Print(string.format("  |cffff0000Outdated: %d|r", counts.outdated))
     end
 
-    if outdated > 0 then
-        Loothing:Print(string.format("  |cffff0000Outdated: %d|r", outdated))
-    end
-
-    if notInstalled > 0 then
-        Loothing:Print(string.format("  |cff888888Not Installed: %d|r", notInstalled))
+    if counts.notInstalled > 0 then
+        Loothing:Print(string.format("  |cff888888Not Installed: %d|r", counts.notInstalled))
     end
 
     Loothing:Print("Use /lt version show to see detailed results")
@@ -571,3 +634,8 @@ VersionCheck.queryStartTime = nil
 VersionCheck.lastRosterCheck = 0
 VersionCheck.lastOutdatedWarn = 0
 VersionCheck.tVersion = nil
+VersionCheck.rosterSnapshot = nil
+VersionCheck.rosterSnapshotDirty = true
+VersionCheck.persistDebounceToken = 0
+VersionCheck.rosterScopeNames = nil
+VersionCheck.lastQueryTarget = nil

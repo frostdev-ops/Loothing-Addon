@@ -1,3 +1,5 @@
+local _, ns = ...
+
 --[[--------------------------------------------------------------------
     Loothing - Loot Council Addon for WoW 12.0+
     TrinketData - Trinket spec restrictions for auto-pass
@@ -19,8 +21,6 @@
 
     Data sourced from RCLootCouncil2/Utils/EncounterJournalData.lua
 ----------------------------------------------------------------------]]
-
-local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 

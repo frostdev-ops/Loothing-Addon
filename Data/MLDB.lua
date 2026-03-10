@@ -39,6 +39,9 @@ local COMPRESSION_KEYS = {
     ["mlSeesVotes"] = "msv",
     ["requireNotes"] = "rn",
     ["autoAddRolls"] = "aar",
+    ["maxRanks"] = "mxr",
+    ["minRanks"] = "mnr",
+    ["maxRevotes"] = "mrv",
 
     -- responseSets fields
     ["responseSets"] = "rs2",
@@ -216,6 +219,9 @@ function MLDBMixin:GatherSettings()
     settings.mlSeesVotes    = votingSettings.mlSeesVotes or false
     settings.requireNotes   = votingSettings.requireNotes or false
     settings.autoAddRolls   = votingSettings.autoAddRolls ~= false  -- default true
+    settings.maxRanks    = votingSettings.maxRanks or 0
+    settings.minRanks    = votingSettings.minRanks or 1
+    settings.maxRevotes  = votingSettings.maxRevotes or 2
 
     -- Observer settings
     settings.mlIsObserver = Loothing.Settings:Get("observers.mlIsObserver", false)
@@ -467,6 +473,15 @@ function MLDBMixin:ApplyFromML(settings, sender)
         end
         if settings.autoAddRolls ~= nil then
             votingSettings.autoAddRolls = settings.autoAddRolls
+        end
+        if settings.maxRanks ~= nil then
+            votingSettings.maxRanks = settings.maxRanks
+        end
+        if settings.minRanks ~= nil then
+            votingSettings.minRanks = settings.minRanks
+        end
+        if settings.maxRevotes ~= nil then
+            votingSettings.maxRevotes = settings.maxRevotes
         end
 
         Loothing.Settings:Set("voting", votingSettings)

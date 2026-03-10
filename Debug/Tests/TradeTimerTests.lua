@@ -12,6 +12,10 @@
     Run: /lt test run tradetimer
 ----------------------------------------------------------------------]]
 
+local _, ns = ...
+local TradeQueueMixin = ns.TradeQueueMixin
+local TestRunner = ns.TestRunner
+
 local function RunTradeTimerTests()
     local passed = 0
     local failed = 0

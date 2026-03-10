@@ -1,3 +1,5 @@
+local _, ns = ...
+
 --[[--------------------------------------------------------------------
     Loothing - Loot Council Addon for WoW 12.0+
     Protocol - Message serialization via Loolib Serializer+Compressor
@@ -14,8 +16,6 @@
 
     Protocol version 3 (breaking from v2 — pre-release, acceptable).
 ----------------------------------------------------------------------]]
-
-local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Compressor = Loolib.Compressor
 local CreateFromMixins = Loolib.CreateFromMixins

@@ -9,7 +9,7 @@ local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 
 -- Addon info
-Loothing.VERSION = "1.2.0"
+Loothing.VERSION = "1.2.1"
 Loothing.PROTOCOL_VERSION = 3
 Loothing.ADDON_PREFIX = "LOOTHING"
 
@@ -255,6 +255,9 @@ Loothing.DefaultSettings = {
         autoAddRolls = true,        -- Automatically add /roll results to candidates
         requireNotes = false,       -- Require voters to add a note with their vote
         mlSeesVotes = false,        -- ML sees votes even when anonymous
+        maxRanks = 0,               -- 0 = unlimited (rank all buttons)
+        minRanks = 1,               -- Minimum rankings required to submit
+        maxRevotes = 2,             -- Maximum re-votes per item
     },
 
     announcements = {
@@ -408,6 +411,7 @@ Loothing.DefaultSettings = {
         sendToGuild = false,        -- Send to guild instead
         savePersonalLoot = false,   -- Log personal loot items
         maxEntries = 500,           -- Hard cap for the shared history table
+        autoExportWeb = false,      -- Show Web export dialog when session ends
     },
 
     history = {},  -- Actual history data (array of entries)
