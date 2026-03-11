@@ -14,7 +14,8 @@ local _, ns = ...
     and appended as 4 big-endian bytes to the compressed blob before channel
     encoding. Decode strips and verifies it; mismatches return nil.
 
-    Protocol version 3 (breaking from v2 — pre-release, acceptable).
+    Protocol version 4 (breaking from v3 — adds msgID for replay protection).
+    Backward compat: v3 senders omit msgID; v4 receivers treat nil msgID as no-dedup.
 ----------------------------------------------------------------------]]
 local Loolib = LibStub("Loolib")
 local Compressor = Loolib.Compressor
@@ -23,6 +24,10 @@ local Serializer = Loolib.Serializer
 local Loothing = ns.Addon
 
 ns.ProtocolMixin = ns.ProtocolMixin or {}
+
+-- Monotonically increasing sequence counter for replay-protection msgIDs.
+-- Resets to 0 on each reload (intentional: dedup window is 120s, reloads take longer).
+local msgSeq = 0
 
 --[[--------------------------------------------------------------------
     Checksum Helpers
@@ -69,10 +74,14 @@ end
 -- Pipeline: Serialize → Compress → append Adler32 checksum → EncodeForAddonChannel
 -- @param command string - Message type from Loothing.MsgType
 -- @param data table|nil - Message payload (structured table)
--- @return string|nil - Encoded message ready for Loolib.Comm
+-- @return string|nil, number|nil - Encoded message ready for Loolib.Comm, msgID
 function ProtocolMixin:Encode(command, data)
-    -- Step 1: Serialize (version + command + data → string)
-    local serialized = self.Serializer:Serialize(self.version, command, data)
+    -- Assign a monotonic message ID for replay protection (Protocol v4+)
+    msgSeq = msgSeq + 1
+    local currentMsgID = msgSeq
+
+    -- Step 1: Serialize (version + command + data + msgID → string)
+    local serialized = self.Serializer:Serialize(self.version, command, data, currentMsgID)
     if not serialized then return nil end
 
     -- Step 2: Compress
@@ -84,23 +93,24 @@ function ProtocolMixin:Encode(command, data)
     local withChecksum  = compressed .. Pack32(checksum)
 
     -- Step 4: Encode for WoW addon channel (escapes null bytes, etc.)
-    return self.Compressor:EncodeForAddonChannel(withChecksum)
+    return self.Compressor:EncodeForAddonChannel(withChecksum), currentMsgID
 end
 
 --- Decode a received message
 -- Pipeline: DecodeForAddonChannel → split checksum → Decompress → verify → Deserialize
 -- @param encoded string - Encoded message from Loolib.Comm callback
--- @return number|nil, string|nil, table|nil - version, command, data (all nil on error)
+-- @return number|nil, string|nil, table|nil, number|nil - version, command, data, msgID
+--   msgID is nil when sender uses protocol v3 (no replay protection for legacy peers)
 function ProtocolMixin:Decode(encoded)
     if not encoded or encoded == "" then
-        return nil, nil, nil
+        return nil, nil, nil, nil
     end
 
     -- Step 1: Decode from addon channel encoding
     local withChecksum = self.Compressor:DecodeForAddonChannel(encoded)
     if not withChecksum or #withChecksum < 5 then
         -- Need at least 4 bytes checksum + 1 byte compressed data
-        return nil, nil, nil
+        return nil, nil, nil, nil
     end
 
     -- Step 2: Split off the 4-byte checksum appended at the end
@@ -110,7 +120,7 @@ function ProtocolMixin:Decode(encoded)
     -- Step 3: Decompress
     local decompressed, success = self.Compressor:Decompress(compressedPart)
     if not success or not decompressed then
-        return nil, nil, nil
+        return nil, nil, nil, nil
     end
 
     -- Step 4: Verify Adler-32 integrity (computed on decompressed = serialized)
@@ -118,16 +128,17 @@ function ProtocolMixin:Decode(encoded)
     if actualChecksum ~= storedChecksum then
         Loothing:Debug("Protocol: Adler-32 mismatch — message may be corrupt",
             string.format("(stored=0x%08X actual=0x%08X)", storedChecksum, actualChecksum))
-        return nil, nil, nil
+        return nil, nil, nil, nil
     end
 
     -- Step 5: Deserialize back to Lua values
-    local ok, version, command, msgData = self.Serializer:Deserialize(decompressed)
+    -- 4th return (msgID) is nil for v3 senders that don't include it
+    local ok, version, command, msgData, msgID = self.Serializer:Deserialize(decompressed)
     if not ok then
-        return nil, nil, nil
+        return nil, nil, nil, nil
     end
 
-    return version, command, msgData
+    return version, command, msgData, msgID
 end
 
 --[[--------------------------------------------------------------------
