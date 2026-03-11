@@ -67,8 +67,17 @@ local COMM_EVENTS = {
 local BATCH_WINDOW   = 0.1
 local MAX_BATCH_SIZE = 20
 
+-- Expose send-side cap so HandleBatch can enforce the same limit on receive
+CommMixin.MAX_BATCH_SIZE = MAX_BATCH_SIZE
+
 -- batchAccumulator[key] = { messages={}, target=, priority= }
 local batchAccumulator = {}
+
+-- Replay-protection: track (sender.."-"..msgID) → timestamp for recent messages.
+-- Entries expire after SEEN_TTL seconds; sweep runs every 30 seconds.
+local seenIDs    = {}
+local SEEN_TTL   = 120
+local lastCleanup = 0
 
 local function GetBatchKey(target, priority)
     return (target or "_broadcast") .. ":" .. (priority or "NORMAL")
@@ -195,7 +204,11 @@ function CommMixin:QueueForBatch(command, data, target, priority)
     local batch = batchAccumulator[key]
 
     if not batch then
-        batch = { messages = {}, target = target, priority = priority }
+        -- Use TempTable pool for the messages array to avoid GC pressure.
+        -- Released in FlushBatch after Send() returns (Send is synchronous).
+        -- Leak check: /run Loolib.TempTable:PrintLeaks()
+        local messages = Loolib.TempTable:Acquire()
+        batch = { messages = messages, target = target, priority = priority }
         batchAccumulator[key] = batch
 
         -- Schedule automatic flush at end of collection window
@@ -221,19 +234,28 @@ function CommMixin:FlushBatch(key)
     if not batch then return end
     batchAccumulator[key] = nil
 
-    if #batch.messages == 0 then return end
+    local messages = batch.messages
 
-    -- Single message: bypass BATCH wrapper (no overhead)
-    if #batch.messages == 1 then
-        local inner = batch.messages[1]
-        self:Send(inner.command, inner.data, batch.target, batch.priority)
+    if #messages == 0 then
+        Loolib.TempTable:Release(messages)
         return
     end
 
-    -- Multiple messages: wrap in BATCH container
+    -- Single message: bypass BATCH wrapper (no overhead)
+    if #messages == 1 then
+        local inner = messages[1]
+        self:Send(inner.command, inner.data, batch.target, batch.priority)
+        -- Send() is synchronous (encodes + enqueues); safe to release now
+        Loolib.TempTable:Release(messages)
+        return
+    end
+
+    -- Multiple messages: wrap in BATCH container.
+    -- Protocol:Encode serializes messages synchronously; release immediately after.
     self:Send(Loothing.MsgType.BATCH, {
-        messages = batch.messages,
+        messages = messages,
     }, batch.target, batch.priority)
+    Loolib.TempTable:Release(messages)
 end
 
 --- Flush all pending batches immediately
@@ -309,8 +331,8 @@ end
 -- @param distribution string - Channel received on
 -- @param sender string - Sender name
 function CommMixin:OnMessage(message, distribution, sender)
-    -- Decode message
-    local version, command, data = ns.Protocol:Decode(message)
+    -- Decode message (msgID is nil for v3 senders — dedup skipped for legacy peers)
+    local version, command, data, msgID = ns.Protocol:Decode(message)
 
     if not version or not command then
         Loothing:Debug("Failed to decode message from", sender)
@@ -325,6 +347,28 @@ function CommMixin:OnMessage(message, distribution, sender)
 
     -- Normalize sender name
     sender = Utils.NormalizeName(sender)
+
+    -- Replay protection: deduplicate by sender+msgID (Protocol v4+).
+    -- v3 senders have msgID=nil; we skip dedup to stay backward compatible.
+    if msgID then
+        local now = GetTime()
+        local dedupKey = sender .. "-" .. msgID
+        if seenIDs[dedupKey] then
+            Loothing:Debug("Dropped duplicate", command, "from", sender, "msgID=", msgID)
+            return
+        end
+        seenIDs[dedupKey] = now
+
+        -- Periodic sweep: remove entries older than SEEN_TTL (runs every 30s)
+        if now - lastCleanup > 30 then
+            lastCleanup = now
+            for k, t in pairs(seenIDs) do
+                if now - t > SEEN_TTL then
+                    seenIDs[k] = nil
+                end
+            end
+        end
+    end
 
     -- Route to handler
     self:RouteMessage(command, data, sender, distribution)
