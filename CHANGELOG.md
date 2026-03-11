@@ -6,6 +6,17 @@ All notable changes to Loothing will be documented in this file.
 
 ### Fixed
 
+#### Roster iLvl Sync And Display (`Comm/MessageHandler.lua`, `Modules/VersionCheck.lua`, `UI/RosterPanel.lua`, `Core/Init.lua`)
+
+- Version replies now include the responder's equipped iLvl, active spec ID, and optional test-version tag so roster consumers can rebuild shared player metadata instead of only knowing the remote addon version
+- `VersionCheck` now writes responder iLvl/spec data into `PlayerCache` using the live group unit GUID when available, restoring remote roster iLvl visibility for everyone viewing the roster tab
+- The roster tab now falls back to version-query metadata if cache hydration has not completed yet, avoiding `?` rows while responses are still being processed
+- Opening the roster tab now triggers the existing throttled group version refresh path, so remote iLvl data is requested when the panel is viewed instead of waiting for a separate roster-change event
+- Manual raid/guild version queries now preserve previously known iLvl/spec metadata for online members until fresh responses arrive, preventing temporary roster iLvl flicker or accidental metadata loss during mixed-response queries
+- Group roster updates now always rescope the live version snapshot back to the actual party/raid roster, so a prior solo guild query can no longer leave raid members outside the stale guild snapshot
+- Guild queries no longer wipe persisted version-cache entries for offline or non-responding members before the query completes, preserving the intended cross-session version cache behavior
+- Version responses now ignore malformed or secret sender names instead of risking a nil-index write into the version cache
+
 #### History Export Reliability (`Data/History.lua`, `UI/HistoryPanel.lua`)
 
 - JSON history export now escapes raw WoW pipe codes (`|c...|Hitem...`) as `\u007C`, so large exports render and copy correctly in WoW's export edit box instead of collapsing into formatted garbage

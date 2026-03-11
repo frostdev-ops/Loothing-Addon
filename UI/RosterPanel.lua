@@ -503,6 +503,12 @@ function RosterPanelMixin:GatherRosterData()
             entry.versionStr = vData.version
             entry.tVersion = vData.tVersion
             entry.isOutdated = vData.isOutdated
+            if not entry.ilvl and vData.ilvl and vData.ilvl > 0 then
+                entry.ilvl = vData.ilvl
+            end
+            if not entry.specID and vData.specID then
+                entry.specID = vData.specID
+            end
         end
 
         -- Council (uses GetMembersInRaid lookup for test mode + auto-include support)
@@ -1100,6 +1106,9 @@ end
 
 function RosterPanelMixin:Show()
     self.frame:Show()
+    if VersionCheck and VersionCheck.OnGroupRosterUpdate then
+        VersionCheck:OnGroupRosterUpdate()
+    end
     self:Refresh()
 end
 

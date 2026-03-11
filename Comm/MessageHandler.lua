@@ -680,8 +680,18 @@ end
 --- Send version response
 -- @param target string - Player to respond to
 function CommMixin:SendVersionResponse(target)
+    local _, equippedIlvl = GetAverageItemLevel()
+    local specID
+    local specIndex = GetSpecialization and GetSpecialization()
+    if specIndex and GetSpecializationInfo then
+        specID = GetSpecializationInfo(specIndex)
+    end
+
     self:Send(Loothing.MsgType.VERSION_RESPONSE, {
         version = Loothing.VERSION,
+        tVersion = ns.VersionCheck and ns.VersionCheck.tVersion or nil,
+        ilvl = equippedIlvl and equippedIlvl > 0 and equippedIlvl or nil,
+        specID = specID,
     }, target)
 end
 

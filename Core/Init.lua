@@ -758,7 +758,7 @@ local function RegisterEvents()
         end, Loothing)
 
         Loothing.Comm:RegisterCallback("OnVersionResponse", function(_, data)
-            versionCheck:HandleResponse(data.version, data.sender)
+            versionCheck:HandleResponse(data.version, data.sender, data.tVersion, data.ilvl, data.specID)
         end, Loothing)
     end
 

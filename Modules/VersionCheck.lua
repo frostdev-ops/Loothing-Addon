@@ -14,13 +14,15 @@ local Loothing = ns.Addon
 local Utils = ns.Utils
 local C_Timer = C_Timer
 local GetNumGroupMembers = GetNumGroupMembers
+local GetNumSubgroupMembers = GetNumSubgroupMembers
 local GetNumGuildMembers = GetNumGuildMembers
 local GetTime = GetTime
 local IsInGroup = IsInGroup
 local IsInGuild = IsInGuild
 local IsInRaid = IsInRaid
 local UnitExists = UnitExists
-local ipairs, pairs, time, type = ipairs, pairs, time, type
+local UnitGUID = UnitGUID
+local ipairs, pairs, time, type, next = ipairs, pairs, time, type, next
 local tconcat = table.concat
 local tsort = table.sort
 
@@ -87,6 +89,10 @@ end
 function VersionCheckMixin:GetSnapshotRosterNames()
     if self.queryInProgress then
         return self.rosterScopeNames or self:GetCurrentRosterNames()
+    end
+
+    if IsInGroup() then
+        return self:GetCurrentRosterNames()
     end
 
     if self.lastQueryTarget == "guild" and self.rosterScopeNames then
@@ -285,9 +291,7 @@ end
 function VersionCheckMixin:OnGroupRosterUpdate()
     if not IsInGroup() then return end
 
-    if self.lastQueryTarget ~= "guild" then
-        self:SetRosterScopeNames(self:GetCurrentRosterNames())
-    end
+    self:SetRosterScopeNames(self:GetCurrentRosterNames())
 
     local now = GetTime()
     if (now - self.lastRosterCheck) < ROSTER_CHECK_THROTTLE then
@@ -349,24 +353,33 @@ function VersionCheckMixin:Query(target)
         return
     end
 
-    -- Prune cache: remove entries not in current roster
-    local rosterNames = self:GetCurrentRosterNames()
-    for name in pairs(self.versionCache) do
-        if not rosterNames[name] then
-            self.versionCache[name] = nil
+    local rosterNames = nil
+    if target ~= "guild" then
+        -- Group queries are scoped to the live roster.
+        rosterNames = self:GetCurrentRosterNames()
+        for name in pairs(self.versionCache) do
+            if not rosterNames[name] then
+                self.versionCache[name] = nil
+            end
         end
     end
 
-    -- Reset version for roster members so they must re-respond
-    for _, entry in pairs(self.versionCache) do
-        entry.version = nil
-        entry.tVersion = nil
-        entry.isOutdated = false
+    -- Reset only the entries we expect a fresh response from.
+    if rosterNames then
+        for name, entry in pairs(self.versionCache) do
+            if rosterNames[name] then
+                entry.version = nil
+                entry.tVersion = nil
+                entry.isOutdated = false
+            end
+        end
     end
     self.queryInProgress = true
     self.queryStartTime = GetTime()
     self.lastQueryTarget = target
-    self:SetRosterScopeNames(rosterNames)
+    if rosterNames then
+        self:SetRosterScopeNames(rosterNames)
+    end
 
     -- Add self to cache (include tVersion if set)
     self:AddVersionEntry(Loolib.SecretUtil.SafeUnitName("player"), Loothing.VERSION, self.tVersion)
@@ -400,12 +413,15 @@ function VersionCheckMixin:QueryGuild()
         local name, _, _, _, _, _, _, _, online = Loothing.GetGuildRosterInfo(i)
         if online and name then
             name = Utils.NormalizeName(name)
+            local existing = self.versionCache[name] or {}
             guildRosterNames[name] = true
             self.versionCache[name] = {
                 version = nil,
                 tVersion = nil,
                 timestamp = time(),
                 isOutdated = false,
+                ilvl = existing.ilvl,
+                specID = existing.specID,
             }
         end
     end
@@ -430,12 +446,15 @@ function VersionCheckMixin:QueryRaid()
     local roster = Utils.GetRaidRoster()
     for _, member in ipairs(roster) do
         if member.online and member.name then
+            local existing = self.versionCache[member.name] or {}
             raidRosterNames[member.name] = true
             self.versionCache[member.name] = {
                 version = nil,
                 tVersion = nil,
                 timestamp = time(),
                 isOutdated = false,
+                ilvl = existing.ilvl,
+                specID = existing.specID,
             }
         end
     end
@@ -476,13 +495,93 @@ function VersionCheckMixin:HandleRequest(sender)
     Loothing.Comm:SendVersionResponse(sender)
 end
 
+local function FindRosterUnit(name)
+    name = Utils.NormalizeName(name)
+    if not name then
+        return nil
+    end
+
+    local playerName = Loolib.SecretUtil.SafeUnitName("player")
+    if playerName and Utils.NormalizeName(playerName) == name then
+        return "player"
+    end
+
+    if not IsInGroup() then
+        return nil
+    end
+
+    if IsInRaid() then
+        for i = 1, GetNumGroupMembers() do
+            local unit = "raid" .. i
+            local unitName = Loolib.SecretUtil.SafeUnitName(unit)
+            if unitName and Utils.NormalizeName(unitName) == name then
+                return unit
+            end
+        end
+        return nil
+    end
+
+    for i = 1, GetNumSubgroupMembers() do
+        local unit = "party" .. i
+        local unitName = Loolib.SecretUtil.SafeUnitName(unit)
+        if unitName and Utils.NormalizeName(unitName) == name then
+            return unit
+        end
+    end
+
+    return nil
+end
+
+function VersionCheckMixin:UpdatePlayerCacheFromResponse(name, ilvl, specID)
+    if not Loothing.PlayerCache then
+        return
+    end
+
+    local unit = FindRosterUnit(name)
+    if not unit then
+        return
+    end
+
+    local guid = UnitGUID(unit)
+    if not guid then
+        return
+    end
+
+    local _, classFile = Loolib.SecretUtil.SafeUnitClass(unit)
+    local fields = {}
+
+    if ilvl and ilvl > 0 then
+        fields.ilvl = ilvl
+    end
+    if specID and specID > 0 then
+        fields.specID = specID
+    end
+    if classFile then
+        fields.class = classFile
+    end
+
+    if next(fields) then
+        Loothing.PlayerCache:Update(guid, fields)
+    end
+end
+
 --- Handle version response from another player
 -- @param version string
 -- @param sender string
 -- @param tVersion string|nil - Test version identifier
-function VersionCheckMixin:HandleResponse(version, sender, tVersion)
+-- @param ilvl number|nil - Equipped item level from responder
+-- @param specID number|nil - Active specialization ID from responder
+function VersionCheckMixin:HandleResponse(version, sender, tVersion, ilvl, specID)
     sender = Utils.NormalizeName(sender)
-    self:AddVersionEntry(sender, version, tVersion)
+    if not sender or not version then
+        return
+    end
+
+    self:AddVersionEntry(sender, version, tVersion, {
+        ilvl = ilvl,
+        specID = specID,
+    })
+    self:UpdatePlayerCacheFromResponse(sender, ilvl, specID)
     self:MarkRosterSnapshotDirty()
 
     self:TriggerEvent("OnVersionReceived", sender, version)
@@ -498,8 +597,14 @@ end
 -- @param name string
 -- @param version string
 -- @param tVersion string|nil - Test version identifier
-function VersionCheckMixin:AddVersionEntry(name, version, tVersion)
+-- @param extraData table|nil - Optional metadata (ilvl, specID)
+function VersionCheckMixin:AddVersionEntry(name, version, tVersion, extraData)
     name = Utils.NormalizeName(name)
+    if not name or not version then
+        return
+    end
+
+    local existing = self.versionCache[name] or {}
 
     self.versionCache[name] = {
         version = version,
@@ -507,6 +612,8 @@ function VersionCheckMixin:AddVersionEntry(name, version, tVersion)
         timestamp = time(),  -- Use real clock for cross-session persistence
         -- Test versions are never considered outdated for warning purposes
         isOutdated = tVersion and false or self:IsOutdated(version),
+        ilvl = extraData and extraData.ilvl or existing.ilvl,
+        specID = extraData and extraData.specID or existing.specID,
     }
     self:MarkRosterSnapshotDirty()
 end
@@ -540,6 +647,8 @@ function VersionCheckMixin:GetRosterSnapshot()
             version = version,
             tVersion = data.tVersion,
             isOutdated = data.isOutdated and version ~= "Not Installed" and not data.tVersion or false,
+            ilvl = data.ilvl,
+            specID = data.specID,
         }
 
         entries[#entries + 1] = entry
