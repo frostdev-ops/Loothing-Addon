@@ -172,8 +172,10 @@ end
 function AckTrackerMixin:HandleAck(data, sender)
     -- Placeholder — ACK tracking for point-to-point messages can be
     -- built here when needed without a wire-format change.
+    -- data.msgID is the Protocol v4 sequence number being acknowledged (may be nil for v3 peers).
     Loothing:Debug("AckTracker: received ACK from", sender,
-        "command=" .. tostring(data and data.command))
+        "command=" .. tostring(data and data.command),
+        "msgID=" .. tostring(data and data.msgID))
 end
 
 --- Trigger an auto-sync with the ML, subject to cooldown

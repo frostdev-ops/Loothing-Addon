@@ -74,6 +74,9 @@ function PlayerCacheMixin:Get(nameOrGUID)
     if not nameOrGUID or nameOrGUID == "" then
         return nil
     end
+    -- WoW 12.0 combat-safety guard: certain unit APIs return opaque "secret values"
+    -- during combat lockdown. Any comparison or table-key operation on a secret value
+    -- raises a Lua error, so we must check before any use of the input.
     if Loolib.SecretUtil.IsSecretValue(nameOrGUID) then return nil end
 
     -- Check if it's a GUID
