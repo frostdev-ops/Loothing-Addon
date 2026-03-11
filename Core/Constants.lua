@@ -9,7 +9,7 @@ local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 
 -- Addon info
-Loothing.VERSION = "1.2.2"
+Loothing.VERSION = "1.2.3"
 Loothing.PROTOCOL_VERSION = 3
 Loothing.ADDON_PREFIX = "LOOTHING"
 

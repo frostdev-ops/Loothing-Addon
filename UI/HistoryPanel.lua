@@ -1035,14 +1035,16 @@ function HistoryPanelMixin:SetExportText(text)
         if self.exportFrame then self.exportFrame:Hide() end
         local hugeFrame = GetOrCreateHugeExportFrame()
         hugeFrame.editBox._exportText = text
-        hugeFrame.editBox:SetText(text)
-        hugeFrame.editBox:HighlightText()
         hugeFrame:Show()
+        hugeFrame.editBox:SetText(text)
+        hugeFrame.editBox:SetFocus()
+        hugeFrame.editBox:HighlightText()
     else
         if HistoryPanelMixin._hugeExportFrame then
             HistoryPanelMixin._hugeExportFrame:Hide()
         end
         self.exportEditBox:SetText(text)
+        self.exportEditBox:SetFocus()
         self.exportEditBox:HighlightText()
     end
 end

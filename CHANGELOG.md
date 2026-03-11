@@ -2,6 +2,25 @@
 
 All notable changes to Loothing will be documented in this file.
 
+## [1.2.3] - 2026-03-11
+
+### Fixed
+
+#### History Export Reliability (`Data/History.lua`, `UI/HistoryPanel.lua`)
+
+- JSON history export now escapes raw WoW pipe codes (`|c...|Hitem...`) as `\u007C`, so large exports render and copy correctly in WoW's export edit box instead of collapsing into formatted garbage
+- JSON and compact/Web exports now include the original `itemLink` field alongside `itemID`/`itemName`, preserving full item-link fidelity for downstream imports
+- Compact/Web export now preserves nested array data inside snapshot tables, including `councilVotes.responses`, instead of silently dropping non-scalar nested fields
+- Large export dialogs now focus the export edit box automatically when shown, so the advertised `Ctrl+A`, `Ctrl+C` workflow works immediately without an extra click
+
+### Tests
+
+- Added `Debug/Tests/HistoryExportTests.lua` with regression coverage for pipe-safe JSON export, nested compact export serialization, and `itemLink` preservation
+
+### Documentation
+
+- Updated the addon data import guide to reflect the current 8 export formats, the JSON `{ metadata, entries }` envelope, and the restored `itemLink` field in exported entries
+
 ## [1.2.2] - 2026-03-10
 
 ### Added

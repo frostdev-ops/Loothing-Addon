@@ -1100,6 +1100,48 @@ function HistoryMixin:ExportDiscord()
     return table.concat(lines, "\n")
 end
 
+local function EscapeJSONStringForExport(value)
+    local s = tostring(value)
+    s = s:gsub("\\", "\\\\")
+    s = s:gsub('"', '\\"')
+    s = s:gsub("\b", "\\b")
+    s = s:gsub("\f", "\\f")
+    s = s:gsub("\n", "\\n")
+    s = s:gsub("\r", "\\r")
+    s = s:gsub("\t", "\\t")
+    -- Raw item links contain pipe codes that WoW EditBoxes interpret as formatting.
+    s = s:gsub("|", "\\u007C")
+    return s
+end
+
+local SerializeCompactJSONValue
+SerializeCompactJSONValue = function(value)
+    local valueType = type(value)
+    if valueType == "nil" then
+        return "null"
+    elseif valueType == "string" then
+        return '"' .. EscapeJSONStringForExport(value) .. '"'
+    elseif valueType == "number" or valueType == "boolean" then
+        return tostring(value)
+    elseif valueType == "table" then
+        local parts = {}
+        local isArray = (#value > 0) or (next(value) == nil)
+        if isArray then
+            for _, entry in ipairs(value) do
+                parts[#parts + 1] = SerializeCompactJSONValue(entry)
+            end
+            return "[" .. table.concat(parts, ",") .. "]"
+        end
+
+        for key, nestedValue in pairs(value) do
+            parts[#parts + 1] = '"' .. EscapeJSONStringForExport(key) .. '":' .. SerializeCompactJSONValue(nestedValue)
+        end
+        return "{" .. table.concat(parts, ",") .. "}"
+    end
+
+    return "null"
+end
+
 --- Export history to JSON format (all fields, including candidates and councilVotes arrays)
 -- @return string
 function HistoryMixin:ExportJSON()
@@ -1114,8 +1156,7 @@ function HistoryMixin:ExportJSON()
         elseif t == "number" then
             return tostring(value)
         elseif t == "string" then
-            local s = value:gsub("\\", "\\\\"):gsub('"', '\\"'):gsub("\n", "\\n"):gsub("\r", "\\r"):gsub("\t", "\\t")
-            return '"' .. s .. '"'
+            return '"' .. EscapeJSONStringForExport(value) .. '"'
         elseif t == "table" then
             local innerIndent = indent .. "  "
             -- Array if it has an integer key 1 or is empty
@@ -1155,6 +1196,7 @@ function HistoryMixin:ExportJSON()
             date            = ts > 0 and date("%Y-%m-%d %H:%M:%S", ts) or "",
             timestamp       = ts,
             itemID          = entry.itemID or 0,
+            itemLink        = entry.itemLink or "",
             itemName        = entry.itemName or "",
             itemLevel       = entry.itemLevel or 0,
             quality         = entry.quality or 0,
@@ -1224,45 +1266,6 @@ end
 function HistoryMixin:ExportCompactJSON()
     local buf = {}
 
-    -- Inline JSON string escaping (no recursion, no table allocation)
-    local function esc(s)
-        s = tostring(s)
-        s = s:gsub("\\", "\\\\")
-        s = s:gsub('"', '\\"')
-        s = s:gsub("\n", "\\n")
-        s = s:gsub("\r", "\\r")
-        s = s:gsub("\t", "\\t")
-        return s
-    end
-
-    -- Serialize a shallow array (candidates / councilVotes are 1-2 levels deep)
-    local function serializeArray(arr)
-        if not arr or #arr == 0 then return "[]" end
-        local parts = {}
-        for _, v in ipairs(arr) do
-            local t = type(v)
-            if t == "string" then
-                parts[#parts + 1] = '"' .. esc(v) .. '"'
-            elseif t == "number" or t == "boolean" then
-                parts[#parts + 1] = tostring(v)
-            elseif t == "table" then
-                local fields = {}
-                for k, fv in pairs(v) do
-                    local ft = type(fv)
-                    if ft == "string" then
-                        fields[#fields + 1] = '"' .. esc(k) .. '":"' .. esc(fv) .. '"'
-                    elseif ft == "number" or ft == "boolean" then
-                        fields[#fields + 1] = '"' .. esc(k) .. '":' .. tostring(fv)
-                    end
-                end
-                parts[#parts + 1] = "{" .. table.concat(fields, ",") .. "}"
-            else
-                parts[#parts + 1] = "null"
-            end
-        end
-        return "[" .. table.concat(parts, ",") .. "]"
-    end
-
     local meta = self:GetExportMetadata()
     local guildDisplay = (meta.guildName ~= "") and meta.guildName or "N/A"
     local rankDisplay  = (meta.guildRank ~= "") and meta.guildRank or "N/A"
@@ -1271,15 +1274,17 @@ function HistoryMixin:ExportCompactJSON()
     local responseDefs = self:GetResponseDefs()
     local rdefParts = {}
     for _, def in ipairs(responseDefs) do
-        rdefParts[#rdefParts + 1] = string.format('{"id":%d,"name":"%s"}', def.id, esc(def.name))
+        rdefParts[#rdefParts + 1] = string.format('{"id":%d,"name":"%s"}', def.id, EscapeJSONStringForExport(def.name))
     end
     local rdefJson = "[" .. table.concat(rdefParts, ",") .. "]"
 
     -- Write metadata header + open entries array
     buf[#buf + 1] = string.format(
         '{"metadata":{"addon":"%s","version":"%s","exportDate":"%s","exportTime":"%s","character":"%s","realm":"%s","guild":"%s","guildRank":"%s","entryCount":%d,"responseDefs":%s},"entries":[',
-        esc(meta.addonName), esc(meta.version), esc(meta.exportDate), esc(meta.exportTime),
-        esc(meta.playerName), esc(meta.realmName), esc(guildDisplay), esc(rankDisplay),
+        EscapeJSONStringForExport(meta.addonName), EscapeJSONStringForExport(meta.version),
+        EscapeJSONStringForExport(meta.exportDate), EscapeJSONStringForExport(meta.exportTime),
+        EscapeJSONStringForExport(meta.playerName), EscapeJSONStringForExport(meta.realmName),
+        EscapeJSONStringForExport(guildDisplay), EscapeJSONStringForExport(rankDisplay),
         meta.entryCount, rdefJson
     )
 
@@ -1297,45 +1302,46 @@ function HistoryMixin:ExportCompactJSON()
         end
         first = false
 
-        -- Fixed template: 34 scalar fields + 2 array fields
+        -- Fixed template: 35 scalar fields + 2 array fields
         buf[#buf + 1] = string.format(
-            '{"guid":"%s","date":"%s","timestamp":%d,"itemID":%d,"itemName":"%s","itemLevel":%d,"quality":%d,"equipSlot":"%s","typeCode":"%s","subType":"%s","bindType":%d,"isBoe":%s,"winner":"%s","winnerClass":"%s","response":"%s","responseID":%d,"winnerNote":"%s","winnerRoll":%d,"winnerGear1":"%s","winnerGear2":"%s","winnerGear1ilvl":%d,"winnerGear2ilvl":%d,"winnerIlvlDiff":%d,"encounterID":%d,"encounterName":"%s","instance":"%s","difficultyID":%d,"difficultyName":"%s","groupSize":%d,"mapID":%d,"votes":%d,"awardReasonId":%d,"awardReason":"%s","owner":"%s","candidates":%s,"councilVotes":%s}',
-            esc(entry.guid or ""),
-            esc(dateStr),
+            '{"guid":"%s","date":"%s","timestamp":%d,"itemID":%d,"itemLink":"%s","itemName":"%s","itemLevel":%d,"quality":%d,"equipSlot":"%s","typeCode":"%s","subType":"%s","bindType":%d,"isBoe":%s,"winner":"%s","winnerClass":"%s","response":"%s","responseID":%d,"winnerNote":"%s","winnerRoll":%d,"winnerGear1":"%s","winnerGear2":"%s","winnerGear1ilvl":%d,"winnerGear2ilvl":%d,"winnerIlvlDiff":%d,"encounterID":%d,"encounterName":"%s","instance":"%s","difficultyID":%d,"difficultyName":"%s","groupSize":%d,"mapID":%d,"votes":%d,"awardReasonId":%d,"awardReason":"%s","owner":"%s","candidates":%s,"councilVotes":%s}',
+            EscapeJSONStringForExport(entry.guid or ""),
+            EscapeJSONStringForExport(dateStr),
             ts,
             entry.itemID or 0,
-            esc(entry.itemName or ""),
+            EscapeJSONStringForExport(entry.itemLink or ""),
+            EscapeJSONStringForExport(entry.itemName or ""),
             entry.itemLevel or 0,
             entry.quality or 0,
-            esc(entry.equipSlot or ""),
-            esc(entry.typeCode or ""),
-            esc(entry.subType or ""),
+            EscapeJSONStringForExport(entry.equipSlot or ""),
+            EscapeJSONStringForExport(entry.typeCode or ""),
+            EscapeJSONStringForExport(entry.subType or ""),
             entry.bindType or 0,
             tostring(entry.isBoe or false),
-            esc(entry.winner or ""),
-            esc(entry.winnerClass or ""),
-            esc(responseName),
+            EscapeJSONStringForExport(entry.winner or ""),
+            EscapeJSONStringForExport(entry.winnerClass or ""),
+            EscapeJSONStringForExport(responseName),
             entry.winnerResponse or 0,
-            esc(entry.winnerNote or ""),
+            EscapeJSONStringForExport(entry.winnerNote or ""),
             entry.winnerRoll or 0,
-            esc(entry.winnerGear1 or ""),
-            esc(entry.winnerGear2 or ""),
+            EscapeJSONStringForExport(entry.winnerGear1 or ""),
+            EscapeJSONStringForExport(entry.winnerGear2 or ""),
             entry.winnerGear1ilvl or 0,
             entry.winnerGear2ilvl or 0,
             entry.winnerIlvlDiff or 0,
             entry.encounterID or 0,
-            esc(entry.encounterName or ""),
-            esc(entry.instance or ""),
+            EscapeJSONStringForExport(entry.encounterName or ""),
+            EscapeJSONStringForExport(entry.instance or ""),
             entry.difficultyID or 0,
-            esc(entry.difficultyName or ""),
+            EscapeJSONStringForExport(entry.difficultyName or ""),
             entry.groupSize or 0,
             entry.mapID or 0,
             entry.votes or 0,
             entry.awardReasonId or 0,
-            esc(entry.awardReason or ""),
-            esc(entry.owner or ""),
-            serializeArray(entry.candidates or {}),
-            serializeArray(entry.councilVotes or {})
+            EscapeJSONStringForExport(entry.awardReason or ""),
+            EscapeJSONStringForExport(entry.owner or ""),
+            SerializeCompactJSONValue(entry.candidates or {}),
+            SerializeCompactJSONValue(entry.councilVotes or {})
         )
     end
 
