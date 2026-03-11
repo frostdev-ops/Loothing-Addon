@@ -139,18 +139,24 @@ function CouncilTableMixin:CreateCandidateRow(_parent)
 
     row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 
-    row:SetScript("OnClick", function(r, button)
-        if not r.candidate then return end
-        if button == "RightButton" then
-            self:ShowCandidateContextMenu(r, r.candidate)
-        elseif button == "LeftButton" then
-            if IsAltKeyDown() and Loothing.Session and Loothing.Session:IsMasterLooter() then
-                self:ShowCandidateContextMenu(r, r.candidate)
-                return
+    -- Set OnClick once per frame (guard prevents re-allocation on every pool reuse).
+    -- _councilTable stores the owning CouncilTable; r.candidate is read dynamically.
+    if not row._clickHooked then
+        row._councilTable = self
+        row:SetScript("OnClick", function(r, button)
+            if not r.candidate then return end
+            if button == "RightButton" then
+                r._councilTable:ShowCandidateContextMenu(r, r.candidate)
+            elseif button == "LeftButton" then
+                if IsAltKeyDown() and Loothing.Session and Loothing.Session:IsMasterLooter() then
+                    r._councilTable:ShowCandidateContextMenu(r, r.candidate)
+                    return
+                end
+                r._councilTable:SelectCandidate(r.candidate)
             end
-            self:SelectCandidate(r.candidate)
-        end
-    end)
+        end)
+        row._clickHooked = true
+    end
 
     return row
 end
@@ -184,12 +190,17 @@ function CouncilTableMixin:UpdateRow(row, candidate, index)
         end
     end
 
-    -- Vote button click handler (needs per-row binding)
+    -- Vote button click handler — _parentRow pointer updated each refresh so the
+    -- closure always reads the current candidate without allocating a new closure.
     local voteCell = row.cells.vote
     if voteCell and voteCell.voteButton then
-        voteCell.voteButton:SetScript("OnClick", function()
-            self:OnVoteClick(candidate)
-        end)
+        voteCell.voteButton._parentRow = row
+        if not voteCell.voteButton._voteHooked then
+            voteCell.voteButton:SetScript("OnClick", function(btn)
+                btn._parentRow._councilTable:OnVoteClick(btn._parentRow.candidate)
+            end)
+            voteCell.voteButton._voteHooked = true
+        end
     end
 end
 
