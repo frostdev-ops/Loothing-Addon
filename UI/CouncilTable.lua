@@ -68,9 +68,9 @@ function CouncilTableMixin:Init(parent)
     self.selectedCandidate = nil
     self.candidateRows = {}
     self.itemTabs = {}
-    -- Throttle state (per-instance)
-    self.pendingRefresh = false
-    self.lastRefreshTime = 0
+    -- ThrottledRefresh: leading+trailing throttle, allocated once per instance
+    self.ThrottledRefresh = Loolib.FunctionUtil.ThrottleWithTrailing(
+        function() self:RefreshCandidates() end, REFRESH_THROTTLE)
 
     -- Sorting defaults
     self.sortColumn = "response"
@@ -1036,28 +1036,6 @@ function CouncilTableMixin:CreateFramePools()
         frame.candidate = nil
         frame.rowIndex = nil
     end)
-end
-
---[[--------------------------------------------------------------------
-    Throttled Refresh
-----------------------------------------------------------------------]]
-
-function CouncilTableMixin:ThrottledRefresh()
-    local now = GetTime()
-    if now - self.lastRefreshTime >= REFRESH_THROTTLE then
-        self.lastRefreshTime = now
-        self:RefreshCandidates()
-        return
-    end
-
-    if not self.pendingRefresh then
-        self.pendingRefresh = true
-        C_Timer.After(REFRESH_THROTTLE, function()
-            self.pendingRefresh = false
-            self.lastRefreshTime = GetTime()
-            self:RefreshCandidates()
-        end)
-    end
 end
 
 --[[--------------------------------------------------------------------
