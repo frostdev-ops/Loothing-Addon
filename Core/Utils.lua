@@ -588,6 +588,30 @@ function Utils.ColorToNamed(color)
     return { r = color[1] or 1, g = color[2] or 1, b = color[3] or 1, a = color[4] or 1 }
 end
 
+--[[--------------------------------------------------------------------
+    Schema Validation
+----------------------------------------------------------------------]]
+
+--- Validate incoming message data against a field schema
+-- Schema entries are { fieldName, expectedType, required }
+-- @param data table - The message data to validate
+-- @param schema table - Array of { field, type, required } entries
+-- @return boolean, string|nil - ok, reason string on failure
+function Utils.ValidateSchema(data, schema)
+    for _, entry in ipairs(schema) do
+        local field, expectedType, required = entry[1], entry[2], entry[3]
+        local val = data[field]
+        if val == nil then
+            if required then
+                return false, "missing required field: " .. field
+            end
+        elseif type(val) ~= expectedType then
+            return false, "field '" .. field .. "' expected " .. expectedType .. " got " .. type(val)
+        end
+    end
+    return true
+end
+
 --- Convert named-field color {r=, g=, b=, a=} to array format {r, g, b, a}
 -- Accepts either format; if already array, returns as-is.
 -- @param color table
