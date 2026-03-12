@@ -1,3 +1,16 @@
+# AI agent and tooling config (workspace-level, not for distribution)
+AGENTS.md
+CLAUDE.md
+
+# AI-generated working documents
+*-PLAN.md
+*-REPORT.md
+*-AUDIT.md
+*SWEEP*.md
+*FIXES*.md
+AUDIT_*.md
+
+# Editor/OS
 *.tmp
 *.bak
 *.orig
