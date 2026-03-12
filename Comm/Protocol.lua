@@ -5,7 +5,7 @@ local _, ns = ...
     Protocol - Message serialization via Loolib Serializer+Compressor
 
     Encoding pipeline:
-        Serialize(version, command, data) → Compress → Adler32 → EncodeForAddonChannel
+        Serialize(version, command, data, msgID) → Compress → Adler32 → EncodeForAddonChannel
 
     Decoding pipeline:
         DecodeForAddonChannel → split checksum → Decompress → verify Adler32 → Deserialize
@@ -82,11 +82,11 @@ function ProtocolMixin:Encode(command, data)
 
     -- Step 1: Serialize (version + command + data + msgID → string)
     local serialized = self.Serializer:Serialize(self.version, command, data, currentMsgID)
-    if not serialized then return nil end
+    if not serialized then return nil, nil end
 
     -- Step 2: Compress
     local compressed = self.Compressor:Compress(serialized, 3)
-    if not compressed then return nil end
+    if not compressed then return nil, nil end
 
     -- Step 3: Compute Adler-32 checksum on the serialized payload and append
     local checksum      = self.Compressor:Adler32(serialized)
