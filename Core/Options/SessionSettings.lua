@@ -13,6 +13,19 @@ ns.Options = Options
 local L = ns.Locale
 local unpack = unpack
 
+local function RefreshSettingsDialog()
+    if Loolib.Config and type(Loolib.Config.NotifyChange) == "function" then
+        Loolib.Config:NotifyChange("Loothing")
+    elseif Loolib.Config and Loolib.Config.Dialog then
+        Loolib.Config.Dialog:RefreshContent("Loothing")
+    end
+end
+
+local function GetAwardReasonAtIndex(index)
+    local reasons = Loothing.Settings:GetAwardReasons()
+    return reasons and reasons[index] or nil
+end
+
 
 local function GetSessionSettingsOptions()
     local opts = {
@@ -654,14 +667,13 @@ local function GetSessionSettingsOptions()
     }
     for i = 1, 20 do
         local hiddenFunc = function()
-            local reasons = Loothing.Settings:GetAwardReasons()
-            return not reasons or not reasons[i]
+            return GetAwardReasonAtIndex(i) == nil
         end
         perReasonArgs["reason" .. i .. "Header"] = {
             type = "header",
             name = function()
-                local reasons = Loothing.Settings:GetAwardReasons()
-                return reasons and reasons[i] and reasons[i].name or ("Reason " .. i)
+                local reason = GetAwardReasonAtIndex(i)
+                return reason and reason.name or ("Reason " .. i)
             end,
             order = i * 10,
             hidden = hiddenFunc,
@@ -672,11 +684,14 @@ local function GetSessionSettingsOptions()
             order = i * 10 + 1,
             hidden = hiddenFunc,
             get = function()
-                local reasons = Loothing.Settings:GetAwardReasons()
-                return reasons and reasons[i] and reasons[i].name or ""
+                local reason = GetAwardReasonAtIndex(i)
+                return reason and reason.name or ""
             end,
             set = function(_, v)
-                Loothing.Settings:UpdateAwardReason(i, { name = v })
+                local reason = GetAwardReasonAtIndex(i)
+                if reason then
+                    Loothing.Settings:UpdateAwardReason(reason.id, { name = v })
+                end
             end,
         }
         perReasonArgs["reason" .. i .. "Color"] = {
@@ -686,14 +701,17 @@ local function GetSessionSettingsOptions()
             hasAlpha = true,
             hidden = hiddenFunc,
             get = function()
-                local reasons = Loothing.Settings:GetAwardReasons()
-                if reasons and reasons[i] and reasons[i].color then
-                    return unpack(reasons[i].color)
+                local reason = GetAwardReasonAtIndex(i)
+                if reason and reason.color then
+                    return unpack(reason.color)
                 end
                 return 1, 1, 1, 1
             end,
             set = function(_, r, g, b, a)
-                Loothing.Settings:UpdateAwardReason(i, { color = { r, g, b, a } })
+                local reason = GetAwardReasonAtIndex(i)
+                if reason then
+                    Loothing.Settings:UpdateAwardReason(reason.id, { color = { r, g, b, a } })
+                end
             end,
         }
         perReasonArgs["reason" .. i .. "Sort"] = {
@@ -705,11 +723,14 @@ local function GetSessionSettingsOptions()
             step = 1,
             hidden = hiddenFunc,
             get = function()
-                local reasons = Loothing.Settings:GetAwardReasons()
-                return reasons and reasons[i] and reasons[i].sort or i
+                local reason = GetAwardReasonAtIndex(i)
+                return reason and reason.sort or i
             end,
             set = function(_, v)
-                Loothing.Settings:UpdateAwardReason(i, { sort = v })
+                local reason = GetAwardReasonAtIndex(i)
+                if reason then
+                    Loothing.Settings:UpdateAwardReason(reason.id, { sort = v })
+                end
             end,
         }
         perReasonArgs["reason" .. i .. "Log"] = {
@@ -718,11 +739,14 @@ local function GetSessionSettingsOptions()
             order = i * 10 + 4,
             hidden = hiddenFunc,
             get = function()
-                local reasons = Loothing.Settings:GetAwardReasons()
-                return reasons and reasons[i] and reasons[i].log
+                local reason = GetAwardReasonAtIndex(i)
+                return reason and reason.log
             end,
             set = function(_, v)
-                Loothing.Settings:UpdateAwardReason(i, { log = v })
+                local reason = GetAwardReasonAtIndex(i)
+                if reason then
+                    Loothing.Settings:UpdateAwardReason(reason.id, { log = v })
+                end
             end,
         }
         perReasonArgs["reason" .. i .. "Disenchant"] = {
@@ -731,11 +755,14 @@ local function GetSessionSettingsOptions()
             order = i * 10 + 5,
             hidden = hiddenFunc,
             get = function()
-                local reasons = Loothing.Settings:GetAwardReasons()
-                return reasons and reasons[i] and reasons[i].disenchant
+                local reason = GetAwardReasonAtIndex(i)
+                return reason and reason.disenchant
             end,
             set = function(_, v)
-                Loothing.Settings:UpdateAwardReason(i, { disenchant = v })
+                local reason = GetAwardReasonAtIndex(i)
+                if reason then
+                    Loothing.Settings:UpdateAwardReason(reason.id, { disenchant = v })
+                end
             end,
         }
         perReasonArgs["reason" .. i .. "Remove"] = {
@@ -745,7 +772,11 @@ local function GetSessionSettingsOptions()
             hidden = hiddenFunc,
             confirm = "Remove this award reason?",
             func = function()
-                Loothing.Settings:RemoveAwardReason(i)
+                local reason = GetAwardReasonAtIndex(i)
+                if reason then
+                    Loothing.Settings:RemoveAwardReason(reason.id)
+                    RefreshSettingsDialog()
+                end
             end,
         }
     end
@@ -767,16 +798,9 @@ local function GetSessionSettingsOptions()
                 name = "Add New Reason",
                 order = 1,
                 func = function()
-                    local reasons = Loothing.Settings:GetAwardReasons() or {}
-                    local nextId = #reasons + 1
-                    Loothing.Settings:AddAwardReason({
-                        id = nextId,
-                        name = "New Reason",
-                        color = { 1, 1, 1, 1 },
-                        sort = nextId,
-                        log = true,
-                        disenchant = false,
-                    })
+                    if Loothing.Settings:AddAwardReason("New Reason", { 1, 1, 1, 1 }) then
+                        RefreshSettingsDialog()
+                    end
                 end,
             },
             resetDefaults = {
@@ -786,6 +810,7 @@ local function GetSessionSettingsOptions()
                 confirm = "Reset all award reasons to their default values? This cannot be undone.",
                 func = function()
                     Loothing.Settings:ResetAwardReasonsToDefaults()
+                    RefreshSettingsDialog()
                 end,
             },
         },

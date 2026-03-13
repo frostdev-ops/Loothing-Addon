@@ -8,8 +8,7 @@ local Loolib = LibStub("Loolib")
 local Config = Loolib.Config
 local CreateFromMixins = Loolib.CreateFromMixins
 local Loothing = ns.Addon
-local Loothing = ns.Addon
-local OptionsTable = ns.OptionsTable
+local L = ns.Locale
 
 local HEADER_HEIGHT = 56
 
@@ -70,11 +69,12 @@ function SettingsPanelMixin:CreateHeader()
     -- Addon title
     local title = header:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
     title:SetPoint("LEFT", header, "LEFT", xCursor, 4)
-    title:SetText("LOOTHING")
+    title:SetText(L["ADDON_NAME"] or "Loothing")
     title:SetTextColor(1, 1, 1, 1)
 
     -- Version below title
-    local versionStr = "v" .. (Loothing and Loothing.version or (Loothing.VERSION or ""))
+    local versionValue = (Loothing and (Loothing.version or Loothing.VERSION)) or ""
+    local versionStr = "v" .. versionValue
     local version = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     version:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -2)
     version:SetText(versionStr)
@@ -90,39 +90,33 @@ end
 
 --- Create UI elements using ConfigDialog
 function SettingsPanelMixin:CreateElements()
-    -- Ensure Loolib.Config is initialized
-    if not Config or not Config.Dialog or type(Config.Dialog.Open) ~= "function" then
-        -- Fallback: show error message
-        local errText = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-        errText:SetPoint("CENTER")
-        errText:SetText("Error: Loolib ConfigDialog not available")
-        errText:SetTextColor(1, 0.3, 0.3)
-        return
-    end
-
-    -- Create container for ConfigDialog, anchored below the header
     local container = CreateFrame("Frame", nil, self.frame)
     container:SetPoint("TOPLEFT", 0, -HEADER_HEIGHT)
     container:SetPoint("BOTTOMRIGHT", 0, 0)
-
-    -- Open the dialog with our options table
-    if OptionsTable then
-        -- Register the options table if not already registered
-        if not Config:IsRegistered("Loothing") then
-            Config:RegisterOptionsTable("Loothing", OptionsTable)
-        end
-
-        -- Open dialog in our container
-        Config.Dialog:Open("Loothing", container)
-    else
-        -- Fallback: show error message
-        local errText = container:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-        errText:SetPoint("CENTER")
-        errText:SetText("Error: ns.OptionsTable not available")
-        errText:SetTextColor(1, 0, 0)
-    end
-
     self.container = container
+
+    local message = container:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    message:SetPoint("CENTER", 0, 24)
+    message:SetText(L["BLIZZARD_SETTINGS_DESC"] or "Click below to open the full settings panel")
+    message:SetTextColor(0.9, 0.9, 0.9)
+    self.messageText = message
+
+    local openBtn = CreateFrame("Button", nil, container, "UIPanelButtonTemplate")
+    openBtn:SetSize(220, 28)
+    openBtn:SetPoint("TOP", message, "BOTTOM", 0, -16)
+    openBtn:SetText(L["OPEN_SETTINGS"] or "Open Loothing Settings")
+    openBtn:SetScript("OnClick", function()
+        if Config then
+            Config:Open("Loothing")
+        end
+    end)
+    self.openButton = openBtn
+
+    if not Config or type(Config.Open) ~= "function" then
+        message:SetText("Error: Loolib Config not available")
+        message:SetTextColor(1, 0.3, 0.3)
+        openBtn:Disable()
+    end
 end
 
 --[[--------------------------------------------------------------------
@@ -131,10 +125,8 @@ end
 
 --- Refresh settings display
 function SettingsPanelMixin:Refresh()
-    -- ConfigDialog handles this automatically when options change via get/set
-    -- If we need to force a refresh, we can notify the system
-    if Config and Config.Dialog then
-        Config.Dialog:RefreshContent("Loothing")
+    if self.messageText then
+        self.messageText:SetText(L["BLIZZARD_SETTINGS_DESC"] or "Click below to open the full settings panel")
     end
 end
 

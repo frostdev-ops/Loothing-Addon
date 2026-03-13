@@ -1273,7 +1273,16 @@ end
 function SettingsMixin:GetAwardReasons()
     local defaults = Loothing.DefaultSettings.awardReasons.reasons
     local reasons = self:Get("awardReasons.reasons", defaults)
-    return Utils.DeepCopy(reasons)
+    local copy = Utils.DeepCopy(reasons)
+    table.sort(copy, function(a, b)
+        local aSort = tonumber(a and a.sort) or math.huge
+        local bSort = tonumber(b and b.sort) or math.huge
+        if aSort == bSort then
+            return (tonumber(a and a.id) or math.huge) < (tonumber(b and b.id) or math.huge)
+        end
+        return aSort < bSort
+    end)
+    return copy
 end
 
 --- Get award reason by ID
@@ -1329,39 +1338,71 @@ end
 -- @return boolean - True if removed
 function SettingsMixin:RemoveAwardReason(id)
     local reasons = self:GetAwardReasons()
-    
+
     for i, reason in ipairs(reasons) do
         if reason.id == id then
             table.remove(reasons, i)
+            for sortIndex, entry in ipairs(reasons) do
+                entry.sort = sortIndex
+            end
             self:Set("awardReasons.reasons", reasons)
             return true
         end
     end
-    
+
     return false
 end
 
 --- Update an award reason
 -- @param id number - Reason ID
--- @param name string - New name (optional)
--- @param color table - New color (optional)
+-- @param name string|table - New name or patch table (optional)
+-- @param color table - New color (optional when name is a string)
 -- @return boolean - True if updated
 function SettingsMixin:UpdateAwardReason(id, name, color)
     local reasons = self:GetAwardReasons()
-    
+    local patch
+    if type(name) == "table" then
+        patch = name
+    else
+        patch = {
+            name = name,
+            color = color,
+        }
+    end
+
     for i, reason in ipairs(reasons) do
         if reason.id == id then
-            if name then
-                reason.name = name
+            if patch.name ~= nil then
+                reason.name = patch.name
             end
-            if color then
-                reason.color = color
+            if patch.color ~= nil then
+                reason.color = patch.color
+            end
+            if patch.sort ~= nil then
+                reason.sort = math.max(1, math.floor(tonumber(patch.sort) or reason.sort or i))
+            end
+            if patch.log ~= nil then
+                reason.log = patch.log == true
+            end
+            if patch.disenchant ~= nil then
+                reason.disenchant = patch.disenchant == true
+            end
+            table.sort(reasons, function(a, b)
+                local aSort = tonumber(a and a.sort) or math.huge
+                local bSort = tonumber(b and b.sort) or math.huge
+                if aSort == bSort then
+                    return (tonumber(a and a.id) or math.huge) < (tonumber(b and b.id) or math.huge)
+                end
+                return aSort < bSort
+            end)
+            for sortIndex, entry in ipairs(reasons) do
+                entry.sort = sortIndex
             end
             self:Set("awardReasons.reasons", reasons)
             return true
         end
     end
-    
+
     return false
 end
 

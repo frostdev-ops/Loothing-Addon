@@ -149,6 +149,9 @@ local function InitializeModules()
         if not Config:IsRegistered("Loothing") then
             Config:RegisterOptionsTable("Loothing", ns.OptionsTable)
         end
+        if Config.Dialog and type(Config.Dialog.SetDefaultSize) == "function" then
+            Config.Dialog:SetDefaultSize("Loothing", 1040, 760)
+        end
     end
 
     -- Initialize response manager
@@ -843,7 +846,13 @@ local function RegisterSlashCommands()
             printError(L["SLASH_NO_CONFIG"] or "Config dialog not available.")
             return
         end
-        Config:Open("Loothing", section)
+
+        local path = ns.Options and ns.Options.ResolveOptionsPath and ns.Options.ResolveOptionsPath(section) or nil
+        if path and #path > 0 then
+            Config:Open("Loothing", unpack(path))
+        else
+            Config:Open("Loothing")
+        end
     end
 
     local function handleIgnore(argText)

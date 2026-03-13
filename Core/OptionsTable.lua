@@ -19,127 +19,69 @@ local function resolveOptions(name)
     return nil
 end
 
--- Shallow-copy a group table and force inline = true so it renders in the tab page
-local function inlineGroup(group)
+local function copyTableShallow(tbl)
+    if not tbl then return nil end
+    local copy = {}
+    for k, v in pairs(tbl) do
+        copy[k] = v
+    end
+    return copy
+end
+
+local function cloneGroup(group, overrides)
     if not group then return nil end
-    local g = {}
-    for k, v in pairs(group) do g[k] = v end
-    g.inline = true
+    local g = copyTableShallow(group)
+    if overrides then
+        for k, v in pairs(overrides) do
+            g[k] = v
+        end
+    end
     return g
+end
+
+local function addClonedGroup(targetArgs, key, sourceGroup, order, overrides)
+    local group = cloneGroup(sourceGroup, overrides)
+    if not group then
+        return
+    end
+
+    group.order = order
+    targetArgs[key] = group
 end
 
 -- Build the args table on demand so Options/*.lua files are loaded first
 local function BuildArgs()
     local localPrefs = resolveOptions("GetLocalPreferencesOptions")
     local sessionSettings = resolveOptions("GetSessionSettingsOptions")
+    local localArgs = localPrefs and localPrefs.args or nil
+    local sessionArgs = sessionSettings and sessionSettings.args or nil
 
-    -- ----------------------------------------------------------------
-    -- General tab: frame behavior, loot response, autopass, auto-award,
-    --              ignore list, history, ML settings
-    -- ----------------------------------------------------------------
-    local generalArgs = {}
-    if localPrefs and localPrefs.args then
-        local order = 1
-        for destKey, srcKey in pairs({
-            frameBehavior = "frame",
-            lootResponse  = "lootResponse",
-            autopass      = "autopass",
-            autoaward     = "autoaward",
-            ignore        = "ignore",
-            history       = "history",
-            ml            = "ml",
-        }) do
-            local group = inlineGroup(localPrefs.args[srcKey])
-            if group then
-                group.order = order
-                order = order + 1
-                generalArgs[destKey] = group
-            end
-        end
-    end
+    local rootArgs = {}
 
-    -- ----------------------------------------------------------------
-    -- Session tab: voting + session trigger (inline), then button sets
-    --              and type code assignment (also inline, scrollable)
-    -- ----------------------------------------------------------------
-    local sessionArgs = {}
-    if sessionSettings and sessionSettings.args then
-        local srcArgs = sessionSettings.args
-        local order = 1
-        for _, key in ipairs({ "voting", "responseButtons" }) do
-            local group = inlineGroup(srcArgs[key])
-            if group then
-                group.order = order
-                order = order + 1
-                sessionArgs[key] = group
-            end
-        end
-    end
+    addClonedGroup(rootArgs, "lootResponse", localArgs and localArgs.lootResponse, 10)
+    addClonedGroup(rootArgs, "frame", localArgs and localArgs.frame, 20)
+    addClonedGroup(rootArgs, "autopass", localArgs and localArgs.autopass, 30)
+    addClonedGroup(rootArgs, "autoaward", localArgs and localArgs.autoaward, 40)
+    addClonedGroup(rootArgs, "ignore", localArgs and localArgs.ignore, 50)
+    addClonedGroup(rootArgs, "ml", localArgs and localArgs.ml, 60)
+    addClonedGroup(rootArgs, "history", localArgs and localArgs.history, 70)
+    addClonedGroup(rootArgs, "voting", sessionArgs and sessionArgs.voting, 80)
+    addClonedGroup(rootArgs, "winnerDetermination", sessionArgs and sessionArgs.winnerDetermination, 90)
+    addClonedGroup(rootArgs, "responseButtons", sessionArgs and sessionArgs.responseButtons, 100)
+    addClonedGroup(rootArgs, "observerPermissions", sessionArgs and sessionArgs.observerPermissions, 110)
+    addClonedGroup(rootArgs, "council", sessionArgs and sessionArgs.council, 120)
+    addClonedGroup(rootArgs, "awardReasons", sessionArgs and sessionArgs.awardReasons, 130)
+    addClonedGroup(rootArgs, "announcements", localArgs and localArgs.announcements, 140, {
+        childGroups = "tree",
+    })
 
-    -- ----------------------------------------------------------------
-    -- Council & Awards tab: council roster + award reasons (both inline)
-    -- ----------------------------------------------------------------
-    local councilArgs = {}
-    if sessionSettings and sessionSettings.args then
-        local srcArgs = sessionSettings.args
-        local order = 1
-        for _, key in ipairs({ "council", "awardReasons" }) do
-            local group = inlineGroup(srcArgs[key])
-            if group then
-                group.order = order
-                order = order + 1
-                councilArgs[key] = group
-            end
-        end
-    end
-
-    -- ----------------------------------------------------------------
-    -- Announcements tab: all announcement sub-groups (inlined)
-    -- ----------------------------------------------------------------
-    local announcementsArgs = {}
-    if localPrefs and localPrefs.args and localPrefs.args.announcements then
-        local ann = localPrefs.args.announcements
-        for k, v in pairs(ann.args or {}) do
-            if type(v) == "table" and v.type == "group" then
-                announcementsArgs[k] = inlineGroup(v)
-            else
-                announcementsArgs[k] = v
-            end
-        end
-    end
-
-    return {
-        general = {
-            type = "group",
-            name = L["GENERAL"] or "General",
-            order = 1,
-            args = generalArgs,
-        },
-        session = {
-            type = "group",
-            name = L["SESSION_SETTINGS_ML"] or "Session",
-            order = 2,
-            args = sessionArgs,
-        },
-        councilAwards = {
-            type = "group",
-            name = L["COUNCIL"] or "Council & Awards",
-            order = 3,
-            args = councilArgs,
-        },
-        announcements = {
-            type = "group",
-            name = L["ANNOUNCEMENT_SETTINGS"] or "Announcements",
-            order = 4,
-            args = announcementsArgs,
-        },
-    }
+    return rootArgs
 end
 
 ns.OptionsTable = ns.OptionsTable or {
     type = "group",
     name = L["ADDON_NAME"],
-    childGroups = "tab",
+    childGroups = "tree",
     get = function(info)
         local key = table.concat(info, ".")
         return Loothing.Settings:Get(key)
@@ -156,4 +98,57 @@ local OptionsTable = ns.OptionsTable
 -- Called from Init.lua during initialization, or on first dialog open.
 function Options.BuildOptionsTable()
     OptionsTable.args = BuildArgs()
+end
+
+local PATH_ALIASES = {
+    general = { "lootResponse" },
+    personal = { "lootResponse" },
+    session = { "voting" },
+    raidSession = { "voting" },
+    councilAwards = { "council" },
+    councilManagement = { "council" },
+    council = { "council" },
+    announcements = { "announcements" },
+    history = { "history" },
+    ml = { "ml" },
+    responseButtons = { "responseButtons" },
+}
+
+function Options.ResolveOptionsPath(section)
+    if not section or section == "" then
+        return nil
+    end
+
+    if (not OptionsTable.args or not next(OptionsTable.args)) and Options.BuildOptionsTable then
+        Options.BuildOptionsTable()
+    end
+
+    if type(section) == "table" then
+        return section
+    end
+
+    local normalized = tostring(section):gsub("^%s+", ""):gsub("%s+$", "")
+    if normalized == "" then
+        return nil
+    end
+
+    local explicit = OptionsTable.args and OptionsTable.args[normalized]
+    if explicit then
+        return { normalized }
+    end
+
+    local alias = PATH_ALIASES[normalized] or PATH_ALIASES[normalized:lower()]
+    if alias then
+        return alias
+    end
+
+    local dotted = {}
+    for part in normalized:gmatch("[^%.%s/]+") do
+        dotted[#dotted + 1] = part
+    end
+    if #dotted > 0 then
+        return dotted
+    end
+
+    return nil
 end
