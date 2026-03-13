@@ -73,6 +73,11 @@ local COMPRESSION_KEYS = {
 
     -- Session settings
     ["votingMode"] = "vm",
+    ["sessionTriggerAction"] = "sta",
+    ["sessionTriggerTiming"] = "stt",
+    ["sessionTriggerRaid"] = "str",
+    ["sessionTriggerDungeon"] = "std",
+    ["sessionTriggerOpenWorld"] = "stow",
 
     -- AutoPass settings
     ["autoPass"] = "ap",
@@ -231,6 +236,13 @@ function MLDBMixin:GatherSettings()
     -- Session settings
     settings.votingTimeout = Loothing.Settings:Get("settings.votingTimeout", 30)
     settings.votingMode = Loothing.Settings:Get("settings.votingMode", "SIMPLE")
+
+    -- Session trigger policy
+    settings.sessionTriggerAction   = Loothing.Settings:GetSessionTriggerAction()
+    settings.sessionTriggerTiming   = Loothing.Settings:GetSessionTriggerTiming()
+    settings.sessionTriggerRaid     = Loothing.Settings:GetSessionTriggerRaid()
+    settings.sessionTriggerDungeon  = Loothing.Settings:GetSessionTriggerDungeon()
+    settings.sessionTriggerOpenWorld = Loothing.Settings:GetSessionTriggerOpenWorld()
 
     -- Sort order
     settings.sortOrder = Loothing.Settings:Get("councilTable.sortColumn", "response")
@@ -492,6 +504,23 @@ function MLDBMixin:ApplyFromML(settings, sender)
         end
         if settings.votingMode then
             Loothing.Settings:Set("settings.votingMode", settings.votingMode)
+        end
+
+        -- Apply session trigger policy
+        if settings.sessionTriggerAction then
+            Loothing.Settings:SetSessionTriggerAction(settings.sessionTriggerAction)
+        end
+        if settings.sessionTriggerTiming then
+            Loothing.Settings:SetSessionTriggerTiming(settings.sessionTriggerTiming)
+        end
+        if settings.sessionTriggerRaid ~= nil then
+            Loothing.Settings:SetSessionTriggerRaid(settings.sessionTriggerRaid)
+        end
+        if settings.sessionTriggerDungeon ~= nil then
+            Loothing.Settings:SetSessionTriggerDungeon(settings.sessionTriggerDungeon)
+        end
+        if settings.sessionTriggerOpenWorld ~= nil then
+            Loothing.Settings:SetSessionTriggerOpenWorld(settings.sessionTriggerOpenWorld)
         end
 
         -- Apply sort order

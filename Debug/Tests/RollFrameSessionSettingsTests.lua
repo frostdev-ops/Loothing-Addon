@@ -362,130 +362,289 @@ TestRunner:Describe("RollFrame Timeout Configuration", function()
 end)
 
 --[[--------------------------------------------------------------------
-    Session Trigger Mode Tests
+    Session Trigger Policy Tests (split model)
 ----------------------------------------------------------------------]]
 
-TestRunner:Describe("Session Trigger Modes", function()
+TestRunner:Describe("Session Trigger Policy - Action / Timing / Scope", function()
     TestRunner:BeforeEach(function()
         clearMockSettings()
     end)
 
-    TestRunner:It("should support manual trigger mode", function()
-        local mode = "manual"
-        local valid = { manual = true, auto = true, prompt = true, afterRolls = true }
-        Assert.IsTrue(valid[mode], "manual is a valid trigger mode")
+    -- Valid action values
+    TestRunner:It("should accept valid trigger actions", function()
+        local valid = { manual = true, prompt = true, auto = true }
+        Assert.IsTrue(valid["manual"], "manual is valid")
+        Assert.IsTrue(valid["prompt"], "prompt is valid")
+        Assert.IsTrue(valid["auto"],   "auto is valid")
+        Assert.IsFalse(valid["afterRolls"] or false, "afterRolls is no longer a direct action")
+        Assert.IsFalse(valid["garbage"] or false, "garbage is rejected")
     end, { category = "unit" })
 
-    TestRunner:It("should support auto trigger mode", function()
-        local mode = "auto"
-        local valid = { manual = true, auto = true, prompt = true, afterRolls = true }
-        Assert.IsTrue(valid[mode], "auto is a valid trigger mode")
+    -- Valid timing values
+    TestRunner:It("should accept valid trigger timings", function()
+        local valid = { encounterEnd = true, afterLoot = true }
+        Assert.IsTrue(valid["encounterEnd"])
+        Assert.IsTrue(valid["afterLoot"])
+        Assert.IsFalse(valid["immediate"] or false, "invalid timing rejected")
     end, { category = "unit" })
 
-    TestRunner:It("should support prompt trigger mode", function()
-        local mode = "prompt"
-        local valid = { manual = true, auto = true, prompt = true, afterRolls = true }
-        Assert.IsTrue(valid[mode], "prompt is a valid trigger mode")
-    end, { category = "unit" })
-
-    TestRunner:It("should support afterRolls trigger mode", function()
-        local mode = "afterRolls"
-        local valid = { manual = true, auto = true, prompt = true, afterRolls = true }
-        Assert.IsTrue(valid[mode], "afterRolls is a valid trigger mode")
-    end, { category = "unit" })
-
-    TestRunner:It("should reject invalid trigger mode", function()
-        local mode = "invalid_mode"
-        local valid = { manual = true, auto = true, prompt = true, afterRolls = true }
-        Assert.IsFalse(valid[mode] or false, "invalid_mode should be rejected")
-    end, { category = "unit" })
-
-    TestRunner:It("should default to prompt mode", function()
-        local defaultMode = "prompt"
-        Assert.Equals("prompt", defaultMode, "Default trigger mode should be prompt")
-    end, { category = "unit" })
-
-    TestRunner:It("auto mode should not do anything on OnEncounterEnd for manual", function()
-        local mode = "manual"
-        local shouldAutoStart = mode == "auto"
-        local shouldPrompt = mode == "prompt"
-
-        Assert.IsFalse(shouldAutoStart, "manual mode should not auto-start")
-        Assert.IsFalse(shouldPrompt, "manual mode should not prompt")
-    end, { category = "unit" })
-
-    TestRunner:It("auto mode should start session immediately", function()
-        local mode = "auto"
-        local shouldAutoStart = mode == "auto"
-
-        Assert.IsTrue(shouldAutoStart, "auto mode should auto-start session")
-    end, { category = "unit" })
-
-    TestRunner:It("prompt mode should show confirmation dialog", function()
-        local mode = "prompt"
-        local shouldPrompt = mode == "prompt"
-
-        Assert.IsTrue(shouldPrompt, "prompt mode should show dialog")
-    end, { category = "unit" })
-
-    TestRunner:It("afterRolls mode should wait for loot receipt", function()
-        local mode = "afterRolls"
-        local shouldWaitForLoot = mode == "afterRolls"
-
-        Assert.IsTrue(shouldWaitForLoot, "afterRolls should wait for ML to receive loot")
+    -- Defaults
+    TestRunner:It("should default to prompt + encounterEnd + raid-only", function()
+        local defaults = {
+            action    = "prompt",
+            timing    = "encounterEnd",
+            raid      = true,
+            dungeon   = false,
+            openWorld = false,
+        }
+        Assert.Equals("prompt",       defaults.action)
+        Assert.Equals("encounterEnd", defaults.timing)
+        Assert.IsTrue(defaults.raid)
+        Assert.IsFalse(defaults.dungeon)
+        Assert.IsFalse(defaults.openWorld)
     end, { category = "unit" })
 end)
 
 --[[--------------------------------------------------------------------
-    Session Trigger Mode - afterRolls Debounce Tests
+    Session Trigger Policy - Encounter Scope Classification
 ----------------------------------------------------------------------]]
 
-TestRunner:Describe("Session afterRolls Mode Debounce", function()
+TestRunner:Describe("Session Trigger Policy - Scope Classification", function()
+    TestRunner:It("raid instance type maps to raid scope", function()
+        local function classify(instanceType)
+            if instanceType == "raid"  then return "raid"      end
+            if instanceType == "party" then return "dungeon"   end
+            if instanceType == "none"  then return "openWorld" end
+            return nil
+        end
+        Assert.Equals("raid",      classify("raid"))
+        Assert.Equals("dungeon",   classify("party"))
+        Assert.Equals("openWorld", classify("none"))
+        Assert.IsNil(classify("pvp"),      "pvp should be nil")
+        Assert.IsNil(classify("arena"),    "arena should be nil")
+        Assert.IsNil(classify("scenario"), "scenario should be nil")
+    end, { category = "unit" })
+
+    TestRunner:It("raid boss kill triggers prompt by default", function()
+        local scope = "raid"
+        local scopeEnabled = { raid = true, dungeon = false, openWorld = false }
+        local action = "prompt"
+        local timing = "encounterEnd"
+        local success = 1
+
+        local shouldFire = success == 1 and scopeEnabled[scope] and timing == "encounterEnd"
+        local willPrompt = shouldFire and action == "prompt"
+        Assert.IsTrue(willPrompt, "Raid kill with defaults should prompt")
+    end, { category = "unit" })
+
+    TestRunner:It("dungeon boss kill does nothing by default", function()
+        local scope = "dungeon"
+        local scopeEnabled = { raid = true, dungeon = false, openWorld = false }
+        Assert.IsFalse(scopeEnabled[scope] or false, "Dungeon scope disabled by default")
+    end, { category = "unit" })
+
+    TestRunner:It("dungeon boss kill triggers when dungeon scope enabled", function()
+        local scope = "dungeon"
+        local scopeEnabled = { raid = true, dungeon = true, openWorld = false }
+        Assert.IsTrue(scopeEnabled[scope], "Dungeon scope fires when enabled")
+    end, { category = "unit" })
+
+    TestRunner:It("open-world encounter does nothing by default", function()
+        local scope = "openWorld"
+        local scopeEnabled = { raid = true, dungeon = false, openWorld = false }
+        Assert.IsFalse(scopeEnabled[scope] or false, "Open-world scope disabled by default")
+    end, { category = "unit" })
+
+    TestRunner:It("wipes never trigger", function()
+        local success = 0
+        Assert.IsFalse(success == 1, "Wipe (success=0) should never trigger")
+    end, { category = "unit" })
+
+    TestRunner:It("active sessions suppress all new prompts", function()
+        local INACTIVE = 0
+        local ACTIVE = 1
+
+        local state = ACTIVE
+        Assert.IsFalse(state == INACTIVE, "Should not fire when session active")
+    end, { category = "unit" })
+end)
+
+--[[--------------------------------------------------------------------
+    Session Trigger Policy - afterLoot Timing
+----------------------------------------------------------------------]]
+
+TestRunner:Describe("Session Trigger Policy - afterLoot Timing", function()
+    TestRunner:It("afterLoot only reacts to ML loot, not other players' loot", function()
+        local timing = "afterLoot"
+        local action = "prompt"
+        local isMyLoot = false  -- another player's loot
+        local shouldAct = timing == "afterLoot" and action ~= "manual" and isMyLoot
+        Assert.IsFalse(shouldAct, "Should not act on other player's loot")
+
+        isMyLoot = true
+        shouldAct = timing == "afterLoot" and action ~= "manual" and isMyLoot
+        Assert.IsTrue(shouldAct, "Should act on ML's own loot")
+    end, { category = "unit" })
+
+    TestRunner:It("afterLoot + auto starts directly after debounce", function()
+        local timing = "afterLoot"
+        local action = "auto"
+        local isMyLoot = true
+        local hasEligibleEncounter = true
+
+        local shouldAct = timing == "afterLoot" and action ~= "manual" and isMyLoot and hasEligibleEncounter
+        local willAutoStart = shouldAct and action == "auto"
+        Assert.IsTrue(willAutoStart, "afterLoot + auto should auto-start after debounce")
+    end, { category = "unit" })
+
+    TestRunner:It("manual caches encounter context but does not prompt/start", function()
+        local action = "manual"
+        local willPrompt = action == "prompt"
+        local willAuto = action == "auto"
+        Assert.IsFalse(willPrompt, "Manual should not prompt")
+        Assert.IsFalse(willAuto, "Manual should not auto-start")
+    end, { category = "unit" })
+
     TestRunner:It("should debounce loot events with 2.5 second timer", function()
         local LOOT_DEBOUNCE_DELAY = 2.5
         Assert.Equals(2.5, LOOT_DEBOUNCE_DELAY, "Debounce delay should be 2.5 seconds")
     end, { category = "unit" })
+end)
 
-    TestRunner:It("should track loot count for ML", function()
-        local receivedLootCount = 0
+--[[--------------------------------------------------------------------
+    Session Trigger Policy - Legacy Migration
+----------------------------------------------------------------------]]
 
-        -- Simulate loot received
-        receivedLootCount = receivedLootCount + 1
-        Assert.Equals(1, receivedLootCount)
-
-        receivedLootCount = receivedLootCount + 1
-        Assert.Equals(2, receivedLootCount)
+TestRunner:Describe("Session Trigger Policy - Legacy Mode Migration", function()
+    TestRunner:It("legacy manual maps to manual + encounterEnd", function()
+        local map = {
+            manual     = { action = "manual", timing = "encounterEnd" },
+            auto       = { action = "auto",   timing = "encounterEnd" },
+            prompt     = { action = "prompt",  timing = "encounterEnd" },
+            afterRolls = { action = "prompt",  timing = "afterLoot" },
+        }
+        local entry = map["manual"]
+        Assert.Equals("manual",       entry.action)
+        Assert.Equals("encounterEnd", entry.timing)
     end, { category = "unit" })
 
-    TestRunner:It("should reset loot count after timer fires", function()
-        local receivedLootCount = 5
-
-        -- Simulate timer callback resetting count
-        receivedLootCount = 0
-        Assert.Equals(0, receivedLootCount, "Count should reset to 0")
+    TestRunner:It("legacy auto maps to auto + encounterEnd", function()
+        local map = {
+            manual     = { action = "manual", timing = "encounterEnd" },
+            auto       = { action = "auto",   timing = "encounterEnd" },
+            prompt     = { action = "prompt",  timing = "encounterEnd" },
+            afterRolls = { action = "prompt",  timing = "afterLoot" },
+        }
+        local entry = map["auto"]
+        Assert.Equals("auto",         entry.action)
+        Assert.Equals("encounterEnd", entry.timing)
     end, { category = "unit" })
 
-    TestRunner:It("should only prompt when session is inactive", function()
-        local INACTIVE = 0  -- Loothing.SessionState.INACTIVE
-        local ACTIVE = 1    -- Loothing.SessionState.ACTIVE
+    TestRunner:It("legacy prompt maps to prompt + encounterEnd", function()
+        local map = {
+            manual     = { action = "manual", timing = "encounterEnd" },
+            auto       = { action = "auto",   timing = "encounterEnd" },
+            prompt     = { action = "prompt",  timing = "encounterEnd" },
+            afterRolls = { action = "prompt",  timing = "afterLoot" },
+        }
+        local entry = map["prompt"]
+        Assert.Equals("prompt",       entry.action)
+        Assert.Equals("encounterEnd", entry.timing)
+    end, { category = "unit" })
 
-        local state = INACTIVE
-        local shouldPrompt = state == INACTIVE
+    TestRunner:It("legacy afterRolls maps to prompt + afterLoot", function()
+        local map = {
+            manual     = { action = "manual", timing = "encounterEnd" },
+            auto       = { action = "auto",   timing = "encounterEnd" },
+            prompt     = { action = "prompt",  timing = "encounterEnd" },
+            afterRolls = { action = "prompt",  timing = "afterLoot" },
+        }
+        local entry = map["afterRolls"]
+        Assert.Equals("prompt",    entry.action)
+        Assert.Equals("afterLoot", entry.timing)
+    end, { category = "unit" })
 
-        Assert.IsTrue(shouldPrompt, "Should prompt when inactive")
-
-        state = ACTIVE
-        shouldPrompt = state == INACTIVE
-        Assert.IsFalse(shouldPrompt, "Should not prompt when active")
+    TestRunner:It("legacy GetSessionTriggerMode round-trips correctly", function()
+        -- Simulate: action=prompt, timing=encounterEnd → should return "prompt"
+        local function legacyMode(action, timing)
+            if action == "manual" then return "manual" end
+            if action == "auto"   then return "auto"   end
+            if timing == "afterLoot" then return "afterRolls" end
+            return "prompt"
+        end
+        Assert.Equals("manual",     legacyMode("manual", "encounterEnd"))
+        Assert.Equals("auto",       legacyMode("auto",   "encounterEnd"))
+        Assert.Equals("prompt",     legacyMode("prompt",  "encounterEnd"))
+        Assert.Equals("afterRolls", legacyMode("prompt",  "afterLoot"))
     end, { category = "unit" })
 end)
 
 --[[--------------------------------------------------------------------
-    Settings Accessor Method Tests
+    Session Trigger Policy - MLDB Compression Round-Trip
 ----------------------------------------------------------------------]]
 
-TestRunner:Describe("Settings - Session Trigger Mode Accessors", function()
-    TestRunner:It("GetSessionTriggerMode should return valid mode", function()
+TestRunner:Describe("Session Trigger Policy - MLDB Round-Trip", function()
+    TestRunner:It("new trigger fields have compression keys", function()
+        -- Verify the compression map recognises the new fields
+        local COMPRESSION_KEYS = {
+            sessionTriggerAction   = "sta",
+            sessionTriggerTiming   = "stt",
+            sessionTriggerRaid     = "str",
+            sessionTriggerDungeon  = "std",
+            sessionTriggerOpenWorld = "stow",
+        }
+        Assert.Equals("sta",  COMPRESSION_KEYS["sessionTriggerAction"])
+        Assert.Equals("stt",  COMPRESSION_KEYS["sessionTriggerTiming"])
+        Assert.Equals("str",  COMPRESSION_KEYS["sessionTriggerRaid"])
+        Assert.Equals("std",  COMPRESSION_KEYS["sessionTriggerDungeon"])
+        Assert.Equals("stow", COMPRESSION_KEYS["sessionTriggerOpenWorld"])
+    end, { category = "unit" })
+
+    TestRunner:It("compress then decompress round-trips trigger fields", function()
+        local COMP = {
+            sessionTriggerAction   = "sta",
+            sessionTriggerTiming   = "stt",
+            sessionTriggerRaid     = "str",
+            sessionTriggerDungeon  = "std",
+            sessionTriggerOpenWorld = "stow",
+        }
+        local DECOMP = {}
+        for k, v in pairs(COMP) do DECOMP[v] = k end
+
+        local original = {
+            sessionTriggerAction   = "prompt",
+            sessionTriggerTiming   = "afterLoot",
+            sessionTriggerRaid     = true,
+            sessionTriggerDungeon  = true,
+            sessionTriggerOpenWorld = false,
+        }
+
+        -- Compress
+        local compressed = {}
+        for k, v in pairs(original) do
+            compressed[COMP[k] or k] = v
+        end
+
+        -- Decompress
+        local restored = {}
+        for k, v in pairs(compressed) do
+            restored[DECOMP[k] or k] = v
+        end
+
+        Assert.Equals(original.sessionTriggerAction,    restored.sessionTriggerAction)
+        Assert.Equals(original.sessionTriggerTiming,    restored.sessionTriggerTiming)
+        Assert.Equals(original.sessionTriggerRaid,      restored.sessionTriggerRaid)
+        Assert.Equals(original.sessionTriggerDungeon,   restored.sessionTriggerDungeon)
+        Assert.Equals(original.sessionTriggerOpenWorld,  restored.sessionTriggerOpenWorld)
+    end, { category = "unit" })
+end)
+
+--[[--------------------------------------------------------------------
+    Settings Accessor Method Tests (updated for split model)
+----------------------------------------------------------------------]]
+
+TestRunner:Describe("Settings - Session Trigger Accessors", function()
+    TestRunner:It("GetSessionTriggerMode legacy shim returns valid mode", function()
         if Loothing and Loothing.Settings then
             local mode = Loothing.Settings:GetSessionTriggerMode()
             local valid = { manual = true, auto = true, prompt = true, afterRolls = true }
@@ -493,50 +652,42 @@ TestRunner:Describe("Settings - Session Trigger Mode Accessors", function()
         end
     end, { category = "integration" })
 
-    TestRunner:It("SetSessionTriggerMode should validate input", function()
-        -- Test validation logic
-        local valid = { manual = true, auto = true, prompt = true, afterRolls = true }
+    TestRunner:It("GetSessionTriggerAction should return valid action", function()
+        if Loothing and Loothing.Settings then
+            local action = Loothing.Settings:GetSessionTriggerAction()
+            local valid = { manual = true, prompt = true, auto = true }
+            Assert.IsTrue(valid[action] or false, "Action should be valid: " .. tostring(action))
+        end
+    end, { category = "integration" })
 
-        -- Valid mode
-        Assert.IsTrue(valid["prompt"], "prompt should be valid")
+    TestRunner:It("GetSessionTriggerTiming should return valid timing", function()
+        if Loothing and Loothing.Settings then
+            local timing = Loothing.Settings:GetSessionTriggerTiming()
+            local valid = { encounterEnd = true, afterLoot = true }
+            Assert.IsTrue(valid[timing] or false, "Timing should be valid: " .. tostring(timing))
+        end
+    end, { category = "integration" })
 
-        -- Invalid mode
-        Assert.IsFalse(valid["garbage"] or false, "garbage should be invalid")
+    TestRunner:It("GetAutoStartSession backward compat returns true only for auto action", function()
+        local function getAutoStart(action)
+            return action == "auto"
+        end
+        Assert.IsTrue(getAutoStart("auto"))
+        Assert.IsFalse(getAutoStart("prompt"))
+        Assert.IsFalse(getAutoStart("manual"))
     end, { category = "unit" })
 
-    TestRunner:It("GetAutoStartSession should return true only for auto mode", function()
-        -- Backward compat: GetAutoStartSession returns true iff mode == "auto"
-        local mode = "auto"
-        local autoStart = mode == "auto"
-        Assert.IsTrue(autoStart)
-
-        mode = "prompt"
-        autoStart = mode == "auto"
-        Assert.IsFalse(autoStart)
-
-        mode = "manual"
-        autoStart = mode == "auto"
-        Assert.IsFalse(autoStart)
-    end, { category = "unit" })
-
-    TestRunner:It("SetAutoStartSession backward compat should map correctly", function()
-        -- SetAutoStartSession(true) -> "auto"
-        -- SetAutoStartSession(false) -> "manual"
-
-        local resultMode
+    TestRunner:It("SetAutoStartSession backward compat maps correctly", function()
+        local resultAction
         local function setAutoStart(enabled)
-            if enabled then
-                resultMode = "auto"
-            else
-                resultMode = "manual"
-            end
+            resultAction = enabled and "auto" or "manual"
         end
 
         setAutoStart(true)
-        Assert.Equals("auto", resultMode)
+        Assert.Equals("auto", resultAction)
 
         setAutoStart(false)
-        Assert.Equals("manual", resultMode)
+        Assert.Equals("manual", resultAction)
     end, { category = "unit" })
 end)
 
@@ -623,10 +774,11 @@ TestRunner:Describe("Session Integration", function()
 
     TestRunner:It("should have trigger mode state variables", function()
         if Loothing and Loothing.Session then
-            -- These should be initialized in Init()
             local session = Loothing.Session
-            -- Can't assert nil vs not present, but method should exist
             Assert.NotNil(session, "Session should exist")
+            Assert.NotNil(session.ClassifyEncounterScope, "ClassifyEncounterScope should exist")
+            Assert.NotNil(session.IsScopeEnabled, "IsScopeEnabled should exist")
+            Assert.NotNil(session.ApplyTriggerAction, "ApplyTriggerAction should exist")
         end
     end, { category = "integration" })
 end)
@@ -638,15 +790,30 @@ TestRunner:Describe("Settings Integration", function()
         end
     end)
 
-    TestRunner:It("should have GetSessionTriggerMode method", function()
+    TestRunner:It("should have GetSessionTriggerMode method (legacy)", function()
         if Loothing and Loothing.Settings then
             Assert.NotNil(Loothing.Settings.GetSessionTriggerMode, "GetSessionTriggerMode should exist")
         end
     end, { category = "integration" })
 
-    TestRunner:It("should have SetSessionTriggerMode method", function()
+    TestRunner:It("should have SetSessionTriggerMode method (legacy)", function()
         if Loothing and Loothing.Settings then
             Assert.NotNil(Loothing.Settings.SetSessionTriggerMode, "SetSessionTriggerMode should exist")
+        end
+    end, { category = "integration" })
+
+    TestRunner:It("should have split trigger accessors", function()
+        if Loothing and Loothing.Settings then
+            Assert.NotNil(Loothing.Settings.GetSessionTriggerAction,    "GetSessionTriggerAction should exist")
+            Assert.NotNil(Loothing.Settings.SetSessionTriggerAction,    "SetSessionTriggerAction should exist")
+            Assert.NotNil(Loothing.Settings.GetSessionTriggerTiming,    "GetSessionTriggerTiming should exist")
+            Assert.NotNil(Loothing.Settings.SetSessionTriggerTiming,    "SetSessionTriggerTiming should exist")
+            Assert.NotNil(Loothing.Settings.GetSessionTriggerRaid,      "GetSessionTriggerRaid should exist")
+            Assert.NotNil(Loothing.Settings.SetSessionTriggerRaid,      "SetSessionTriggerRaid should exist")
+            Assert.NotNil(Loothing.Settings.GetSessionTriggerDungeon,   "GetSessionTriggerDungeon should exist")
+            Assert.NotNil(Loothing.Settings.SetSessionTriggerDungeon,   "SetSessionTriggerDungeon should exist")
+            Assert.NotNil(Loothing.Settings.GetSessionTriggerOpenWorld,  "GetSessionTriggerOpenWorld should exist")
+            Assert.NotNil(Loothing.Settings.SetSessionTriggerOpenWorld,  "SetSessionTriggerOpenWorld should exist")
         end
     end, { category = "integration" })
 
@@ -718,16 +885,19 @@ end)
 
 TestRunner:Describe("Session Edge Cases", function()
     TestRunner:It("should clean up pending state on session start", function()
-        -- Simulating pendingEncounterID cleanup
-        local pendingEncounterID = 12345
-        local pendingEncounterName = "Test Boss"
+        -- Simulating lastEligibleEncounter cleanup
+        local lastEligibleEncounter = { id = 12345, name = "Test Boss" }
+        local lastEncounterID = 12345
+        local lastEncounterName = "Test Boss"
 
         -- After session starts, should clear
-        pendingEncounterID = nil
-        pendingEncounterName = nil
+        lastEligibleEncounter = nil
+        lastEncounterID = nil
+        lastEncounterName = nil
 
-        Assert.IsNil(pendingEncounterID, "pendingEncounterID should be cleared")
-        Assert.IsNil(pendingEncounterName, "pendingEncounterName should be cleared")
+        Assert.IsNil(lastEligibleEncounter, "lastEligibleEncounter should be cleared")
+        Assert.IsNil(lastEncounterID, "lastEncounterID should be cleared")
+        Assert.IsNil(lastEncounterName, "lastEncounterName should be cleared")
     end, { category = "unit" })
 
     TestRunner:It("should cancel timer on session end", function()
@@ -756,12 +926,35 @@ end)
 ----------------------------------------------------------------------]]
 
 TestRunner:Describe("Constants Validation", function()
-    TestRunner:It("LOOTHING_SESSION_TRIGGER should have all required values", function()
+    TestRunner:It("LOOTHING_SESSION_TRIGGER should have all required values (legacy)", function()
         if Loothing.SessionTrigger then
             Assert.NotNil(Loothing.SessionTrigger.MANUAL, "MANUAL should exist")
             Assert.NotNil(Loothing.SessionTrigger.AUTO, "AUTO should exist")
             Assert.NotNil(Loothing.SessionTrigger.PROMPT, "PROMPT should exist")
             Assert.NotNil(Loothing.SessionTrigger.AFTER_ROLLS, "AFTER_ROLLS should exist")
+        end
+    end, { category = "integration" })
+
+    TestRunner:It("SessionTriggerAction enum should have all values", function()
+        if Loothing.SessionTriggerAction then
+            Assert.Equals("manual", Loothing.SessionTriggerAction.MANUAL)
+            Assert.Equals("prompt", Loothing.SessionTriggerAction.PROMPT)
+            Assert.Equals("auto",   Loothing.SessionTriggerAction.AUTO)
+        end
+    end, { category = "integration" })
+
+    TestRunner:It("SessionTriggerTiming enum should have all values", function()
+        if Loothing.SessionTriggerTiming then
+            Assert.Equals("encounterEnd", Loothing.SessionTriggerTiming.ENCOUNTER_END)
+            Assert.Equals("afterLoot",    Loothing.SessionTriggerTiming.AFTER_LOOT)
+        end
+    end, { category = "integration" })
+
+    TestRunner:It("SessionTriggerScope enum should have all values", function()
+        if Loothing.SessionTriggerScope then
+            Assert.Equals("sessionTriggerRaid",      Loothing.SessionTriggerScope.RAID)
+            Assert.Equals("sessionTriggerDungeon",   Loothing.SessionTriggerScope.DUNGEON)
+            Assert.Equals("sessionTriggerOpenWorld",  Loothing.SessionTriggerScope.OPEN_WORLD)
         end
     end, { category = "integration" })
 
@@ -773,11 +966,22 @@ TestRunner:Describe("Constants Validation", function()
         end
     end, { category = "integration" })
 
-    TestRunner:It("settings defaults should include sessionTriggerMode", function()
+    TestRunner:It("settings defaults should include sessionTriggerMode (legacy)", function()
         if Loothing.DefaultSettings and Loothing.DefaultSettings.settings then
             local s = Loothing.DefaultSettings.settings
-            Assert.NotNil(s.sessionTriggerMode, "sessionTriggerMode should be defined")
-            Assert.Equals("prompt", s.sessionTriggerMode, "Default should be prompt")
+            Assert.NotNil(s.sessionTriggerMode, "sessionTriggerMode (legacy) should be defined")
+            Assert.Equals("prompt", s.sessionTriggerMode, "Legacy default should be prompt")
+        end
+    end, { category = "integration" })
+
+    TestRunner:It("settings defaults should include split trigger fields", function()
+        if Loothing.DefaultSettings and Loothing.DefaultSettings.settings then
+            local s = Loothing.DefaultSettings.settings
+            Assert.Equals("prompt",       s.sessionTriggerAction,  "Default action should be prompt")
+            Assert.Equals("encounterEnd", s.sessionTriggerTiming,  "Default timing should be encounterEnd")
+            Assert.IsTrue(s.sessionTriggerRaid,                    "Default raid should be true")
+            Assert.IsFalse(s.sessionTriggerDungeon,                "Default dungeon should be false")
+            Assert.IsFalse(s.sessionTriggerOpenWorld,              "Default openWorld should be false")
         end
     end, { category = "integration" })
 end)

@@ -766,13 +766,28 @@ L["EQUIPMENT_ONLY"] = "Equipment Only"
 L["SLASH_DESC_ADD"] = "Add item to session"
 L["AWARD_LATER_ALL"] = "Award Later (All)"
 
--- Session Trigger Modes
+-- Session Trigger Modes (legacy — kept for backward compat)
 L["SESSION_TRIGGER_MODE"] = "Session Trigger Mode"
 L["SESSION_TRIGGER_MODE_DESC"] = "How loot sessions are started after a boss kill"
 L["TRIGGER_MANUAL"] = "Manual (use /loothing start)"
 L["TRIGGER_AUTO"] = "Automatic (start immediately)"
 L["TRIGGER_PROMPT"] = "Prompt (ask before starting)"
 L["TRIGGER_AFTER_ROLLS"] = "After Rolls (wait for ML to receive loot)"
+
+-- Session Trigger Policy (split model)
+L["SESSION_TRIGGER_HEADER"] = "Session Trigger"
+L["SESSION_TRIGGER_ACTION"] = "Trigger Action"
+L["SESSION_TRIGGER_ACTION_DESC"] = "What happens when a boss kill is eligible"
+L["SESSION_TRIGGER_TIMING"] = "Trigger Timing"
+L["SESSION_TRIGGER_TIMING_DESC"] = "When the trigger action fires relative to the boss kill"
+L["TRIGGER_TIMING_ENCOUNTER_END"] = "On Boss Kill"
+L["TRIGGER_TIMING_AFTER_LOOT"] = "After ML Receives Loot"
+L["TRIGGER_SCOPE_RAID"] = "Raid Bosses"
+L["TRIGGER_SCOPE_RAID_DESC"] = "Trigger on raid boss kills"
+L["TRIGGER_SCOPE_DUNGEON"] = "Dungeon Bosses"
+L["TRIGGER_SCOPE_DUNGEON_DESC"] = "Trigger on dungeon boss kills"
+L["TRIGGER_SCOPE_OPEN_WORLD"] = "Open World"
+L["TRIGGER_SCOPE_OPEN_WORLD_DESC"] = "Trigger on open-world encounters (e.g. world bosses)"
 
 -- AutoPass Options
 L["CONFIG_AUTOPASS_BOE"] = "AutoPass BoE Items"

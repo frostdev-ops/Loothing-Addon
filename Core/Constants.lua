@@ -9,7 +9,7 @@ local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 
 -- Addon info
-Loothing.VERSION = "1.2.4"
+Loothing.VERSION = "1.2.5"
 Loothing.PROTOCOL_VERSION = 4
 Loothing.ADDON_PREFIX = "LOOTHING"
 
@@ -135,7 +135,7 @@ Loothing.VotingMode = {
 }
 
 --[[--------------------------------------------------------------------
-    Session Trigger Mode
+    Session Trigger Mode (legacy single-field enum — kept for migration)
 ----------------------------------------------------------------------]]
 
 Loothing.SessionTrigger = {
@@ -143,6 +143,29 @@ Loothing.SessionTrigger = {
     AUTO = "auto",
     PROMPT = "prompt",
     AFTER_ROLLS = "afterRolls",
+}
+
+--[[--------------------------------------------------------------------
+    Session Trigger Policy (split model — source of truth)
+----------------------------------------------------------------------]]
+
+Loothing.SessionTriggerAction = {
+    MANUAL = "manual",     -- Requires /loothing start; never prompts or auto-starts
+    PROMPT = "prompt",     -- Shows dialog to confirm session start
+    AUTO   = "auto",       -- Starts session directly without dialog
+}
+
+Loothing.SessionTriggerTiming = {
+    ENCOUNTER_END = "encounterEnd",   -- React immediately on ENCOUNTER_END
+    AFTER_LOOT    = "afterLoot",      -- Wait for ML loot receipt + debounce
+}
+
+-- Encounter scope toggles: which instance types are eligible for triggers.
+-- PvP, arena, and scenario are always rejected regardless of these flags.
+Loothing.SessionTriggerScope = {
+    RAID       = "sessionTriggerRaid",
+    DUNGEON    = "sessionTriggerDungeon",
+    OPEN_WORLD = "sessionTriggerOpenWorld",
 }
 
 --[[--------------------------------------------------------------------
@@ -235,7 +258,12 @@ Loothing.DefaultSettings = {
     settings = {
         votingMode = Loothing.VotingMode.SIMPLE,
         votingTimeout = 30,
-        sessionTriggerMode = "prompt",
+        sessionTriggerMode = "prompt",   -- Legacy (migration source; not used at runtime)
+        sessionTriggerAction = "prompt",
+        sessionTriggerTiming = "encounterEnd",
+        sessionTriggerRaid = true,
+        sessionTriggerDungeon = false,
+        sessionTriggerOpenWorld = false,
         showMinimapButton = true,
         uiScale = 1.0,
         mainFramePosition = nil,

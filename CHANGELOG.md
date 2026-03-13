@@ -2,6 +2,77 @@
 
 All notable changes to Loothing will be documented in this file.
 
+## [1.2.5] - 2026-03-12
+
+### Changed
+
+#### Session Trigger Policy Refactor (`Core/Constants.lua`, `Core/SettingsVoting.lua`, `Data/Session.lua`)
+
+- Replaced the single `sessionTriggerMode` setting with a split policy model:
+  - **`sessionTriggerAction`**: `manual` | `prompt` | `auto` — what happens on an eligible boss kill
+  - **`sessionTriggerTiming`**: `encounterEnd` | `afterLoot` — when the action fires relative to the kill
+  - **Encounter scope toggles**: `sessionTriggerRaid` (default on), `sessionTriggerDungeon` (default off), `sessionTriggerOpenWorld` (default off)
+- `OnEncounterEnd` now gates on instance type: PvP, arena, and scenario encounters are always rejected; raid/dungeon/open-world are controlled by the scope toggles (test mode bypasses the scope gate)
+- Extracted `ClassifyEncounterScope()`, `IsScopeEnabled()`, and `ApplyTriggerAction()` as focused helpers on `SessionMixin`
+- afterLoot timing now uses `ApplyTriggerAction()` (respects action=auto for direct start after debounce, not just prompt)
+- Default behavior is unchanged: prompt + encounterEnd + raid-only
+
+#### Settings UI (`Core/Options/SessionSettings.lua`)
+
+- Replaced the single "Session Trigger Mode" dropdown with two dropdowns (Action, Timing) and three scope toggles (Raid, Dungeon, Open World) under a "Session Trigger" header
+- Added help text noting PvP/arena/scenario exclusion and raid-only default
+
+#### MLDB Sync (`Data/MLDB.lua`)
+
+- Session trigger policy fields are now broadcast to raid members via MLDB (5 new compression keys: `sta`, `stt`, `str`, `std`, `stow`)
+- `GatherSettings()` includes the split trigger fields; `ApplyFromML()` applies them through the validated setters
+
+#### Locale (`Locale/enUS.lua`)
+
+- Added 11 new locale strings for the split trigger controls (header, action, timing, scope labels and descriptions)
+
+### Fixed
+
+#### Migration and Profile Switch Safety (`Core/SettingsVoting.lua`)
+
+- Lazy migration from legacy `sessionTriggerMode` to split fields on first access; legacy `GetSessionTriggerMode`/`SetSessionTriggerMode` remain as compatibility shims
+- Removed instance-level migration flag that prevented migration from running after profile switches
+
+#### Stale afterLoot Debounce on New Encounter (`Data/Session.lua`)
+
+- `OnEncounterStart` now cancels any pending afterLoot debounce timer and resets the loot count, preventing stale state from a previous encounter from firing mid-combat
+
+#### Cleanup Path State Reset (`Data/Session.lua`)
+
+- `EndSession` and `OnSessionStartReceived` now correctly clear `lastEligibleEncounter` and legacy aliases
+
+### Tests (`Debug/Tests/RollFrameSessionSettingsTests.lua`)
+
+- Replaced all placeholder trigger-mode tests with behavioral tests covering scope classification, default policy, scope enable/disable, wipe rejection, active-session suppression, afterLoot ML-only filtering, afterLoot+auto direct start, manual caching, legacy migration round-trips, and MLDB compression round-trips
+- Added constants validation for new `SessionTriggerAction`, `SessionTriggerTiming`, and `SessionTriggerScope` enums
+- Updated integration tests to verify new split accessor methods and helper method existence
+
+## [1.2.4] - 2026-03-12
+
+### Added
+
+#### Manifest-Driven Builder And Analyzer (`../builder.py`, `../package.sh`, `../Loolib/manifest.lua`)
+
+- Replaced the old shell-heavy packager with a Python builder that now supports build, lint, analyze, and manifest inspection workflows
+- Restored a dedicated `loothing` preset and aligned release packaging with Loothing’s real embedded Loolib runtime requirements
+
+### Fixed
+
+#### Embedded Loolib Runtime Hardening (`../Loolib/`)
+
+- Pulled in the full Loolib hardening wave that stabilized all shipped families, including core lifecycle/data/event layers and the hardened UI families
+- Resolved the reviewed `ui-appearance` frame-validation regression and the late-discovered `ui-canvas` sync/history edge cases before finalizing the release
+
+#### Versioning And Release Metadata (`README.md`, `Loothing.toc`, `Loothing-Dev.toc`, `Debug/Tests/HistoryExportTests.lua`)
+
+- Updated live version references to 1.2.4 across release docs, dev TOC metadata, and export test fixtures
+- README installation notes now reflect packaged reality: the release zip embeds the required Loolib runtime subset, while standalone `Loolib/` is only needed for source-linked development
+
 ## [1.2.3] - 2026-03-11
 
 ### Fixed

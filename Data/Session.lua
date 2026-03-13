@@ -64,14 +64,15 @@ function SessionMixin:Init()
     self.currentVotingItem = nil
     self.voteTimer = nil
 
-    -- Session trigger mode state
-    self.pendingEncounterID = nil
-    self.pendingEncounterName = nil
-    self.lastEncounterID = nil
-    self.lastEncounterName = nil
+    -- Session trigger state
+    self.lastEligibleEncounter = nil   -- { id, name } — cached for afterLoot / manual
     self.pendingLootTimer = nil
     self.receivedLootCount = 0
     self.lootBuffer = {}  -- Pre-session loot buffer (items arrive before session starts)
+
+    -- Legacy aliases (kept for any external reads)
+    self.lastEncounterID = nil
+    self.lastEncounterName = nil
 
     -- Register for communication events
     self:RegisterCommEvents()
@@ -369,7 +370,7 @@ function SessionMixin:EndSession()
         self:CancelVoting()  -- Cancels all voting items when called without guid
     end
 
-    -- Cancel afterRolls mode timer if running
+    -- Cancel afterLoot debounce timer if running
     if self.pendingLootTimer then
         self.pendingLootTimer:Cancel()
         self.pendingLootTimer = nil
@@ -381,10 +382,11 @@ function SessionMixin:EndSession()
         self.autoStartTimer = nil
     end
 
-    -- Clear trigger mode state
+    -- Clear trigger state
     self.receivedLootCount = 0
-    self.pendingEncounterID = nil
-    self.pendingEncounterName = nil
+    self.lastEligibleEncounter = nil
+    self.lastEncounterID = nil
+    self.lastEncounterName = nil
     if self.lootBuffer then wipe(self.lootBuffer) end
 
     -- Hide any pending session prompt dialog
@@ -1354,7 +1356,64 @@ end
 function SessionMixin:OnEncounterStart()
     -- Wipe stale buffer from previous encounter that never started a session
     if self.lootBuffer then wipe(self.lootBuffer) end
+
+    -- Cancel any stale afterLoot debounce from a previous encounter
+    if self.pendingLootTimer then
+        self.pendingLootTimer:Cancel()
+        self.pendingLootTimer = nil
+    end
+    self.receivedLootCount = 0
 end
+
+--[[--------------------------------------------------------------------
+    Encounter Scope Classifier
+----------------------------------------------------------------------]]
+
+--- Classify the current instance into a trigger scope.
+-- @return string|nil - "raid", "dungeon", "openWorld", or nil (ineligible)
+function SessionMixin:ClassifyEncounterScope()
+    local _, instanceType = IsInInstance()
+    if instanceType == "raid" then
+        return "raid"
+    elseif instanceType == "party" then
+        return "dungeon"
+    elseif instanceType == "none" then
+        return "openWorld"
+    end
+    -- pvp, arena, scenario → always ineligible
+    return nil
+end
+
+--- Check if the given encounter scope is enabled in settings.
+-- @param scope string - "raid", "dungeon", or "openWorld"
+-- @return boolean
+function SessionMixin:IsScopeEnabled(scope)
+    if scope == "raid" then
+        return Loothing.Settings:GetSessionTriggerRaid()
+    elseif scope == "dungeon" then
+        return Loothing.Settings:GetSessionTriggerDungeon()
+    elseif scope == "openWorld" then
+        return Loothing.Settings:GetSessionTriggerOpenWorld()
+    end
+    return false
+end
+
+--- Apply the configured action (manual/prompt/auto) for an eligible encounter.
+-- @param encounterID number
+-- @param encounterName string
+function SessionMixin:ApplyTriggerAction(encounterID, encounterName)
+    local action = Loothing.Settings:GetSessionTriggerAction()
+    if action == "auto" then
+        self:StartSession(encounterID, encounterName)
+    elseif action == "prompt" then
+        self:ShowSessionPrompt(encounterID, encounterName)
+    end
+    -- "manual": do nothing (encounter is cached in lastEligibleEncounter)
+end
+
+--[[--------------------------------------------------------------------
+    OnEncounterEnd — Eligibility Gate
+----------------------------------------------------------------------]]
 
 --- Handle encounter end
 -- @param encounterID number
@@ -1363,28 +1422,42 @@ end
 -- @param groupSize number
 -- @param success number - 1 if boss killed, 0 if wipe
 function SessionMixin:OnEncounterEnd(encounterID, encounterName, _difficultyID, _groupSize, success)
+    -- Gate 1: must be a kill
     if success ~= 1 then return end
+
+    -- Gate 2: must be in group (or test mode)
     if not IsInGroup() and not IsTestModeEnabled() then return end
+
+    -- Gate 3: must be handling loot (or test mode)
     if not Loothing.handleLoot and not IsTestModeEnabled() then return end
+
+    -- Gate 4: no active session
     if self.state ~= Loothing.SessionState.INACTIVE then
         Loothing:Debug("Encounter ended but session already active, ignoring:", encounterName)
         return
     end
 
-    local mode = Loothing.Settings:GetSessionTriggerMode()
-
-    -- Only store encounter info for modes that need it (prompt and afterRolls)
-    if mode == "prompt" or mode == "afterRolls" then
-        self.lastEncounterID = encounterID
-        self.lastEncounterName = encounterName
+    -- Gate 5: encounter scope must be enabled (test mode bypasses)
+    if not IsTestModeEnabled() then
+        local scope = self:ClassifyEncounterScope()
+        if not scope or not self:IsScopeEnabled(scope) then
+            Loothing:Debug("Encounter scope not enabled:", scope or "nil", encounterName)
+            return
+        end
     end
 
-    if mode == "auto" then
-        self:StartSession(encounterID, encounterName)
-    elseif mode == "prompt" then
-        self:ShowSessionPrompt(encounterID, encounterName)
+    -- Cache the eligible encounter for afterLoot / manual use
+    self.lastEligibleEncounter = { id = encounterID, name = encounterName }
+    -- Keep legacy aliases in sync
+    self.lastEncounterID = encounterID
+    self.lastEncounterName = encounterName
+
+    local timing = Loothing.Settings:GetSessionTriggerTiming()
+
+    if timing == "encounterEnd" then
+        self:ApplyTriggerAction(encounterID, encounterName)
     end
-    -- "manual" and "afterRolls" modes: do nothing here (afterRolls triggers on loot receipt)
+    -- "afterLoot": waits for OnLootReceived + debounce before applying action
 end
 
 --- Show session start confirmation dialog to ML
@@ -1396,7 +1469,7 @@ function SessionMixin:ShowSessionPrompt(encounterID, encounterName)
         return
     end
 
-    -- Guard: Don't show if encounterID is nil (can happen with afterRolls mode edge cases)
+    -- Guard: Don't show if encounterID is nil (can happen with afterLoot timing edge cases)
     if not encounterID then
         encounterID = 0
         encounterName = encounterName or "Unknown Boss"
@@ -1420,10 +1493,11 @@ end
 
 --- Handle loot received
 function SessionMixin:OnLootReceived(_encounterID, _itemID, itemLink, _quantity, playerName)
-    local mode = Loothing.Settings:GetSessionTriggerMode()
+    local timing = Loothing.Settings:GetSessionTriggerTiming()
+    local action = Loothing.Settings:GetSessionTriggerAction()
 
-    -- For afterRolls mode: track when ML receives loot, then prompt
-    if mode == "afterRolls" and Loothing.handleLoot then
+    -- afterLoot timing: track when ML receives loot, then apply the configured action
+    if timing == "afterLoot" and action ~= "manual" and Loothing.handleLoot then
         -- Use IsSamePlayer if available for robust cross-realm comparison
         local isMyLoot = false
         if Utils.IsSamePlayer then
@@ -1444,15 +1518,16 @@ function SessionMixin:OnLootReceived(_encounterID, _itemID, itemLink, _quantity,
                 self.pendingLootTimer:Cancel()
             end
 
-            -- After debounce delay with no new loot, prompt for session
-            -- (Debounce delay allows all boss loot to be distributed before prompting)
+            -- After debounce delay with no new loot, apply the trigger action
             local debounceDelay = Loothing.Timing and Loothing.Timing.LOOT_DEBOUNCE_DELAY or 2.5
             self.pendingLootTimer = C_Timer.NewTimer(debounceDelay, function()
-                -- Guard: Only prompt if we have loot, session is inactive, and we have a valid encounter
                 if self.receivedLootCount > 0
                    and self.state == Loothing.SessionState.INACTIVE
-                   and self.lastEncounterID then
-                    self:ShowSessionPrompt(self.lastEncounterID, self.lastEncounterName)
+                   and self.lastEligibleEncounter then
+                    self:ApplyTriggerAction(
+                        self.lastEligibleEncounter.id,
+                        self.lastEligibleEncounter.name
+                    )
                 end
                 self.receivedLootCount = 0
                 self.pendingLootTimer = nil
@@ -1539,8 +1614,9 @@ function SessionMixin:HandleRemoteSessionStart(data)
         self.pendingLootTimer = nil
     end
     self.receivedLootCount = 0
-    self.pendingEncounterID = nil
-    self.pendingEncounterName = nil
+    self.lastEligibleEncounter = nil
+    self.lastEncounterID = nil
+    self.lastEncounterName = nil
     local Popups = GetPopups()
     if Popups then
         Popups:Hide("LOOTHING_CONFIRM_START_SESSION")
