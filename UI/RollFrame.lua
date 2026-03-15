@@ -616,14 +616,17 @@ function RollFrameMixin:UpdateTimer()
             self.timerBar:SetValue(0)
             self.timerBar:SetStatusBarColor(0.6, 0.2, 0.2, 1)
 
-            -- Auto-close after a delay only if voting actually expired
-            C_Timer.After(1.5, function()
-                local itemRemaining = self.frame:IsShown() and self.item and
-                    self.item.GetTimeRemaining and self.item:GetTimeRemaining() or 0
-                if itemRemaining ~= math.huge and (itemRemaining or 0) <= 0 then
-                    self:Close(false)
-                end
-            end)
+            -- Auto-close after a delay (deduplicated: only one pending timer at a time)
+            if not self.autoCloseTimer then
+                self.autoCloseTimer = C_Timer.NewTimer(1.5, function()
+                    self.autoCloseTimer = nil
+                    local itemRemaining = self.frame:IsShown() and self.item and
+                        self.item.GetTimeRemaining and self.item:GetTimeRemaining() or 0
+                    if itemRemaining ~= math.huge and (itemRemaining or 0) <= 0 then
+                        self:Close(false)
+                    end
+                end)
+            end
         else
             self.timerText:SetText("")
             if self.timerBar then
@@ -677,13 +680,18 @@ function RollFrameMixin:StartTimerFlash()
     end
     self.timerFlashOverlay:Show()
 
-    local ag = self.timerFlashOverlay:CreateAnimationGroup()
-    local alpha = ag:CreateAnimation("Alpha")
-    alpha:SetFromAlpha(0)
-    alpha:SetToAlpha(0.4)
-    alpha:SetDuration(0.3)
-    alpha:SetSmoothing("IN_OUT")
-    ag:SetLooping("BOUNCE")
+    -- Reuse existing animation group if available; create only once per overlay
+    local ag = self.timerFlashOverlay._flashAG
+    if not ag then
+        ag = self.timerFlashOverlay:CreateAnimationGroup()
+        local alpha = ag:CreateAnimation("Alpha")
+        alpha:SetFromAlpha(0)
+        alpha:SetToAlpha(0.4)
+        alpha:SetDuration(0.3)
+        alpha:SetSmoothing("IN_OUT")
+        ag:SetLooping("BOUNCE")
+        self.timerFlashOverlay._flashAG = ag
+    end
     ag:Play()
     self.flashAnim = ag
 end

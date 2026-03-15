@@ -203,6 +203,11 @@ L["BUTTON_SETS"] = "按鈕組"
 L["DEFAULT_SET"] = "預設"
 L["WHISPER_KEY"] = "密語關鍵詞"
 
+-- Locale Override
+L["CONFIG_LOCALE_OVERRIDE"] = "語言覆蓋"
+L["CONFIG_LOCALE_OVERRIDE_DESC"] = "手動設定插件語言（需要/reload）"
+L["LOCALE_AUTO"] = "自動（遊戲語言）"
+
 -- Observer System (new strings - untranslated placeholders)
 L["OBSERVERS"] = L["OBSERVERS"] or "Observers"
 L["OBSERVER"] = L["OBSERVER"] or "Observer"

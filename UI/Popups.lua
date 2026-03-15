@@ -835,6 +835,34 @@ Popups:Register("LOOTHING_CONFIRM_PROFILE_OVERWRITE", {
     },
 })
 
+-- 19. Settings Import Confirmation — two action buttons for import mode
+Popups:Register("LOOTHING_SETTINGS_IMPORT_CONFIRM", {
+    title = "Import Settings",
+    text = "Choose how to apply the imported settings:",
+    modal = true,
+    hide_on_escape = true,
+    show_while_dead = true,
+    buttons = {
+        {
+            text = "Create New Profile",
+            on_click = function(dialog, data)
+                if data and data.onNewProfile then
+                    data.onNewProfile()
+                end
+            end,
+        },
+        {
+            text = "Apply to Current",
+            danger = true,
+            on_click = function(dialog, data)
+                if data and data.onApplyCurrent then
+                    data.onApplyCurrent()
+                end
+            end,
+        },
+    },
+})
+
 --[[--------------------------------------------------------------------
     Convenience Functions
 ----------------------------------------------------------------------]]

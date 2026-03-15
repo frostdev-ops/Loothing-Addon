@@ -122,6 +122,43 @@ local function GetLocalPreferencesOptions()
                 order = 1,
                 columns = 3,
                 args = {
+                    localeOverride = {
+                        type = "select",
+                        name = L["CONFIG_LOCALE_OVERRIDE"] or "Language Override",
+                        desc = L["CONFIG_LOCALE_OVERRIDE_DESC"] or "Set addon language manually (requires /reload)",
+                        order = 0,
+                        width = "double",
+                        values = {
+                            [""] = L["LOCALE_AUTO"] or "Automatic (game language)",
+                            enUS = "English",
+                            deDE = "Deutsch",
+                            esES = "Español",
+                            frFR = "Français",
+                            itIT = "Italiano",
+                            ptBR = "Português",
+                            ruRU = "Русский",
+                            koKR = "한국어",
+                            zhCN = "简体中文",
+                            zhTW = "繁體中文",
+                            brainrot = "Brainrot",
+                        },
+                        get = function()
+                            local db = _G.LoolibDB
+                            if db and type(db._localeOverrides) == "table" then
+                                return db._localeOverrides["Loothing"] or ""
+                            end
+                            return ""
+                        end,
+                        set = function(_, value)
+                            local db = _G.LoolibDB
+                            if not db then return end
+                            if not db._localeOverrides then
+                                db._localeOverrides = {}
+                            end
+                            db._localeOverrides["Loothing"] = (value ~= "") and value or nil
+                            print("|cFF33FF99Loothing|r: " .. (L["CONFIG_LOCALE_OVERRIDE_DESC"] or "Language changed. /reload to apply."))
+                        end,
+                    },
                     autoShow = {
                         type = "toggle",
                         name = L["CONFIG_ROLLFRAME_AUTO_SHOW"] or "Auto-Show Response Frame",
@@ -352,33 +389,133 @@ local function GetLocalPreferencesOptions()
                         get = function() return Loothing.Settings:GetIgnoreItemsEnabled() end,
                         set = function(_, v) Loothing.Settings:SetIgnoreItemsEnabled(v) end,
                     },
+                    catHeader = {
+                        type = "header",
+                        name = L["IGNORE_CATEGORIES"] or "Category Filters",
+                        order = 2,
+                    },
                     ignoreEnchantingMaterials = {
                         type = "toggle",
                         name = L["CONFIG_IGNORE_ENCHANTING_MATS"] or "Ignore Enchanting Materials",
-                        order = 2,
+                        order = 3,
                         get = function() return Loothing.Settings:GetIgnoreEnchantingMaterials() end,
                         set = function(_, v) Loothing.Settings:SetIgnoreEnchantingMaterials(v) end,
                     },
                     ignoreCraftingReagents = {
                         type = "toggle",
                         name = L["CONFIG_IGNORE_CRAFTING_REAGENTS"] or "Ignore Crafting Reagents",
-                        order = 3,
+                        order = 4,
                         get = function() return Loothing.Settings:GetIgnoreCraftingReagents() end,
                         set = function(_, v) Loothing.Settings:SetIgnoreCraftingReagents(v) end,
                     },
                     ignoreConsumables = {
                         type = "toggle",
                         name = L["CONFIG_IGNORE_CONSUMABLES"] or "Ignore Consumables",
-                        order = 4,
+                        order = 5,
                         get = function() return Loothing.Settings:GetIgnoreConsumables() end,
                         set = function(_, v) Loothing.Settings:SetIgnoreConsumables(v) end,
                     },
                     ignorePermanentEnhancements = {
                         type = "toggle",
                         name = L["CONFIG_IGNORE_PERMANENT_ENHANCEMENTS"] or "Ignore Permanent Enhancements",
-                        order = 5,
+                        order = 6,
                         get = function() return Loothing.Settings:GetIgnorePermanentEnhancements() end,
                         set = function(_, v) Loothing.Settings:SetIgnorePermanentEnhancements(v) end,
+                    },
+                    itemsHeader = {
+                        type = "header",
+                        name = L["IGNORED_ITEMS"] or "Ignored Items",
+                        order = 10,
+                    },
+                    itemListDesc = {
+                        type = "description",
+                        name = function()
+                            local items = Loothing.Settings:GetIgnoredItems()
+                            if not next(items) then
+                                return L["NO_IGNORED_ITEMS"] or "No items are currently ignored."
+                            end
+                            local lines = {}
+                            for itemID in pairs(items) do
+                                local itemName = C_Item.GetItemNameByID(itemID)
+                                if itemName then
+                                    lines[#lines + 1] = string.format("  [%d] %s", itemID, itemName)
+                                else
+                                    lines[#lines + 1] = string.format("  [%d]", itemID)
+                                end
+                            end
+                            table.sort(lines)
+                            return table.concat(lines, "\n")
+                        end,
+                        order = 11,
+                        fontSize = "medium",
+                    },
+                    addItemInput = {
+                        type = "input",
+                        name = L["ADD_IGNORED_ITEM"] or "Add Item to Ignore List",
+                        desc = L["IGNORE_ADD_DESC"] or "Paste an item link or enter an item ID.",
+                        order = 12,
+                        width = "double",
+                        get = function() return "" end,
+                        set = function(_, value)
+                            value = strtrim(value)
+                            if value == "" then return end
+                            local itemID = tonumber(value)
+                                or tonumber(value:match("item:(%d+)"))
+                            if not itemID then
+                                print("|cFF33FF99Loothing|r: " .. (L["SLASH_INVALID_ITEM"] or "Invalid item link."))
+                                return
+                            end
+                            Loothing.Settings:AddIgnoredItem(itemID)
+                            local itemName = C_Item.GetItemNameByID(itemID) or tostring(itemID)
+                            print("|cFF33FF99Loothing|r: " .. string.format(
+                                L["ITEM_IGNORED"] or "%s added to ignore list", itemName))
+                            if Loolib.Config then Loolib.Config:NotifyChange("Loothing") end
+                        end,
+                    },
+                    removeItemSelect = {
+                        type = "select",
+                        name = L["REMOVE_IGNORED_ITEM"] or "Remove from ignore list",
+                        order = 13,
+                        width = "double",
+                        values = function()
+                            local items = Loothing.Settings:GetIgnoredItems()
+                            local list = {}
+                            for itemID in pairs(items) do
+                                local itemName = C_Item.GetItemNameByID(itemID)
+                                if itemName then
+                                    list[itemID] = string.format("%s (%d)", itemName, itemID)
+                                else
+                                    list[itemID] = tostring(itemID)
+                                end
+                            end
+                            return list
+                        end,
+                        get = function() return nil end,
+                        set = function(_, value)
+                            Loothing.Settings:RemoveIgnoredItem(value)
+                            local itemName = C_Item.GetItemNameByID(value) or tostring(value)
+                            print("|cFF33FF99Loothing|r: " .. string.format(
+                                L["ITEM_UNIGNORED"] or "%s removed from ignore list", itemName))
+                            if Loolib.Config then Loolib.Config:NotifyChange("Loothing") end
+                        end,
+                        hidden = function()
+                            return not next(Loothing.Settings:GetIgnoredItems())
+                        end,
+                    },
+                    clearBtn = {
+                        type = "execute",
+                        name = L["CLEAR_IGNORED_ITEMS"] or "Clear All",
+                        order = 14,
+                        confirm = true,
+                        confirmText = L["CONFIRM_CLEAR_IGNORED"] or "Clear all ignored items?",
+                        func = function()
+                            Loothing.Settings:ClearIgnoredItems()
+                            print("|cFF33FF99Loothing|r: " .. (L["IGNORED_ITEMS_CLEARED"] or "Ignore list cleared."))
+                            if Loolib.Config then Loolib.Config:NotifyChange("Loothing") end
+                        end,
+                        hidden = function()
+                            return not next(Loothing.Settings:GetIgnoredItems())
+                        end,
                     },
                 },
             },

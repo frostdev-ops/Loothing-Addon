@@ -611,7 +611,7 @@ function VersionCheckMixin:AddVersionEntry(name, version, tVersion, extraData)
         tVersion = tVersion,
         timestamp = time(),  -- Use real clock for cross-session persistence
         -- Test versions are never considered outdated for warning purposes
-        isOutdated = tVersion and false or self:IsOutdated(version),
+        isOutdated = not tVersion and self:IsOutdated(version),
         ilvl = extraData and extraData.ilvl or existing.ilvl,
         specID = extraData and extraData.specID or existing.specID,
     }

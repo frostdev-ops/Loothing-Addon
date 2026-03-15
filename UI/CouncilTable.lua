@@ -1092,6 +1092,7 @@ end
 function CouncilTableMixin:Show()
     self:LoadPosition()
     self.frame:Show()
+    self.frame:Raise()
     self:RebuildColumnHeaders()
     self:RefreshItemTabs()
     self:RefreshCandidates()

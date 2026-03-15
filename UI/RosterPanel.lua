@@ -962,7 +962,8 @@ function RosterPanelMixin:ShowRowContextMenu(row, entry)
         end
 
         -- Master Looter assignment
-        if Loothing.Settings then
+        local canSetML = Loothing.Settings and (Loothing.Settings:IsMasterLooter() or isPlayerLeader)
+        if canSetML then
             local explicitML = Loothing.Settings:GetMasterLooterName()
             local isExplicitML = explicitML and Utils.IsSamePlayer(entry.name, explicitML)
 

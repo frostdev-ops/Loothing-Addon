@@ -158,6 +158,15 @@ function AckTrackerMixin:HandleHeartbeat(digest, sender)
                 Loothing:Debug("AckTracker: council hash mismatch — sync needed")
                 needsSync = true
             end
+
+            -- Deep-check MLDB hash
+            if not needsSync then
+                local localMLDBHash = self:ComputeMLDBHash()
+                if localMLDBHash ~= digest.mldbHash then
+                    Loothing:Debug("AckTracker: MLDB hash mismatch — sync needed")
+                    needsSync = true
+                end
+            end
         end
     end
 
@@ -216,7 +225,35 @@ function AckTrackerMixin:ComputeCouncilHash()
     return Loolib.Compressor:Adler32(str)
 end
 
+--- Serialize a table deterministically (sorted keys at every level)
+-- Required because pairs() iteration order is undefined, so Serialize()
+-- output can differ between ML and client even for identical tables.
+-- @param tbl any
+-- @return string
+function AckTrackerMixin:DeterministicSerialize(tbl)
+    if type(tbl) ~= "table" then
+        return tostring(tbl)
+    end
+
+    local keys = {}
+    for k in pairs(tbl) do
+        keys[#keys + 1] = k
+    end
+    table.sort(keys, function(a, b)
+        return tostring(a) < tostring(b)
+    end)
+
+    local parts = {}
+    for _, k in ipairs(keys) do
+        parts[#parts + 1] = tostring(k) .. "=" .. self:DeterministicSerialize(tbl[k])
+    end
+
+    return "{" .. table.concat(parts, ",") .. "}"
+end
+
 --- Compute Adler-32 hash of the current MLDB
+-- Uses deterministic serialization to ensure ML and client produce
+-- identical hashes for identical data.
 -- @return number
 function AckTrackerMixin:ComputeMLDBHash()
     if not Loothing.MLDB then return 0 end
@@ -224,9 +261,7 @@ function AckTrackerMixin:ComputeMLDBHash()
     local mldb = Loothing.MLDB:Get()
     if not mldb then return 0 end
 
-    local serialized = Loolib.Serializer:Serialize(mldb)
-    if not serialized then return 0 end
-
+    local serialized = self:DeterministicSerialize(mldb)
     return Loolib.Compressor:Adler32(serialized)
 end
 

@@ -252,6 +252,15 @@ function VotingEngine:TallyRankedChoice(votes, candidates, opts)
         -- Handle tie for last place — use backward tiebreaker
         if #tiedForLast > 1 then
             local toRemove = self:ResolveTiedElimination(tiedForLast, rounds)
+
+            -- Safety: if we would eliminate ALL remaining candidates,
+            -- break out to the final tiebreaker instead of leaving zero.
+            local activeCount = 0
+            for _ in pairs(activeCandidates) do activeCount = activeCount + 1 end
+            if #toRemove >= activeCount then
+                break
+            end
+
             for _, candidate in ipairs(toRemove) do
                 activeCandidates[candidate] = nil
                 eliminated[#eliminated + 1] = {

@@ -9,7 +9,7 @@ local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 
 -- Addon info
-Loothing.VERSION = "1.2.5"
+Loothing.VERSION = "1.2.7"
 Loothing.PROTOCOL_VERSION = 4
 Loothing.ADDON_PREFIX = "LOOTHING"
 
@@ -214,6 +214,7 @@ Loothing.MsgType = {
     SYNC_HISTORY_REQUEST = "SHR",    -- ML -> Target: Request to sync history
     SYNC_HISTORY_ACK = "SHA",        -- Target -> ML: Accept history sync
     SYNC_HISTORY_DATA = "SHD",       -- ML -> Target: History payload
+    PROFILE_EXPORT_SHARE = "PES",    -- Player -> Target: Share a settings export string
 
     -- Cross-realm relay
     XREALM = "XR",             -- Cross-realm whisper relay via group channel

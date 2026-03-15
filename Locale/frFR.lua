@@ -194,6 +194,11 @@ L["COUNCIL_AWARD"] = "Attribuer"
 L["COUNCIL_REVOTE"] = "Re-voter"
 L["COUNCIL_SKIP"] = "Passer"
 
+-- Locale Override
+L["CONFIG_LOCALE_OVERRIDE"] = "Remplacement de la langue"
+L["CONFIG_LOCALE_OVERRIDE_DESC"] = "Définir la langue de l'addon manuellement (nécessite /reload)"
+L["LOCALE_AUTO"] = "Automatique (langue du jeu)"
+
 -- Observer System (new strings - untranslated placeholders)
 L["OBSERVERS"] = L["OBSERVERS"] or "Observers"
 L["OBSERVER"] = L["OBSERVER"] or "Observer"

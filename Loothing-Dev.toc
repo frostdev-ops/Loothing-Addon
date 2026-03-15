@@ -3,7 +3,7 @@
 ## Title: Loothing (Dev)
 ## Notes: Development build with test harness and debug tooling
 ## Author: James Kueller
-## Version: 1.2.5
+## Version: 1.2.7
 ## SavedVariables: LoolibDB
 ## Dependencies: Loolib
 ## IconTexture: Interface\AddOns\Loothing\Media\logo
@@ -38,8 +38,10 @@ Core\TestModeState.lua
 Core\Migration.lua
 Core\Settings.lua
 Core\SettingsVoting.lua
+Core\SettingsExport.lua
 Core\Options\SessionSettings.lua
 Core\Options\LocalPreferences.lua
+Core\Options\ProfileOptions.lua
 Core\OptionsTable.lua
 Core\ItemFilter.lua
 Core\ResponseManager.lua
@@ -148,3 +150,4 @@ Debug\Tests\RollFrameSessionSettingsTests.lua
 Debug\Tests\SecretValueTests.lua
 Debug\Tests\DiagnosticsTests.lua
 Debug\Tests\HistoryExportTests.lua
+Debug\Tests\SettingsExportTests.lua

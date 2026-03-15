@@ -22,12 +22,17 @@ ns.WhisperHandlerMixin = ns.WhisperHandlerMixin or {}
 local WhisperHandlerMixin = ns.WhisperHandlerMixin
 
 local L = Loothing.Locale
+local GetTime = GetTime
 
 -- Frame used to listen for CHAT_MSG_WHISPER
 local whisperFrame = nil
 
 -- Track outgoing whispers to filter from chat frame
 local outgoingWhispers = {}
+
+-- Per-sender rate limiting to prevent whisper-spam abuse
+local whisperCooldowns = {}
+local WHISPER_COOLDOWN = 2  -- seconds between accepted commands per sender
 
 --- Initialize the whisper handler
 function WhisperHandlerMixin:Init()
@@ -75,6 +80,7 @@ function WhisperHandlerMixin:Disable()
     end
 
     wipe(outgoingWhispers)
+    wipe(whisperCooldowns)
 
     Loothing:Debug("WhisperHandler disabled")
 end
@@ -107,6 +113,13 @@ function WhisperHandlerMixin:OnWhisperReceived(message, sender)
     end
 
     local normalizedSender = Utils.NormalizeName(sender)
+
+    -- Per-sender rate limiting
+    local now = GetTime()
+    if whisperCooldowns[normalizedSender] and now - whisperCooldowns[normalizedSender] < WHISPER_COOLDOWN then
+        return
+    end
+    whisperCooldowns[normalizedSender] = now
 
     -- Validate sender is in our group/raid before processing
     local roster = Utils.GetRaidRoster and Utils.GetRaidRoster()

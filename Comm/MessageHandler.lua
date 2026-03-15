@@ -127,6 +127,7 @@ local HANDLERS = {
     [Loothing.MsgType.SYNC_HISTORY_REQUEST]    = "HandleHistorySyncRequest",
     [Loothing.MsgType.SYNC_HISTORY_ACK]        = "HandleHistorySyncAck",
     [Loothing.MsgType.SYNC_HISTORY_DATA]       = "HandleHistoryData",
+    [Loothing.MsgType.PROFILE_EXPORT_SHARE]    = "HandleProfileExportShare",
     [Loothing.MsgType.XREALM]                  = "HandleXRealm",
     [Loothing.MsgType.STOP_HANDLE_LOOT]        = "HandleStopHandleLoot",
     [Loothing.MsgType.TRADABLE]                = "HandleTradable",
@@ -791,6 +792,15 @@ end
 function CommMixin:SendHistoryData(historyData, target)
     self:Send(Loothing.MsgType.SYNC_HISTORY_DATA, {
         data = historyData,
+    }, target, "BULK")
+end
+
+--- Send a shareable settings export string directly to another player.
+-- @param exportString string
+-- @param target string
+function CommMixin:SendProfileExport(exportString, target)
+    self:Send(Loothing.MsgType.PROFILE_EXPORT_SHARE, {
+        exportString = exportString,
     }, target, "BULK")
 end
 

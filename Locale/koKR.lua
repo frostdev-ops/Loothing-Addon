@@ -154,6 +154,11 @@ L["COUNCIL_TABLE_TITLE"] = "전리품 위원회 - 후보자"
 L["COUNCIL_AWARD"] = "수여"
 L["COUNCIL_SKIP"] = "건너뛰기"
 
+-- Locale Override
+L["CONFIG_LOCALE_OVERRIDE"] = "언어 변경"
+L["CONFIG_LOCALE_OVERRIDE_DESC"] = "애드온 언어를 수동으로 설정합니다 (/reload 필요)"
+L["LOCALE_AUTO"] = "자동 (게임 언어)"
+
 -- Observer System (new strings - untranslated placeholders)
 L["OBSERVERS"] = L["OBSERVERS"] or "Observers"
 L["OBSERVER"] = L["OBSERVER"] or "Observer"

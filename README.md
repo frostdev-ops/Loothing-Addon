@@ -2,7 +2,7 @@
 
 A loot council addon for World of Warcraft 12.0+ (Midnight). Built on [Loolib](https://github.com/frostdev-ops/Loolib).
 
-**Version**: 1.2.3 | **Interface**: 120000 | **License**: MIT
+**Version**: 1.2.7 | **Interface**: 120000 | **License**: MIT
 
 ---
 
@@ -32,8 +32,9 @@ A loot council addon for World of Warcraft 12.0+ (Midnight). Built on [Loolib](h
 ## Installation
 
 1. Download the latest release zip
-2. Extract `Loothing/` and `Loolib/` into your `World of Warcraft/_retail_/Interface/AddOns/` directory
-3. Reload or launch the game
+2. Extract `Loothing/` into your `World of Warcraft/_retail_/Interface/AddOns/` directory
+3. Standalone `Loolib/` is only needed for source-linked development workflows; the release package embeds the required runtime subset automatically
+4. Reload or launch the game
 
 ---
 

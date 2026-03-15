@@ -554,6 +554,13 @@ end
 --- Destroy the voting session
 function VotingSessionMixin:Destroy()
     self:StopTimer()
+
+    -- Clear callback subscriptions to prevent stale event delivery
+    -- after the session is released back to a pool or discarded.
+    if self.callbackRegistry then
+        wipe(self.callbackRegistry)
+    end
+
     self.item = nil
     self.results = nil
     self.expectedVoters = {}

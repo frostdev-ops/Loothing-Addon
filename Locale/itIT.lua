@@ -154,6 +154,11 @@ L["COUNCIL_TABLE_TITLE"] = "Consiglio bottino - Candidati"
 L["COUNCIL_AWARD"] = "Assegna"
 L["COUNCIL_SKIP"] = "Salta"
 
+-- Locale Override
+L["CONFIG_LOCALE_OVERRIDE"] = "Sovrascrittura lingua"
+L["CONFIG_LOCALE_OVERRIDE_DESC"] = "Imposta la lingua dell'addon manualmente (richiede /reload)"
+L["LOCALE_AUTO"] = "Automatico (lingua del gioco)"
+
 -- Observer System (new strings - untranslated placeholders)
 L["OBSERVERS"] = L["OBSERVERS"] or "Observers"
 L["OBSERVER"] = L["OBSERVER"] or "Observer"

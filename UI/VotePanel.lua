@@ -76,6 +76,9 @@ function VotePanelMixin:CreateFrame()
 
     self.frame = frame
     ns.VotePanelFrame = frame
+
+    local WM = Loolib:GetModule("WindowManager")
+    if WM then WM:Register(frame) end
 end
 
 --- Create UI elements
@@ -931,6 +934,7 @@ end
 --- Show the panel
 function VotePanelMixin:Show()
     self.frame:Show()
+    self.frame:Raise()
 end
 
 --- Hide the panel

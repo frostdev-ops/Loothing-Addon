@@ -34,6 +34,7 @@ Loothing.lootMethod = nil           -- Current loot method from GetLootMethod()
 -- ML check state (module-private via upvalues)
 local mlCheckTimer = nil            -- Pending NewMLCheck timer handle
 local mlRetryCount = 0              -- Number of ML retry attempts
+local mlRetryTimer = nil            -- Handle for the 0.5s retry timer (prevents parallel chains)
 local raidEnterTimer = nil          -- Pending OnRaidEnter timer handle
 local raidEnterAt = nil             -- Absolute trigger time for pending OnRaidEnter timer
 local OnRaidEnter
@@ -126,6 +127,12 @@ local function InitializeModules()
     if ns.SettingsMixin then
         Loothing.Settings = CreateFromMixins(ns.SettingsMixin)
         Loothing.Settings:Init()
+    end
+
+    -- Initialize settings export/import (depends on Settings)
+    if ns.SettingsExportMixin then
+        Loothing.SettingsExport = CreateFromMixins(ns.SettingsExportMixin)
+        Loothing.SettingsExport:Init()
     end
 
     -- Initialize auto-award system (depends on Settings)
@@ -443,7 +450,7 @@ local function PerformMLCheck()
         mlRetryCount = mlRetryCount + 1
         if mlRetryCount < 10 then
             Loothing:Debug("ML unknown, retry #" .. mlRetryCount)
-            C_Timer.After(0.5, PerformMLCheck)
+            mlRetryTimer = C_Timer.NewTimer(0.5, PerformMLCheck)
             return
         end
         Loothing:Debug("ML unknown after 10 retries, giving up")
@@ -530,6 +537,11 @@ end
 local function ScheduleMLCheck()
     if mlCheckTimer then
         mlCheckTimer:Cancel()
+    end
+    -- Cancel any in-flight retry chain to prevent parallel retry races
+    if mlRetryTimer then
+        mlRetryTimer:Cancel()
+        mlRetryTimer = nil
     end
     mlRetryCount = 0
     mlCheckTimer = C_Timer.NewTimer(2, PerformMLCheck)
@@ -806,6 +818,37 @@ local function RegisterEvents()
                 if historyPanel then
                     historyPanel:ShowWebExport()
                 end
+            end
+        end, Loothing)
+    end
+
+    -- Wire Announcer to Session events (session start, end, item added, voting started)
+    if Loothing.Session and Loothing.Announcer then
+        Loothing.Session:RegisterCallback("OnSessionStarted", function(_, sessionID, encounterID, encounterName)
+            Loothing.Announcer:AnnounceSessionStart(encounterName)
+        end, Loothing)
+
+        Loothing.Session:RegisterCallback("OnSessionEnded", function()
+            Loothing.Announcer:AnnounceSessionEnd()
+        end, Loothing)
+
+        Loothing.Session:RegisterCallback("OnItemAdded", function(_, item)
+            if item and item.itemLink then
+                Loothing.Announcer:AnnounceItem(item.itemLink, {
+                    itemLevel = item.itemLevel,
+                    itemType = item.itemType,
+                    session = Loothing.Session.encounterName,
+                })
+            end
+        end, Loothing)
+
+        Loothing.Session:RegisterCallback("OnVotingStarted", function(_, item)
+            if item and item.itemLink then
+                Loothing.Announcer:AnnounceConsiderations(item.itemLink, {
+                    itemLevel = item.itemLevel,
+                    itemType = item.itemType,
+                    session = Loothing.Session.encounterName,
+                })
             end
         end, Loothing)
     end
@@ -1153,6 +1196,76 @@ local function RegisterSlashCommands()
             end,
         },
         {
+            key = "export",
+            description = L["SLASH_DESC_EXPORT"] or "Export current profile settings",
+            usage = { "/lt export" },
+            handler = function()
+                if Loothing.SettingsExport then
+                    Loothing.SettingsExport:ShowExportDialog()
+                else
+                    printError("Settings export not available.")
+                end
+            end,
+        },
+        {
+            key = "profile",
+            aliases = { "prof" },
+            description = L["SLASH_DESC_PROFILE"] or "Manage profiles (list, switch, create)",
+            usage = { "/lt profile", "/lt profile list", "/lt profile <name>" },
+            handler = function(args)
+                args = strtrim(args or "")
+                local profiles = Loothing.Settings:GetProfiles() or {}
+                local current = Loothing.Settings:GetCurrentProfile() or "Default"
+
+                -- No args or "list": print all profiles
+                if args == "" or args:lower() == "list" then
+                    printLine(L["PROFILE_LIST_HEADER"] or "Profiles:")
+                    for _, name in ipairs(profiles) do
+                        if name == current then
+                            print("  |cFF33FF99> " .. name .. "|r")
+                        else
+                            print("    " .. name)
+                        end
+                    end
+                    return
+                end
+
+                -- Try case-insensitive match against existing profiles
+                local argsLower = args:lower()
+                local matched = nil
+                for _, name in ipairs(profiles) do
+                    if name:lower() == argsLower then
+                        matched = name
+                        break
+                    end
+                end
+
+                if matched then
+                    Loothing.Settings:SetProfile(matched)
+                    printLine(string.format(
+                        L["PROFILE_SWITCHED"] or "Switched to profile: %s", matched))
+                else
+                    -- Validate and create new profile
+                    local trimmed = strtrim(args)
+                    if #trimmed > 48 then
+                        printError("Profile name must be 48 characters or fewer.")
+                        return
+                    end
+                    if trimmed:match('[<>:"/\\|?*]') then
+                        printError("Profile name contains invalid characters.")
+                        return
+                    end
+                    Loothing.Settings:SetProfile(trimmed)
+                    printLine(string.format(
+                        L["PROFILE_CREATED"] or "Created and switched to profile: %s", trimmed))
+                end
+
+                if Loolib.Config then
+                    Loolib.Config:NotifyChange("Loothing")
+                end
+            end,
+        },
+        {
             key = "sync",
             description = L["SLASH_DESC_SYNC"] or "Sync settings or history",
             usage = { "/lt sync settings [guild|player]", "/lt sync history [guild|player] [days]" },
@@ -1162,10 +1275,19 @@ local function RegisterSlashCommands()
         },
         {
             key = "import",
-            description = L["SLASH_DESC_IMPORT"] or "Import loot history text",
-            usage = { "/lt import <csv|tsv data>" },
+            description = L["SLASH_DESC_IMPORT"] or "Import loot history or settings",
+            usage = { "/lt import <csv|tsv data>", "/lt import settings" },
             handler = function(args)
-                handleImport(args or "")
+                local firstWord = (args or ""):match("^(%S+)")
+                if firstWord and firstWord:lower() == "settings" then
+                    if Loothing.SettingsExport then
+                        Loothing.SettingsExport:ShowImportDialog()
+                    else
+                        printError("Settings import not available.")
+                    end
+                else
+                    handleImport(args or "")
+                end
             end,
         },
         {

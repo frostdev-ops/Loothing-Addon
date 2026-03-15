@@ -2,6 +2,34 @@
 
 All notable changes to Loothing will be documented in this file.
 
+## [1.2.7] - 2026-03-15
+
+### Added
+
+#### Comm-Based Profile Sharing (`Core/SettingsExport.lua`, `Comm/MessageHandler.lua`, `Comm/Handlers/Core.lua`, `Core/Options/ProfileOptions.lua`)
+
+- Added direct profile sharing over addon comm using the same printable settings export string as manual export/import
+- Shared imports now land in the existing confirmation modal, so receivers choose `Create New Profile` or `Apply to Current` before anything is written
+- Added an online group-member target selector and `Share` action to the Profiles options panel
+
+#### Shared Export Codec (`../Loolib/Comm/ExportCodec.lua`)
+
+- Added a reusable export codec to Loolib so printable table exports use one serializer/compressor path instead of duplicating the pipeline in addon code
+
+#### Export Decoder Utility (`tools/decode_export.py`)
+
+- Added a Python CLI that decodes both settings exports and compact loot exports outside the game client
+
+### Fixed
+
+#### Decoder Table Semantics (`tools/decode_export.py`)
+
+- Empty Lua tables now decode to JSON objects by default instead of empty arrays, which better matches map-like settings payloads
+
+### Documentation
+
+- Updated visible version references to `1.2.7` in `README.md`, `Loothing.toc`, `Loothing-Dev.toc`, and export metadata fixtures
+
 ## [1.2.5] - 2026-03-12
 
 ### Changed

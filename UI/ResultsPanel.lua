@@ -76,6 +76,9 @@ function ResultsPanelMixin:CreateFrame()
 
     self.frame = frame
     ns.ResultsPanelFrame = frame
+
+    local WM = Loolib:GetModule("WindowManager")
+    if WM then WM:Register(frame) end
 end
 
 --- Create UI elements
@@ -716,6 +719,7 @@ end
 
 function ResultsPanelMixin:Show()
     self.frame:Show()
+    self.frame:Raise()
 end
 
 function ResultsPanelMixin:Hide()

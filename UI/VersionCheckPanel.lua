@@ -102,6 +102,9 @@ function VersionCheckPanelMixin:CreateFrame()
 
     self.frame = frame
     ns.VersionCheckPanelFrame = frame
+
+    local WM = Loolib:GetModule("WindowManager")
+    if WM then WM:Register(frame) end
 end
 
 --- Create UI elements
@@ -326,6 +329,7 @@ end
 
 function VersionCheckPanelMixin:Show()
     self.frame:Show()
+    self.frame:Raise()
     self:RefreshList()
 end
 

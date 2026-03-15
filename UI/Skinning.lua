@@ -363,6 +363,10 @@ function SkinningMixin:SetupFrame(frame, frameName, globalName, options)
     if globalName and options.escapeClose ~= false then
         self:RegisterForEscapeClose(frame, globalName)
     end
+
+    -- Click-to-raise
+    local WM = Loolib:GetModule("WindowManager")
+    if WM then WM:Register(frame) end
 end
 
 --[[--------------------------------------------------------------------

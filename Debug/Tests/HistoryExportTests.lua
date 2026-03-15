@@ -30,7 +30,7 @@ local function CreateHistory(entries)
     history.GetExportMetadata = function()
         return {
             addonName = "Loothing",
-            version = "1.2.3",
+            version = "1.2.7",
             exportDate = "2026-03-11",
             exportTime = "12:00:00",
             playerName = "Tester",

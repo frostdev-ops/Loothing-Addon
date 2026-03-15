@@ -230,6 +230,12 @@ end
 -- @param itemGUID string - Item GUID
 -- @return boolean - True if item was auto-awarded
 function AutoAwardMixin:ProcessItem(itemLink, itemGUID)
+    -- Dedup guard: prevent awarding the same item twice from redundant events
+    if self.pendingAwards[itemGUID] then
+        Loothing:Debug("AutoAward: skipping duplicate for", itemGUID)
+        return false
+    end
+
     if not self:ShouldAutoAward(itemLink) then
         return false
     end
@@ -273,6 +279,8 @@ function AutoAwardMixin:AwardItem(itemLink, itemGUID, targetPlayer)
 
     -- Award the item
     if Loothing.Session.AwardItem then
+        -- Mark as pending before awarding to prevent re-entry from duplicate events
+        self.pendingAwards[itemGUID] = true
         Loothing.Session:AwardItem(sessionItem.id, targetPlayer, reason)
 
         -- Log the auto-award

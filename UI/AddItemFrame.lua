@@ -76,6 +76,9 @@ function AddItemFrameMixin:BuildFrame()
     self.frame = frame
     ns.AddItemFrame = frame
 
+    local WM = Loolib:GetModule("WindowManager")
+    if WM then WM:Register(frame) end
+
     -- Title
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     title:SetPoint("TOPLEFT", 8, -8)
@@ -798,6 +801,7 @@ end
 function AddItemFrameMixin:Show()
     wipe(self.itemQueue)
     self.frame:Show()
+    self.frame:Raise()
     self:SelectTab(1)
     self.editBox:SetFocus()
 end

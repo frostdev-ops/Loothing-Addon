@@ -319,9 +319,31 @@ function SettingsMixin:GetDefault(key)
 end
 
 --- Reset all settings to defaults (resets current profile)
+-- The proxy self.db already follows self.sv.profile via its metatable,
+-- so we must NOT replace it with a direct table reference.
 function SettingsMixin:ResetAll()
     self.sv:ResetProfile()
-    self.db = self.sv.profile
+end
+
+--- Get a deep copy of the current profile data (for export)
+-- @return table
+function SettingsMixin:GetProfileData()
+    return Utils.DeepCopy(self.sv.profile)
+end
+
+--- Write key-value pairs into the current profile (for import)
+-- @param data table - Key-value pairs to apply
+function SettingsMixin:SetProfileData(data)
+    if type(data) ~= "table" then return end
+    for k, v in pairs(data) do
+        self.sv.profile[k] = v
+    end
+end
+
+--- Get the profile defaults table
+-- @return table
+function SettingsMixin:GetProfileDefaults()
+    return PROFILE_DEFAULTS
 end
 
 --[[--------------------------------------------------------------------

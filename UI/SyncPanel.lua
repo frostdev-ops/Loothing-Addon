@@ -74,6 +74,9 @@ function SyncPanelMixin:CreateFrame()
 
     self.frame = frame
     ns.SyncPanelFrame = frame
+
+    local WM = Loolib:GetModule("WindowManager")
+    if WM then WM:Register(frame) end
 end
 
 --- Create UI elements
@@ -363,6 +366,7 @@ end
 
 function SyncPanelMixin:Show()
     self.frame:Show()
+    self.frame:Raise()
 end
 
 function SyncPanelMixin:Hide()

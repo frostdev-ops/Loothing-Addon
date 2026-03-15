@@ -48,6 +48,8 @@ L["SLASH_DESC_DEBUG"] = "Alternar modo debug (ativa comandos de dev)"
 L["SLASH_DESC_TEST"] = "Utilitários de modo teste"
 L["SLASH_DESC_TESTMODE"] = "Controlar simulador/modo teste"
 L["SLASH_DESC_HELP"] = "Mostrar ajuda de comandos"
+L["SLASH_DESC_START"] = "Ativar distribuição de saque"
+L["SLASH_DESC_STOP"] = "Desativar distribuição de saque"
 
 -- Session
 L["SESSION"] = "Sessão"
@@ -68,6 +70,12 @@ L["ML_IS_RAID_LEADER"] = "Mestre do Saque: %s (líder de raide)"
 L["ML_NOT_SET"] = "Nenhum Mestre do Saque (não em grupo)"
 L["ML_CLEARED"] = "Mestre do Saque limpo - usando líder de raide"
 L["ML_ASSIGNED"] = "Mestre do Saque atribuído a %s"
+L["ML_HANDLING_LOOT"] = "Agora distribuindo o saque."
+L["ML_NOT_ACTIVE_SESSION"] = "Loothing não está ativo para esta sessão. Use '/loothing start' para ativar manualmente."
+L["ML_USAGE_PROMPT_TEXT"] = "Você é o líder de raide. Usar Loothing para distribuição de saque?"
+L["ML_USAGE_PROMPT_TEXT_INSTANCE"] = "Você é o líder de raide.\nUsar Loothing para %s?"
+L["ML_STOPPED_HANDLING"] = "Parou de distribuir o saque."
+L["RECONNECT_RESTORED"] = "Estado da sessão restaurado do cache."
 L["ERROR_NOT_ML"] = "Apenas o Mestre do Saque pode fazer isto"
 L["ERROR_NOT_ML_OR_RL"] = "Apenas o Mestre do Saque ou Líder de Raide podem fazer isto"
 L["REFRESH"] = "Atualizar"
@@ -161,6 +169,9 @@ L["TAB_SESSION"] = "Sessão"
 L["TAB_TRADE"] = "Comércio"
 L["TAB_HISTORY"] = "Histórico"
 L["TAB_ROSTER"] = "Lista"
+L["TAB_SETTINGS"] = "Configurações"
+
+-- Roster
 L["ROSTER_SUMMARY"] = "%d Membros | %d Online | %d Instalados | %d Conselho"
 L["ROSTER_NO_GROUP"] = "Não está em um grupo"
 L["ROSTER_QUERY_VERSIONS"] = "Verificar versões"
@@ -174,7 +185,6 @@ L["ROSTER_DEMOTE"] = "Rebaixar"
 L["ROSTER_UNINVITE"] = "Expulsar"
 L["ROSTER_ADD_OBSERVER"] = "Adicionar como Observador"
 L["ROSTER_REMOVE_OBSERVER"] = "Remover como Observador"
-L["TAB_SETTINGS"] = "Configurações"
 
 -- Settings
 L["SETTINGS"] = "Configurações"
@@ -258,6 +268,39 @@ L["SLASH_IGNORE"] = "/loothing ignore [itemlink] - Adicionar/remover item da lis
 L["CLEAR_IGNORED_ITEMS"] = "Limpar Tudo"
 L["CONFIRM_CLEAR_IGNORED"] = "Limpar todos os itens ignorados?"
 L["IGNORED_ITEMS_CLEARED"] = "Lista de ignorados limpa"
+L["IGNORE_CATEGORIES"] = "Filtros de Categoria"
+L["IGNORE_ADD_DESC"] = "Cole um link de item ou insira um ID de item."
+
+-- Locale Override
+L["CONFIG_LOCALE_OVERRIDE"] = "Substituir Idioma"
+L["CONFIG_LOCALE_OVERRIDE_DESC"] = "Definir idioma do addon manualmente (requer /reload)"
+L["LOCALE_AUTO"] = "Automático (idioma do jogo)"
+
+-- Common UI
+L["CLOSE"] = "Fechar"
+L["CANCEL"] = "Cancelar"
+L["NO_LIMIT"] = "Sem limite"
+
+-- Personal Preferences
+L["PERSONAL_PREFERENCES"] = "Preferências pessoais"
+L["CONFIG_LOOT_RESPONSE"] = "Resposta de saque"
+L["CONFIG_ROLLFRAME_AUTO_SHOW"] = "Mostrar quadro de resposta automaticamente"
+L["CONFIG_ROLLFRAME_AUTO_SHOW_DESC"] = "Mostrar automaticamente o quadro de resposta quando a votação iniciar"
+L["CONFIG_ROLLFRAME_AUTO_ROLL"] = "Auto-rolar ao enviar"
+L["CONFIG_ROLLFRAME_AUTO_ROLL_DESC"] = "Executar /roll automaticamente ao enviar uma resposta"
+L["CONFIG_ROLLFRAME_GEAR_COMPARE"] = "Mostrar comparação de equipamento"
+L["CONFIG_ROLLFRAME_GEAR_COMPARE_DESC"] = "Mostrar itens equipados atualmente para comparação"
+L["CONFIG_ROLLFRAME_REQUIRE_NOTE"] = "Exigir nota"
+L["CONFIG_ROLLFRAME_REQUIRE_NOTE_DESC"] = "Exigir uma nota antes de enviar uma resposta"
+L["CONFIG_ROLLFRAME_PRINT_RESPONSE"] = "Imprimir resposta no chat"
+L["CONFIG_ROLLFRAME_PRINT_RESPONSE_DESC"] = "Imprimir sua resposta enviada no chat como referência pessoal"
+L["CONFIG_ROLLFRAME_TIMER"] = "Temporizador de resposta"
+L["CONFIG_ROLLFRAME_TIMER_ENABLED"] = "Mostrar temporizador de resposta"
+L["CONFIG_ROLLFRAME_TIMER_DURATION"] = "Duração do temporizador"
+
+-- Session Settings (ML)
+L["SESSION_SETTINGS_ML"] = "Configurações de sessão (MS)"
+L["VOTING_TIMEOUT_DURATION"] = "Duração do tempo limite"
 
 -- Errors
 L["ERROR_NOT_IN_RAID"] = "Você deve estar em uma raide"
@@ -709,31 +752,311 @@ L["CONFIG_HISTORY_90_DAYS"] = "90 Dias"
 L["CONFIG_HISTORY_120_DAYS"] = "120 Dias"
 L["CONFIG_HISTORY_180_DAYS"] = "180 Dias"
 L["CONFIG_HISTORY_365_DAYS"] = "365 Dias"
+L["CONFIG_HISTORY_AUTO_EXPORT_WEB"] = "Mostrar exportação web automaticamente"
+L["CONFIG_HISTORY_AUTO_EXPORT_WEB_DESC"] = "Ao encerrar uma sessão, abrir automaticamente o diálogo de exportação com a exportação web pronta para copiar"
 
--- Observer System (new strings - untranslated placeholders)
-L["OBSERVERS"] = L["OBSERVERS"] or "Observers"
-L["OBSERVER"] = L["OBSERVER"] or "Observer"
-L["OBSERVER_LIST"] = L["OBSERVER_LIST"] or "Observer List"
-L["ADD_OBSERVER"] = L["ADD_OBSERVER"] or "Add Observer"
-L["REMOVE_OBSERVER"] = L["REMOVE_OBSERVER"] or "Remove Observer"
-L["IS_OBSERVER"] = L["IS_OBSERVER"] or "%s is now an observer"
-L["REMOVED_OBSERVER"] = L["REMOVED_OBSERVER"] or "%s removed from observers"
-L["NO_OBSERVERS"] = L["NO_OBSERVERS"] or "No observers added"
-L["CONFIG_ML_OBSERVER"] = L["CONFIG_ML_OBSERVER"] or "ML Observer Mode"
-L["CONFIG_ML_OBSERVER_DESC"] = L["CONFIG_ML_OBSERVER_DESC"] or "Master Looter can see everything and manage sessions but cannot vote"
-L["OPEN_OBSERVATION"] = L["OPEN_OBSERVATION"] or "Open Observation"
-L["OPEN_OBSERVATION_DESC"] = L["OPEN_OBSERVATION_DESC"] or "Allow all raid members to observe voting"
-L["OBSERVER_PERMISSIONS"] = L["OBSERVER_PERMISSIONS"] or "Observer Permissions"
-L["OBSERVER_SEE_VOTE_COUNTS"] = L["OBSERVER_SEE_VOTE_COUNTS"] or "See Vote Counts"
-L["OBSERVER_SEE_VOTE_COUNTS_DESC"] = L["OBSERVER_SEE_VOTE_COUNTS_DESC"] or "Observers can see how many votes each candidate has"
-L["OBSERVER_SEE_VOTER_IDS"] = L["OBSERVER_SEE_VOTER_IDS"] or "See Voter Identities"
-L["OBSERVER_SEE_VOTER_IDS_DESC"] = L["OBSERVER_SEE_VOTER_IDS_DESC"] or "Observers can see who voted for each candidate"
-L["OBSERVER_SEE_RESPONSES"] = L["OBSERVER_SEE_RESPONSES"] or "See Responses"
-L["OBSERVER_SEE_RESPONSES_DESC"] = L["OBSERVER_SEE_RESPONSES_DESC"] or "Observers can see what response each candidate selected"
-L["OBSERVER_SEE_NOTES"] = L["OBSERVER_SEE_NOTES"] or "See Notes"
-L["OBSERVER_SEE_NOTES_DESC"] = L["OBSERVER_SEE_NOTES_DESC"] or "Observers can see candidate notes"
-L["CONFIG_OBSERVER_REMOVE_ALL"] = L["CONFIG_OBSERVER_REMOVE_ALL"] or "Remove All Observers"
-L["CONFIG_OBSERVER_REMOVE_ALL_DESC"] = L["CONFIG_OBSERVER_REMOVE_ALL_DESC"] or "Remove all observers from the list"
+-- Whisper Commands
+L["WHISPER_RESPONSE_RECEIVED"] = "Loothing: Resposta '%s' recebida para %s"
+L["WHISPER_NO_SESSION"] = "Loothing: Nenhuma sessão ativa"
+L["WHISPER_NO_VOTING_ITEMS"] = "Loothing: Nenhum item em votação no momento"
+L["WHISPER_UNKNOWN_COMMAND"] = "Loothing: Comando desconhecido '%s'. Sussurre !help para opções"
+L["WHISPER_HELP_HEADER"] = "Loothing: Comandos de sussurro:"
+L["WHISPER_HELP_LINE"] = "  %s - %s"
+L["WHISPER_ALREADY_RESPONDED"] = "Loothing: Você já respondeu a %s"
+L["WHISPER_ITEM_SPECIFIED"] = "Loothing: Resposta '%s' recebida para %s (#%d)"
+L["WHISPER_INVALID_ITEM_NUM"] = "Loothing: Número de item inválido %d (sessão tem %d itens)"
+
+-- ============================================================================
+-- Phase 1-6 Additional Locale Strings
+-- ============================================================================
+
+-- General / UI
+L["ADDON_TAGLINE"] = "Addon de Loot Council"
+L["VERSION"] = "Versão"
+L["VERSION_CHECK"] = "Verificação de Versão"
+L["OUTDATED"] = "Desatualizado"
+L["NOT_INSTALLED"] = "Não Instalado"
+L["CURRENT"] = "Atual"
+L["ENABLED"] = "Ativado"
+L["REQUIRED"] = "Obrigatório"
+L["NOTE"] = "Nota:"
+L["PLAYER"] = "Jogador"
+L["SEND"] = "Enviar"
+L["SEND_TO"] = "Enviar Para:"
+L["WHISPER"] = "Sussurro"
+
+-- Blizzard Settings Integration
+L["BLIZZARD_SETTINGS_DESC"] = "Clique abaixo para abrir o painel completo de configurações"
+L["OPEN_SETTINGS"] = "Abrir Configurações do Loothing"
+
+-- Slash Commands (Debug)
+L["SLASH_DESC_ERRORS"] = "Mostrar erros capturados"
+L["SLASH_DESC_LOG"] = "Ver logs recentes"
+
+-- Session Panel
+L["ADD_ITEM"] = "Adicionar Item"
+L["ADD_ITEM_PROMPT"] = "Insira um link de item ou arraste um item:"
+L["ADD_ITEM_TITLE"] = "Adicionar Item à Sessão"
+L["ENTER_ITEM"] = "Inserir Item"
+L["RECENT_DROPS"] = "Drops Recentes"
+L["FROM_BAGS"] = "Das Bolsas"
+L["ENTER_ITEM_HINT"] = "Cole um link de item, ID de item, ou arraste um item aqui"
+L["DRAG_ITEM_HERE"] = "Solte o item aqui"
+L["ADD_SELECTED"] = "Adicionar Selecionados"
+L["NO_RECENT_DROPS"] = "Nenhum item negociável recente encontrado"
+L["NO_BAG_ITEMS"] = "Nenhum item elegível nas bolsas"
+L["EQUIPMENT_ONLY"] = "Apenas Equipamentos"
+L["SLASH_DESC_ADD"] = "Adicionar item à sessão"
+L["AWARD_LATER_ALL"] = "Premiar Depois (Todos)"
+
+-- Session Trigger Modes (legacy)
+L["SESSION_TRIGGER_MODE"] = "Modo de Disparo de Sessão"
+L["SESSION_TRIGGER_MODE_DESC"] = "Como sessões de loot são iniciadas após a morte do chefe"
+L["TRIGGER_MANUAL"] = "Manual (use /loothing start)"
+L["TRIGGER_AUTO"] = "Automático (iniciar imediatamente)"
+L["TRIGGER_PROMPT"] = "Perguntar (confirmar antes de iniciar)"
+L["TRIGGER_AFTER_ROLLS"] = "Após Rolls (aguardar ML receber o loot)"
+
+-- Session Trigger Policy (split model)
+L["SESSION_TRIGGER_HEADER"] = "Disparo de Sessão"
+L["SESSION_TRIGGER_ACTION"] = "Ação de Disparo"
+L["SESSION_TRIGGER_ACTION_DESC"] = "O que acontece quando a morte do chefe é elegível"
+L["SESSION_TRIGGER_TIMING"] = "Temporização do Disparo"
+L["SESSION_TRIGGER_TIMING_DESC"] = "Quando a ação de disparo ocorre em relação à morte do chefe"
+L["TRIGGER_TIMING_ENCOUNTER_END"] = "Na Morte do Chefe"
+L["TRIGGER_TIMING_AFTER_LOOT"] = "Após ML Receber o Loot"
+L["TRIGGER_SCOPE_RAID"] = "Chefes de Raide"
+L["TRIGGER_SCOPE_RAID_DESC"] = "Disparar em mortes de chefes de raide"
+L["TRIGGER_SCOPE_DUNGEON"] = "Chefes de Masmorra"
+L["TRIGGER_SCOPE_DUNGEON_DESC"] = "Disparar em mortes de chefes de masmorra"
+L["TRIGGER_SCOPE_OPEN_WORLD"] = "Mundo Aberto"
+L["TRIGGER_SCOPE_OPEN_WORLD_DESC"] = "Disparar em encontros de mundo aberto (ex: chefes mundiais)"
+
+-- AutoPass Options
+L["CONFIG_AUTOPASS_BOE"] = "AutoPass Itens BoE"
+L["CONFIG_AUTOPASS_BOE_DESC"] = "Passar automaticamente em itens Vinculado ao Equipar"
+L["CONFIG_AUTOPASS_TRANSMOG"] = "AutoPass Transmog"
+L["CONFIG_AUTOPASS_TRANSMOG_DESC"] = "Auto-pass em itens já coletados para transmog"
+L["CONFIG_AUTOPASS_TRANSMOG_SOURCE"] = "Pular Aparências Conhecidas"
+L["CONFIG_AUTOPASS_TRANSMOG_SOURCE_DESC"] = "Auto-pass em fontes de transmog já aprendidas"
+
+-- Auto Award Options
+L["CONFIG_AUTO_AWARD_LOWER_THRESHOLD"] = "Limite de Qualidade Inferior"
+L["CONFIG_AUTO_AWARD_LOWER_THRESHOLD_DESC"] = "Qualidade mínima para auto-prêmio"
+L["CONFIG_AUTO_AWARD_UPPER_THRESHOLD"] = "Limite de Qualidade Superior"
+L["CONFIG_AUTO_AWARD_UPPER_THRESHOLD_DESC"] = "Qualidade máxima para auto-prêmio"
+L["CONFIG_AUTO_AWARD_REASON"] = "Motivo do Prêmio"
+L["CONFIG_AUTO_AWARD_REASON_DESC"] = "Motivo exibido no histórico para auto-prêmios"
+L["CONFIG_AUTO_AWARD_INCLUDE_BOE"] = "Incluir Itens BoE"
+L["CONFIG_AUTO_AWARD_INCLUDE_BOE_DESC"] = "Incluir itens Vinculado ao Equipar em auto-prêmios"
+
+-- Frame Behavior Options
+L["CONFIG_FRAME_BEHAVIOR"] = "Comportamento de Frame"
+L["CONFIG_FRAME_AUTO_OPEN"] = "Abrir Frames Automaticamente"
+L["CONFIG_FRAME_AUTO_OPEN_DESC"] = "Mostrar frames automaticamente quando loot está disponível"
+L["CONFIG_FRAME_AUTO_CLOSE"] = "Fechar Frames Automaticamente"
+L["CONFIG_FRAME_AUTO_CLOSE_DESC"] = "Fechar frames automaticamente quando sessão termina"
+L["CONFIG_FRAME_SHOW_SPEC_ICON"] = "Mostrar Ícones de Especialização"
+L["CONFIG_FRAME_SHOW_SPEC_ICON_DESC"] = "Mostrar ícones de especialização ao invés de ícones de classe"
+L["CONFIG_FRAME_CLOSE_ESCAPE"] = "Fechar com Escape"
+L["CONFIG_FRAME_CLOSE_ESCAPE_DESC"] = "Permitir que a tecla Escape feche frames do Loothing"
+L["CONFIG_FRAME_CHAT_OUTPUT"] = "Frame de Chat de Saída"
+L["CONFIG_FRAME_CHAT_OUTPUT_DESC"] = "Qual frame de chat usar para mensagens do Loothing"
+
+-- ML Usage Options
+L["CONFIG_ML_USAGE_MODE"] = "Modo de Uso"
+L["CONFIG_ML_USAGE_MODE_DESC"] = "Quando ativar o Loothing como mestre de saque"
+L["CONFIG_ML_USAGE_NEVER"] = "Nunca"
+L["CONFIG_ML_USAGE_GL"] = "Group Loot"
+L["CONFIG_ML_USAGE_ASK_GL"] = "Perguntar em Group Loot"
+L["CONFIG_ML_RAIDS_ONLY"] = "Apenas Raides"
+L["CONFIG_ML_RAIDS_ONLY_DESC"] = "Ativar apenas em instâncias de raide"
+L["CONFIG_ML_ALLOW_OUTSIDE"] = "Permitir Fora de Raides"
+L["CONFIG_ML_ALLOW_OUTSIDE_DESC"] = "Permitir gerenciar loot fora de instâncias de raide"
+L["CONFIG_ML_SKIP_SESSION"] = "Pular Frame de Sessão"
+L["CONFIG_ML_SKIP_SESSION_DESC"] = "Iniciar sessões imediatamente sem o frame de configuração de sessão"
+L["CONFIG_ML_SORT_ITEMS"] = "Ordenar Itens"
+L["CONFIG_ML_SORT_ITEMS_DESC"] = "Ordenar automaticamente itens por tipo e nível de item"
+L["CONFIG_ML_AUTO_ADD_BOES"] = "Auto-Adicionar BoEs"
+L["CONFIG_ML_AUTO_ADD_BOES_DESC"] = "Adicionar automaticamente itens Vinculado ao Equipar às sessões"
+L["CONFIG_ML_PRINT_TRADES"] = "Imprimir Comércios Completos"
+L["CONFIG_ML_PRINT_TRADES_DESC"] = "Imprimir uma mensagem quando um comércio é concluído"
+L["CONFIG_ML_REJECT_TRADE"] = "Rejeitar Comércios Inválidos"
+L["CONFIG_ML_REJECT_TRADE_DESC"] = "Rejeitar automaticamente comércios que não fazem parte de uma sessão"
+L["CONFIG_ML_AWARD_LATER"] = "Premiar Depois"
+L["CONFIG_ML_AWARD_LATER_DESC"] = "Permitir que o ML guarde itens e premie depois"
+
+-- History Options
+L["CONFIG_HISTORY_SEND_GUILD"] = "Enviar para Guilda"
+L["CONFIG_HISTORY_SEND_GUILD_DESC"] = "Transmitir histórico para o canal de guilda"
+L["CONFIG_HISTORY_SAVE_PL"] = "Salvar Loot Pessoal"
+L["CONFIG_HISTORY_SAVE_PL_DESC"] = "Registrar loot pessoal no histórico"
+
+-- Ignore Item Options
+L["CONFIG_IGNORE_ENCHANTING_MATS"] = "Ignorar Materiais de Encantamento"
+L["CONFIG_IGNORE_CRAFTING_REAGENTS"] = "Ignorar Reagentes de Criação"
+L["CONFIG_IGNORE_CONSUMABLES"] = "Ignorar Consumíveis"
+L["CONFIG_IGNORE_PERMANENT_ENHANCEMENTS"] = "Ignorar Melhorias Permanentes"
+L["CONFIG_IGNORE_PERMANENT_ENHANCEMENTS_DESC"] = "Gemas, encantamentos e outras melhorias permanentes"
+
+-- Announcement Options
+L["CONFIG_ANNOUNCEMENT_TOKENS_DESC"] = "Tokens disponíveis: {item}, {winner}, {reason}, {notes}, {ilvl}, {type}, {oldItem}, {ml}, {session}, {votes}"
+L["CONFIG_ANNOUNCE_CONSIDERATIONS"] = "Anunciar Considerações"
+L["CONFIG_ANNOUNCE_CONSIDERATIONS_DESC"] = "Anunciar quando um item está sendo considerado para distribuição"
+L["CONFIG_ITEM_ANNOUNCEMENTS"] = "Anúncios de Item"
+L["CONFIG_SESSION_ANNOUNCEMENTS"] = "Anúncios de Sessão"
+L["CONFIG_SESSION_START"] = "Início de Sessão"
+L["CONFIG_SESSION_END"] = "Fim de Sessão"
+L["CONFIG_MESSAGE"] = "Mensagem"
+
+-- Button Sets & Type Code Options
+L["CONFIG_BUTTON_SETS"] = "Conjuntos de Botões"
+L["CONFIG_TYPECODE_ASSIGNMENT"] = "Atribuição de Código de Tipo"
+
+-- Award Reasons Options
+L["CONFIG_AWARD_REASONS"] = "Motivos de Prêmio"
+L["NUM_AWARD_REASONS"] = "Número de Motivos"
+
+-- Council Guild Rank Options
+L["CONFIG_GUILD_RANK"] = "Auto-Inclusão por Patente de Guilda"
+L["CONFIG_GUILD_RANK_DESC"] = "Incluir automaticamente membros da guilda com patente igual ou superior no conselho"
+L["CONFIG_MIN_RANK"] = "Patente Mínima de Guilda"
+L["CONFIG_MIN_RANK_DESC"] = "Membros da guilda com esta patente ou superior serão auto-incluídos como membros do conselho. 0 = desativado, 1 = Mestre de Guilda, 2 = Oficiais, etc."
+L["CONFIG_COUNCIL_REMOVE_ALL"] = "Remover Todos os Membros"
+L["CONFIG_COUNCIL_REMOVE_ALL_DESC"] = "Remover todos os membros do conselho da lista"
+
+-- Council Table UI
+L["CHANGE_RESPONSE"] = "Mudar Resposta"
+L["YOUR_RANKING"] = "Sua Classificação"
+
+-- Sync Panel UI
+L["SYNC_DATA"] = "Sincronizar Dados"
+L["SELECT_TARGET"] = "Selecionar Alvo"
+L["SELECT_TARGET_FIRST"] = "Selecione um jogador alvo"
+L["NO_TARGETS"] = "Nenhum membro online encontrado"
+L["GUILD"] = "Guilda (Todos Online)"
+L["QUERY_GROUP"] = "Consultar Grupo"
+L["LAST_7_DAYS"] = "Últimos 7 Dias"
+L["LAST_30_DAYS"] = "Últimos 30 Dias"
+L["ALL_TIME"] = "Todo o Período"
+L["SYNCING_TO"] = "Sincronizando %s para %s..."
+
+-- History Panel UI
+L["DATE_RANGE"] = "Período:"
+L["FILTER_BY_WINNER"] = "Filtrar por %s"
+L["DELETE_ENTRY"] = "Deletar Entrada"
+
+-- Observer System
+L["OBSERVERS"] = "Observadores"
+L["OBSERVER"] = "Observador"
+L["OBSERVER_LIST"] = "Lista de Observadores"
+L["ADD_OBSERVER"] = "Adicionar Observador"
+L["REMOVE_OBSERVER"] = "Remover Observador"
+L["IS_OBSERVER"] = "%s agora é um observador"
+L["REMOVED_OBSERVER"] = "%s removido dos observadores"
+L["NO_OBSERVERS"] = "Nenhum observador adicionado"
+
+-- ML Observer
+L["CONFIG_ML_OBSERVER"] = "Modo Observador do ML"
+L["CONFIG_ML_OBSERVER_DESC"] = "Mestre do Saque pode ver tudo e gerenciar sessões mas não pode votar"
+
+-- Open Observation (replaces OBSERVE_MODE)
+L["OPEN_OBSERVATION"] = "Observação Aberta"
+L["OPEN_OBSERVATION_DESC"] = "Permitir que todos os membros da raide observem a votação (adiciona todos como observador)"
+
+-- Observer Permissions
+L["OBSERVER_PERMISSIONS"] = "Permissões de Observador"
+L["OBSERVER_SEE_VOTE_COUNTS"] = "Ver Contagem de Votos"
+L["OBSERVER_SEE_VOTE_COUNTS_DESC"] = "Observadores podem ver quantos votos cada candidato tem"
+L["OBSERVER_SEE_VOTER_IDS"] = "Ver Identidade dos Votantes"
+L["OBSERVER_SEE_VOTER_IDS_DESC"] = "Observadores podem ver quem votou em cada candidato"
+L["OBSERVER_SEE_RESPONSES"] = "Ver Respostas"
+L["OBSERVER_SEE_RESPONSES_DESC"] = "Observadores podem ver qual resposta cada candidato selecionou"
+L["OBSERVER_SEE_NOTES"] = "Ver Notas"
+L["OBSERVER_SEE_NOTES_DESC"] = "Observadores podem ver notas dos candidatos"
+L["CONFIG_OBSERVER_REMOVE_ALL"] = "Remover Todos os Observadores"
+L["CONFIG_OBSERVER_REMOVE_ALL_DESC"] = "Remover todos os observadores da lista"
+
+-- Bulk Actions
+L["BULK_START_VOTE"] = "Iniciar Votação (%d)"
+L["BULK_END_VOTE"] = "Encerrar Votação (%d)"
+L["BULK_SKIP"] = "Pular (%d)"
+L["BULK_REMOVE"] = "Remover (%d)"
+L["BULK_REVOTE"] = "Re-Votar (%d)"
+L["BULK_AWARD_LATER"] = "Premiar Depois"
+L["DESELECT_ALL"] = "Desmarcar"
+L["N_SELECTED"] = "%d selecionados"
+L["REMOVE_ITEMS"] = "Remover Itens"
+L["CONFIRM_BULK_SKIP"] = "Pular %d itens selecionados?"
+L["CONFIRM_BULK_REMOVE"] = "Remover %d itens selecionados da sessão?"
+L["CONFIRM_BULK_REVOTE"] = "Re-votar em %d itens selecionados?"
+
+-- ============================================================================
+-- RCV (Ranked Choice Voting) Audit Strings
+-- ============================================================================
+
+-- RCV Settings
+L["RCV_SETTINGS"] = "Configurações de Escolha Classificada"
+L["MAX_RANKS"] = "Máximo de Classificações"
+L["MIN_RANKS"] = "Mínimo de Classificações"
+L["MAX_RANKS_DESC"] = "Número máximo de escolhas que um votante pode classificar (0 = ilimitado)"
+L["MIN_RANKS_DESC"] = "Número mínimo de escolhas obrigatórias para enviar um voto"
+L["RANK_LIMIT_REACHED"] = "Máximo de %d classificações atingido"
+L["RANK_MINIMUM_REQUIRED"] = "Classifique pelo menos %d escolhas"
+L["UNLIMITED"] = "Ilimitado"
+L["MAX_REVOTES"] = "Máximo de Re-votações"
+
+-- ML Sees Votes
+L["ML_SEES_VOTES"] = "ML Vê Votos"
+L["ML_SEES_VOTES_DESC"] = "Mestre do Saque pode ver votos mesmo quando anônimo"
+
+-- IRV Round Visualization
+L["SHOW_IRV_ROUNDS"] = "Mostrar Rodadas IRV (%d rodadas)"
+L["HIDE_IRV_ROUNDS"] = "Ocultar Rodadas IRV"
+L["IRV_ROUND"] = "Rodada %d"
+L["IRV_ELIMINATED"] = "eliminado"
+L["IRV_WINNER_FOUND"] = "VENCEDOR"
+
+-- Settings Export/Import
+L["PROFILES"] = "Perfis"
+L["PROFILES_DESC"] = "Criar, alternar, copiar, deletar e redefinir perfis. Exportar e importar configurações como textos compartilháveis."
+L["EXPORT_SETTINGS"] = "Exportar Configurações"
+L["EXPORT_SETTINGS_DESC"] = "Exportar seu perfil atual como texto compartilhável"
+L["IMPORT_SETTINGS"] = "Importar Configurações"
+L["IMPORT_SETTINGS_DESC"] = "Importar configurações de um texto exportado"
+L["EXPORT_TITLE"] = "Exportar Configurações"
+L["EXPORT_DESC"] = "Pressione Ctrl+A para selecionar tudo, depois Ctrl+C para copiar."
+L["EXPORT_FAILED"] = "Falha na exportação: %s"
+L["IMPORT_TITLE"] = "Importar Configurações"
+L["IMPORT_DESC"] = "Cole o texto de configurações exportado abaixo, depois clique em Importar."
+L["IMPORT_BUTTON"] = "Importar"
+L["IMPORT_FAILED"] = "Falha na importação: %s"
+L["IMPORT_VERSION_WARN"] = "Nota: exportado com Loothing v%s (você tem v%s)."
+L["IMPORT_SUCCESS_NEW"] = "Configurações importadas como novo perfil: %s"
+L["IMPORT_SUCCESS_CURRENT"] = "Configurações importadas no perfil atual."
+L["SLASH_DESC_EXPORT"] = "Exportar configurações do perfil atual"
+L["SLASH_DESC_PROFILE"] = "Gerenciar perfis (listar, alternar, criar)"
+
+-- Profile Management
+L["PROFILE_CURRENT"] = "Perfil Atual"
+L["PROFILE_SWITCH"] = "Trocar Perfil"
+L["PROFILE_SWITCH_DESC"] = "Selecione um perfil para trocar."
+L["PROFILE_NEW"] = "Criar Novo Perfil"
+L["PROFILE_NEW_DESC"] = "Insira um nome para o novo perfil."
+L["PROFILE_COPY_FROM"] = "Copiar De"
+L["PROFILE_COPY_DESC"] = "Copiar configurações de outro perfil para o atual."
+L["PROFILE_COPY_CONFIRM"] = "Isto substituirá todas as configurações do perfil atual. Continuar?"
+L["PROFILE_DELETE"] = "Deletar Perfil"
+L["PROFILE_DELETE_CONFIRM"] = "Tem certeza de que quer deletar este perfil? Isto não pode ser desfeito."
+L["PROFILE_RESET"] = "Redefinir Padrões"
+L["PROFILE_RESET_CONFIRM"] = "Redefinir perfil '%s' para configurações padrão? Isto não pode ser desfeito."
+L["PROFILE_LIST"] = "Todos os Perfis"
+L["PROFILE_DEFAULT_SUFFIX"] = "(padrão)"
+L["PROFILE_EXPORT_INLINE_DESC"] = "Gere um texto de exportação, depois copie para compartilhar suas configurações."
+L["PROFILE_IMPORT_INLINE_DESC"] = "Cole o texto de configurações exportado abaixo, depois clique em Importar."
+L["PROFILE_LIST_HEADER"] = "Perfis:"
+L["PROFILE_SWITCHED"] = "Perfil trocado para: %s"
+L["PROFILE_CREATED"] = "Criado e trocado para perfil: %s"
 
 -- Make locale available globally
 Loothing.Locale = L

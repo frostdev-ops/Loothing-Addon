@@ -115,6 +115,7 @@ local SCHEMAS = {
     BATCH           = { { "messages",  "table",  true } },
     MLDB_BROADCAST  = { { "data",      "table",  true } },
     COUNCIL_ROSTER  = { { "members",   "table",  true } },
+    PROFILE_EXPORT_SHARE = { { "exportString", "string", true } },
 }
 
 --- Validate data against a schema and log on failure.
@@ -582,5 +583,16 @@ function CommMixin:HandleHistoryData(data, sender)
     end
     if Loothing.Sync and data then
         Loothing.Sync:HandleHistoryData(data.data, sender)
+    end
+end
+
+function CommMixin:HandleProfileExportShare(data, sender)
+    if not validateHandler("HandleProfileExportShare", data, SCHEMAS.PROFILE_EXPORT_SHARE) then return end
+    if not isGroupMember(sender) then
+        Loothing:Debug("Rejected PROFILE_EXPORT_SHARE from non-group member:", sender)
+        return
+    end
+    if Loothing.SettingsExport then
+        Loothing.SettingsExport:HandleSharedExport(data.exportString, sender)
     end
 end

@@ -74,6 +74,7 @@ local function BuildArgs()
     addClonedGroup(rootArgs, "announcements", localArgs and localArgs.announcements, 140, {
         childGroups = "tree",
     })
+    addClonedGroup(rootArgs, "profiles", resolveOptions("GetProfileOptions"), 150)
 
     return rootArgs
 end
@@ -112,6 +113,7 @@ local PATH_ALIASES = {
     history = { "history" },
     ml = { "ml" },
     responseButtons = { "responseButtons" },
+    profiles = { "profiles" },
 }
 
 function Options.ResolveOptionsPath(section)
