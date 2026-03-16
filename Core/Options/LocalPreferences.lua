@@ -12,7 +12,7 @@ ns.Options = Options
 local L = ns.Locale
 
 local function GetQualityValues()
-    return { [0]="Poor", [1]="Common", [2]="Uncommon", [3]="Rare", [4]="Epic", [5]="Legendary" }
+    return { [0]=L["QUALITY_POOR"], [1]=L["QUALITY_COMMON"], [2]=L["QUALITY_UNCOMMON"], [3]=L["QUALITY_RARE"], [4]=L["QUALITY_EPIC"], [5]=L["QUALITY_LEGENDARY"] }
 end
 
 local function GetChatFrameValues()
@@ -40,8 +40,7 @@ local function MakeLineOptions(getLineFn, setLineFn, prefix)
     local args = {
         desc = {
             type = "description",
-            name = L["CONFIG_ANNOUNCEMENT_TOKENS_DESC"]
-                or "Configure up to 5 announcement lines. Available tokens: {item}, {winner}, {reason}, {notes}, {ilvl}, {type}, {oldItem}, {ml}, {session}, {votes}",
+            name = L["CONFIG_ANNOUNCEMENT_TOKENS_DESC"],
             order = 0,
         },
     }
@@ -49,12 +48,12 @@ local function MakeLineOptions(getLineFn, setLineFn, prefix)
         local baseOrder = i * 10
         args[prefix .. i .. "Header"] = {
             type = "header",
-            name = (L["CONFIG_LINE"] or "Line") .. " " .. i,
+            name = (L["CONFIG_LINE"]) .. " " .. i,
             order = baseOrder,
         }
         args[prefix .. i .. "Enabled"] = {
             type = "toggle",
-            name = L["CONFIG_ENABLED"] or "Enabled",
+            name = L["CONFIG_ENABLED"],
             order = baseOrder + 1,
             width = "half",
             get = function()
@@ -68,7 +67,7 @@ local function MakeLineOptions(getLineFn, setLineFn, prefix)
         }
         args[prefix .. i .. "Channel"] = {
             type = "select",
-            name = L["CONFIG_CHANNEL"] or "Channel",
+            name = L["CONFIG_CHANNEL"],
             order = baseOrder + 2,
             values = GetChannelValues(),
             get = function()
@@ -82,7 +81,7 @@ local function MakeLineOptions(getLineFn, setLineFn, prefix)
         }
         args[prefix .. i .. "Text"] = {
             type = "input",
-            name = L["CONFIG_MESSAGE"] or "Message",
+            name = L["CONFIG_MESSAGE"],
             order = baseOrder + 3,
             width = "full",
             get = function()
@@ -101,14 +100,14 @@ end
 local function GetLocalPreferencesOptions()
     return {
         type = "group",
-        name = L["PERSONAL_PREFERENCES"] or "Personal Preferences",
-        desc = "These settings only affect you. They are not broadcast to the raid.",
+        name = L["PERSONAL_PREFERENCES"],
+        desc = L["CONFIG_LOCAL_PREFS_DESC"],
         order = 2,
         childGroups = "tree",
         args = {
             localPrefsDesc = {
                 type = "description",
-                name = "|cff88ccff These settings only affect your client. They are never sent to other raid members.|r",
+                name = "|cff88ccff" .. L["CONFIG_LOCAL_PREFS_NOTE"] .. "|r",
                 order = 0,
                 fontSize = "medium",
                 width = "full",
@@ -118,51 +117,40 @@ local function GetLocalPreferencesOptions()
             -- ============================================================
             lootResponse = {
                 type = "group",
-                name = L["CONFIG_LOOT_RESPONSE"] or "Loot Response",
+                name = L["CONFIG_LOOT_RESPONSE"],
                 order = 1,
                 columns = 3,
                 args = {
-                    localeOverride = {
-                        type = "select",
-                        name = L["CONFIG_LOCALE_OVERRIDE"] or "Language Override",
-                        desc = L["CONFIG_LOCALE_OVERRIDE_DESC"] or "Set addon language manually (requires /reload)",
+                    brainrotMode = {
+                        type = "toggle",
+                        name = L["CONFIG_BRAINROT_MODE"],
+                        desc = L["CONFIG_BRAINROT_MODE_DESC"],
                         order = 0,
                         width = "double",
-                        values = {
-                            [""] = L["LOCALE_AUTO"] or "Automatic (game language)",
-                            enUS = "English",
-                            deDE = "Deutsch",
-                            esES = "Español",
-                            frFR = "Français",
-                            itIT = "Italiano",
-                            ptBR = "Português",
-                            ruRU = "Русский",
-                            koKR = "한국어",
-                            zhCN = "简体中文",
-                            zhTW = "繁體中文",
-                            brainrot = "Brainrot",
-                        },
                         get = function()
                             local db = _G.LoolibDB
-                            if db and type(db._localeOverrides) == "table" then
-                                return db._localeOverrides["Loothing"] or ""
+                            if type(db) == "table" and type(db._brainrotMode) == "table" then
+                                return db._brainrotMode[ADDON_NAME] == true
                             end
-                            return ""
+                            return false
                         end,
                         set = function(_, value)
                             local db = _G.LoolibDB
-                            if not db then return end
-                            if not db._localeOverrides then
-                                db._localeOverrides = {}
+                            if type(db) ~= "table" then
+                                _G.LoolibDB = {}
+                                db = _G.LoolibDB
                             end
-                            db._localeOverrides["Loothing"] = (value ~= "") and value or nil
-                            print("|cFF33FF99Loothing|r: " .. (L["CONFIG_LOCALE_OVERRIDE_DESC"] or "Language changed. /reload to apply."))
+                            if not db._brainrotMode then
+                                db._brainrotMode = {}
+                            end
+                            db._brainrotMode[ADDON_NAME] = value or nil
+                            print("|cFF33FF99Loothing|r: " .. L["CONFIG_BRAINROT_MODE_DESC"])
                         end,
                     },
                     autoShow = {
                         type = "toggle",
-                        name = L["CONFIG_ROLLFRAME_AUTO_SHOW"] or "Auto-Show Response Frame",
-                        desc = L["CONFIG_ROLLFRAME_AUTO_SHOW_DESC"] or "Automatically show the response frame when voting starts",
+                        name = L["CONFIG_ROLLFRAME_AUTO_SHOW"],
+                        desc = L["CONFIG_ROLLFRAME_AUTO_SHOW_DESC"],
                         order = 1,
                         width = "half",
                         get = function() return Loothing.Settings:Get("rollFrame.autoShow", true) ~= false end,
@@ -170,8 +158,8 @@ local function GetLocalPreferencesOptions()
                     },
                     autoRollOnSubmit = {
                         type = "toggle",
-                        name = L["CONFIG_ROLLFRAME_AUTO_ROLL"] or "Auto-Roll on Submit",
-                        desc = L["CONFIG_ROLLFRAME_AUTO_ROLL_DESC"] or "Automatically trigger /roll when submitting a response",
+                        name = L["CONFIG_ROLLFRAME_AUTO_ROLL"],
+                        desc = L["CONFIG_ROLLFRAME_AUTO_ROLL_DESC"],
                         order = 2,
                         width = "half",
                         get = function() return Loothing.Settings:Get("rollFrame.autoRollOnSubmit", false) end,
@@ -179,8 +167,8 @@ local function GetLocalPreferencesOptions()
                     },
                     showGearComparison = {
                         type = "toggle",
-                        name = L["CONFIG_ROLLFRAME_GEAR_COMPARE"] or "Show Gear Comparison",
-                        desc = L["CONFIG_ROLLFRAME_GEAR_COMPARE_DESC"] or "Show your currently equipped items for comparison",
+                        name = L["CONFIG_ROLLFRAME_GEAR_COMPARE"],
+                        desc = L["CONFIG_ROLLFRAME_GEAR_COMPARE_DESC"],
                         order = 3,
                         width = "half",
                         get = function() return Loothing.Settings:Get("rollFrame.showGearComparison", true) ~= false end,
@@ -188,8 +176,8 @@ local function GetLocalPreferencesOptions()
                     },
                     requireNote = {
                         type = "toggle",
-                        name = L["CONFIG_ROLLFRAME_REQUIRE_NOTE"] or "Require Note",
-                        desc = L["CONFIG_ROLLFRAME_REQUIRE_NOTE_DESC"] or "Require a note before submitting a response",
+                        name = L["CONFIG_ROLLFRAME_REQUIRE_NOTE"],
+                        desc = L["CONFIG_ROLLFRAME_REQUIRE_NOTE_DESC"],
                         order = 4,
                         width = "half",
                         get = function() return Loothing.Settings:Get("rollFrame.requireNote", false) end,
@@ -197,8 +185,8 @@ local function GetLocalPreferencesOptions()
                     },
                     printResponseToChat = {
                         type = "toggle",
-                        name = L["CONFIG_ROLLFRAME_PRINT_RESPONSE"] or "Print Response to Chat",
-                        desc = L["CONFIG_ROLLFRAME_PRINT_RESPONSE_DESC"] or "Print your submitted response to chat for personal reference",
+                        name = L["CONFIG_ROLLFRAME_PRINT_RESPONSE"],
+                        desc = L["CONFIG_ROLLFRAME_PRINT_RESPONSE_DESC"],
                         order = 5,
                         width = "half",
                         get = function() return Loothing.Settings:Get("rollFrame.printResponseToChat", false) end,
@@ -206,13 +194,13 @@ local function GetLocalPreferencesOptions()
                     },
                     responseTimerHeader = {
                         type = "header",
-                        name = L["CONFIG_ROLLFRAME_TIMER"] or "Response Timer",
+                        name = L["CONFIG_ROLLFRAME_TIMER"],
                         order = 10,
                     },
                     rollFrameTimeoutEnabled = {
                         type = "toggle",
-                        name = L["CONFIG_ROLLFRAME_TIMER_ENABLED"] or "Show Response Timer",
-                        desc = "Show a countdown timer on the response frame. When disabled, the frame stays open until you respond or the ML ends voting.",
+                        name = L["CONFIG_ROLLFRAME_TIMER_ENABLED"],
+                        desc = L["CONFIG_ROLLFRAME_TIMER_ENABLED_DESC"],
                         order = 11,
                         get = function()
                             local enabled = Loothing.Settings:GetRollFrameTimeoutEnabled()
@@ -230,8 +218,8 @@ local function GetLocalPreferencesOptions()
                     },
                     rollFrameTimeoutDuration = {
                         type = "range",
-                        name = L["CONFIG_ROLLFRAME_TIMER_DURATION"] or "Timer Duration",
-                        desc = L["SECONDS"] or "Seconds",
+                        name = L["CONFIG_ROLLFRAME_TIMER_DURATION"],
+                        desc = L["SECONDS"],
                         order = 12,
                         min = Loothing.Timing.MIN_ROLL_TIMEOUT,
                         max = Loothing.Timing.MAX_ROLL_TIMEOUT,
@@ -274,8 +262,8 @@ local function GetLocalPreferencesOptions()
                     },
                     boe = {
                         type = "toggle",
-                        name = L["CONFIG_AUTOPASS_BOE"] or "AutoPass BoE Items",
-                        desc = L["CONFIG_AUTOPASS_BOE_DESC"] or "Automatically pass on Bind on Equip items",
+                        name = L["CONFIG_AUTOPASS_BOE"],
+                        desc = L["CONFIG_AUTOPASS_BOE_DESC"],
                         order = 3,
                         width = "half",
                         get = function() return Loothing.Settings:Get("autoPass.boe") end,
@@ -283,7 +271,7 @@ local function GetLocalPreferencesOptions()
                     },
                     trinkets = {
                         type = "toggle",
-                        name = L["CONFIG_AUTOPASS_TRINKETS"] or "AutoPass Trinkets",
+                        name = L["CONFIG_AUTOPASS_TRINKETS"],
                         order = 4,
                         width = "half",
                         get = function() return Loothing.Settings:Get("autoPass.trinkets") end,
@@ -291,7 +279,7 @@ local function GetLocalPreferencesOptions()
                     },
                     transmog = {
                         type = "toggle",
-                        name = L["CONFIG_AUTOPASS_TRANSMOG"] or "AutoPass Transmog",
+                        name = L["CONFIG_AUTOPASS_TRANSMOG"],
                         order = 5,
                         width = "half",
                         get = function() return Loothing.Settings:Get("autoPass.transmog") end,
@@ -299,7 +287,7 @@ local function GetLocalPreferencesOptions()
                     },
                     transmogSource = {
                         type = "toggle",
-                        name = L["CONFIG_AUTOPASS_TRANSMOG_SOURCE"] or "Skip Known Appearances",
+                        name = L["CONFIG_AUTOPASS_TRANSMOG_SOURCE"],
                         order = 6,
                         width = "half",
                         get = function() return Loothing.Settings:Get("autoPass.transmogSource") end,
@@ -307,7 +295,7 @@ local function GetLocalPreferencesOptions()
                     },
                     silent = {
                         type = "toggle",
-                        name = L["CONFIG_AUTOPASS_SILENT"] or "Silent AutoPass",
+                        name = L["CONFIG_AUTOPASS_SILENT"],
                         order = 7,
                         width = "half",
                         get = function() return Loothing.Settings:Get("autoPass.silent") end,
@@ -342,7 +330,7 @@ local function GetLocalPreferencesOptions()
                     },
                     lowerThreshold = {
                         type = "select",
-                        name = L["CONFIG_AUTO_AWARD_LOWER_THRESHOLD"] or "Lower Quality Threshold",
+                        name = L["CONFIG_AUTO_AWARD_LOWER_THRESHOLD"],
                         order = 3,
                         values = GetQualityValues(),
                         get = function() return Loothing.Settings:Get("autoAward.lowerThreshold") end,
@@ -350,7 +338,7 @@ local function GetLocalPreferencesOptions()
                     },
                     upperThreshold = {
                         type = "select",
-                        name = L["CONFIG_AUTO_AWARD_UPPER_THRESHOLD"] or "Upper Quality Threshold",
+                        name = L["CONFIG_AUTO_AWARD_UPPER_THRESHOLD"],
                         order = 4,
                         values = GetQualityValues(),
                         get = function() return Loothing.Settings:Get("autoAward.upperThreshold") end,
@@ -358,14 +346,14 @@ local function GetLocalPreferencesOptions()
                     },
                     reason = {
                         type = "input",
-                        name = L["CONFIG_AUTO_AWARD_REASON"] or "Award Reason",
+                        name = L["CONFIG_AUTO_AWARD_REASON"],
                         order = 5,
                         get = function() return Loothing.Settings:GetAutoAwardReason() end,
                         set = function(_, v) Loothing.Settings:SetAutoAwardReason(v) end,
                     },
                     includeBoE = {
                         type = "toggle",
-                        name = L["CONFIG_AUTO_AWARD_INCLUDE_BOE"] or "Include BoE Items",
+                        name = L["CONFIG_AUTO_AWARD_INCLUDE_BOE"],
                         order = 6,
                         get = function() return Loothing.Settings:GetAutoAwardIncludeBoE() end,
                         set = function(_, v) Loothing.Settings:SetAutoAwardIncludeBoE(v) end,
@@ -391,40 +379,40 @@ local function GetLocalPreferencesOptions()
                     },
                     catHeader = {
                         type = "header",
-                        name = L["IGNORE_CATEGORIES"] or "Category Filters",
+                        name = L["IGNORE_CATEGORIES"],
                         order = 2,
                     },
                     ignoreEnchantingMaterials = {
                         type = "toggle",
-                        name = L["CONFIG_IGNORE_ENCHANTING_MATS"] or "Ignore Enchanting Materials",
+                        name = L["CONFIG_IGNORE_ENCHANTING_MATS"],
                         order = 3,
                         get = function() return Loothing.Settings:GetIgnoreEnchantingMaterials() end,
                         set = function(_, v) Loothing.Settings:SetIgnoreEnchantingMaterials(v) end,
                     },
                     ignoreCraftingReagents = {
                         type = "toggle",
-                        name = L["CONFIG_IGNORE_CRAFTING_REAGENTS"] or "Ignore Crafting Reagents",
+                        name = L["CONFIG_IGNORE_CRAFTING_REAGENTS"],
                         order = 4,
                         get = function() return Loothing.Settings:GetIgnoreCraftingReagents() end,
                         set = function(_, v) Loothing.Settings:SetIgnoreCraftingReagents(v) end,
                     },
                     ignoreConsumables = {
                         type = "toggle",
-                        name = L["CONFIG_IGNORE_CONSUMABLES"] or "Ignore Consumables",
+                        name = L["CONFIG_IGNORE_CONSUMABLES"],
                         order = 5,
                         get = function() return Loothing.Settings:GetIgnoreConsumables() end,
                         set = function(_, v) Loothing.Settings:SetIgnoreConsumables(v) end,
                     },
                     ignorePermanentEnhancements = {
                         type = "toggle",
-                        name = L["CONFIG_IGNORE_PERMANENT_ENHANCEMENTS"] or "Ignore Permanent Enhancements",
+                        name = L["CONFIG_IGNORE_PERMANENT_ENHANCEMENTS"],
                         order = 6,
                         get = function() return Loothing.Settings:GetIgnorePermanentEnhancements() end,
                         set = function(_, v) Loothing.Settings:SetIgnorePermanentEnhancements(v) end,
                     },
                     itemsHeader = {
                         type = "header",
-                        name = L["IGNORED_ITEMS"] or "Ignored Items",
+                        name = L["IGNORED_ITEMS"],
                         order = 10,
                     },
                     itemListDesc = {
@@ -432,7 +420,7 @@ local function GetLocalPreferencesOptions()
                         name = function()
                             local items = Loothing.Settings:GetIgnoredItems()
                             if not next(items) then
-                                return L["NO_IGNORED_ITEMS"] or "No items are currently ignored."
+                                return L["NO_IGNORED_ITEMS"]
                             end
                             local lines = {}
                             for itemID in pairs(items) do
@@ -451,8 +439,8 @@ local function GetLocalPreferencesOptions()
                     },
                     addItemInput = {
                         type = "input",
-                        name = L["ADD_IGNORED_ITEM"] or "Add Item to Ignore List",
-                        desc = L["IGNORE_ADD_DESC"] or "Paste an item link or enter an item ID.",
+                        name = L["ADD_IGNORED_ITEM"],
+                        desc = L["IGNORE_ADD_DESC"],
                         order = 12,
                         width = "double",
                         get = function() return "" end,
@@ -462,19 +450,19 @@ local function GetLocalPreferencesOptions()
                             local itemID = tonumber(value)
                                 or tonumber(value:match("item:(%d+)"))
                             if not itemID then
-                                print("|cFF33FF99Loothing|r: " .. (L["SLASH_INVALID_ITEM"] or "Invalid item link."))
+                                print("|cFF33FF99Loothing|r: " .. (L["SLASH_INVALID_ITEM"]))
                                 return
                             end
                             Loothing.Settings:AddIgnoredItem(itemID)
                             local itemName = C_Item.GetItemNameByID(itemID) or tostring(itemID)
                             print("|cFF33FF99Loothing|r: " .. string.format(
-                                L["ITEM_IGNORED"] or "%s added to ignore list", itemName))
+                                L["ITEM_IGNORED"], itemName))
                             if Loolib.Config then Loolib.Config:NotifyChange("Loothing") end
                         end,
                     },
                     removeItemSelect = {
                         type = "select",
-                        name = L["REMOVE_IGNORED_ITEM"] or "Remove from ignore list",
+                        name = L["REMOVE_IGNORED_ITEM"],
                         order = 13,
                         width = "double",
                         values = function()
@@ -495,7 +483,7 @@ local function GetLocalPreferencesOptions()
                             Loothing.Settings:RemoveIgnoredItem(value)
                             local itemName = C_Item.GetItemNameByID(value) or tostring(value)
                             print("|cFF33FF99Loothing|r: " .. string.format(
-                                L["ITEM_UNIGNORED"] or "%s removed from ignore list", itemName))
+                                L["ITEM_UNIGNORED"], itemName))
                             if Loolib.Config then Loolib.Config:NotifyChange("Loothing") end
                         end,
                         hidden = function()
@@ -504,13 +492,13 @@ local function GetLocalPreferencesOptions()
                     },
                     clearBtn = {
                         type = "execute",
-                        name = L["CLEAR_IGNORED_ITEMS"] or "Clear All",
+                        name = L["CLEAR_IGNORED_ITEMS"],
                         order = 14,
                         confirm = true,
-                        confirmText = L["CONFIRM_CLEAR_IGNORED"] or "Clear all ignored items?",
+                        confirmText = L["CONFIRM_CLEAR_IGNORED"],
                         func = function()
                             Loothing.Settings:ClearIgnoredItems()
-                            print("|cFF33FF99Loothing|r: " .. (L["IGNORED_ITEMS_CLEARED"] or "Ignore list cleared."))
+                            print("|cFF33FF99Loothing|r: " .. (L["IGNORED_ITEMS_CLEARED"]))
                             if Loolib.Config then Loolib.Config:NotifyChange("Loothing") end
                         end,
                         hidden = function()
@@ -524,13 +512,13 @@ local function GetLocalPreferencesOptions()
             -- ============================================================
             frame = {
                 type = "group",
-                name = L["CONFIG_FRAME_BEHAVIOR"] or "Frame Behavior",
+                name = L["CONFIG_FRAME_BEHAVIOR"],
                 order = 5,
                 columns = 3,
                 args = {
                     autoOpen = {
                         type = "toggle",
-                        name = L["CONFIG_FRAME_AUTO_OPEN"] or "Auto-Open Frames",
+                        name = L["CONFIG_FRAME_AUTO_OPEN"],
                         order = 1,
                         width = "half",
                         get = function() return Loothing.Settings:Get("frame.autoOpen") end,
@@ -538,7 +526,7 @@ local function GetLocalPreferencesOptions()
                     },
                     autoClose = {
                         type = "toggle",
-                        name = L["CONFIG_FRAME_AUTO_CLOSE"] or "Auto-Close Frames",
+                        name = L["CONFIG_FRAME_AUTO_CLOSE"],
                         order = 2,
                         width = "half",
                         get = function() return Loothing.Settings:Get("frame.autoClose") end,
@@ -546,7 +534,7 @@ local function GetLocalPreferencesOptions()
                     },
                     minimizeInCombat = {
                         type = "toggle",
-                        name = L["CONFIG_FRAME_MINIMIZE_COMBAT"] or "Minimize in Combat",
+                        name = L["CONFIG_FRAME_MINIMIZE_COMBAT"],
                         order = 3,
                         width = "half",
                         get = function() return Loothing.Settings:Get("frame.minimizeInCombat") end,
@@ -554,7 +542,7 @@ local function GetLocalPreferencesOptions()
                     },
                     showSpecIcon = {
                         type = "toggle",
-                        name = L["CONFIG_FRAME_SHOW_SPEC_ICON"] or "Show Spec Icons",
+                        name = L["CONFIG_FRAME_SHOW_SPEC_ICON"],
                         order = 4,
                         width = "half",
                         get = function() return Loothing.Settings:Get("frame.showSpecIcon") end,
@@ -562,7 +550,7 @@ local function GetLocalPreferencesOptions()
                     },
                     closeWithEscape = {
                         type = "toggle",
-                        name = L["CONFIG_FRAME_CLOSE_ESCAPE"] or "Close with Escape",
+                        name = L["CONFIG_FRAME_CLOSE_ESCAPE"],
                         order = 5,
                         width = "half",
                         get = function() return Loothing.Settings:Get("frame.closeWithEscape") end,
@@ -570,7 +558,7 @@ local function GetLocalPreferencesOptions()
                     },
                     timeoutFlash = {
                         type = "toggle",
-                        name = L["CONFIG_FRAME_TIMEOUT_FLASH"] or "Flash on Timeout",
+                        name = L["CONFIG_FRAME_TIMEOUT_FLASH"],
                         order = 6,
                         width = "half",
                         get = function() return Loothing.Settings:Get("frame.timeoutFlash") end,
@@ -578,7 +566,7 @@ local function GetLocalPreferencesOptions()
                     },
                     blockTradesDuringVoting = {
                         type = "toggle",
-                        name = L["CONFIG_FRAME_BLOCK_TRADES"] or "Block Trades During Voting",
+                        name = L["CONFIG_FRAME_BLOCK_TRADES"],
                         order = 7,
                         width = "half",
                         get = function() return Loothing.Settings:Get("frame.blockTradesDuringVoting") end,
@@ -586,7 +574,7 @@ local function GetLocalPreferencesOptions()
                     },
                     chatFrameName = {
                         type = "select",
-                        name = L["CONFIG_FRAME_CHAT_OUTPUT"] or "Chat Output Frame",
+                        name = L["CONFIG_FRAME_CHAT_OUTPUT"],
                         order = 8,
                         values = GetChatFrameValues(),
                         get = function() return Loothing.Settings:Get("frame.chatFrameName") end,
@@ -599,18 +587,18 @@ local function GetLocalPreferencesOptions()
             -- ============================================================
             ml = {
                 type = "group",
-                name = L["CONFIG_ML_SETTINGS"] or "ML Settings",
+                name = L["CONFIG_ML_SETTINGS"],
                 order = 6,
                 columns = 3,
                 args = {
                     usageMode = {
                         type = "select",
-                        name = L["CONFIG_ML_USAGE_MODE"] or "Usage Mode",
+                        name = L["CONFIG_ML_USAGE_MODE"],
                         order = 1,
                         values = {
-                            never = L["CONFIG_ML_USAGE_NEVER"] or "Never",
-                            gl = L["CONFIG_ML_USAGE_GL"] or "Group Loot",
-                            ask_gl = L["CONFIG_ML_USAGE_ASK_GL"] or "Ask on Group Loot",
+                            never = L["CONFIG_ML_USAGE_NEVER"],
+                            gl = L["CONFIG_ML_USAGE_GL"],
+                            ask_gl = L["CONFIG_ML_USAGE_ASK_GL"],
                         },
                         sorting = { "never", "gl", "ask_gl" },
                         get = function() return Loothing.Settings:Get("ml.usageMode") end,
@@ -618,7 +606,7 @@ local function GetLocalPreferencesOptions()
                     },
                     onlyUseInRaids = {
                         type = "toggle",
-                        name = L["CONFIG_ML_RAIDS_ONLY"] or "Raids Only",
+                        name = L["CONFIG_ML_RAIDS_ONLY"],
                         order = 2,
                         width = "half",
                         get = function() return Loothing.Settings:Get("ml.onlyUseInRaids") end,
@@ -626,7 +614,7 @@ local function GetLocalPreferencesOptions()
                     },
                     allowOutOfRaid = {
                         type = "toggle",
-                        name = L["CONFIG_ML_ALLOW_OUTSIDE"] or "Allow Outside Raids",
+                        name = L["CONFIG_ML_ALLOW_OUTSIDE"],
                         order = 3,
                         width = "half",
                         get = function() return Loothing.Settings:Get("ml.allowOutOfRaid") end,
@@ -634,7 +622,7 @@ local function GetLocalPreferencesOptions()
                     },
                     skipSessionFrame = {
                         type = "toggle",
-                        name = L["CONFIG_ML_SKIP_SESSION"] or "Skip Session Frame",
+                        name = L["CONFIG_ML_SKIP_SESSION"],
                         order = 4,
                         width = "half",
                         get = function() return Loothing.Settings:Get("ml.skipSessionFrame") end,
@@ -642,7 +630,7 @@ local function GetLocalPreferencesOptions()
                     },
                     sortItems = {
                         type = "toggle",
-                        name = L["CONFIG_ML_SORT_ITEMS"] or "Sort Items",
+                        name = L["CONFIG_ML_SORT_ITEMS"],
                         order = 5,
                         width = "half",
                         get = function() return Loothing.Settings:Get("ml.sortItems") end,
@@ -650,7 +638,7 @@ local function GetLocalPreferencesOptions()
                     },
                     autoAddBoEs = {
                         type = "toggle",
-                        name = L["CONFIG_ML_AUTO_ADD_BOES"] or "Auto-Add BoEs",
+                        name = L["CONFIG_ML_AUTO_ADD_BOES"],
                         order = 6,
                         width = "half",
                         get = function() return Loothing.Settings:Get("ml.autoAddBoEs") end,
@@ -658,7 +646,7 @@ local function GetLocalPreferencesOptions()
                     },
                     printCompletedTrades = {
                         type = "toggle",
-                        name = L["CONFIG_ML_PRINT_TRADES"] or "Print Completed Trades",
+                        name = L["CONFIG_ML_PRINT_TRADES"],
                         order = 7,
                         width = "half",
                         get = function() return Loothing.Settings:Get("ml.printCompletedTrades") end,
@@ -666,7 +654,7 @@ local function GetLocalPreferencesOptions()
                     },
                     rejectTrade = {
                         type = "toggle",
-                        name = L["CONFIG_ML_REJECT_TRADE"] or "Reject Invalid Trades",
+                        name = L["CONFIG_ML_REJECT_TRADE"],
                         order = 8,
                         width = "half",
                         get = function() return Loothing.Settings:Get("ml.rejectTrade") end,
@@ -674,7 +662,7 @@ local function GetLocalPreferencesOptions()
                     },
                     awardLater = {
                         type = "toggle",
-                        name = L["CONFIG_ML_AWARD_LATER"] or "Award Later",
+                        name = L["CONFIG_ML_AWARD_LATER"],
                         order = 9,
                         width = "half",
                         get = function() return Loothing.Settings:Get("ml.awardLater") end,
@@ -687,13 +675,13 @@ local function GetLocalPreferencesOptions()
             -- ============================================================
             history = {
                 type = "group",
-                name = L["CONFIG_HISTORY_SETTINGS"] or "History Settings",
+                name = L["CONFIG_HISTORY_SETTINGS"],
                 order = 7,
                 columns = 3,
                 args = {
                     enabled = {
                         type = "toggle",
-                        name = L["CONFIG_HISTORY_ENABLED"] or "Enable History",
+                        name = L["CONFIG_HISTORY_ENABLED"],
                         order = 1,
                         width = "half",
                         get = function() return Loothing.Settings:Get("historySettings.enabled", true) end,
@@ -701,24 +689,24 @@ local function GetLocalPreferencesOptions()
                     },
                     clearAll = {
                         type = "execute",
-                        name = L["CONFIG_HISTORY_CLEAR_ALL"] or "Clear All History",
+                        name = L["CONFIG_HISTORY_CLEAR_ALL"],
                         order = 2,
                         func = function()
                             if Loothing.History then
                                 Loothing.History:ClearHistory()
-                                Loothing:Print("All history cleared")
+                                Loothing:Print(L["CONFIG_HISTORY_ALL_CLEARED"])
                                 if Loolib.Config and Loolib.Config.Dialog then
                                     Loolib.Config.Dialog:RefreshContent("Loothing")
                                 end
                             end
                         end,
                         confirm = function()
-                            return "Are you sure you want to delete ALL history entries? This cannot be undone!"
+                            return L["CONFIG_HISTORY_CLEARALL_CONFIRM"]
                         end,
                     },
                     sendHistory = {
                         type = "toggle",
-                        name = L["CONFIG_HISTORY_SEND"] or "Send History",
+                        name = L["CONFIG_HISTORY_SEND"],
                         order = 3,
                         width = "half",
                         get = function() return Loothing.Settings:Get("historySettings.sendHistory") end,
@@ -726,7 +714,7 @@ local function GetLocalPreferencesOptions()
                     },
                     sendToGuild = {
                         type = "toggle",
-                        name = L["CONFIG_HISTORY_SEND_GUILD"] or "Send to Guild",
+                        name = L["CONFIG_HISTORY_SEND_GUILD"],
                         order = 4,
                         width = "half",
                         get = function() return Loothing.Settings:Get("historySettings.sendToGuild") end,
@@ -734,7 +722,7 @@ local function GetLocalPreferencesOptions()
                     },
                     savePersonalLoot = {
                         type = "toggle",
-                        name = L["CONFIG_HISTORY_SAVE_PL"] or "Save Personal Loot",
+                        name = L["CONFIG_HISTORY_SAVE_PL"],
                         order = 5,
                         width = "half",
                         get = function() return Loothing.Settings:Get("historySettings.savePersonalLoot") end,
@@ -742,9 +730,8 @@ local function GetLocalPreferencesOptions()
                     },
                     autoExportWeb = {
                         type = "toggle",
-                        name = L["CONFIG_HISTORY_AUTO_EXPORT_WEB"] or "Auto-Show Web Export",
-                        desc = L["CONFIG_HISTORY_AUTO_EXPORT_WEB_DESC"]
-                            or "When a loot session ends, automatically open the export dialog with the Web export ready to copy. Upload at loothing.xyz",
+                        name = L["CONFIG_HISTORY_AUTO_EXPORT_WEB"],
+                        desc = L["CONFIG_HISTORY_AUTO_EXPORT_WEB_DESC"],
                         order = 6,
                         width = "full",
                         get = function() return Loothing.Settings:Get("historySettings.autoExportWeb") end,
@@ -790,7 +777,7 @@ local function GetLocalPreferencesOptions()
                             },
                             announceConsiderations = {
                                 type = "toggle",
-                                name = L["CONFIG_ANNOUNCE_CONSIDERATIONS"] or "Announce Considerations",
+                                name = L["CONFIG_ANNOUNCE_CONSIDERATIONS"],
                                 order = 4,
                                 get = function() return Loothing.Settings:GetAnnounceConsiderations() end,
                                 set = function(_, v) Loothing.Settings:SetAnnounceConsiderations(v) end,
@@ -799,13 +786,13 @@ local function GetLocalPreferencesOptions()
                     },
                     considerations = {
                         type = "group",
-                        name = L["CONFIG_CONSIDERATIONS"] or "Considerations",
+                        name = L["CONFIG_CONSIDERATIONS"],
                         order = 2,
                         inline = false,
                         args = {
                             considerationsChannel = {
                                 type = "select",
-                                name = L["CONFIG_CONSIDERATIONS_CHANNEL"] or "Channel",
+                                name = L["CONFIG_CONSIDERATIONS_CHANNEL"],
                                 order = 1,
                                 values = GetChannelValues(),
                                 get = function() return Loothing.Settings:GetConsiderationsChannel() end,
@@ -813,7 +800,7 @@ local function GetLocalPreferencesOptions()
                             },
                             considerationsText = {
                                 type = "input",
-                                name = L["CONFIG_CONSIDERATIONS_TEXT"] or "Message Template",
+                                name = L["CONFIG_CONSIDERATIONS_TEXT"],
                                 order = 2,
                                 width = "full",
                                 get = function() return Loothing.Settings:GetConsiderationsText() end,
@@ -834,7 +821,7 @@ local function GetLocalPreferencesOptions()
                     },
                     items = {
                         type = "group",
-                        name = L["CONFIG_ITEM_ANNOUNCEMENTS"] or "Item Announcements",
+                        name = L["CONFIG_ITEM_ANNOUNCEMENTS"],
                         order = 4,
                         inline = false,
                         args = MakeLineOptions(
@@ -845,18 +832,18 @@ local function GetLocalPreferencesOptions()
                     },
                     sessions = {
                         type = "group",
-                        name = L["CONFIG_SESSION_ANNOUNCEMENTS"] or "Session Announcements",
+                        name = L["CONFIG_SESSION_ANNOUNCEMENTS"],
                         order = 5,
                         inline = false,
                         args = {
                             sessionStartHeader = {
                                 type = "header",
-                                name = L["CONFIG_SESSION_START"] or "Session Start",
+                                name = L["CONFIG_SESSION_START"],
                                 order = 1,
                             },
                             sessionStartChannel = {
                                 type = "select",
-                                name = L["CONFIG_CHANNEL"] or "Channel",
+                                name = L["CONFIG_CHANNEL"],
                                 order = 2,
                                 values = GetChannelValues(),
                                 get = function() return Loothing.Settings:GetSessionStartChannel() end,
@@ -864,7 +851,7 @@ local function GetLocalPreferencesOptions()
                             },
                             sessionStartText = {
                                 type = "input",
-                                name = L["CONFIG_MESSAGE"] or "Message",
+                                name = L["CONFIG_MESSAGE"],
                                 order = 3,
                                 width = "full",
                                 get = function() return Loothing.Settings:GetSessionStartText() end,
@@ -872,12 +859,12 @@ local function GetLocalPreferencesOptions()
                             },
                             sessionEndHeader = {
                                 type = "header",
-                                name = L["CONFIG_SESSION_END"] or "Session End",
+                                name = L["CONFIG_SESSION_END"],
                                 order = 10,
                             },
                             sessionEndChannel = {
                                 type = "select",
-                                name = L["CONFIG_CHANNEL"] or "Channel",
+                                name = L["CONFIG_CHANNEL"],
                                 order = 11,
                                 values = GetChannelValues(),
                                 get = function() return Loothing.Settings:GetSessionEndChannel() end,
@@ -885,7 +872,7 @@ local function GetLocalPreferencesOptions()
                             },
                             sessionEndText = {
                                 type = "input",
-                                name = L["CONFIG_MESSAGE"] or "Message",
+                                name = L["CONFIG_MESSAGE"],
                                 order = 12,
                                 width = "full",
                                 get = function() return Loothing.Settings:GetSessionEndText() end,

@@ -136,7 +136,7 @@ function VotePanelMixin:CreateNoteInput()
     -- Label
     local label = container:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     label:SetPoint("TOPLEFT", 0, 0)
-    label:SetText(L["NOTE"] or "Note:")
+    label:SetText(L["NOTE"])
     label:SetTextColor(0.8, 0.8, 0.8)
 
     -- Edit box
@@ -154,7 +154,7 @@ function VotePanelMixin:CreateNoteInput()
     -- Required indicator (shown when notes are required)
     local requiredText = container:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     requiredText:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -2)
-    requiredText:SetText("*" .. (L["REQUIRED"] or "Required"))
+    requiredText:SetText("*" .. (L["REQUIRED"]))
     requiredText:SetTextColor(1, 0.3, 0.3)
     requiredText:Hide()
     self.noteRequiredText = requiredText
@@ -553,11 +553,11 @@ function VotePanelMixin:UpdateRankHelperText()
     local minRanks = Loothing.Settings and Loothing.Settings:GetMinRanks() or 1
 
     if maxRanks > 0 and count >= maxRanks then
-        self.rankHelperText:SetText(string.format(L and L["RANK_LIMIT_REACHED"] or "Maximum %d ranks reached", maxRanks))
+        self.rankHelperText:SetText(string.format(L and L["RANK_LIMIT_REACHED"], maxRanks))
         self.rankHelperText:SetTextColor(1, 0.5, 0.2)
         self.rankHelperText:Show()
     elseif count < minRanks then
-        self.rankHelperText:SetText(string.format(L and L["RANK_MINIMUM_REQUIRED"] or "Rank at least %d choices", minRanks))
+        self.rankHelperText:SetText(string.format(L and L["RANK_MINIMUM_REQUIRED"], minRanks))
         self.rankHelperText:SetTextColor(1, 0.3, 0.3)
         self.rankHelperText:Show()
     else
@@ -671,10 +671,10 @@ function VotePanelMixin:ApplyObserveMode()
     if self.submitButton then
         self.submitButton:SetEnabled(not observeMode)
         if observeMode then
-            self.submitButton:SetText("Observe Mode")
+            self.submitButton:SetText(L["OBSERVE_MODE"])
         else
             local L = Loothing.Locale
-            self.submitButton:SetText(L["SUBMIT_VOTE"] or "Submit Vote")
+            self.submitButton:SetText(L["SUBMIT_VOTE"])
         end
     end
 
@@ -820,7 +820,7 @@ function VotePanelMixin:SubmitVote()
 
     -- Check for observe mode
     if Loothing.Settings and Loothing.Settings:GetObserveMode() then
-        Loothing:Print("You are in observe mode and cannot cast votes.")
+        Loothing:Print(Loothing.Locale["OBSERVE_MODE_MSG"])
         return
     end
 
@@ -828,7 +828,7 @@ function VotePanelMixin:SubmitVote()
     local note = self:GetNote()
     if Loothing.Settings and Loothing.Settings:GetRequireNotes() then
         if note == "" then
-            Loothing:Print("You must add a note with your vote.")
+            Loothing:Print(Loothing.Locale["VOTE_NOTE_REQUIRED"])
             if self.noteInput then
                 self.noteInput:SetFocus()
             end

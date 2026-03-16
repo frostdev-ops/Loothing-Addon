@@ -211,14 +211,14 @@ end
 -- 0. ML Usage Prompt - "You are ML, use Loothing?"
 Popups:Register("LOOTHING_ML_USAGE_PROMPT", {
     title = L["ADDON_NAME"],
-    text = L["ML_USAGE_PROMPT_TEXT"] or "You are the raid leader. Use Loothing for loot distribution?",
+    text = L["ML_USAGE_PROMPT_TEXT"],
     modal = true,
     hide_on_escape = true,
     show_while_dead = true,
     on_show = function(dialog, data)
         if data and data.instance and data.instance ~= "" then
             return string.format(
-                L["ML_USAGE_PROMPT_TEXT_INSTANCE"] or "You are the raid leader.\nUse Loothing for %s?",
+                L["ML_USAGE_PROMPT_TEXT_INSTANCE"],
                 data.instance
             )
         end
@@ -238,7 +238,7 @@ Popups:Register("LOOTHING_ML_USAGE_PROMPT", {
 -- 1. Confirm Usage - "Use Loothing for this session?"
 Popups:Register("LOOTHING_CONFIRM_USAGE", {
     title = L["ADDON_NAME"],
-    text = "Do you want to use Loothing for loot distribution in this raid?",
+    text = L["POPUP_CONFIRM_USAGE"],
     modal = true,
     hide_on_escape = true,
     show_while_dead = true,
@@ -265,7 +265,7 @@ Popups:Register("LOOTHING_CONFIRM_USAGE", {
 -- 2. Confirm Abort - "Abort current session?"
 Popups:Register("LOOTHING_CONFIRM_ABORT", {
     title = L["END_SESSION"],
-    text = "Are you sure you want to end the current loot session? All pending items will be closed.",
+    text = L["POPUP_CONFIRM_END_SESSION"],
     modal = true,
     hide_on_escape = true,
     show_while_dead = true,
@@ -333,7 +333,7 @@ Popups:Register("LOOTHING_CONFIRM_AWARD", {
 -- 4. Confirm Award Later - "Bag {item} for later?"
 Popups:Register("LOOTHING_CONFIRM_AWARD_LATER", {
     title = L["AWARD_ITEM"],
-    text = "Award {item} to yourself to distribute later?",
+    text = L["POPUP_AWARD_LATER"],
     modal = true,
     hide_on_escape = true,
     show_while_dead = true,
@@ -363,16 +363,16 @@ Popups:Register("LOOTHING_CONFIRM_AWARD_LATER", {
 -- 5. Trade Add Item - "Add {count} items to trade with {player}?"
 Popups:Register("LOOTHING_TRADE_ADD_ITEM", {
     title = L["TRADE_QUEUE"],
-    text = "Add {count} awarded items to trade with {player}?",
+    text = L["POPUP_TRADE_ADD_ITEMS"],
     modal = true,
     hide_on_escape = true,
     show_while_dead = true,
     on_show = function(dialog, data)
         if data and data.count and data.player then
             if data.count == 1 then
-                return string.format("Add 1 awarded item to trade with %s?", data.player)
+                return string.format(L["POPUP_TRADE_ADD_SINGLE"], data.player)
             else
-                return string.format("Add %d awarded items to trade with %s?", data.count, data.player)
+                return string.format(L["POPUP_TRADE_ADD_MULTI"], data.count, data.player)
             end
         end
         return nil
@@ -400,7 +400,7 @@ Popups:Register("LOOTHING_TRADE_ADD_ITEM", {
 -- 6. Keep Item - "Keep {item} or trade?"
 Popups:Register("LOOTHING_KEEP_ITEM", {
     title = L["AWARD_ITEM"],
-    text = "What would you like to do with {item}?",
+    text = L["POPUP_KEEP_OR_TRADE"],
     modal = true,
     hide_on_escape = true,
     show_while_dead = true,
@@ -410,13 +410,13 @@ Popups:Register("LOOTHING_KEEP_ITEM", {
     end,
     on_show = function(dialog, data)
         if data and data.item then
-            return string.format("What would you like to do with %s?", data.item)
+            return string.format(L["POPUP_KEEP_OR_TRADE_FMT"], data.item)
         end
         return nil
     end,
     buttons = {
         {
-            text = "Keep",
+            text = L["KEEP"],
             on_click = function(dialog, data)
                 if data and data.onKeep then
                     data.onKeep()
@@ -436,30 +436,30 @@ Popups:Register("LOOTHING_KEEP_ITEM", {
 
 -- 7. Sync Request - "{player} wants to sync {type}"
 Popups:Register("LOOTHING_SYNC_REQUEST", {
-    title = "Sync Request",
-    text = "{player} wants to sync their {type} to you. Accept?",
+    title = L["POPUP_SYNC_REQUEST_TITLE"],
+    text = L["POPUP_SYNC_REQUEST"],
     modal = true,
     hide_on_escape = true,
     show_while_dead = true,
     on_show = function(dialog, data)
         if data then
             local syncType = data.type or "data"
-            local player = data.player or "Unknown"
+            local player = data.player or L["UNKNOWN"]
 
             if syncType == "settings" then
-                return string.format("%s wants to sync their Loothing settings to you. Accept?", player)
+                return string.format(L["POPUP_SYNC_SETTINGS_FMT"], player)
             elseif syncType == "history" then
                 local days = data.days or 7
-                return string.format("%s wants to sync their loot history (%d days) to you. Accept?", player, days)
+                return string.format(L["POPUP_SYNC_HISTORY_FMT"], player, days)
             else
-                return string.format("%s wants to sync their %s to you. Accept?", player, syncType)
+                return string.format(L["POPUP_SYNC_GENERIC_FMT"], player, syncType)
             end
         end
         return nil
     end,
     buttons = {
         {
-            text = "Accept",
+            text = L["ACCEPT"],
             on_click = function(dialog, data)
                 if data and data.onAccept then
                     data.onAccept()
@@ -467,7 +467,7 @@ Popups:Register("LOOTHING_SYNC_REQUEST", {
             end,
         },
         {
-            text = "Decline",
+            text = L["DECLINE"],
             on_click = function(dialog, data)
                 if data and data.onCancel then
                     data.onCancel()
@@ -480,16 +480,16 @@ Popups:Register("LOOTHING_SYNC_REQUEST", {
 -- 8. Import Overwrite - "Import will overwrite {count} entries"
 Popups:Register("LOOTHING_IMPORT_OVERWRITE", {
     title = L["HISTORY"],
-    text = "This import will overwrite {count} existing history entries. Continue?",
+    text = L["POPUP_IMPORT_OVERWRITE"],
     modal = true,
     hide_on_escape = true,
     show_while_dead = true,
     on_show = function(dialog, data)
         if data and data.count then
             if data.count == 1 then
-                return "This import will overwrite 1 existing history entry. Continue?"
+                return L["POPUP_IMPORT_OVERWRITE_SINGLE"]
             else
-                return string.format("This import will overwrite %d existing history entries. Continue?", data.count)
+                return string.format(L["POPUP_IMPORT_OVERWRITE_MULTI"], data.count)
             end
         end
         return nil
@@ -525,14 +525,14 @@ Popups:Register("LOOTHING_CONFIRM_DELETE_HISTORY", {
     on_show = function(dialog, data)
         if data and data.count then
             if data.count == 1 then
-                return "Delete 1 history entry? This cannot be undone."
+                return L["POPUP_DELETE_HISTORY_SINGLE"]
             elseif data.count == "all" then
-                return "Delete ALL history entries? This cannot be undone."
+                return L["POPUP_DELETE_HISTORY_ALL"]
             else
-                return string.format("Delete %d history entries? This cannot be undone.", data.count)
+                return string.format(L["POPUP_DELETE_HISTORY_MULTI"], data.count)
             end
         end
-        return "Delete selected history entries? This cannot be undone."
+        return L["POPUP_DELETE_HISTORY_SELECTED"]
     end,
     buttons = {
         {
@@ -564,9 +564,9 @@ Popups:Register("LOOTHING_CONFIRM_CLEAR_COUNCIL", {
     show_while_dead = true,
     on_show = function(dialog, data)
         if data and data.count then
-            return string.format("Remove all %d council members?", data.count)
+            return string.format(L["POPUP_CLEAR_COUNCIL_COUNT"], data.count)
         end
-        return "Remove all council members?"
+        return L["POPUP_CLEAR_COUNCIL"]
     end,
     buttons = {
         {
@@ -592,7 +592,7 @@ Popups:Register("LOOTHING_CONFIRM_CLEAR_COUNCIL", {
 -- 11. Confirm Skip Item - "Skip this item?"
 Popups:Register("LOOTHING_CONFIRM_SKIP", {
     title = L["SKIP_ITEM"],
-    text = "Skip {item} without awarding it?",
+    text = L["POPUP_SKIP_ITEM"],
     modal = true,
     hide_on_escape = true,
     show_while_dead = true,
@@ -601,7 +601,7 @@ Popups:Register("LOOTHING_CONFIRM_SKIP", {
     end,
     on_show = function(dialog, data)
         if data and data.item then
-            return string.format("Skip %s without awarding it?", data.item)
+            return string.format(L["POPUP_SKIP_ITEM_FMT"], data.item)
         end
         return nil
     end,
@@ -628,7 +628,7 @@ Popups:Register("LOOTHING_CONFIRM_SKIP", {
 -- 12. Confirm Re-vote - "Clear all votes and restart voting?"
 Popups:Register("LOOTHING_CONFIRM_REVOTE", {
     title = L["RE_VOTE"],
-    text = "Clear all votes and restart voting for {item}?",
+    text = L["POPUP_CONFIRM_REVOTE"],
     modal = true,
     hide_on_escape = true,
     show_while_dead = true,
@@ -637,9 +637,9 @@ Popups:Register("LOOTHING_CONFIRM_REVOTE", {
     end,
     on_show = function(dialog, data)
         if data and data.item then
-            return string.format("Clear all votes and restart voting for %s?", data.item)
+            return string.format(L["POPUP_CONFIRM_REVOTE_FMT"], data.item)
         end
-        return "Clear all votes and restart voting?"
+        return L["COUNCIL_CONFIRM_REVOTE"]
     end,
     buttons = {
         {
@@ -670,9 +670,9 @@ Popups:Register("LOOTHING_CONFIRM_CLEAR_IGNORED", {
     show_while_dead = true,
     on_show = function(dialog, data)
         if data and data.count then
-            return string.format("Clear all %d ignored items?", data.count)
+            return string.format(L["POPUP_CLEAR_IGNORED_COUNT"], data.count)
         end
-        return "Clear all ignored items?"
+        return L["POPUP_CLEAR_IGNORED"]
     end,
     buttons = {
         {
@@ -726,13 +726,13 @@ Popups:Register("LOOTHING_CONFIRM_RESET_REASONS", {
 -- 15. Confirm Delete Button Set - "Delete button set {name}?"
 Popups:Register("LOOTHING_CONFIRM_DELETE_SET", {
     title = L["BUTTON_SETS"],
-    text = "Delete button set '{name}'?",
+    text = L["CONFIRM_DELETE_SET"],
     modal = true,
     hide_on_escape = true,
     show_while_dead = true,
     on_show = function(dialog, data)
         if data and data.name then
-            return string.format("Delete button set '%s'?", data.name)
+            return string.format(L["CONFIRM_DELETE_SET"], data.name)
         end
         return nil
     end,
@@ -759,8 +759,8 @@ Popups:Register("LOOTHING_CONFIRM_DELETE_SET", {
 
 -- 16. Confirm Re-announce - "Re-announce all items?"
 Popups:Register("LOOTHING_CONFIRM_REANNOUNCE", {
-    title = "Re-announce Items",
-    text = "Re-announce all items to the group?",
+    title = L["POPUP_REANNOUNCE_TITLE"],
+    text = L["POPUP_REANNOUNCE"],
     modal = true,
     hide_on_escape = true,
     show_while_dead = true,
@@ -782,15 +782,15 @@ Popups:Register("LOOTHING_CONFIRM_REANNOUNCE", {
 -- 17. Confirm Start Session - "Start loot session for {boss}?"
 Popups:Register("LOOTHING_CONFIRM_START_SESSION", {
     title = L["START_SESSION"],
-    text = "Start loot session for {boss}?",
+    text = L["POPUP_START_SESSION"],
     modal = true,
     hide_on_escape = true,
     show_while_dead = true,
     on_show = function(dialog, data)
         if data and data.boss then
-            return string.format("Start loot session for %s?", data.boss)
+            return string.format(L["POPUP_START_SESSION_FMT"], data.boss)
         end
-        return "Start loot session?"
+        return L["POPUP_START_SESSION_GENERIC"]
     end,
     buttons = {
         {
@@ -814,14 +814,14 @@ Popups:Register("LOOTHING_CONFIRM_START_SESSION", {
 
 -- 18. Confirm Profile Overwrite - "Overwrite current profile?"
 Popups:Register("LOOTHING_CONFIRM_PROFILE_OVERWRITE", {
-    title = "Overwrite Profile",
-    text = "This will overwrite your current profile settings. Continue?",
+    title = L["POPUP_OVERWRITE_PROFILE_TITLE"],
+    text = L["POPUP_OVERWRITE_PROFILE"],
     modal = true,
     hide_on_escape = true,
     show_while_dead = true,
     buttons = {
         {
-            text = "Overwrite",
+            text = L["OVERWRITE"],
             danger = true,
             on_click = function(dialog, data)
                 if data and data.onAccept then
@@ -837,14 +837,14 @@ Popups:Register("LOOTHING_CONFIRM_PROFILE_OVERWRITE", {
 
 -- 19. Settings Import Confirmation — two action buttons for import mode
 Popups:Register("LOOTHING_SETTINGS_IMPORT_CONFIRM", {
-    title = "Import Settings",
-    text = "Choose how to apply the imported settings:",
+    title = L["POPUP_IMPORT_SETTINGS_TITLE"],
+    text = L["POPUP_IMPORT_SETTINGS"],
     modal = true,
     hide_on_escape = true,
     show_while_dead = true,
     buttons = {
         {
-            text = "Create New Profile",
+            text = L["CREATE_NEW_PROFILE"],
             on_click = function(dialog, data)
                 if data and data.onNewProfile then
                     data.onNewProfile()
@@ -852,7 +852,7 @@ Popups:Register("LOOTHING_SETTINGS_IMPORT_CONFIRM", {
             end,
         },
         {
-            text = "Apply to Current",
+            text = L["APPLY_TO_CURRENT"],
             danger = true,
             on_click = function(dialog, data)
                 if data and data.onApplyCurrent then
@@ -915,7 +915,7 @@ function Popups:Alert(title, message, onOK)
 
     dialog:SetButtons({
         {
-            text = "OK",
+            text = L["OK"],
             onClick = function(dlg)
                 if onOK then
                     onOK()

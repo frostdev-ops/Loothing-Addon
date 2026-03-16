@@ -135,6 +135,7 @@ end
 --- Execute a /roll command for the current item
 function RollFrameMixin:DoRoll()
     if not self.item then return end
+    if self:GetItemRoll(self.item.guid) then return end
     local rollSettings = Loothing.Settings and Loothing.Settings:Get("rollFrame.rollRange")
     local minRoll = rollSettings and rollSettings.min or 1
     local maxRoll = rollSettings and rollSettings.max or 100
@@ -312,6 +313,25 @@ function RollFrameMixin:ResetUIState(previousResponse)
         end
     else
         self.selectedResponse = nil
+    end
+
+    if self.rollButtonRoll and self.rollButtonPass then
+        self.rollButtonRoll.selected:Hide()
+        self.rollPassSelected:Hide()
+
+        if alreadyResponded or isPending then
+            self.rollButtonRoll:Disable()
+            self.rollButtonPass:Disable()
+        else
+            self.rollButtonRoll:Enable()
+            self.rollButtonPass:Enable()
+        end
+
+        if previousResponse and previousResponse.response == "ROLL" then
+            self.rollButtonRoll.selected:Show()
+        elseif previousResponse and previousResponse.response == "PASS" then
+            self.rollPassSelected:Show()
+        end
     end
 
     -- Update roll display (shows existing roll or "...")
@@ -612,7 +632,7 @@ function RollFrameMixin:UpdateTimer()
 
     if remaining <= 0 then
         if isVoting then
-            self.timerText:SetText(L["TIME_EXPIRED"] or "Time expired")
+            self.timerText:SetText(L["TIME_EXPIRED"])
             self.timerBar:SetValue(0)
             self.timerBar:SetStatusBarColor(0.6, 0.2, 0.2, 1)
 
@@ -716,7 +736,7 @@ end
 function RollFrameMixin:UpdateSubmitButton()
     local canSubmit = self.selectedResponse ~= nil
     local current = self.item and self:GetItemResponse(self.item.guid) or nil
-    if current and current.pending then
+    if current and (current.pending or current.submitted) then
         canSubmit = false
     end
 
@@ -742,7 +762,7 @@ function RollFrameMixin:UpdateSubmitButton()
             btnText = "Sending..."
         else
             local L = Loothing.Locale
-            btnText = L["SUBMIT_RESPONSE"] or "Submit Response"
+            btnText = L["SUBMIT_RESPONSE"]
         end
 
         -- Update label FontString (custom button uses .label, not SetText)
@@ -786,14 +806,14 @@ end
 function RollFrameMixin:Submit()
     if not self.selectedResponse then return end
     if not self.item then return end
-    -- Prevent double-submit while pending
+    -- Prevent resubmits once this item is pending or already acknowledged
     local existing = self:GetItemResponse(self.item.guid)
-    if existing and existing.pending then
+    if existing and (existing.pending or existing.submitted) then
         return
     end
 
-    -- For roll-type items, trigger /roll if the response is ROLL
-    if self.item.isRoll and self.selectedResponse == "ROLL" then
+    -- For roll-type items, only trigger an addon-driven /roll once per item.
+    if self.item.isRoll and self.selectedResponse == "ROLL" and not self:GetItemRoll(self.item.guid) then
         self:DoRoll()
     end
 
@@ -855,6 +875,10 @@ function RollFrameMixin:SendResponse(note)
 
     -- Track pending ack (do not mark submitted yet)
     self:SetItemResponse(itemGUID, response, note, false, true)
+
+    if self.item and self.item.guid == itemGUID then
+        self:ResetUIState(self:GetItemResponse(itemGUID))
+    end
 
     -- Fire event
     self:TriggerEvent("OnResponseSubmitted", self.item, response, note, roll)

@@ -303,6 +303,29 @@ function Utils.IsMasterLooter()
     return false
 end
 
+--- Check if the local player can manage council/observer rosters.
+-- Solo clients may edit their saved defaults; grouped clients must be the active ML.
+-- @return boolean
+function Utils.CanManageCouncilRoster()
+    if IsTestModeEnabled() then
+        return true
+    end
+
+    if not IsInGroup() then
+        return true
+    end
+
+    if Loothing.Session and Loothing.Session.GetMasterLooter and Loothing.Session:GetMasterLooter() then
+        return Loothing.Session:IsMasterLooter()
+    end
+
+    if Loothing.Settings and Loothing.Settings.IsMasterLooter then
+        return Loothing.Settings:IsMasterLooter()
+    end
+
+    return false
+end
+
 --[[--------------------------------------------------------------------
     Instance Type Utilities
 ----------------------------------------------------------------------]]

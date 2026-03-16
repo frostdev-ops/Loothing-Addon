@@ -7,6 +7,7 @@ local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local Utils = ns.Utils
+local L = Loothing.Locale
 local VersionCheck = ns.VersionCheck
 local C_Timer = C_Timer
 
@@ -24,16 +25,17 @@ local HEADER_HEIGHT = 28
 local COLUMN_HEADER_HEIGHT = 22
 local FOOTER_HEIGHT = 36
 
--- Column definitions: { id, width (nil = FILL), label }
+-- Column definitions: { id, width (nil = FILL), labelKey }
+-- Labels are resolved at display time via L[labelKey] in CreateColumnButtons
 local COLUMNS = {
     { id = "status",  width = 20,  label = "" },
-    { id = "name",    width = nil, label = "Name" },
+    { id = "name",    width = nil, labelKey = "ROSTER_COLUMN_NAME" },
     { id = "role",    width = 28,  label = "" },
-    { id = "ilvl",    width = 40,  label = "iLvl" },
+    { id = "ilvl",    width = 40,  labelKey = "ROSTER_COLUMN_ILVL" },
     { id = "version", width = 90,  label = "Loothing" },
-    { id = "council", width = 58,  label = "Council" },
-    { id = "loot",    width = 44,  label = "Loot" },
-    { id = "rank",    width = 60,  label = "Rank" },
+    { id = "council", width = 58,  labelKey = "ROSTER_COLUMN_COUNCIL" },
+    { id = "loot",    width = 44,  labelKey = "ROSTER_COLUMN_LOOT" },
+    { id = "rank",    width = 60,  labelKey = "ROSTER_COLUMN_RANK" },
 }
 
 local FIXED_WIDTH_TOTAL = 0
@@ -50,8 +52,8 @@ local ROLE_ATLASES = {
     DAMAGER = "roleicon-tiny-dps",
 }
 
--- Rank display names
-local RANK_NAMES = { [2] = "Leader", [1] = "Assist", [0] = "Member" }
+-- Rank display names (resolved at display time via L[])
+local RANK_KEYS = { [2] = "ROSTER_RANK_LEADER", [1] = "ROSTER_RANK_ASSIST", [0] = "ROSTER_RANK_MEMBER" }
 
 -- Sort comparators keyed by column id
 local SORT_COMPARATORS = {
@@ -189,7 +191,7 @@ function RosterPanelMixin:CreateColumnButtons()
 
         local text = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         text:SetPoint("LEFT", 2, 0)
-        text:SetText(col.label)
+        text:SetText(col.labelKey and L[col.labelKey] or col.label or "")
         text:SetTextColor(0.6, 0.6, 0.6)
         btn.label = text
 
@@ -343,7 +345,7 @@ function RosterPanelMixin:CreateFooter()
     local queryBtn = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
     queryBtn:SetSize(120, 26)
     queryBtn:SetPoint("RIGHT")
-    queryBtn:SetText(L["ROSTER_QUERY_VERSIONS"] or "Query Versions")
+    queryBtn:SetText(L["ROSTER_QUERY_VERSIONS"])
     queryBtn:SetScript("OnClick", function()
         self:QueryVersions()
     end)
@@ -361,7 +363,7 @@ function RosterPanelMixin:CreateEmptyState()
 
     self.emptyText = self.listContainer:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     self.emptyText:SetPoint("CENTER")
-    self.emptyText:SetText(L["ROSTER_NO_GROUP"] or "Not in a group")
+    self.emptyText:SetText(L["ROSTER_NO_GROUP"])
     self.emptyText:SetTextColor(0.5, 0.5, 0.5)
     self.emptyText:Hide()
 end
@@ -745,7 +747,7 @@ function RosterPanelMixin:SetupRow(row, entry, yOffset, fillWidth)
     row.versionText:SetWidth(86)
     if entry.versionStr then
         if entry.versionStr == "Not Installed" then
-            row.versionText:SetText("Not Installed")
+            row.versionText:SetText(L["ROSTER_NOT_INSTALLED"])
             row.versionText:SetTextColor(0.5, 0.5, 0.5)
         elseif entry.isOutdated then
             row.versionText:SetText(entry.versionStr)
@@ -790,7 +792,7 @@ function RosterPanelMixin:SetupRow(row, entry, yOffset, fillWidth)
     -- Rank (60px)
     row.rankText:SetPoint("LEFT", xPos + 2, 0)
     row.rankText:SetWidth(56)
-    row.rankText:SetText(RANK_NAMES[entry.rank] or "Member")
+    row.rankText:SetText(RANK_KEYS[entry.rank] and L[RANK_KEYS[entry.rank]] or L["ROSTER_RANK_MEMBER"])
     if entry.rank == 2 then
         row.rankText:SetTextColor(1, 0.82, 0)
     elseif entry.rank == 1 then
@@ -836,7 +838,7 @@ function RosterPanelMixin:ShowRowTooltip(row, entry)
 
     -- Role + Spec
     local roleStr = entry.role or "NONE"
-    if roleStr == "NONE" or roleStr == "" then roleStr = "No Role" end
+    if roleStr == "NONE" or roleStr == "" then roleStr = L["ROSTER_NO_ROLE"] end
     local specStr = ""
     if entry.specID and entry.specID > 0 then
         local _, specName = GetSpecializationInfoByID(entry.specID)
@@ -844,23 +846,23 @@ function RosterPanelMixin:ShowRowTooltip(row, entry)
             specStr = " - " .. specName
         end
     end
-    GameTooltip:AddLine("Role: " .. roleStr .. specStr, 0.7, 0.7, 0.7)
+    GameTooltip:AddLine(L["ROSTER_TOOLTIP_ROLE"] .. roleStr .. specStr, 0.7, 0.7, 0.7)
 
     -- Item Level
     if entry.ilvl and entry.ilvl > 0 then
-        GameTooltip:AddLine("Item Level: " .. math.floor(entry.ilvl), 0.7, 0.7, 0.7)
+        GameTooltip:AddLine(string.format(L["TOOLTIP_ITEM_LEVEL"], math.floor(entry.ilvl)), 0.7, 0.7, 0.7)
     end
 
     -- Subgroup
     if entry.subgroup then
-        GameTooltip:AddLine("Group: " .. entry.subgroup, 0.7, 0.7, 0.7)
+        GameTooltip:AddLine(L["ROSTER_TOOLTIP_GROUP"] .. entry.subgroup, 0.7, 0.7, 0.7)
     end
 
     -- Online/Dead status
     if not entry.online then
-        GameTooltip:AddLine("Offline", 1, 0.3, 0.3)
+        GameTooltip:AddLine(L["ROSTER_OFFLINE"], 1, 0.3, 0.3)
     elseif entry.isDead then
-        GameTooltip:AddLine("Dead", 1, 0.3, 0.3)
+        GameTooltip:AddLine(L["ROSTER_DEAD"], 1, 0.3, 0.3)
     end
 
     GameTooltip:AddLine(" ")
@@ -868,33 +870,33 @@ function RosterPanelMixin:ShowRowTooltip(row, entry)
     -- Version
     if entry.versionStr then
         local vColor = entry.isOutdated and "|cffff8000" or "|cff00cc00"
-        GameTooltip:AddLine("Loothing: " .. vColor .. entry.versionStr .. "|r", 1, 1, 1)
+        GameTooltip:AddLine(L["ROSTER_TOOLTIP_VERSION"] .. vColor .. entry.versionStr .. "|r", 1, 1, 1)
         if entry.tVersion then
-            GameTooltip:AddLine("Test Version: " .. entry.tVersion, 0.5, 0.8, 1)
+            GameTooltip:AddLine(L["ROSTER_TOOLTIP_TEST_VERSION"] .. entry.tVersion, 0.5, 0.8, 1)
         end
     else
-        GameTooltip:AddLine("Loothing: |cff888888Unknown|r", 1, 1, 1)
+        GameTooltip:AddLine(L["ROSTER_TOOLTIP_VERSION"] .. "|cff888888" .. L["ROSTER_UNKNOWN"] .. "|r", 1, 1, 1)
     end
 
     -- Council
     if entry.isCouncil then
-        GameTooltip:AddLine("Council Member", 0.2, 0.8, 0.2)
+        GameTooltip:AddLine(L["ROSTER_COUNCIL_MEMBER"], 0.2, 0.8, 0.2)
     end
 
     -- Master Looter
     if entry.isMasterLooter then
-        GameTooltip:AddLine("Master Looter", 1, 0.82, 0)
+        GameTooltip:AddLine(L["ROSTER_MASTER_LOOTER"], 1, 0.82, 0)
     end
 
     -- Observer
     if entry.isObserver then
-        GameTooltip:AddLine("Observer", 0.5, 0.8, 1)
+        GameTooltip:AddLine(L["OBSERVER"], 0.5, 0.8, 1)
     end
 
     -- History breakdown by response
     if entry.historyCount and entry.historyCount > 0 and Loothing.History then
         GameTooltip:AddLine(" ")
-        GameTooltip:AddLine("Loot History: " .. entry.historyCount .. " items", 1, 0.82, 0)
+        GameTooltip:AddLine(string.format(L["ROSTER_TOOLTIP_LOOT_HISTORY"], entry.historyCount), 1, 0.82, 0)
 
         local responseCounts = self.historyResponseBreakdown[entry.name] or {}
 
@@ -918,6 +920,7 @@ function RosterPanelMixin:ShowRowContextMenu(row, entry)
     local isPlayerLeader = UnitIsGroupLeader("player")
     local isPlayerAssistant = IsInRaid() and UnitIsGroupAssistant("player")
     local canManageRaid = isPlayerLeader or isPlayerAssistant
+    local canManageCouncilRoster = Utils.CanManageCouncilRoster()
     local isSelf = Utils.IsSamePlayer(entry.name, playerName)
 
     MenuUtil.CreateContextMenu(row, function(_, rootDescription)
@@ -932,14 +935,14 @@ function RosterPanelMixin:ShowRowContextMenu(row, entry)
         end
 
         -- Council toggle
-        if Loothing.Council and not isSelf then
+        if canManageCouncilRoster and Loothing.Council and not isSelf then
             if entry.isCouncil then
-                rootDescription:CreateButton(L["ROSTER_REMOVE_COUNCIL"] or "Remove from Council", function()
+                rootDescription:CreateButton(L["ROSTER_REMOVE_COUNCIL"], function()
                     Loothing.Council:RemoveMember(entry.name)
                     self:Refresh()
                 end)
             else
-                rootDescription:CreateButton(L["ROSTER_ADD_COUNCIL"] or "Add to Council", function()
+                rootDescription:CreateButton(L["ROSTER_ADD_COUNCIL"], function()
                     Loothing.Council:AddMember(entry.name)
                     self:Refresh()
                 end)
@@ -947,14 +950,14 @@ function RosterPanelMixin:ShowRowContextMenu(row, entry)
         end
 
         -- Observer toggle
-        if Loothing.Observer and not isSelf then
+        if canManageCouncilRoster and Loothing.Observer and not isSelf then
             if entry.isObserver then
-                rootDescription:CreateButton(L["ROSTER_REMOVE_OBSERVER"] or "Remove as Observer", function()
+                rootDescription:CreateButton(L["ROSTER_REMOVE_OBSERVER"], function()
                     Loothing.Observer:RemoveObserver(entry.name)
                     self:Refresh()
                 end)
             else
-                rootDescription:CreateButton(L["ROSTER_ADD_OBSERVER"] or "Add as Observer", function()
+                rootDescription:CreateButton(L["ROSTER_ADD_OBSERVER"], function()
                     Loothing.Observer:AddObserver(entry.name)
                     self:Refresh()
                 end)
@@ -968,13 +971,13 @@ function RosterPanelMixin:ShowRowContextMenu(row, entry)
             local isExplicitML = explicitML and Utils.IsSamePlayer(entry.name, explicitML)
 
             if isExplicitML then
-                rootDescription:CreateButton(L["ROSTER_CLEAR_ML"] or "Remove as Master Looter", function()
+                rootDescription:CreateButton(L["ROSTER_CLEAR_ML"], function()
                     Loothing.Settings:ClearMasterLooter()
                     Loothing:Print(string.format("%s is no longer Master Looter", entry.shortName or entry.name))
                     self:Refresh()
                 end)
             else
-                rootDescription:CreateButton(L["ROSTER_SET_ML"] or "Set as Master Looter", function()
+                rootDescription:CreateButton(L["ROSTER_SET_ML"], function()
                     Loothing.Settings:SetMasterLooterName(entry.name)
                     Loothing:Print(string.format("%s is now Master Looter", entry.shortName or entry.name))
                     self:Refresh()
@@ -986,7 +989,7 @@ function RosterPanelMixin:ShowRowContextMenu(row, entry)
 
         -- Whisper
         if not isSelf then
-            rootDescription:CreateButton(L["WHISPER"] or "Whisper", function()
+            rootDescription:CreateButton(L["WHISPER"], function()
                 ChatFrame_OpenChat("/w " .. entry.name .. " ")
             end)
         end
@@ -997,24 +1000,24 @@ function RosterPanelMixin:ShowRowContextMenu(row, entry)
 
             -- Promote to Leader (leader only)
             if isPlayerLeader then
-                rootDescription:CreateButton(L["ROSTER_PROMOTE_LEADER"] or "Promote to Leader", function()
+                rootDescription:CreateButton(L["ROSTER_PROMOTE_LEADER"], function()
                     PromoteToLeader(entry.name)
                 end)
             end
 
             -- Promote to Assistant / Demote
             if entry.rank == 0 then
-                rootDescription:CreateButton(L["ROSTER_PROMOTE_ASSISTANT"] or "Promote to Assistant", function()
+                rootDescription:CreateButton(L["ROSTER_PROMOTE_ASSISTANT"], function()
                     PromoteToAssistant(entry.name)
                 end)
             elseif entry.rank == 1 and isPlayerLeader then
-                rootDescription:CreateButton(L["ROSTER_DEMOTE"] or "Demote", function()
+                rootDescription:CreateButton(L["ROSTER_DEMOTE"], function()
                     DemoteAssistant(entry.name)
                 end)
             end
 
             -- Uninvite (red text for danger)
-            rootDescription:CreateButton("|cffff3333" .. (L["ROSTER_UNINVITE"] or "Uninvite") .. "|r", function()
+            rootDescription:CreateButton("|cffff3333" .. (L["ROSTER_UNINVITE"]) .. "|r", function()
                 UninviteUnit(entry.name)
             end)
         end
@@ -1060,7 +1063,7 @@ function RosterPanelMixin:UpdateSummary()
         if entry.isCouncil then councilCount = councilCount + 1 end
     end
 
-    local fmt = L["ROSTER_SUMMARY"] or "%d Members | %d Online | %d Installed | %d Council"
+    local fmt = L["ROSTER_SUMMARY"]
     self.summaryText:SetText(string.format(fmt, total, onlineCount, installedCount, councilCount))
 end
 

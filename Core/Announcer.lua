@@ -8,6 +8,7 @@ local Loolib = LibStub("Loolib")
 local CreateFromMixins = Loolib.CreateFromMixins
 local Events = Loolib.Events
 local Loothing = ns.Addon
+local L = ns.Locale
 local Utils = ns.Utils
 
 --[[--------------------------------------------------------------------
@@ -227,7 +228,7 @@ function AnnouncerMixin:AnnounceConsiderations(itemLink, extraParams)
         ml = extraParams.ml,
     })
 
-    local template = announcements.considerationsText or "{ml} is considering {item} for distribution"
+    local template = announcements.considerationsText or L["ANN_CONSIDERATIONS_DEFAULT"]
     local channel = announcements.considerationsChannel or "RAID"
 
     local message = self:FormatText(template, replacements)
@@ -242,11 +243,11 @@ function AnnouncerMixin:AnnounceSessionStart(sessionName)
     end
 
     local announcements = Loothing.Settings:Get("announcements")
-    local template = announcements and announcements.sessionStartText or "Loot council session started"
+    local template = announcements and announcements.sessionStartText or L["SESSION_STARTED_DEFAULT"]
     local channel = announcements and announcements.sessionStartChannel or "RAID"
 
     local replacements = self:BuildReplacements({
-        session = sessionName or "Manual Session",
+        session = sessionName or L["MANUAL_SESSION"],
     })
 
     local message = self:FormatText(template, replacements)
@@ -260,7 +261,7 @@ function AnnouncerMixin:AnnounceSessionEnd()
     end
 
     local announcements = Loothing.Settings:Get("announcements")
-    local template = announcements and announcements.sessionEndText or "Loot council session ended"
+    local template = announcements and announcements.sessionEndText or L["SESSION_ENDED_DEFAULT"]
     local channel = announcements and announcements.sessionEndChannel or "RAID"
 
     local message = self:FormatText(template, {})

@@ -8,6 +8,7 @@ local Loolib = LibStub("Loolib")
 local GlobalBridge = Loolib.Compat.GlobalBridge
 local Loothing = ns.Addon
 local Utils = ns.Utils
+local L = ns.Locale
 
 local FRAME_W        = 760
 local FRAME_H        = 720
@@ -120,7 +121,7 @@ function ResponseButtonSettingsMixin:BuildFrame()
     -- Title
     local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     title:SetPoint("TOP", 0, -14)
-    title:SetText("Response Button Editor")
+    title:SetText(L["RESPONSE_BUTTON_EDITOR"])
     self.titleText = title
 
     -- Close button
@@ -163,7 +164,7 @@ function ResponseButtonSettingsMixin:BuildFrame()
     -- Set dropdown (simple select button + popup)
     local setLabel = setBar:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     setLabel:SetPoint("LEFT")
-    setLabel:SetText("Set:")
+    setLabel:SetText(L["SET_LABEL"])
 
     local setSelectBtn = CreateFrame("Button", nil, setBar, "UIPanelButtonTemplate")
     setSelectBtn:SetSize(170, 22)
@@ -189,9 +190,9 @@ function ResponseButtonSettingsMixin:BuildFrame()
     local newBtn = CreateFrame("Button", nil, setBar, "UIPanelButtonTemplate")
     newBtn:SetSize(60, 22)
     newBtn:SetPoint("LEFT", setSelectBtn, "RIGHT", 6, 0)
-    newBtn:SetText("New")
+    newBtn:SetText(L["NEW"])
     newBtn:SetScript("OnClick", function()
-        local id = Loothing.Settings:AddResponseSet("New Set")
+        local id = Loothing.Settings:AddResponseSet(L["NEW_SET"])
         Loothing.Settings:SetActiveResponseSet(id)
         self:Refresh()
     end)
@@ -200,12 +201,12 @@ function ResponseButtonSettingsMixin:BuildFrame()
     local copyBtn = CreateFrame("Button", nil, setBar, "UIPanelButtonTemplate")
     copyBtn:SetSize(60, 22)
     copyBtn:SetPoint("LEFT", newBtn, "RIGHT", 4, 0)
-    copyBtn:SetText("Copy")
+    copyBtn:SetText(L["COPY"])
     copyBtn:SetScript("OnClick", function()
         local id  = self:GetActiveSetId()
         local set = Loothing.Settings:GetResponseSetById(id)
         if set then
-            local newId = Loothing.Settings:AddResponseSet(set.name .. " (Copy)", Utils.DeepCopy(set.buttons))
+            local newId = Loothing.Settings:AddResponseSet(set.name .. " " .. L["COPY_SUFFIX"], Utils.DeepCopy(set.buttons))
             Loothing.Settings:SetActiveResponseSet(newId)
             self:Refresh()
         end
@@ -215,14 +216,14 @@ function ResponseButtonSettingsMixin:BuildFrame()
     local renameBtn = CreateFrame("Button", nil, setBar, "UIPanelButtonTemplate")
     renameBtn:SetSize(70, 22)
     renameBtn:SetPoint("LEFT", copyBtn, "RIGHT", 4, 0)
-    renameBtn:SetText("Rename")
+    renameBtn:SetText(L["RENAME"])
     renameBtn:SetScript("OnClick", function()
         local id  = self:GetActiveSetId()
         local set = Loothing.Settings:GetResponseSetById(id)
         GlobalBridge:RegisterStaticPopup("Loothing", "LOOTHING_RENAME_SET", {
-            text         = "Enter new name for set:",
-            button1      = "OK",
-            button2      = "Cancel",
+            text         = L["POPUP_RENAME_SET"],
+            button1      = L["OK"],
+            button2      = L["CANCEL"],
             hasEditBox   = true,
             maxLetters   = 32,
             OnAccept     = function(popup)
@@ -247,20 +248,20 @@ function ResponseButtonSettingsMixin:BuildFrame()
     local deleteSetBtn = CreateFrame("Button", nil, setBar, "UIPanelButtonTemplate")
     deleteSetBtn:SetSize(65, 22)
     deleteSetBtn:SetPoint("LEFT", renameBtn, "RIGHT", 4, 0)
-    deleteSetBtn:SetText("|cffff4444Del|r")
+    deleteSetBtn:SetText("|cffff4444" .. L["DELETE"] .. "|r")
     deleteSetBtn:SetScript("OnClick", function()
         local id = self:GetActiveSetId()
         local rs = Loothing.Settings:GetResponseSets()
         local count = 0
         for _ in pairs(rs.sets or {}) do count = count + 1 end
         if count <= 1 then
-            Loothing:Print("Cannot delete the last response set.")
+            Loothing:Print(L["CANNOT_DELETE_LAST_SET"])
             return
         end
         GlobalBridge:RegisterStaticPopup("Loothing", "LOOTHING_DEL_SET", {
-            text         = "Delete this response set? This cannot be undone.",
-            button1      = "Delete",
-            button2      = "Cancel",
+            text         = L["POPUP_DELETE_RESPONSE_SET"],
+            button1      = L["DELETE"],
+            button2      = L["CANCEL"],
             OnAccept     = function()
                 Loothing.Settings:RemoveResponseSet(id)
                 self:Refresh()
@@ -284,12 +285,12 @@ function ResponseButtonSettingsMixin:BuildFrame()
     local resetBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
     resetBtn:SetSize(140, 22)
     resetBtn:SetPoint("BOTTOMLEFT", 12, 10)
-    resetBtn:SetText("Reset to Defaults")
+    resetBtn:SetText(L["RESET_RESPONSES"])
     resetBtn:SetScript("OnClick", function()
         GlobalBridge:RegisterStaticPopup("Loothing", "LOOTHING_RESET_SETS", {
-            text         = "Reset ALL response sets to defaults? This cannot be undone.",
-            button1      = "Reset",
-            button2      = "Cancel",
+            text         = L["POPUP_RESET_ALL_SETS"],
+            button1      = L["RESET"],
+            button2      = L["CANCEL"],
             OnAccept     = function()
                 if Loothing.ResponseManager then
                     Loothing.ResponseManager:ResetToDefaults()
@@ -315,7 +316,7 @@ function ResponseButtonSettingsMixin:BuildFrame()
 
     local tcHeader = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     tcHeader:SetPoint("BOTTOMLEFT", tcContainer, "TOPLEFT", 0, 6)
-    tcHeader:SetText("|cffffcc00Type Code Mapping|r")
+    tcHeader:SetText("|cffffcc00" .. L["CONFIG_TYPECODE_ASSIGNMENT"] .. "|r")
     self.tcHeader = tcHeader
 
     -- ----------------------------------------------------------------
@@ -329,15 +330,15 @@ function ResponseButtonSettingsMixin:BuildFrame()
     local addBtn = CreateFrame("Button", nil, addBtnContainer, "UIPanelButtonTemplate")
     addBtn:SetSize(120, 22)
     addBtn:SetPoint("LEFT")
-    addBtn:SetText("+ Add Button")
+    addBtn:SetText("+ " .. L["ADD_BUTTON"])
     addBtn:SetScript("OnClick", function()
         local id = self:GetActiveSetId()
         local buttons = Loothing.Settings:GetResponseButtons(id)
         if #buttons >= MAX_BUTTONS then
-            Loothing:Print("Maximum " .. MAX_BUTTONS .. " buttons per set.")
+            Loothing:Print(L["MAX_BUTTONS"])
             return
         end
-        local newId = Loothing.Settings:AddResponseButton(id, { text = "New Button", responseText = "NEW" })
+        local newId = Loothing.Settings:AddResponseButton(id, { text = L["NEW_BUTTON"], responseText = "NEW" })
         if newId then
             self.expandedRow = newId
             self:Refresh()
@@ -384,7 +385,7 @@ function ResponseButtonSettingsMixin:BuildTypeCodeMap(container)
             MenuUtil.CreateContextMenu(btn, function(ownerRegion, rootDescription)
                 local tcMap = Loothing.Settings:GetTypeCodeMap()
 
-                local defaultLabel = (capturedTc == "default") and "Active Set" or "Default"
+                local defaultLabel = (capturedTc == "default") and L["ACTIVE_SET"] or L["DEFAULT_SET"]
                 rootDescription:CreateRadio(defaultLabel,
                     function() return tcMap[capturedTc] == nil end,
                     function()
@@ -463,9 +464,9 @@ function ResponseButtonSettingsMixin:RefreshTypeCodeMap()
             local set = Loothing.Settings:GetResponseSetById(setId)
             dd:SetText(set and set.name or tostring(setId))
         elseif tc == "default" then
-            dd:SetText("Active Set")
+            dd:SetText(L["ACTIVE_SET"])
         else
-            dd:SetText("Default")
+            dd:SetText(L["DEFAULT_SET"])
         end
     end
 end
@@ -633,7 +634,7 @@ function ResponseButtonSettingsMixin:CreateRow()
     dispEB:SetMaxLetters(64)
     dispEB:SetAutoFocus(false)
     row.dispEB = dispEB
-    AddField("Display Text:", -6, dispEB)
+    AddField(L["DISPLAY_TEXT_LABEL"], -6, dispEB)
 
     -- Response Text EditBox
     local respEB = CreateFrame("EditBox", nil, expanded, "InputBoxTemplate")
@@ -641,13 +642,13 @@ function ResponseButtonSettingsMixin:CreateRow()
     respEB:SetMaxLetters(64)
     respEB:SetAutoFocus(false)
     row.respEB = respEB
-    AddField("Response Text:", -32, respEB)
+    AddField(L["RESPONSE_TEXT_LABEL"], -32, respEB)
 
     -- Icon picker button
     local iconPickBtn = CreateFrame("Button", nil, expanded, "UIPanelButtonTemplate")
     iconPickBtn:SetHeight(20)
     row.iconPickBtn = iconPickBtn
-    AddField("Icon:", -58, iconPickBtn)
+    AddField(L["ICON_LABEL"], -58, iconPickBtn)
 
     -- Whisper Keys EditBox
     local whisperEB = CreateFrame("EditBox", nil, expanded, "InputBoxTemplate")
@@ -655,7 +656,7 @@ function ResponseButtonSettingsMixin:CreateRow()
     whisperEB:SetMaxLetters(128)
     whisperEB:SetAutoFocus(false)
     row.whisperEB = whisperEB
-    AddField("Whisper Keys:", -84, whisperEB)
+    AddField(L["WHISPER_KEYS_LABEL"], -84, whisperEB)
 
     -- Require Notes CheckButton
     local requireCB = CreateFrame("CheckButton", nil, expanded, "ChatConfigCheckButtonTemplate")
@@ -663,7 +664,7 @@ function ResponseButtonSettingsMixin:CreateRow()
     row.requireCB = requireCB
     local cbLbl = expanded:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     cbLbl:SetPoint("TOPLEFT", 28, -108)
-    cbLbl:SetText("Require Notes")
+    cbLbl:SetText(L["REQUIRE_NOTES"])
     cbLbl:SetTextColor(0.7, 0.7, 0.7)
     requireCB:SetParent(expanded)
     requireCB:ClearAllPoints()
@@ -727,7 +728,7 @@ function ResponseButtonSettingsMixin:PopulateRow(row, setId, btnData, idx, total
     end)
 
     -- Expand button
-    row.expandBtn:SetText(isExpanded and "▲ Less" or "▼ Edit")
+    row.expandBtn:SetText(isExpanded and ("▲ " .. L["LESS"]) or ("▼ " .. L["EDIT"]))
     row.expandBtn:SetScript("OnClick", function()
         if self.expandedRow == btnData.id then
             self.expandedRow = nil
@@ -741,13 +742,13 @@ function ResponseButtonSettingsMixin:PopulateRow(row, setId, btnData, idx, total
     row.delBtn:SetScript("OnClick", function()
         local buttons = Loothing.Settings:GetResponseButtons(setId)
         if #buttons <= 1 then
-            Loothing:Print("Cannot delete the last button in a set.")
+            Loothing:Print(L["MIN_BUTTONS"])
             return
         end
         GlobalBridge:RegisterStaticPopup("Loothing", "LOOTHING_DEL_BTN", {
-            text         = "Delete this response button?",
-            button1      = "Delete",
-            button2      = "Cancel",
+            text         = L["POPUP_DELETE_RESPONSE_BUTTON"],
+            button1      = L["DELETE"],
+            button2      = L["CANCEL"],
             OnAccept     = function()
                 if self.expandedRow == btnData.id then self.expandedRow = nil end
                 Loothing.Settings:RemoveResponseButton(setId, btnData.id)
@@ -789,7 +790,7 @@ function ResponseButtonSettingsMixin:PopulateRow(row, setId, btnData, idx, total
         end)
 
         -- Icon picker
-        local iconLabel = btnData.icon and ("Icon: ✓") or "Pick Icon…"
+        local iconLabel = btnData.icon and (L["ICON_SET"]) or L["PICK_ICON"]
         row.iconPickBtn:SetText(iconLabel)
         row.iconPickBtn:SetScript("OnClick", function(btn)
             ns.OpenIconPicker(btn, function(path)

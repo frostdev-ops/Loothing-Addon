@@ -48,6 +48,10 @@ end
 -- @param name string - Player name
 -- @return boolean, string - success, error
 function ObserverMixin:AddObserver(name)
+    if not Utils.CanManageCouncilRoster() then
+        return false, "Only the Master Looter can change observers while grouped"
+    end
+
     if not name or name == "" then
         return false, "Invalid name"
     end
@@ -70,6 +74,7 @@ end
 -- @param name string
 -- @return boolean
 function ObserverMixin:RemoveObserver(name)
+    if not Utils.CanManageCouncilRoster() then return false end
     if not name or name == "" then return false end
     name = Utils.NormalizeName(name)
     for i, n in ipairs(self.list) do
@@ -87,10 +92,12 @@ end
 
 --- Clear all observers
 function ObserverMixin:ClearObservers()
+    if not Utils.CanManageCouncilRoster() then return false end
     wipe(self.list)
     self:SaveToSettings()
     self:TriggerEvent("OnObserverListChanged", self.list)
     if Loothing.Sync then Loothing.Sync:BroadcastObserverRoster() end
+    return true
 end
 
 --- Get explicit observer list

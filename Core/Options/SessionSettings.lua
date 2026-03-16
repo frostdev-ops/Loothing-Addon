@@ -11,6 +11,7 @@ local Options = ns.Options or {}
 ns.Options = Options
 
 local L = ns.Locale
+local Utils = ns.Utils
 local unpack = unpack
 
 local function RefreshSettingsDialog()
@@ -26,18 +27,21 @@ local function GetAwardReasonAtIndex(index)
     return reasons and reasons[index] or nil
 end
 
+local function CanManageCouncilRoster()
+    return Utils and Utils.CanManageCouncilRoster and Utils.CanManageCouncilRoster() or false
+end
 
 local function GetSessionSettingsOptions()
     local opts = {
         type = "group",
-        name = L["SESSION_SETTINGS_ML"] or "Session Settings (ML)",
-        desc = "These settings are broadcast to all raid members when you are the Master Looter. They control the session for everyone.",
+        name = L["SESSION_SETTINGS_ML"],
+        desc = L["CONFIG_SESSION_BROADCAST_DESC"],
         order = 1,
         childGroups = "tree",
         args = {
             sessionSettingsDesc = {
                 type = "description",
-                name = "|cffffcc00These settings are broadcast to all raid members when you start a session as Master Looter.|r",
+                name = "|cffffcc00" .. L["CONFIG_SESSION_BROADCAST_NOTE"] .. "|r",
                 order = 0,
                 fontSize = "medium",
                 width = "full",
@@ -64,8 +68,8 @@ local function GetSessionSettingsOptions()
                     },
                     votingTimeoutEnabled = {
                         type = "toggle",
-                        name = L["VOTING_TIMEOUT"] or "Voting Timeout",
-                        desc = "When disabled, voting runs until the ML manually ends it.",
+                        name = L["VOTING_TIMEOUT"],
+                        desc = L["CONFIG_VOTING_TIMEOUT_DESC"],
                         order = 2,
                         get = function()
                             return Loothing.Settings:GetVotingTimeout() ~= Loothing.Timing.NO_TIMEOUT
@@ -80,8 +84,8 @@ local function GetSessionSettingsOptions()
                     },
                     votingTimeout = {
                         type = "range",
-                        name = L["VOTING_TIMEOUT_DURATION"] or "Timeout Duration",
-                        desc = L["SECONDS"] or "Seconds",
+                        name = L["VOTING_TIMEOUT_DURATION"],
+                        desc = L["SECONDS"],
                         order = 3,
                         min = Loothing.Timing.MIN_VOTE_TIMEOUT,
                         max = Loothing.Timing.MAX_VOTE_TIMEOUT,
@@ -95,18 +99,18 @@ local function GetSessionSettingsOptions()
                     -- Session Trigger Policy (split model)
                     triggerHeader = {
                         type = "header",
-                        name = L["SESSION_TRIGGER_HEADER"] or "Session Trigger",
+                        name = L["SESSION_TRIGGER_HEADER"],
                         order = 4,
                     },
                     sessionTriggerAction = {
                         type = "select",
-                        name = L["SESSION_TRIGGER_ACTION"] or "Trigger Action",
-                        desc = L["SESSION_TRIGGER_ACTION_DESC"] or "What happens when a boss kill is eligible",
+                        name = L["SESSION_TRIGGER_ACTION"],
+                        desc = L["SESSION_TRIGGER_ACTION_DESC"],
                         order = 5,
                         values = {
-                            manual = L["TRIGGER_MANUAL"] or "Manual (use /loothing start)",
-                            prompt = L["TRIGGER_PROMPT"] or "Prompt (ask before starting)",
-                            auto   = L["TRIGGER_AUTO"] or "Automatic (start immediately)",
+                            manual = L["TRIGGER_MANUAL"],
+                            prompt = L["TRIGGER_PROMPT"],
+                            auto   = L["TRIGGER_AUTO"],
                         },
                         sorting = { "manual", "prompt", "auto" },
                         get = function() return Loothing.Settings:GetSessionTriggerAction() end,
@@ -114,12 +118,12 @@ local function GetSessionSettingsOptions()
                     },
                     sessionTriggerTiming = {
                         type = "select",
-                        name = L["SESSION_TRIGGER_TIMING"] or "Trigger Timing",
-                        desc = L["SESSION_TRIGGER_TIMING_DESC"] or "When the trigger action fires relative to the boss kill",
+                        name = L["SESSION_TRIGGER_TIMING"],
+                        desc = L["SESSION_TRIGGER_TIMING_DESC"],
                         order = 6,
                         values = {
-                            encounterEnd = L["TRIGGER_TIMING_ENCOUNTER_END"] or "On Boss Kill",
-                            afterLoot    = L["TRIGGER_TIMING_AFTER_LOOT"] or "After ML Receives Loot",
+                            encounterEnd = L["TRIGGER_TIMING_ENCOUNTER_END"],
+                            afterLoot    = L["TRIGGER_TIMING_AFTER_LOOT"],
                         },
                         sorting = { "encounterEnd", "afterLoot" },
                         get = function() return Loothing.Settings:GetSessionTriggerTiming() end,
@@ -127,8 +131,8 @@ local function GetSessionSettingsOptions()
                     },
                     sessionTriggerRaid = {
                         type = "toggle",
-                        name = L["TRIGGER_SCOPE_RAID"] or "Raid Bosses",
-                        desc = L["TRIGGER_SCOPE_RAID_DESC"] or "Trigger on raid boss kills",
+                        name = L["TRIGGER_SCOPE_RAID"],
+                        desc = L["TRIGGER_SCOPE_RAID_DESC"],
                         order = 7,
                         width = "half",
                         get = function() return Loothing.Settings:GetSessionTriggerRaid() end,
@@ -136,8 +140,8 @@ local function GetSessionSettingsOptions()
                     },
                     sessionTriggerDungeon = {
                         type = "toggle",
-                        name = L["TRIGGER_SCOPE_DUNGEON"] or "Dungeon Bosses",
-                        desc = L["TRIGGER_SCOPE_DUNGEON_DESC"] or "Trigger on dungeon boss kills",
+                        name = L["TRIGGER_SCOPE_DUNGEON"],
+                        desc = L["TRIGGER_SCOPE_DUNGEON_DESC"],
                         order = 8,
                         width = "half",
                         get = function() return Loothing.Settings:GetSessionTriggerDungeon() end,
@@ -145,8 +149,8 @@ local function GetSessionSettingsOptions()
                     },
                     sessionTriggerOpenWorld = {
                         type = "toggle",
-                        name = L["TRIGGER_SCOPE_OPEN_WORLD"] or "Open World",
-                        desc = L["TRIGGER_SCOPE_OPEN_WORLD_DESC"] or "Trigger on open-world encounters (e.g. world bosses)",
+                        name = L["TRIGGER_SCOPE_OPEN_WORLD"],
+                        desc = L["TRIGGER_SCOPE_OPEN_WORLD_DESC"],
                         order = 9,
                         width = "half",
                         get = function() return Loothing.Settings:GetSessionTriggerOpenWorld() end,
@@ -154,7 +158,7 @@ local function GetSessionSettingsOptions()
                     },
                     triggerScopeNote = {
                         type = "description",
-                        name = "|cff888888PvP, arena, and scenario encounters never trigger sessions. Raid-only is the default.|r",
+                        name = "|cff888888" .. L["CONFIG_TRIGGER_SCOPE_NOTE"] .. "|r",
                         order = 9.5,
                         fontSize = "small",
                         width = "full",
@@ -197,8 +201,8 @@ local function GetSessionSettingsOptions()
                     },
                     mlIsObserver = {
                         type = "toggle",
-                        name = L["CONFIG_ML_OBSERVER"] or "ML Observer Mode",
-                        desc = L["CONFIG_ML_OBSERVER_DESC"] or "Master Looter can see everything and manage sessions but cannot vote",
+                        name = L["CONFIG_ML_OBSERVER"],
+                        desc = L["CONFIG_ML_OBSERVER_DESC"],
                         order = 14,
                         width = "half",
                         get = function() return Loothing.Settings:GetMLIsObserver() end,
@@ -211,8 +215,8 @@ local function GetSessionSettingsOptions()
                     },
                     openObservation = {
                         type = "toggle",
-                        name = L["OPEN_OBSERVATION"] or "Open Observation",
-                        desc = L["OPEN_OBSERVATION_DESC"] or "Allow all raid members to observe voting",
+                        name = L["OPEN_OBSERVATION"],
+                        desc = L["OPEN_OBSERVATION_DESC"],
                         order = 15,
                         width = "half",
                         get = function() return Loothing.Settings:GetOpenObservation() end,
@@ -243,8 +247,8 @@ local function GetSessionSettingsOptions()
                     },
                     mlSeesVotes = {
                         type = "toggle",
-                        name = L["CONFIG_VOTING_MLSEESVOTES"] or "ML Sees Votes",
-                        desc = L["CONFIG_VOTING_MLSEESVOTES_DESC"] or "Master Looter can see votes even when anonymous",
+                        name = L["CONFIG_VOTING_MLSEESVOTES"],
+                        desc = L["CONFIG_VOTING_MLSEESVOTES_DESC"],
                         order = 18,
                         width = "half",
                         get = function() return Loothing.Settings:GetMlSeesVotes() end,
@@ -252,7 +256,7 @@ local function GetSessionSettingsOptions()
                     },
                     rcvSettingsHeader = {
                         type = "header",
-                        name = L["RCV_SETTINGS"] or "Ranked Choice Settings",
+                        name = L["RCV_SETTINGS"],
                         order = 19,
                         hidden = function()
                             return Loothing.Settings:GetVotingMode() ~= Loothing.VotingMode.RANKED_CHOICE
@@ -260,8 +264,8 @@ local function GetSessionSettingsOptions()
                     },
                     maxRanks = {
                         type = "range",
-                        name = L["MAX_RANKS"] or "Maximum Rankings",
-                        desc = L["MAX_RANKS_DESC"] or "Maximum number of choices a voter can rank (0 = unlimited)",
+                        name = L["MAX_RANKS"],
+                        desc = L["MAX_RANKS_DESC"],
                         order = 20,
                         min = 0,
                         max = 10,
@@ -274,8 +278,8 @@ local function GetSessionSettingsOptions()
                     },
                     minRanks = {
                         type = "range",
-                        name = L["MIN_RANKS"] or "Minimum Rankings",
-                        desc = L["MIN_RANKS_DESC"] or "Minimum number of choices required to submit a vote",
+                        name = L["MIN_RANKS"],
+                        desc = L["MIN_RANKS_DESC"],
                         order = 21,
                         min = 1,
                         max = 10,
@@ -293,18 +297,18 @@ local function GetSessionSettingsOptions()
             -- ============================================================
             responseButtons = {
                 type = "group",
-                name = L["CONFIG_BUTTON_SETS"] or "Response Buttons",
+                name = L["CONFIG_BUTTON_SETS"],
                 order = 2,
                 args = {
                     desc = {
                         type = "description",
-                        name = "Configure response button sets, icons, whisper keys, and type-code assignments using the visual editor.",
+                        name = L["CONFIG_BUTTON_SETS_DESC"],
                         order = 0,
                         width = "full",
                     },
                     openEditor = {
                         type = "execute",
-                        name = "Open Response Button Editor",
+                        name = L["CONFIG_OPEN_BUTTON_EDITOR"],
                         order = 1,
                         func = function()
                             if Loothing.ResponseButtonSettings then
@@ -319,56 +323,56 @@ local function GetSessionSettingsOptions()
             -- ============================================================
             winnerDetermination = {
                 type = "group",
-                name = L["WINNER_DETERMINATION"] or "Winner Determination",
-                desc = L["WINNER_DETERMINATION_DESC"] or "Configure how winners are selected when voting ends",
+                name = L["WINNER_DETERMINATION"],
+                desc = L["WINNER_DETERMINATION_DESC"],
                 order = 3,
                 args = {
                     mode = {
                         type = "select",
-                        name = L["WINNER_MODE"] or "Winner Mode",
-                        desc = L["WINNER_MODE_DESC"] or "How the winner is determined after voting",
+                        name = L["WINNER_MODE"],
+                        desc = L["WINNER_MODE_DESC"],
                         order = 1,
                         values = {
-                            HIGHEST_VOTES = L["WINNER_MODE_HIGHEST_VOTES"] or "Highest Council Votes",
-                            ML_CONFIRM = L["WINNER_MODE_ML_CONFIRM"] or "ML Confirms Winner",
-                            AUTO_HIGHEST_CONFIRM = L["WINNER_MODE_AUTO_CONFIRM"] or "Auto-select Highest + Confirm",
+                            HIGHEST_VOTES = L["WINNER_MODE_HIGHEST_VOTES"],
+                            ML_CONFIRM = L["WINNER_MODE_ML_CONFIRM"],
+                            AUTO_HIGHEST_CONFIRM = L["WINNER_MODE_AUTO_CONFIRM"],
                         },
                         get = function() return Loothing.Settings:Get("winnerDetermination.mode", "ML_CONFIRM") end,
                         set = function(_, v) Loothing.Settings:Set("winnerDetermination.mode", v) end,
                     },
                     tieBreaker = {
                         type = "select",
-                        name = L["WINNER_TIE_BREAKER"] or "Tie Breaker",
-                        desc = L["WINNER_TIE_BREAKER_DESC"] or "How ties are resolved when candidates have equal votes",
+                        name = L["WINNER_TIE_BREAKER"],
+                        desc = L["WINNER_TIE_BREAKER_DESC"],
                         order = 2,
                         values = {
-                            ROLL = L["WINNER_TIE_USE_ROLL"] or "Random (Simulated Roll)",
-                            ML_CHOICE = L["WINNER_TIE_ML_CHOICE"] or "ML Decides",
-                            REVOTE = L["WINNER_TIE_REVOTE"] or "Force Re-Vote",
+                            ROLL = L["WINNER_TIE_USE_ROLL"],
+                            ML_CHOICE = L["WINNER_TIE_ML_CHOICE"],
+                            REVOTE = L["WINNER_TIE_REVOTE"],
                         },
                         get = function() return Loothing.Settings:GetTieBreakerMode() end,
                         set = function(_, v) Loothing.Settings:Set("winnerDetermination.tieBreaker", v) end,
                     },
                     autoAwardOnUnanimous = {
                         type = "toggle",
-                        name = L["WINNER_AUTO_AWARD_UNANIMOUS"] or "Auto-award on Unanimous",
-                        desc = L["WINNER_AUTO_AWARD_UNANIMOUS_DESC"] or "Automatically award when all council members vote for the same candidate",
+                        name = L["WINNER_AUTO_AWARD_UNANIMOUS"],
+                        desc = L["WINNER_AUTO_AWARD_UNANIMOUS_DESC"],
                         order = 3,
                         get = function() return Loothing.Settings:GetAutoAwardOnUnanimous() end,
                         set = function(_, v) Loothing.Settings:Set("winnerDetermination.autoAwardOnUnanimous", v) end,
                     },
                     requireConfirmation = {
                         type = "toggle",
-                        name = L["WINNER_REQUIRE_CONFIRMATION"] or "Require Confirmation",
-                        desc = L["WINNER_REQUIRE_CONFIRMATION_DESC"] or "Show confirmation dialog before awarding items",
+                        name = L["WINNER_REQUIRE_CONFIRMATION"],
+                        desc = L["WINNER_REQUIRE_CONFIRMATION_DESC"],
                         order = 4,
                         get = function() return Loothing.Settings:GetRequireConfirmation() end,
                         set = function(_, v) Loothing.Settings:Set("winnerDetermination.requireConfirmation", v) end,
                     },
                     maxRevotes = {
                         type = "range",
-                        name = L["MAX_REVOTES"] or "Maximum Re-votes",
-                        desc = "Maximum number of re-votes allowed per item (0 = no re-votes)",
+                        name = L["MAX_REVOTES"],
+                        desc = L["CONFIG_MAX_REVOTES_DESC"],
                         order = 5,
                         min = 0,
                         max = 10,
@@ -412,7 +416,7 @@ local function GetSessionSettingsOptions()
                         name = function()
                             local members = Loothing.Council and Loothing.Council:GetMembers() or {}
                             if #members == 0 then
-                                return "|cff888888No council members added yet.|r\n\nCouncil members can vote on loot distribution. Use the field below to add members by name."
+                                return "|cff888888" .. L["CONFIG_COUNCIL_NO_MEMBERS"] .. "|r\n\n" .. L["CONFIG_COUNCIL_ADD_HELP"]
                             end
                             local list = {}
                             for i, name in ipairs(members) do
@@ -427,9 +431,10 @@ local function GetSessionSettingsOptions()
                     addMemberInput = {
                         type = "input",
                         name = L["ADD_MEMBER"],
-                        desc = "Enter character name (e.g., 'Playername' or 'Playername-Realm')",
+                        desc = L["CONFIG_COUNCIL_ADD_NAME_DESC"],
                         order = 5,
                         width = "double",
+                        hidden = function() return not CanManageCouncilRoster() end,
                         get = function() return "" end,
                         set = function(_, value)
                             if value and value ~= "" then
@@ -450,7 +455,7 @@ local function GetSessionSettingsOptions()
                     removeMember = {
                         type = "select",
                         name = L["REMOVE_MEMBER"],
-                        desc = "Select a member to remove from the council",
+                        desc = L["CONFIG_COUNCIL_REMOVE_DESC"],
                         order = 6,
                         width = "double",
                         values = function()
@@ -465,60 +470,66 @@ local function GetSessionSettingsOptions()
                         set = function(_, value)
                             if value and Loothing.Council then
                                 Loothing.Council:RemoveMember(value)
-                                Loothing:Print(value .. " removed from council")
+                                Loothing:Print(string.format(L["CONFIG_COUNCIL_MEMBER_REMOVED"], value))
                                 if Loolib.Config and Loolib.Config.Dialog then
                                     Loolib.Config.Dialog:RefreshContent("Loothing")
                                 end
                             end
                         end,
                         hidden = function()
+                            if not CanManageCouncilRoster() then
+                                return true
+                            end
                             local members = Loothing.Council and Loothing.Council:GetMembers() or {}
                             return #members == 0
                         end,
                         confirm = function(_, value)
                             if not value or value == "" then return false end
-                            return "Remove " .. value .. " from the council?"
+                            return string.format(L["CONFIG_COUNCIL_CONFIRM_REMOVE"], value)
                         end,
                     },
                     removeAll = {
                         type = "execute",
-                        name = L["CONFIG_COUNCIL_REMOVE_ALL"] or "Remove All Members",
+                        name = L["CONFIG_COUNCIL_REMOVE_ALL"],
                         order = 7,
+                        hidden = function()
+                            if not CanManageCouncilRoster() then
+                                return true
+                            end
+                            local members = Loothing.Council and Loothing.Council:GetMembers() or {}
+                            return #members == 0
+                        end,
                         func = function()
                             if Loothing.Council then
                                 local members = Loothing.Council:GetMembers()
                                 for i = #members, 1, -1 do
                                     Loothing.Council:RemoveMember(members[i])
                                 end
-                                Loothing:Print("All council members removed")
+                                Loothing:Print(L["CONFIG_COUNCIL_ALL_REMOVED"])
                                 if Loolib.Config and Loolib.Config.Dialog then
                                     Loolib.Config.Dialog:RefreshContent("Loothing")
                                 end
                             end
                         end,
-                        hidden = function()
-                            local members = Loothing.Council and Loothing.Council:GetMembers() or {}
-                            return #members == 0
-                        end,
                         confirm = function()
-                            return "Remove ALL council members?"
+                            return L["CONFIG_COUNCIL_CONFIRM_REMOVE_ALL"]
                         end,
                     },
                     guildRankHeader = {
                         type = "header",
-                        name = L["CONFIG_GUILD_RANK"] or "Guild Rank Auto-Include",
+                        name = L["CONFIG_GUILD_RANK"],
                         order = 8,
                     },
                     guildRankDesc = {
                         type = "description",
-                        name = L["CONFIG_GUILD_RANK_DESC"] or "Automatically include guild members at or above a certain rank in the council.",
+                        name = L["CONFIG_GUILD_RANK_DESC"],
                         order = 9,
                         fontSize = "medium",
                     },
                     minRank = {
                         type = "range",
-                        name = L["CONFIG_MIN_RANK"] or "Minimum Guild Rank",
-                        desc = L["CONFIG_MIN_RANK_DESC"] or "Guild members at this rank or higher will be auto-included. 0 = disabled.",
+                        name = L["CONFIG_MIN_RANK"],
+                        desc = L["CONFIG_MIN_RANK_DESC"],
                         order = 10,
                         min = 0,
                         max = 10,
@@ -533,36 +544,36 @@ local function GetSessionSettingsOptions()
             -- ============================================================
             awardReasons = {
                 type = "group",
-                name = L["CONFIG_AWARD_REASONS"] or "Award Reasons",
+                name = L["CONFIG_AWARD_REASONS"],
                 order = 5,
                 childGroups = "tree",
                 args = {
                     general = {
                         type = "group",
-                        name = L["GENERAL"] or "General",
+                        name = L["GENERAL"],
                         order = 1,
                         inline = false,
                         args = {
                             enabled = {
                                 type = "toggle",
-                                name = L["ENABLED"] or "Enabled",
-                                desc = "Enable or disable the award reasons system",
+                                name = L["ENABLED"],
+                                desc = L["CONFIG_AWARD_REASONS_ENABLED_DESC"],
                                 order = 1,
                                 get = function() return Loothing.Settings:GetAwardReasonsEnabled() end,
                                 set = function(_, v) Loothing.Settings:SetAwardReasonsEnabled(v) end,
                             },
                             requireReason = {
                                 type = "toggle",
-                                name = L["REQUIRE_AWARD_REASON"] or "Require Reason",
-                                desc = "Require an award reason to be selected before awarding an item",
+                                name = L["REQUIRE_AWARD_REASON"],
+                                desc = L["CONFIG_REQUIRE_AWARD_REASON_DESC"],
                                 order = 2,
                                 get = function() return Loothing.Settings:GetRequireAwardReason() end,
                                 set = function(_, v) Loothing.Settings:SetRequireAwardReason(v) end,
                             },
                             numReasons = {
                                 type = "range",
-                                name = L["NUM_AWARD_REASONS"] or "Number of Reasons",
-                                desc = "Maximum number of active award reasons",
+                                name = L["NUM_AWARD_REASONS"],
+                                desc = L["CONFIG_NUM_REASONS_DESC"],
                                 order = 3,
                                 min = 1,
                                 max = 20,
@@ -579,18 +590,18 @@ local function GetSessionSettingsOptions()
             -- ============================================================
             observerPermissions = {
                 type = "group",
-                name = L["OBSERVER_PERMISSIONS"] or "Observer Permissions",
+                name = L["OBSERVER_PERMISSIONS"],
                 order = 6,
                 args = {
                     desc = {
                         type = "description",
-                        name = "Control what observers can see during voting sessions.",
+                        name = L["CONFIG_OBSERVER_PERMISSIONS_DESC"],
                         order = 0,
                     },
                     seeVoteCounts = {
                         type = "toggle",
-                        name = L["OBSERVER_SEE_VOTE_COUNTS"] or "See Vote Counts",
-                        desc = L["OBSERVER_SEE_VOTE_COUNTS_DESC"] or "Observers can see how many votes each candidate has",
+                        name = L["OBSERVER_SEE_VOTE_COUNTS"],
+                        desc = L["OBSERVER_SEE_VOTE_COUNTS_DESC"],
                         order = 1,
                         get = function()
                             local perms = Loothing.Settings:GetObserverPermissions()
@@ -605,8 +616,8 @@ local function GetSessionSettingsOptions()
                     },
                     seeVoterIdentities = {
                         type = "toggle",
-                        name = L["OBSERVER_SEE_VOTER_IDS"] or "See Voter Identities",
-                        desc = L["OBSERVER_SEE_VOTER_IDS_DESC"] or "Observers can see who voted for each candidate",
+                        name = L["OBSERVER_SEE_VOTER_IDS"],
+                        desc = L["OBSERVER_SEE_VOTER_IDS_DESC"],
                         order = 2,
                         get = function()
                             local perms = Loothing.Settings:GetObserverPermissions()
@@ -621,8 +632,8 @@ local function GetSessionSettingsOptions()
                     },
                     seeResponses = {
                         type = "toggle",
-                        name = L["OBSERVER_SEE_RESPONSES"] or "See Responses",
-                        desc = L["OBSERVER_SEE_RESPONSES_DESC"] or "Observers can see what response each candidate selected",
+                        name = L["OBSERVER_SEE_RESPONSES"],
+                        desc = L["OBSERVER_SEE_RESPONSES_DESC"],
                         order = 3,
                         get = function()
                             local perms = Loothing.Settings:GetObserverPermissions()
@@ -637,8 +648,8 @@ local function GetSessionSettingsOptions()
                     },
                     seeNotes = {
                         type = "toggle",
-                        name = L["OBSERVER_SEE_NOTES"] or "See Notes",
-                        desc = L["OBSERVER_SEE_NOTES_DESC"] or "Observers can see candidate notes",
+                        name = L["OBSERVER_SEE_NOTES"],
+                        desc = L["OBSERVER_SEE_NOTES_DESC"],
                         order = 4,
                         get = function()
                             local perms = Loothing.Settings:GetObserverPermissions()
@@ -661,7 +672,7 @@ local function GetSessionSettingsOptions()
     local perReasonArgs = {
         desc = {
             type = "description",
-            name = "Configure individual award reasons. Each reason has a name, color, sort order, and flags for history logging and disenchant classification.",
+            name = L["CONFIG_AWARD_REASONS_DESC"],
             order = 0,
         },
     }
@@ -673,14 +684,14 @@ local function GetSessionSettingsOptions()
             type = "header",
             name = function()
                 local reason = GetAwardReasonAtIndex(i)
-                return reason and reason.name or ("Reason " .. i)
+                return reason and reason.name or (L["CONFIG_REASON_DEFAULT"] .. " " .. i)
             end,
             order = i * 10,
             hidden = hiddenFunc,
         }
         perReasonArgs["reason" .. i .. "Name"] = {
             type = "input",
-            name = "Name",
+            name = L["REASON_NAME"],
             order = i * 10 + 1,
             hidden = hiddenFunc,
             get = function()
@@ -696,7 +707,7 @@ local function GetSessionSettingsOptions()
         }
         perReasonArgs["reason" .. i .. "Color"] = {
             type = "color",
-            name = "Color",
+            name = L["BUTTON_COLOR"],
             order = i * 10 + 2,
             hasAlpha = true,
             hidden = hiddenFunc,
@@ -716,7 +727,7 @@ local function GetSessionSettingsOptions()
         }
         perReasonArgs["reason" .. i .. "Sort"] = {
             type = "range",
-            name = "Sort Order",
+            name = L["SORT_ORDER"],
             order = i * 10 + 3,
             min = 1,
             max = 20,
@@ -735,7 +746,7 @@ local function GetSessionSettingsOptions()
         }
         perReasonArgs["reason" .. i .. "Log"] = {
             type = "toggle",
-            name = "Log to History",
+            name = L["CONFIG_REASON_LOG"],
             order = i * 10 + 4,
             hidden = hiddenFunc,
             get = function()
@@ -751,7 +762,7 @@ local function GetSessionSettingsOptions()
         }
         perReasonArgs["reason" .. i .. "Disenchant"] = {
             type = "toggle",
-            name = "Disenchant Reason",
+            name = L["CONFIG_REASON_DISENCHANT"],
             order = i * 10 + 5,
             hidden = hiddenFunc,
             get = function()
@@ -767,10 +778,10 @@ local function GetSessionSettingsOptions()
         }
         perReasonArgs["reason" .. i .. "Remove"] = {
             type = "execute",
-            name = "Remove",
+            name = L["REMOVE"],
             order = i * 10 + 6,
             hidden = hiddenFunc,
-            confirm = "Remove this award reason?",
+            confirm = L["CONFIG_CONFIRM_REMOVE_REASON"],
             func = function()
                 local reason = GetAwardReasonAtIndex(i)
                 if reason then
@@ -783,31 +794,31 @@ local function GetSessionSettingsOptions()
 
     reasonArgs.reasons = {
         type = "group",
-        name = "Reasons",
+        name = L["CONFIG_REASONS"],
         order = 2,
         args = perReasonArgs,
     }
     reasonArgs.management = {
         type = "group",
-        name = "Manage",
+        name = L["CONFIG_MANAGE"],
         order = 3,
         inline = true,
         args = {
             addReason = {
                 type = "execute",
-                name = "Add New Reason",
+                name = L["ADD_REASON"],
                 order = 1,
                 func = function()
-                    if Loothing.Settings:AddAwardReason("New Reason", { 1, 1, 1, 1 }) then
+                    if Loothing.Settings:AddAwardReason(L["CONFIG_NEW_REASON_DEFAULT"], { 1, 1, 1, 1 }) then
                         RefreshSettingsDialog()
                     end
                 end,
             },
             resetDefaults = {
                 type = "execute",
-                name = "Reset to Defaults",
+                name = L["CONFIG_RESET_REASONS"],
                 order = 2,
-                confirm = "Reset all award reasons to their default values? This cannot be undone.",
+                confirm = L["CONFIG_CONFIRM_RESET_REASONS"],
                 func = function()
                     Loothing.Settings:ResetAwardReasonsToDefaults()
                     RefreshSettingsDialog()

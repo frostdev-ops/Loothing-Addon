@@ -84,7 +84,7 @@ function SyncPanelMixin:CreateElements()
     -- Title
     self.title = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     self.title:SetPoint("TOP", 0, -20)
-    self.title:SetText(L["SYNC_DATA"] or "Sync Data")
+    self.title:SetText(L["SYNC_DATA"])
 
     -- Close button
     self.closeButton = CreateFrame("Button", nil, self.frame, "UIPanelCloseButton")
@@ -114,7 +114,7 @@ function SyncPanelMixin:CreateElements()
     self.sendBtn = CreateFrame("Button", nil, self.frame, "UIPanelButtonTemplate")
     self.sendBtn:SetSize(120, 28)
     self.sendBtn:SetPoint("BOTTOM", 0, 24)
-    self.sendBtn:SetText(L["SEND"] or "Send")
+    self.sendBtn:SetText(L["SEND"])
     self.sendBtn:SetScript("OnClick", function()
         self:StartSync()
     end)
@@ -127,7 +127,7 @@ function SyncPanelMixin:CreateSyncTypeButtons()
     self.settingsBtn = CreateFrame("Button", nil, self.frame, "UIPanelButtonTemplate")
     self.settingsBtn:SetSize(120, 24)
     self.settingsBtn:SetPoint("TOPLEFT", 30, -50)
-    self.settingsBtn:SetText(L["SETTINGS"] or "Settings")
+    self.settingsBtn:SetText(L["SETTINGS"])
     self.settingsBtn:SetScript("OnClick", function()
         self.syncType = "settings"
         self:UpdateUI()
@@ -136,7 +136,7 @@ function SyncPanelMixin:CreateSyncTypeButtons()
     self.historyBtn = CreateFrame("Button", nil, self.frame, "UIPanelButtonTemplate")
     self.historyBtn:SetSize(120, 24)
     self.historyBtn:SetPoint("LEFT", self.settingsBtn, "RIGHT", 10, 0)
-    self.historyBtn:SetText(L["HISTORY"] or "History")
+    self.historyBtn:SetText(L["HISTORY"])
     self.historyBtn:SetScript("OnClick", function()
         self.syncType = "history"
         self:UpdateUI()
@@ -147,12 +147,12 @@ end
 function SyncPanelMixin:CreateTargetDropdown()
     local targetLabel = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     targetLabel:SetPoint("TOPLEFT", 30, -86)
-    targetLabel:SetText(L["SEND_TO"] or "Send To:")
+    targetLabel:SetText(L["SEND_TO"])
 
     self.targetBtn = CreateFrame("Button", nil, self.frame, "UIPanelButtonTemplate")
     self.targetBtn:SetSize(200, 24)
     self.targetBtn:SetPoint("TOPLEFT", 100, -84)
-    self.targetBtn:SetText(L["SELECT_TARGET"] or "Select Target...")
+    self.targetBtn:SetText(L["SELECT_TARGET"])
     self.targetBtn:SetScript("OnClick", function()
         self:ShowTargetMenu()
     end)
@@ -163,12 +163,12 @@ function SyncPanelMixin:ShowTargetMenu()
     local members = self:GetOnlineMembers()
 
     MenuUtil.CreateContextMenu(self.targetBtn, function(ownerRegion, rootDescription)
-        rootDescription:CreateTitle(L["SELECT_TARGET"] or "Select Target")
+        rootDescription:CreateTitle(L["SELECT_TARGET"])
 
         -- Guild option
-        rootDescription:CreateButton(L["GUILD"] or "Guild (All Online)", function()
+        rootDescription:CreateButton(L["GUILD"], function()
             self.targetPlayer = "guild"
-            self.targetBtn:SetText(L["GUILD"] or "Guild")
+            self.targetBtn:SetText(L["GUILD"])
         end)
 
         rootDescription:CreateDivider()
@@ -182,7 +182,7 @@ function SyncPanelMixin:ShowTargetMenu()
                 end)
             end
         else
-            rootDescription:CreateTitle(L["NO_TARGETS"] or "No online members found")
+            rootDescription:CreateTitle(L["NO_TARGETS"])
         end
     end)
 end
@@ -191,12 +191,12 @@ end
 function SyncPanelMixin:CreateDateRangeDropdown()
     self.dateLabel = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     self.dateLabel:SetPoint("TOPLEFT", 30, -118)
-    self.dateLabel:SetText(L["DATE_RANGE"] or "Date Range:")
+    self.dateLabel:SetText(L["DATE_RANGE"])
 
     self.dateBtn = CreateFrame("Button", nil, self.frame, "UIPanelButtonTemplate")
     self.dateBtn:SetSize(160, 24)
     self.dateBtn:SetPoint("TOPLEFT", 120, -116)
-    self.dateBtn:SetText(L["ALL_TIME"] or "All Time")
+    self.dateBtn:SetText(L["ALL_TIME"])
     self.dateBtn:SetScript("OnClick", function()
         self:ShowDateRangeMenu()
     end)
@@ -205,9 +205,9 @@ end
 --- Show date range context menu
 function SyncPanelMixin:ShowDateRangeMenu()
     local ranges = {
-        { value = "7", label = L["LAST_7_DAYS"] or "Last 7 Days" },
-        { value = "30", label = L["LAST_30_DAYS"] or "Last 30 Days" },
-        { value = "all", label = L["ALL_TIME"] or "All Time" },
+        { value = "7", label = L["LAST_7_DAYS"] },
+        { value = "30", label = L["LAST_30_DAYS"] },
+        { value = "all", label = L["ALL_TIME"] },
     }
 
     MenuUtil.CreateContextMenu(self.dateBtn, function(ownerRegion, rootDescription)
@@ -312,7 +312,7 @@ end
 --- Start the sync operation
 function SyncPanelMixin:StartSync()
     if not self.targetPlayer then
-        self.statusText:SetText("|cffff0000" .. (L["SELECT_TARGET_FIRST"] or "Select a target player") .. "|r")
+        self.statusText:SetText("|cffff0000" .. (L["SELECT_TARGET_FIRST"]) .. "|r")
         return
     end
 
@@ -320,7 +320,7 @@ function SyncPanelMixin:StartSync()
     self.progressBar:SetWidth(0)
     self.progressText:SetText("0%")
     self.statusText:SetText(string.format(
-        L["SYNCING_TO"] or "Syncing %s to %s...",
+        L["SYNCING_TO"],
         self.syncType, self.targetPlayer
     ))
     self.sendBtn:Disable()
@@ -355,7 +355,7 @@ function SyncPanelMixin:SetProgress(pct)
     self.progressText:SetText(math.floor(pct * 100) .. "%")
 
     if pct >= 1.0 then
-        self.statusText:SetText("|cff00ff00" .. (L["SYNC_COMPLETE"] or "Sync complete!") .. "|r")
+        self.statusText:SetText("|cff00ff00" .. (L["SYNC_COMPLETE"]) .. "|r")
         self.sendBtn:Enable()
     end
 end

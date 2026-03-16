@@ -9,6 +9,7 @@ local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local Utils = ns.Utils
 local SkinningMixin = ns.SkinningMixin
+local L = Loothing.Locale
 
 local CouncilTableMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin, ns.CouncilTableMixin or {})
 ns.CouncilTableMixin = CouncilTableMixin
@@ -118,7 +119,7 @@ function CouncilTableMixin:CreateFrame()
     -- Title
     local title = titleBar:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     title:SetPoint("LEFT", 4, 0)
-    title:SetText("Loot Council")
+    title:SetText(L["LOOT_COUNCIL"])
     title:SetTextColor(1, 0.82, 0)
     self.titleText = title
 
@@ -169,13 +170,13 @@ function CouncilTableMixin:CreateElements()
     -- Empty text
     self.emptyText = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     self.emptyText:SetPoint("CENTER", self.listContainer, "CENTER")
-    self.emptyText:SetText("No candidates")
+    self.emptyText:SetText(L["COUNCIL_NO_CANDIDATES"])
     self.emptyText:SetTextColor(0.5, 0.5, 0.5)
 
     -- Observer mode indicator (shown in title bar when observing)
     local observerText = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     observerText:SetPoint("RIGHT", closeButton, "LEFT", -8, 0)
-    observerText:SetText("(Observer)")
+    observerText:SetText("(" .. L["OBSERVER"] .. ")")
     observerText:SetTextColor(0.7, 0.7, 0.3)
     observerText:Hide()
     self.observerText = observerText
@@ -543,7 +544,7 @@ function CouncilTableMixin:SelectItemTab(itemGUID)
     -- Update title
     if self.titleText then
         local name = targetItem.name or "Unknown"
-        self.titleText:SetText(string.format("Loot Council - %s", name))
+        self.titleText:SetText(string.format(L["LOOT_COUNCIL"] .. " - %s", name))
     end
 
     -- Refresh candidates
@@ -738,7 +739,7 @@ function CouncilTableMixin:CreateActionButtons()
     self.awardButton = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
     self.awardButton:SetSize(100, 24)
     self.awardButton:SetPoint("LEFT")
-    self.awardButton:SetText("Award")
+    self.awardButton:SetText(L["COUNCIL_AWARD"])
     self.awardButton:SetScript("OnClick", function()
         if self.selectedCandidate and self.currentItem then
             self:ShowCandidateContextMenu(self.awardButton, self.selectedCandidate)
@@ -749,7 +750,7 @@ function CouncilTableMixin:CreateActionButtons()
     self.revoteButton = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
     self.revoteButton:SetSize(80, 24)
     self.revoteButton:SetPoint("LEFT", self.awardButton, "RIGHT", 8, 0)
-    self.revoteButton:SetText("Re-Vote")
+    self.revoteButton:SetText(L["COUNCIL_REVOTE"])
     self.revoteButton:SetScript("OnClick", function()
         if self.currentItem and Loothing.Session then
             Loothing.Session:StartVoting(self.currentItem.guid)
@@ -761,7 +762,7 @@ function CouncilTableMixin:CreateActionButtons()
     self.skipButton = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
     self.skipButton:SetSize(80, 24)
     self.skipButton:SetPoint("LEFT", self.revoteButton, "RIGHT", 8, 0)
-    self.skipButton:SetText("Skip")
+    self.skipButton:SetText(L["COUNCIL_SKIP"])
     self.skipButton:SetScript("OnClick", function()
         if self.currentItem and Loothing.Session then
             Loothing.Session:SkipItem(self.currentItem.guid)
@@ -772,7 +773,7 @@ function CouncilTableMixin:CreateActionButtons()
     self.resultsButton = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
     self.resultsButton:SetSize(80, 24)
     self.resultsButton:SetPoint("RIGHT", -4, 0)
-    self.resultsButton:SetText("Results")
+    self.resultsButton:SetText(L["RESULTS"])
     self.resultsButton:SetScript("OnClick", function()
         if self.currentItem and Loothing.UI and Loothing.UI.ResultsPanel then
             Loothing.UI.ResultsPanel:SetItem(self.currentItem)
@@ -865,10 +866,10 @@ function CouncilTableMixin:CreateEnchanterButton()
     end)
     btn:SetScript("OnEnter", function(b)
         GameTooltip:SetOwner(b, "ANCHOR_RIGHT")
-        GameTooltip:SetText("Disenchant Target", 1, 1, 1)
-        GameTooltip:AddLine("Click to select an enchanter", 1, 1, 1)
+        GameTooltip:SetText(L["DISENCHANT_TARGET"], 1, 1, 1)
+        GameTooltip:AddLine(L["CLICK_SELECT_ENCHANTER"], 1, 1, 1)
         if self.disenchantTarget then
-            GameTooltip:AddLine("Current: " .. self.disenchantTarget, 0.5, 1, 0.5)
+            GameTooltip:AddLine(L["CURRENT_COLON"] .. self.disenchantTarget, 0.5, 1, 0.5)
         end
         GameTooltip:Show()
     end)
@@ -880,25 +881,25 @@ end
 function CouncilTableMixin:ShowEnchanterDropdown(anchor)
     local enchanters = Loothing.PlayerCache and Loothing.PlayerCache:GetEnchanters() or {}
     if #enchanters == 0 then
-        Loothing:Print("No enchanters detected in the group")
+        Loothing:Print(L["NO_ENCHANTERS"])
         return
     end
 
     MenuUtil.CreateContextMenu(anchor, function(_, rootDescription)
-        rootDescription:CreateTitle("Select Enchanter")
+        rootDescription:CreateTitle(L["SELECT_ENCHANTER"])
         for _, enc in ipairs(enchanters) do
             local classColor = RAID_CLASS_COLORS and RAID_CLASS_COLORS[enc.class] or { r = 1, g = 1, b = 1 }
             local coloredName = string.format("|cff%02x%02x%02x%s|r",
                 classColor.r * 255, classColor.g * 255, classColor.b * 255, enc.name)
             rootDescription:CreateButton(coloredName, function()
                 self.disenchantTarget = enc.name
-                Loothing:Print("Disenchant target set to: " .. enc.name)
+                Loothing:Print(string.format(L["DISENCHANT_TARGET_SET"], enc.name))
             end)
         end
         rootDescription:CreateDivider()
-        rootDescription:CreateButton("Clear", function()
+        rootDescription:CreateButton(L["CLEAR"], function()
             self.disenchantTarget = nil
-            Loothing:Print("Disenchant target cleared")
+            Loothing:Print(L["DISENCHANT_TARGET_CLEARED"])
         end)
     end)
 end
@@ -981,7 +982,7 @@ function CouncilTableMixin:ShowVoterProgressTooltip(anchor)
     end
 
     GameTooltip:SetOwner(anchor, "ANCHOR_BOTTOM")
-    GameTooltip:AddLine("Council Voting Progress", 1, 0.82, 0)
+    GameTooltip:AddLine(L["COUNCIL_VOTING_PROGRESS"], 1, 0.82, 0)
     GameTooltip:AddLine(" ")
 
     for _, member in ipairs(expectedVoters) do

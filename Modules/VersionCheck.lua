@@ -11,6 +11,7 @@
 local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
+local L = ns.Locale
 local Utils = ns.Utils
 local C_Timer = C_Timer
 local GetNumGroupMembers = GetNumGroupMembers
@@ -330,11 +331,11 @@ function VersionCheckMixin:WarnOutdatedMembers()
     end
 
     if outdatedCount > 0 then
-        local msg = string.format("|cffff9900%d group member(s) have outdated Loothing:|r %s",
+        local msg = string.format(L["VERSION_OUTDATED_MEMBERS"],
             outdatedCount,
             tconcat(outdatedNames, ", "))
         if outdatedCount > 3 then
-            msg = msg .. string.format(" and %d more", outdatedCount - 3)
+            msg = msg .. string.format(L["VERSION_AND_MORE"], outdatedCount - 3)
         end
         Loothing:Print(msg)
         self:TriggerEvent("OnOutdatedWarning", outdatedCount)
@@ -349,7 +350,7 @@ end
 -- @param target string - "guild" or "raid"
 function VersionCheckMixin:Query(target)
     if self.queryInProgress then
-        Loothing:Print("Version check already in progress")
+        Loothing:Print(L["VERSION_CHECK_IN_PROGRESS"])
         return
     end
 
@@ -400,7 +401,7 @@ end
 --- Query guild members
 function VersionCheckMixin:QueryGuild()
     if not IsInGuild() then
-        Loothing:Print("You are not in a guild")
+        Loothing:Print(L["NOT_IN_GUILD"])
         self:CompleteQuery()
         return
     end
@@ -435,7 +436,7 @@ end
 --- Query raid members
 function VersionCheckMixin:QueryRaid()
     if not IsInRaid() and not IsInGroup() then
-        Loothing:Print("You are not in a raid or party")
+        Loothing:Print(L["NOT_IN_GROUP"])
         self:CompleteQuery()
         return
     end
@@ -707,22 +708,22 @@ end
 function VersionCheckMixin:PrintSummary()
     local counts = self:GetRosterSnapshot().counts
 
-    Loothing:Print(string.format("Version Check Results: %d total", counts.total))
-    Loothing:Print(string.format("  Up to date: %d", counts.current))
+    Loothing:Print(string.format(L["VERSION_RESULTS_TOTAL"], counts.total))
+    Loothing:Print(string.format(L["VERSION_RESULTS_CURRENT"], counts.current))
 
     if counts.testVersions > 0 then
-        Loothing:Print(string.format("  |cff00ff00Test versions: %d|r", counts.testVersions))
+        Loothing:Print(string.format(L["VERSION_RESULTS_TEST"], counts.testVersions))
     end
 
     if counts.outdated > 0 then
-        Loothing:Print(string.format("  |cffff0000Outdated: %d|r", counts.outdated))
+        Loothing:Print(string.format(L["VERSION_RESULTS_OUTDATED"], counts.outdated))
     end
 
     if counts.notInstalled > 0 then
-        Loothing:Print(string.format("  |cff888888Not Installed: %d|r", counts.notInstalled))
+        Loothing:Print(string.format(L["VERSION_RESULTS_NOT_INSTALLED"], counts.notInstalled))
     end
 
-    Loothing:Print("Use /lt version show to see detailed results")
+    Loothing:Print(L["VERSION_RESULTS_HINT"])
 end
 
 --[[--------------------------------------------------------------------

@@ -115,7 +115,12 @@ local SCHEMAS = {
     BATCH           = { { "messages",  "table",  true } },
     MLDB_BROADCAST  = { { "data",      "table",  true } },
     COUNCIL_ROSTER  = { { "members",   "table",  true } },
-    PROFILE_EXPORT_SHARE = { { "exportString", "string", true } },
+    PROFILE_EXPORT_SHARE = {
+        { "exportString", "string", true },
+        { "shareID", "string", false },
+        { "scope", "string", false },
+        { "sessionID", "string", false },
+    },
 }
 
 --- Validate data against a schema and log on failure.
@@ -586,13 +591,46 @@ function CommMixin:HandleHistoryData(data, sender)
     end
 end
 
-function CommMixin:HandleProfileExportShare(data, sender)
+function CommMixin:HandleProfileExportShare(data, sender, distribution)
     if not validateHandler("HandleProfileExportShare", data, SCHEMAS.PROFILE_EXPORT_SHARE) then return end
-    if not isGroupMember(sender) then
+
+    local scope = data.scope
+    if scope == "group" then
+        if not data.shareID or data.shareID == "" then
+            Loothing:Debug("Rejected PROFILE_EXPORT_SHARE group broadcast with missing shareID:", sender)
+            return
+        end
+        if distribution ~= "RAID" and distribution ~= "PARTY" then
+            Loothing:Debug("Rejected PROFILE_EXPORT_SHARE group broadcast on unexpected channel:", distribution)
+            return
+        end
+        if not Loothing.Session or not Loothing.Session:IsActive() then
+            Loothing:Debug("Rejected PROFILE_EXPORT_SHARE group broadcast with no active session:", sender)
+            return
+        end
+        if not data.sessionID or not Loothing.Session:IsCurrentSession(data.sessionID) then
+            Loothing:Debug("Rejected PROFILE_EXPORT_SHARE with mismatched session:", sender)
+            return
+        end
+        if not isGroupMember(sender) then
+            Loothing:Debug("Rejected PROFILE_EXPORT_SHARE group broadcast from non-group member:", sender)
+            return
+        end
+        local sessionMasterLooter = Loothing.Session:GetMasterLooter()
+        if not sessionMasterLooter or not Utils.IsSamePlayer(sessionMasterLooter, sender) then
+            Loothing:Debug("Rejected PROFILE_EXPORT_SHARE group broadcast from non-ML:", sender)
+            return
+        end
+    elseif not isGroupMember(sender) then
         Loothing:Debug("Rejected PROFILE_EXPORT_SHARE from non-group member:", sender)
         return
     end
+
     if Loothing.SettingsExport then
-        Loothing.SettingsExport:HandleSharedExport(data.exportString, sender)
+        Loothing.SettingsExport:HandleSharedExport(data.exportString, sender, {
+            shareID = data.shareID,
+            scope = scope,
+            sessionID = data.sessionID,
+        })
     end
 end

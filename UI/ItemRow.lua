@@ -276,7 +276,7 @@ function ItemRowMixin:UpdateStatus()
         local hideVotes = Loothing.Settings and Loothing.Settings:GetHideVotes() and not isML
 
         if timeRemaining == math.huge then
-            self.infoText:SetText(L["NO_LIMIT"] or "No Limit")
+            self.infoText:SetText(L["NO_LIMIT"])
             self.infoText:SetTextColor(0.2, 0.8, 0.2)
         elseif timeRemaining > 0 then
             self.infoText:SetText(string.format("%ds", math.ceil(timeRemaining)))

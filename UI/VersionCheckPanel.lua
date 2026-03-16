@@ -112,7 +112,7 @@ function VersionCheckPanelMixin:CreateElements()
     -- Title
     self.title = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     self.title:SetPoint("TOP", 0, -20)
-    self.title:SetText(L["VERSION_CHECK"] or "Version Check")
+    self.title:SetText(L["VERSION_CHECK"])
 
     -- Close button
     self.closeButton = CreateFrame("Button", nil, self.frame, "UIPanelCloseButton")
@@ -138,7 +138,7 @@ function VersionCheckPanelMixin:CreateElements()
     self.queryBtn = CreateFrame("Button", nil, self.frame, "UIPanelButtonTemplate")
     self.queryBtn:SetSize(140, 26)
     self.queryBtn:SetPoint("BOTTOMLEFT", 20, 18)
-    self.queryBtn:SetText(L["QUERY_GROUP"] or "Query Group")
+    self.queryBtn:SetText(L["QUERY_GROUP"])
     self.queryBtn:SetScript("OnClick", function()
         self:QueryVersions()
     end)
@@ -158,15 +158,15 @@ function VersionCheckPanelMixin:CreateColumnHeaders()
 
     local nameHeader = headers:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     nameHeader:SetPoint("LEFT", 4, 0)
-    nameHeader:SetText(L["PLAYER"] or "Player")
+    nameHeader:SetText(L["PLAYER"])
 
     local versionHeader = headers:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     versionHeader:SetPoint("LEFT", 180, 0)
-    versionHeader:SetText(L["VERSION"] or "Version")
+    versionHeader:SetText(L["VERSION"])
 
     local statusHeader = headers:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     statusHeader:SetPoint("LEFT", 290, 0)
-    statusHeader:SetText(L["STATUS"] or "Status")
+    statusHeader:SetText(L["STATUS"])
 end
 
 --- Create scrollable list area
@@ -296,9 +296,9 @@ function VersionCheckPanelMixin:RefreshList()
 
         -- Status color coding
         local statusMap = {
-            current       = { text = L["CURRENT"] or "Current",       color = "|cff00ff00" },
-            outdated      = { text = L["OUTDATED"] or "Outdated",     color = "|cffffff00" },
-            not_installed = { text = L["NOT_INSTALLED"] or "Not Installed", color = "|cffff0000" },
+            current       = { text = L["CURRENT"],       color = "|cff00ff00" },
+            outdated      = { text = L["OUTDATED"],     color = "|cffffff00" },
+            not_installed = { text = L["NOT_INSTALLED"], color = "|cffff0000" },
             querying      = { text = "...",                           color = "|cff888888" },
         }
         local status = entry.version and self:GetVersionStatus(entry.version) or (VersionCheck and VersionCheck.queryInProgress and "querying" or "not_installed")

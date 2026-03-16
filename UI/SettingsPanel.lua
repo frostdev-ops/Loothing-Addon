@@ -69,7 +69,7 @@ function SettingsPanelMixin:CreateHeader()
     -- Addon title
     local title = header:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
     title:SetPoint("LEFT", header, "LEFT", xCursor, 4)
-    title:SetText(L["ADDON_NAME"] or "Loothing")
+    title:SetText(L["ADDON_NAME"])
     title:SetTextColor(1, 1, 1, 1)
 
     -- Version below title
@@ -97,14 +97,14 @@ function SettingsPanelMixin:CreateElements()
 
     local message = container:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     message:SetPoint("CENTER", 0, 24)
-    message:SetText(L["BLIZZARD_SETTINGS_DESC"] or "Click below to open the full settings panel")
+    message:SetText(L["BLIZZARD_SETTINGS_DESC"])
     message:SetTextColor(0.9, 0.9, 0.9)
     self.messageText = message
 
     local openBtn = CreateFrame("Button", nil, container, "UIPanelButtonTemplate")
     openBtn:SetSize(220, 28)
     openBtn:SetPoint("TOP", message, "BOTTOM", 0, -16)
-    openBtn:SetText(L["OPEN_SETTINGS"] or "Open Loothing Settings")
+    openBtn:SetText(L["OPEN_SETTINGS"])
     openBtn:SetScript("OnClick", function()
         if Config then
             Config:Open("Loothing")
@@ -126,7 +126,7 @@ end
 --- Refresh settings display
 function SettingsPanelMixin:Refresh()
     if self.messageText then
-        self.messageText:SetText(L["BLIZZARD_SETTINGS_DESC"] or "Click below to open the full settings panel")
+        self.messageText:SetText(L["BLIZZARD_SETTINGS_DESC"])
     end
 end
 

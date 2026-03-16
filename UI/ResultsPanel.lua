@@ -198,12 +198,12 @@ function ResultsPanelMixin:CreateResultsArea()
         local L = Loothing.Locale
         if self.roundsContainer and self.roundsContainer:IsShown() then
             self.roundsContainer:Hide()
-            self.roundsToggle:SetText(string.format(L and L["SHOW_IRV_ROUNDS"] or "Show IRV Rounds (%d rounds)", self._roundCount or 0))
+            self.roundsToggle:SetText(string.format(L and L["SHOW_IRV_ROUNDS"], self._roundCount or 0))
         else
             if self.roundsContainer then
                 self.roundsContainer:Show()
             end
-            self.roundsToggle:SetText(L and L["HIDE_IRV_ROUNDS"] or "Hide IRV Rounds")
+            self.roundsToggle:SetText(L and L["HIDE_IRV_ROUNDS"])
         end
         -- Recalculate candidate row positions
         self:LayoutCandidateRows()
@@ -347,7 +347,7 @@ function ResultsPanelMixin:DisplayResults(_results)
     if self.results and self.results.rounds and #self.results.rounds > 0 then
         self:BuildRoundsVisualization(self.results)
         local L = Loothing.Locale
-        self.roundsToggle:SetText(string.format(L and L["SHOW_IRV_ROUNDS"] or "Show IRV Rounds (%d rounds)", #self.results.rounds))
+        self.roundsToggle:SetText(string.format(L and L["SHOW_IRV_ROUNDS"], #self.results.rounds))
         self.roundsToggle:Show()
         -- Adjust starting offset for candidate rows
         summaryOffset = summaryOffset - 26  -- space for toggle button
@@ -422,7 +422,7 @@ function ResultsPanelMixin:UpdateAwardButtonText()
         else
             name = self.selectedCandidate.playerName or "Unknown"
         end
-        local text = "Award to " .. name
+        local text = string.format(Loothing.Locale["AWARD_TO"], name)
         self.awardButton:SetText(text)
         local fs = self.awardButton:GetFontString()
         self.awardButton:SetWidth(math.max(90, fs:GetStringWidth() + 24))
@@ -437,8 +437,9 @@ end
 -- @param totalVotes number - Total council votes
 -- @param candidates table - All candidates sorted
 function ResultsPanelMixin:UpdateWinnerSection(winner, totalVotes, candidates)
+    local L = Loothing.Locale
     if totalVotes == 0 then
-        self.winnerText:SetText("|cff888888No council votes cast|r")
+        self.winnerText:SetText("|cff888888" .. L["NO_COUNCIL_VOTES"] .. "|r")
         return
     end
 
@@ -460,13 +461,13 @@ function ResultsPanelMixin:UpdateWinnerSection(winner, totalVotes, candidates)
         for _, c in ipairs(tied) do
             names[#names + 1] = c:GetColoredName()
         end
-        self.winnerText:SetText("|cffffcc00Tie:|r " .. table.concat(names, ", "))
+        self.winnerText:SetText("|cffffcc00" .. L["TIE"] .. ":|r " .. table.concat(names, ", "))
     elseif winner then
         local coloredName = winner:GetColoredName()
         if hideVotes then
-            self.winnerText:SetText("Recommended: " .. coloredName)
+            self.winnerText:SetText(L["RECOMMENDED"] .. ": " .. coloredName)
         else
-            self.winnerText:SetText(string.format("Recommended: %s (%d votes)", coloredName, maxVotes))
+            self.winnerText:SetText(string.format(L["RECOMMENDED"] .. ": %s (%d " .. L["VOTES_LABEL"] .. ")", coloredName, maxVotes))
         end
     end
 end
@@ -690,10 +691,10 @@ function ResultsPanelMixin:ShowAwardReasonDropdown()
     local reasons = Loothing.Settings:GetAwardReasons()
 
     MenuUtil.CreateContextMenu(self.awardButton, function(_, rootDescription)
-        rootDescription:CreateTitle("Select Award Reason")
+        rootDescription:CreateTitle(Loothing.Locale["SELECT_AWARD_REASON"])
 
         if not Loothing.Settings:GetRequireAwardReason() then
-            rootDescription:CreateButton("Award (No Reason)", function()
+            rootDescription:CreateButton(Loothing.Locale["AWARD_NO_REASON"], function()
                 self:ShowAwardDialog(nil, nil, nil)
             end)
             rootDescription:CreateDivider()

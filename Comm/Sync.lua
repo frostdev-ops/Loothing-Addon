@@ -9,6 +9,7 @@
 local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
+local L = ns.Locale
 local CreateFromMixins = Loolib.CreateFromMixins
 local Utils = ns.Utils
 
@@ -434,7 +435,7 @@ end
 -- @param target string - "guild" or player name
 function SyncMixin:RequestSettingsSync(target)
     if self.settingsSyncInProgress then
-        Loothing:Print("Settings sync already in progress")
+        Loothing:Print(L["SYNC_IN_PROGRESS"])
         return
     end
 
@@ -446,9 +447,9 @@ function SyncMixin:RequestSettingsSync(target)
     Loothing.Comm:SendSettingsSyncRequest(target)
 
     if target == "guild" then
-        Loothing:Print("Requesting settings sync to guild...")
+        Loothing:Print(L["SYNC_SETTINGS_TO_GUILD"])
     else
-        Loothing:Print("Requesting settings sync to " .. target)
+        Loothing:Print(string.format(L["SYNC_SETTINGS_TO_PLAYER"], target))
     end
 
     -- Timeout after 30 seconds
@@ -460,9 +461,9 @@ function SyncMixin:RequestSettingsSync(target)
                 count = count + 1
             end
             if count > 0 then
-                Loothing:Print(string.format("Settings sync completed to %d recipients", count))
+                Loothing:Print(string.format(L["SYNC_SETTINGS_COMPLETED"], count))
             else
-                Loothing:Print("Settings sync timed out - no responses")
+                Loothing:Print(L["SYNC_TIMEOUT"])
             end
         end
     end)
@@ -508,7 +509,7 @@ function SyncMixin:AcceptSettingsSync(sender)
     Loothing.Comm:SendSettingsSyncAck(sender)
 
     self.awaitingSettingsFrom = sender
-    Loothing:Print("Accepted settings sync from " .. sender)
+    Loothing:Print(string.format(L["SYNC_ACCEPTED_FROM"], sender))
 end
 
 --- Handle settings sync acknowledgment
@@ -525,7 +526,7 @@ function SyncMixin:HandleSettingsSyncAck(sender)
     -- Send settings data (Protocol handles serialization+compression)
     Loothing.Comm:SendSettingsData(self.pendingSettingsSync, sender)
 
-    Loothing:Print("Sent settings to " .. sender)
+    Loothing:Print(string.format(L["SYNC_SETTINGS_SENT"], sender))
 end
 
 --- Handle received settings data
@@ -548,7 +549,7 @@ function SyncMixin:HandleSettingsData(data, sender)
     -- Apply settings directly (no need to deserialize, Protocol already did)
     self:ApplySettings(data)
 
-    Loothing:Print("Applied settings from " .. sender)
+    Loothing:Print(string.format(L["SYNC_SETTINGS_APPLIED"], sender))
 end
 
 --- Apply received settings
@@ -579,7 +580,7 @@ function SyncMixin:RequestHistorySync(target, days)
     days = days or 7
 
     if self.historySyncInProgress then
-        Loothing:Print("History sync already in progress")
+        Loothing:Print(L["SYNC_IN_PROGRESS"])
         return
     end
 
@@ -591,9 +592,9 @@ function SyncMixin:RequestHistorySync(target, days)
     Loothing.Comm:SendHistorySyncRequest(target, days)
 
     if target == "guild" then
-        Loothing:Print(string.format("Requesting history sync (%d days) to guild...", days))
+        Loothing:Print(string.format(L["SYNC_HISTORY_GUILD_DAYS"], days))
     else
-        Loothing:Print(string.format("Requesting history sync (%d days) to %s", days, target))
+        Loothing:Print(string.format(L["SYNC_HISTORY_TO_PLAYER"], days, target))
     end
 
     -- Timeout
@@ -605,9 +606,9 @@ function SyncMixin:RequestHistorySync(target, days)
                 count = count + 1
             end
             if count > 0 then
-                Loothing:Print(string.format("History sync completed to %d recipients", count))
+                Loothing:Print(string.format(L["SYNC_HISTORY_COMPLETED"], count))
             else
-                Loothing:Print("History sync timed out - no responses")
+                Loothing:Print(L["SYNC_TIMEOUT"])
             end
         end
     end)
@@ -660,7 +661,7 @@ function SyncMixin:AcceptHistorySync(sender)
     Loothing.Comm:SendHistorySyncAck(sender)
 
     self.awaitingHistoryFrom = sender
-    Loothing:Print("Accepted history sync from " .. sender)
+    Loothing:Print(string.format(L["SYNC_ACCEPTED_FROM"], sender))
 end
 
 --- Handle history sync acknowledgment
@@ -677,7 +678,7 @@ function SyncMixin:HandleHistorySyncAck(sender)
     -- Send history data (Protocol handles serialization+compression)
     Loothing.Comm:SendHistoryData(self.pendingHistorySync, sender)
 
-    Loothing:Print(string.format("Sent %d history entries to %s", #self.pendingHistorySync, sender))
+    Loothing:Print(string.format(L["SYNC_HISTORY_SENT"], #self.pendingHistorySync, sender))
 end
 
 --- Handle history data
@@ -717,7 +718,7 @@ function SyncMixin:HandleHistoryData(data, sender)
         Loothing:Debug("HandleHistoryData: skipped", skipped, "entries with missing fields from", sender)
     end
 
-    Loothing:Print(string.format("Imported %d history entries from %s", imported, sender))
+    Loothing:Print(string.format(L["HISTORY_SYNCED"], imported, sender))
 end
 
 --[[--------------------------------------------------------------------

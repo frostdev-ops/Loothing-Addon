@@ -108,7 +108,7 @@ function HistoryPanelMixin:CreateFilterBar()
     filterBar:SetHeight(28)
 
     -- Nil-safe placeholder string (guards against missing locale key)
-    local placeholder = L["SEARCH"] or "Search..."
+    local placeholder = L["SEARCH"]
     filterBar._placeholder = placeholder
     filterBar._placeholderActive = true
 
@@ -830,7 +830,7 @@ function HistoryPanelMixin:ShowHistoryRowContextMenu(row, entry)
 
         -- Link in chat
         if entry.itemLink then
-            rootDescription:CreateButton(L["LINK_IN_CHAT"] or "Link in Chat", function()
+            rootDescription:CreateButton(L["LINK_IN_CHAT"], function()
                 ChatEdit_InsertLink(entry.itemLink)
             end)
         end
@@ -838,7 +838,7 @@ function HistoryPanelMixin:ShowHistoryRowContextMenu(row, entry)
         -- Filter by winner
         if entry.winner then
             rootDescription:CreateButton(
-                string.format(L["FILTER_BY_WINNER"] or "Filter by %s", Utils.GetShortName(entry.winner)),
+                string.format(L["FILTER_BY_WINNER"], Utils.GetShortName(entry.winner)),
                 function()
                     self:SetWinnerFilter(entry.winner)
                 end
@@ -860,7 +860,7 @@ function HistoryPanelMixin:ShowHistoryRowContextMenu(row, entry)
         rootDescription:CreateDivider()
 
         -- Delete entry
-        rootDescription:CreateButton(L["DELETE_ENTRY"] or "Delete Entry", function()
+        rootDescription:CreateButton(L["DELETE_ENTRY"], function()
             if Loothing.History and entry.guid then
                 Loothing.History:DeleteEntry(entry.guid)
                 self:Refresh()
@@ -1149,7 +1149,7 @@ function HistoryPanelMixin:ShowExportDialog()
         local eqdkpButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
         eqdkpButton:SetSize(60, 22)
         eqdkpButton:SetPoint("LEFT", jsonButton, "RIGHT", 4, 0)
-        eqdkpButton:SetText(L["EXPORT_EQDKP"] or "EQdkp")
+        eqdkpButton:SetText(L["EXPORT_EQDKP"])
         eqdkpButton:SetScript("OnClick", function()
             self:SetExportText(Loothing.History:ExportEQdkp())
         end)

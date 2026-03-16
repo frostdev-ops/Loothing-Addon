@@ -604,7 +604,7 @@ OnRaidEnter = function()
                 Loothing:StartHandleLoot()
             end,
             function()
-                Loothing:Print(L["ML_NOT_ACTIVE_SESSION"] or "Loothing is not active for this session. Use '/loothing start' to enable manually.")
+                Loothing:Print(L["ML_NOT_ACTIVE_SESSION"])
             end
         )
     end
@@ -617,7 +617,7 @@ function Addon:StartHandleLoot()
 
     self.handleLoot = true
     self:Debug("StartHandleLoot - now handling loot")
-    self:Print(L["ML_HANDLING_LOOT"] or "Now handling loot distribution.")
+    self:Print(L["ML_HANDLING_LOOT"])
 
     -- Broadcast MLDB settings first (so candidates know our config)
     if self.MLDB then
@@ -649,7 +649,7 @@ function Addon:StopHandleLoot()
 
     self.handleLoot = false
     self:Debug("StopHandleLoot - no longer handling loot")
-    self:Print(L["ML_STOPPED_HANDLING"] or "Stopped handling loot distribution.")
+    self:Print(L["ML_STOPPED_HANDLING"])
 
     -- Broadcast to group that ML stopped handling loot
     if self.Comm and self.Comm.BroadcastStopHandleLoot then
@@ -873,7 +873,7 @@ local function RegisterSlashCommands()
 
     local function ensureMainFrame(tabKey)
         if not Loothing.MainFrame then
-            printError(L["SLASH_NO_MAINFRAME"] or "Main window not available yet.")
+            printError(L["SLASH_NO_MAINFRAME"])
             return false
         end
 
@@ -886,7 +886,7 @@ local function RegisterSlashCommands()
 
     local function openConfig(section)
         if not Config then
-            printError(L["SLASH_NO_CONFIG"] or "Config dialog not available.")
+            printError(L["SLASH_NO_CONFIG"])
             return
         end
 
@@ -912,7 +912,7 @@ local function RegisterSlashCommands()
 
         local itemID = Utils.GetItemID(itemLink)
         if not itemID then
-            printError(L["SLASH_INVALID_ITEM"] or "Invalid item link.")
+            printError(L["SLASH_INVALID_ITEM"])
             return
         end
 
@@ -980,7 +980,7 @@ local function RegisterSlashCommands()
             if Loothing.Sync then
                 Loothing.Sync:RequestSettingsSync(target)
             else
-                printError(L["SLASH_SYNC_UNAVAILABLE"] or "Sync module not available.")
+                printError(L["SLASH_SYNC_UNAVAILABLE"])
             end
             return
         end
@@ -993,7 +993,7 @@ local function RegisterSlashCommands()
             if Loothing.Sync then
                 Loothing.Sync:RequestHistorySync(target, numDays)
             else
-                printError(L["SLASH_SYNC_UNAVAILABLE"] or "Sync module not available.")
+                printError(L["SLASH_SYNC_UNAVAILABLE"])
             end
             return
         end
@@ -1005,19 +1005,19 @@ local function RegisterSlashCommands()
 
     local function handleImport(argText)
         if not Loothing.HistoryImport then
-            printError(L["SLASH_IMPORT_UNAVAILABLE"] or "Import module not available.")
+            printError(L["SLASH_IMPORT_UNAVAILABLE"])
             return
         end
 
         local text = argText or ""
         if text == "" then
-            printLine(L["SLASH_IMPORT_PROMPT"] or "Provide CSV/TSV text: /lt import <data>")
+            printLine(L["SLASH_IMPORT_PROMPT"])
             return
         end
 
         local entries, err = Loothing.HistoryImport:DetectFormat(text)
         if not entries then
-            printError(string.format(L["SLASH_IMPORT_PARSE_ERROR"] or "Parse error: %s", err or "unknown"))
+            printError(string.format(L["SLASH_IMPORT_PARSE_ERROR"], err or "unknown"))
             return
         end
 
@@ -1025,9 +1025,9 @@ local function RegisterSlashCommands()
         if success then
             local stats = Loothing.HistoryImport:GetImportStats() or {}
             local imported = stats.imported or #entries
-            printLine(string.format(L["SLASH_IMPORT_SUCCESS"] or "Imported %d entries.", imported))
+            printLine(string.format(L["SLASH_IMPORT_SUCCESS"], imported))
         else
-            printError(string.format(L["SLASH_IMPORT_FAILED"] or "Import failed: %s", importErr or "unknown"))
+            printError(string.format(L["SLASH_IMPORT_FAILED"], importErr or "unknown"))
         end
     end
 
@@ -1035,7 +1035,7 @@ local function RegisterSlashCommands()
         if isDebugEnabled() then
             return true
         end
-        printError(string.format(L["SLASH_DEBUG_REQUIRED"] or "Enable debug mode with /lt debug to use %s", commandName or "this command"))
+        printError(string.format(L["SLASH_DEBUG_REQUIRED"], commandName or "this command"))
         return false
     end
 
@@ -1043,7 +1043,7 @@ local function RegisterSlashCommands()
         {
             key = "show",
             aliases = { "open" },
-            description = L["SLASH_DESC_SHOW"] or "Show main window",
+            description = L["SLASH_DESC_SHOW"],
             usage = { "/lt", "/lt show" },
             handler = function()
                 ensureMainFrame()
@@ -1051,23 +1051,23 @@ local function RegisterSlashCommands()
         },
         {
             key = "hide",
-            description = L["SLASH_DESC_HIDE"] or "Hide main window",
+            description = L["SLASH_DESC_HIDE"],
             usage = { "/lt hide" },
             handler = function()
                 if Loothing.MainFrame then
                     Loothing.MainFrame:Hide()
                 else
-                    printError(L["SLASH_NO_MAINFRAME"] or "Main window not available yet.")
+                    printError(L["SLASH_NO_MAINFRAME"])
                 end
             end,
         },
         {
             key = "toggle",
-            description = L["SLASH_DESC_TOGGLE"] or "Toggle main window",
+            description = L["SLASH_DESC_TOGGLE"],
             usage = { "/lt toggle" },
             handler = function()
                 if not Loothing.MainFrame then
-                    printError(L["SLASH_NO_MAINFRAME"] or "Main window not available yet.")
+                    printError(L["SLASH_NO_MAINFRAME"])
                     return
                 end
                 if Loothing.MainFrame:IsShown() then
@@ -1080,7 +1080,7 @@ local function RegisterSlashCommands()
         {
             key = "config",
             aliases = { "settings" },
-            description = L["SLASH_DESC_CONFIG"] or "Open settings dialog",
+            description = L["SLASH_DESC_CONFIG"],
             usage = { "/lt config", "/lt config council" },
             handler = function(args)
                 openConfig(args ~= "" and args or nil)
@@ -1088,7 +1088,7 @@ local function RegisterSlashCommands()
         },
         {
             key = "history",
-            description = L["SLASH_DESC_HISTORY"] or "Open history tab",
+            description = L["SLASH_DESC_HISTORY"],
             usage = { "/lt history" },
             handler = function()
                 ensureMainFrame("history")
@@ -1096,7 +1096,7 @@ local function RegisterSlashCommands()
         },
         {
             key = "council",
-            description = L["SLASH_DESC_COUNCIL"] or "Open council settings",
+            description = L["SLASH_DESC_COUNCIL"],
             usage = { "/lt council" },
             handler = function()
                 openConfig("council")
@@ -1104,7 +1104,7 @@ local function RegisterSlashCommands()
         },
         {
             key = "ml",
-            description = L["SLASH_DESC_ML"] or "View or assign Master Looter",
+            description = L["SLASH_DESC_ML"],
             usage = { "/lt ml", "/lt ml <name>", "/lt ml clear" },
             handler = function(args)
                 handleMasterLooter(args or "")
@@ -1113,7 +1113,7 @@ local function RegisterSlashCommands()
         {
             key = "start",
             aliases = { "activate", "enable" },
-            description = L["SLASH_DESC_START"] or "Activate loot handling",
+            description = L["SLASH_DESC_START"],
             usage = { "/lt start" },
             handler = function()
                 if not IsInGroup() then
@@ -1136,7 +1136,7 @@ local function RegisterSlashCommands()
         {
             key = "stop",
             aliases = { "deactivate", "disable" },
-            description = L["SLASH_DESC_STOP"] or "Deactivate loot handling",
+            description = L["SLASH_DESC_STOP"],
             usage = { "/lt stop" },
             handler = function()
                 if Loothing.handleLoot then
@@ -1149,7 +1149,7 @@ local function RegisterSlashCommands()
         },
         {
             key = "ignore",
-            description = L["SLASH_DESC_IGNORE"] or "Add/remove item from ignore list",
+            description = L["SLASH_DESC_IGNORE"],
             usage = { "/lt ignore <itemLink|itemID>" },
             handler = function(args)
                 handleIgnore(args)
@@ -1157,11 +1157,11 @@ local function RegisterSlashCommands()
         },
         {
             key = "add",
-            description = L["SLASH_DESC_ADD"] or "Add item to session",
+            description = L["SLASH_DESC_ADD"],
             usage = { "/lt add", "/lt add <itemLink|itemID>" },
             handler = function(args)
                 if not Loothing.Session then
-                    printError(L["ERROR_NO_SESSION"] or "No active session")
+                    printError(L["ERROR_NO_SESSION"])
                     return
                 end
                 local input = args and args ~= "" and args or nil
@@ -1181,7 +1181,7 @@ local function RegisterSlashCommands()
                         elseif retries < 20 then
                             C_Timer.After(0.05, function() tryAdd(input, retries + 1) end)
                         else
-                            printError(L["SLASH_INVALID_ITEM"] or "Invalid item link.")
+                            printError(L["SLASH_INVALID_ITEM"])
                         end
                     end
                     tryAdd(input)
@@ -1197,7 +1197,7 @@ local function RegisterSlashCommands()
         },
         {
             key = "export",
-            description = L["SLASH_DESC_EXPORT"] or "Export current profile settings",
+            description = L["SLASH_DESC_EXPORT"],
             usage = { "/lt export" },
             handler = function()
                 if Loothing.SettingsExport then
@@ -1210,7 +1210,7 @@ local function RegisterSlashCommands()
         {
             key = "profile",
             aliases = { "prof" },
-            description = L["SLASH_DESC_PROFILE"] or "Manage profiles (list, switch, create)",
+            description = L["SLASH_DESC_PROFILE"],
             usage = { "/lt profile", "/lt profile list", "/lt profile <name>" },
             handler = function(args)
                 args = strtrim(args or "")
@@ -1219,7 +1219,7 @@ local function RegisterSlashCommands()
 
                 -- No args or "list": print all profiles
                 if args == "" or args:lower() == "list" then
-                    printLine(L["PROFILE_LIST_HEADER"] or "Profiles:")
+                    printLine(L["PROFILE_LIST_HEADER"])
                     for _, name in ipairs(profiles) do
                         if name == current then
                             print("  |cFF33FF99> " .. name .. "|r")
@@ -1243,7 +1243,7 @@ local function RegisterSlashCommands()
                 if matched then
                     Loothing.Settings:SetProfile(matched)
                     printLine(string.format(
-                        L["PROFILE_SWITCHED"] or "Switched to profile: %s", matched))
+                        L["PROFILE_SWITCHED"], matched))
                 else
                     -- Validate and create new profile
                     local trimmed = strtrim(args)
@@ -1257,7 +1257,7 @@ local function RegisterSlashCommands()
                     end
                     Loothing.Settings:SetProfile(trimmed)
                     printLine(string.format(
-                        L["PROFILE_CREATED"] or "Created and switched to profile: %s", trimmed))
+                        L["PROFILE_CREATED"], trimmed))
                 end
 
                 if Loolib.Config then
@@ -1267,7 +1267,7 @@ local function RegisterSlashCommands()
         },
         {
             key = "sync",
-            description = L["SLASH_DESC_SYNC"] or "Sync settings or history",
+            description = L["SLASH_DESC_SYNC"],
             usage = { "/lt sync settings [guild|player]", "/lt sync history [guild|player] [days]" },
             handler = function(args)
                 handleSync(args or "")
@@ -1275,7 +1275,7 @@ local function RegisterSlashCommands()
         },
         {
             key = "import",
-            description = L["SLASH_DESC_IMPORT"] or "Import loot history or settings",
+            description = L["SLASH_DESC_IMPORT"],
             usage = { "/lt import <csv|tsv data>", "/lt import settings" },
             handler = function(args)
                 local firstWord = (args or ""):match("^(%S+)")
@@ -1292,7 +1292,7 @@ local function RegisterSlashCommands()
         },
         {
             key = "errors",
-            description = L["SLASH_DESC_ERRORS"] or "Show captured errors",
+            description = L["SLASH_DESC_ERRORS"],
             usage = { "/lt errors", "/lt errors clear", "/lt errors count" },
             handler = function(args)
                 if Loothing.ErrorHandler then
@@ -1304,7 +1304,7 @@ local function RegisterSlashCommands()
         },
         {
             key = "log",
-            description = L["SLASH_DESC_LOG"] or "View recent logs",
+            description = L["SLASH_DESC_LOG"],
             usage = { "/lt log", "/lt log clear", "/lt log debug|info|warn|error", "/lt log <count>" },
             handler = function(args)
                 if Loothing.ErrorHandler then
@@ -1316,7 +1316,7 @@ local function RegisterSlashCommands()
         },
         {
             key = "debug",
-            description = L["SLASH_DESC_DEBUG"] or "Toggle debug mode (enables dev commands)",
+            description = L["SLASH_DESC_DEBUG"],
             usage = { "/lt debug", "/lt debug on", "/lt debug off" },
             handler = function(args)
                 local toggle = (args or ""):lower()
@@ -1327,7 +1327,7 @@ local function RegisterSlashCommands()
                 else
                     Loothing.debug = not Loothing.debug
                 end
-                printLine(string.format(L["SLASH_DEBUG_STATE"] or "Loothing debug: %s", Loothing.debug and "ON" or "OFF"))
+                printLine(string.format(L["SLASH_DEBUG_STATE"], Loothing.debug and "ON" or "OFF"))
             end,
         },
         {
@@ -1370,7 +1370,7 @@ local function RegisterSlashCommands()
         {
             key = "test",
             devOnly = true,
-            description = L["SLASH_DESC_TEST"] or "Test mode utilities",
+            description = L["SLASH_DESC_TEST"],
             usage = { "/lt test", "/lt test help" },
             handler = function(args)
                 if not requireDebug("/lt test") then
@@ -1380,14 +1380,14 @@ local function RegisterSlashCommands()
                 if TestMode and TestMode.HandleCommand then
                     TestMode:HandleCommand(args or "")
                 else
-                    printError(L["SLASH_TEST_UNAVAILABLE"] or "Test mode not available.")
+                    printError(L["SLASH_TEST_UNAVAILABLE"])
                 end
             end,
         },
         {
             key = "testmode",
             devOnly = true,
-            description = L["SLASH_DESC_TESTMODE"] or "Control simulator/test mode",
+            description = L["SLASH_DESC_TESTMODE"],
             usage = { "/lt testmode on|off|status", "/lt testmode persist on|off" },
             handler = function(args)
                 if not requireDebug("/lt testmode") then
@@ -1397,18 +1397,18 @@ local function RegisterSlashCommands()
                 if TestMode and TestMode.HandleSlash then
                     TestMode:HandleSlash(args or "")
                 else
-                    printError(L["SLASH_TEST_UNAVAILABLE"] or "Test mode not available.")
+                    printError(L["SLASH_TEST_UNAVAILABLE"])
                 end
             end,
         },
         {
             key = "help",
-            description = L["SLASH_DESC_HELP"] or "Show command help",
+            description = L["SLASH_DESC_HELP"],
             usage = { "/lt help", "/lt help <command>" },
             handler = function(args, resolved, allCommands)
                 local topic = (args or ""):lower()
                 local function listCommands()
-                    printLine(L["SLASH_HELP_HEADER"] or "Loothing commands:")
+                    printLine(L["SLASH_HELP_HEADER"])
                     for _, c in ipairs(allCommands) do
                         if not c.devOnly or isDebugEnabled() then
                             local aliasText = ""
@@ -1419,7 +1419,7 @@ local function RegisterSlashCommands()
                         end
                     end
                     if not isDebugEnabled() then
-                        printLine(L["SLASH_HELP_DEBUG_NOTE"] or "Enable /lt debug to see developer commands.")
+                        printLine(L["SLASH_HELP_DEBUG_NOTE"])
                     end
                 end
 
@@ -1430,11 +1430,11 @@ local function RegisterSlashCommands()
 
                 local lookup = resolved[topic]
                 if not lookup or (lookup.devOnly and not isDebugEnabled()) then
-                    printError(string.format(L["SLASH_HELP_UNKNOWN"] or "Unknown command '%s'. Use /lt help.", topic))
+                    printError(string.format(L["SLASH_HELP_UNKNOWN"], topic))
                     return
                 end
 
-                printLine(string.format(L["SLASH_HELP_DETAIL"] or "Usage for /lt %s:", lookup.key))
+                printLine(string.format(L["SLASH_HELP_DETAIL"], lookup.key))
                 if lookup.usage then
                     for _, line in ipairs(lookup.usage) do
                         printLine("  " .. line)
@@ -1477,7 +1477,7 @@ local function RegisterSlashCommands()
 
         local command = commandByToken[token]
         if not command then
-            printError(string.format(L["SLASH_HELP_UNKNOWN"] or "Unknown command '%s'. Use /lt help.", token))
+            printError(string.format(L["SLASH_HELP_UNKNOWN"], token))
             local helpCmd = commandByToken["help"]
             if helpCmd then
                 helpCmd.handler("", helpCmd, commands)
@@ -1486,7 +1486,7 @@ local function RegisterSlashCommands()
         end
 
         if command.devOnly and not isDebugEnabled() then
-            printError(L["SLASH_DEBUG_REQUIRED"] or "Enable debug mode with /lt debug to use this command.")
+            printError(L["SLASH_DEBUG_REQUIRED"])
             return
         end
 
@@ -1504,6 +1504,31 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
     if event == "ADDON_LOADED" then
         local addonName = ...
         if addonName == ADDON_NAME then
+            -- Detect and apply Brainrot Mode (SavedVariables are now available)
+            local svDB = _G.LoolibDB
+            if type(svDB) == "table" then
+                -- Migrate old locale override to dedicated flag (one-time)
+                if type(svDB._localeOverrides) == "table"
+                   and svDB._localeOverrides[ADDON_NAME] == "brainrot" then
+                    if not svDB._brainrotMode then svDB._brainrotMode = {} end
+                    svDB._brainrotMode[ADDON_NAME] = true
+                    svDB._localeOverrides[ADDON_NAME] = nil
+                    if not next(svDB._localeOverrides) then svDB._localeOverrides = nil end
+                end
+                -- Apply brainrot strings in-place over the real locale table
+                if type(svDB._brainrotMode) == "table"
+                   and svDB._brainrotMode[ADDON_NAME] == true then
+                    Addon.BrainrotMode = true
+                    local baseLocale = ns.Locale
+                    local brainrot = ns.BrainrotStrings
+                    if baseLocale and brainrot then
+                        for key, value in pairs(brainrot) do
+                            rawset(baseLocale, key, value)
+                        end
+                    end
+                end
+            end
+
             -- Initialize all modules (Loolib.Comm handles addon prefix registration)
             InitializeModules()
 
@@ -1565,11 +1590,11 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
 
                 local desc = settingsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
                 desc:SetPoint("TOP", logoTex, "BOTTOM", 0, -8)
-                desc:SetText("Loothing - " .. (L["ADDON_TAGLINE"] or "Loot Council Addon"))
+                desc:SetText("Loothing - " .. (L["ADDON_TAGLINE"]))
 
                 local subdesc = settingsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
                 subdesc:SetPoint("TOP", desc, "BOTTOM", 0, -12)
-                subdesc:SetText(L["BLIZZARD_SETTINGS_DESC"] or "Click below to open the full settings panel")
+                subdesc:SetText(L["BLIZZARD_SETTINGS_DESC"])
 
                 local versionText = settingsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
                 versionText:SetPoint("TOP", subdesc, "BOTTOM", 0, -8)
@@ -1579,7 +1604,7 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
                 local openBtn = CreateFrame("Button", nil, settingsFrame, "UIPanelButtonTemplate")
                 openBtn:SetSize(200, 30)
                 openBtn:SetPoint("TOP", versionText, "BOTTOM", 0, -20)
-                openBtn:SetText(L["OPEN_SETTINGS"] or "Open Loothing Settings")
+                openBtn:SetText(L["OPEN_SETTINGS"])
                 openBtn:SetScript("OnClick", function()
                     if SettingsPanel then
                         SettingsPanel:Close()
@@ -1867,5 +1892,5 @@ function Addon:RestoreFromCache()
         end)
     end
 
-    self:Print(L["RECONNECT_RESTORED"] or "Restored session state from cache.")
+    self:Print(L["RECONNECT_RESTORED"])
 end

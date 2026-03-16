@@ -7,6 +7,7 @@ local _, ns = ...
 local Loothing = ns.Addon
 local Utils = ns.Utils
 local TestMode = ns.TestMode
+local L = Loothing.Locale
 
 local CouncilTableMixin = ns.CouncilTableMixin or {}
 ns.CouncilTableMixin = CouncilTableMixin
@@ -465,7 +466,7 @@ function CouncilTableMixin:ShowCandidateContextMenu(row, candidate)
         if isML and self.currentItem then
             local itemGUID = self.currentItem.guid
 
-            rootDescription:CreateButton(L["AWARD_ITEM"] or "Award Item", function()
+            rootDescription:CreateButton(L["AWARD_ITEM"], function()
                 if Loothing.Session then
                     Loothing.Session:AwardItem(itemGUID, candidate.name)
                     self:TriggerEvent("OnCandidateAwarded", self.currentItem, candidate)
@@ -486,7 +487,7 @@ function CouncilTableMixin:ShowCandidateContextMenu(row, candidate)
             if Loothing.Settings then
                 local reasons = Loothing.Settings:GetAwardReasons()
                 if reasons and #reasons > 0 then
-                    local awardForMenu = rootDescription:CreateButton("Award For...", nop)
+                    local awardForMenu = rootDescription:CreateButton(L["AWARD_FOR"], nop)
                     for _, reason in ipairs(reasons) do
                         local r, g, b = 1, 1, 1
                         if reason.color then
@@ -507,13 +508,13 @@ function CouncilTableMixin:ShowCandidateContextMenu(row, candidate)
         end
 
         -- Whisper
-        rootDescription:CreateButton(L["WHISPER"] or "Whisper", function()
+        rootDescription:CreateButton(L["WHISPER"], function()
             ChatFrame_OpenChat("/w " .. (candidate.name or ""))
         end)
 
         -- View Gear
         if candidate.gear1Link or candidate.gear2Link then
-            rootDescription:CreateButton("View Gear", function()
+            rootDescription:CreateButton(L["VIEW_GEAR"], function()
                 GameTooltip:SetOwner(UIParent, "ANCHOR_CURSOR")
                 if candidate.gear1Link then
                     GameTooltip:SetHyperlink(candidate.gear1Link)
@@ -526,7 +527,7 @@ function CouncilTableMixin:ShowCandidateContextMenu(row, candidate)
 
         -- Change response (ML only)
         if isML then
-            local responseSubmenu = rootDescription:CreateButton(L["CHANGE_RESPONSE"] or "Change Response", nop)
+            local responseSubmenu = rootDescription:CreateButton(L["CHANGE_RESPONSE"], nop)
             for id, info in pairs(Loothing.ResponseInfo) do
                 responseSubmenu:CreateButton(info.name, function()
                     if self.currentItem and self.currentItem.candidateManager then
@@ -542,7 +543,7 @@ function CouncilTableMixin:ShowCandidateContextMenu(row, candidate)
             local enchanters = Loothing.PlayerCache and Loothing.PlayerCache:GetEnchanters() or {}
             if #enchanters > 0 then
                 rootDescription:CreateDivider()
-                local deSubmenu = rootDescription:CreateButton(L["DISENCHANT"] or "Disenchant", nop)
+                local deSubmenu = rootDescription:CreateButton(L["DISENCHANT"], nop)
                 for _, enc in ipairs(enchanters) do
                     local classColor = RAID_CLASS_COLORS and RAID_CLASS_COLORS[enc.class] or { r = 1, g = 1, b = 1 }
                     local coloredName = string.format("|cff%02x%02x%02x%s|r",
@@ -616,7 +617,7 @@ function CouncilTableMixin:OnVoteClick(candidate)
         if not selfVote then
             local playerName = Utils.GetPlayerFullName()
             if Utils.IsSamePlayer(candidate.name, playerName) then
-                Loothing:Print("Self-voting is disabled for this session.")
+                Loothing:Print(Loothing.Locale["SELF_VOTE_DISABLED"])
                 return
             end
         end

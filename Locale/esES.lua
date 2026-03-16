@@ -3,21 +3,16 @@
     Locale - Spanish (Spain/Mexico) localization
 ----------------------------------------------------------------------]]
 
-local _, ns = ...
-local Loothing = ns.Addon
-
-local locale = (Loothing.ForceLocale or GetLocale())
-if locale ~= "esES" and locale ~= "esMX" then
-    return
-end
-
-local base = Loothing.Locale or {}
-local L = setmetatable({}, { __index = base })
+local ADDON_NAME, ns = ...
+local Loolib = LibStub("Loolib")
+local LoolibLocale = Loolib.Locale or Loolib:GetModule("Locale")
+local L = LoolibLocale:NewLocale(ADDON_NAME, "esES")
+       or LoolibLocale:NewLocale(ADDON_NAME, "esMX")
+if not L then return end
 
 -- General
 L["ADDON_NAME"] = "Loothing"
 L["ADDON_LOADED"] = "Loothing v%s cargado. Escribe /loothing o /lt para opciones."
-L["SLASH_HELP"] = "Comandos: /loothing [show|hide|config|history|council]"
 L["SLASH_HELP_HEADER"] = "Comandos de Loothing (usa /lt help <comando>):"
 L["SLASH_HELP_DETAIL"] = "Uso para /lt %s:"
 L["SLASH_HELP_UNKNOWN"] = "Comando desconocido '%s'. Usa /lt help."
@@ -52,13 +47,7 @@ L["SLASH_DESC_START"] = "Activar distribución de botín"
 L["SLASH_DESC_STOP"] = "Desactivar distribución de botín"
 
 -- Session
-L["SESSION"] = "Sesión"
-L["SESSION_START"] = "Iniciar Sesión"
-L["SESSION_END"] = "Finalizar Sesión"
 L["SESSION_ACTIVE"] = "Sesión Activa"
-L["SESSION_INACTIVE"] = "Sin Sesión Activa"
-L["SESSION_STARTED"] = "Sesión de consejo de botín iniciada para %s"
-L["SESSION_ENDED"] = "Sesión de consejo de botín finalizada"
 L["SESSION_CLOSED"] = "Sesión Cerrada"
 L["NO_ITEMS"] = "Sin objetos en la sesión"
 L["MANUAL_SESSION"] = "Sesión Manual"
@@ -76,7 +65,6 @@ L["ML_USAGE_PROMPT_TEXT"] = "Eres el líder de banda. ¿Usar Loothing para la di
 L["ML_USAGE_PROMPT_TEXT_INSTANCE"] = "Eres el líder de banda.\n¿Usar Loothing para %s?"
 L["ML_STOPPED_HANDLING"] = "Se detuvo la gestión de distribución de botín."
 L["RECONNECT_RESTORED"] = "Estado de sesión restaurado desde la caché."
-L["ERROR_NOT_ML"] = "Solo el Maestro Despojador puede hacer esto"
 L["ERROR_NOT_ML_OR_RL"] = "Solo el Maestro Despojador o el Líder de Banda pueden hacer esto"
 L["REFRESH"] = "Actualizar"
 L["ITEM"] = "Objeto"
@@ -87,81 +75,49 @@ L["DATE"] = "Fecha"
 -- Voting
 L["VOTE"] = "Voto"
 L["VOTING"] = "Votación"
-L["VOTE_NOW"] = "Votar Ahora"
 L["START_VOTE"] = "Iniciar Votación"
-L["VOTING_OPEN"] = "Votación abierta para %s"
-L["VOTING_CLOSED"] = "Votación cerrada"
-L["VOTES_RECEIVED"] = "%d/%d votos recibidos"
 L["TIME_REMAINING"] = "%d segundos restantes"
 L["SUBMIT_VOTE"] = "Enviar Voto"
 L["SUBMIT_RESPONSE"] = "Enviar Respuesta"
 L["CHANGE_VOTE"] = "Cambiar Voto"
-L["VOTE_SUBMITTED"] = "Voto enviado"
-L["ALREADY_VOTED"] = "Ya has votado en este objeto"
 
 -- Responses
-L["NEED"] = "Necesidad"
-L["GREED"] = "Codicia"
-L["OFFSPEC"] = "Especialidad Secundaria"
-L["TRANSMOG"] = "Transfiguración"
-L["PASS"] = "Pasar"
 
 -- Response descriptions
-L["NEED_DESC"] = "Mejora de especialidad principal"
-L["GREED_DESC"] = "Interés general"
-L["OFFSPEC_DESC"] = "Especialidad secundaria o alt"
-L["TRANSMOG_DESC"] = "Solo apariencia"
-L["PASS_DESC"] = "No interesado"
 
 -- Awards
 L["AWARD"] = "Otorgar"
-L["AWARD_TO"] = "Otorgar a %s"
 L["AWARD_ITEM"] = "Otorgar Objeto"
 L["CONFIRM_AWARD"] = "¿Otorgar %s a %s?"
 L["ITEM_AWARDED"] = "%s otorgado a %s"
 L["SKIP_ITEM"] = "Saltar Objeto"
-L["ITEM_SKIPPED"] = "Objeto omitido"
 L["DISENCHANT"] = "Desencantar"
 
 -- Results
 L["RESULTS"] = "Resultados"
 L["WINNER"] = "Ganador"
-L["NO_VOTES"] = "Sin votos recibidos"
 L["TIE"] = "Empate"
-L["TIE_BREAKER"] = "Se requiere desempate"
-L["TOTAL_VOTES"] = "Total: %d votos"
-L["LOOTED_BY"] = "Obtenido por: %s"
 
 -- Council
 L["COUNCIL"] = "Consejo"
 L["COUNCIL_MEMBERS"] = "Miembros del Consejo"
 L["ADD_MEMBER"] = "Agregar Miembro"
 L["REMOVE_MEMBER"] = "Eliminar Miembro"
-L["NOT_COUNCIL"] = "No eres miembro del consejo"
 L["IS_COUNCIL"] = "%s es miembro del consejo"
-L["COUNCIL_ONLY"] = "Solo miembros del consejo pueden votar"
 L["AUTO_OFFICERS"] = "Incluir automáticamente oficiales"
 L["AUTO_RAID_LEADER"] = "Incluir automáticamente líder de banda"
 
 -- History
 L["HISTORY"] = "Historial"
-L["LOOT_HISTORY"] = "Historial de Botín"
 L["NO_HISTORY"] = "Sin historial de botín"
 L["CLEAR_HISTORY"] = "Limpiar Historial"
-L["CONFIRM_CLEAR"] = "¿Limpiar todo el historial de botín?"
 L["CONFIRM_CLEAR_HISTORY"] = "¿Limpiar todo el historial de botín?"
 L["EXPORT"] = "Exportar"
 L["EXPORT_HISTORY"] = "Exportar Historial"
 L["EXPORT_EQDKP"] = "EQdkp"
-L["EXPORT_EQDKP_DESC"] = "Exportar a formato XML de EQdkp-Plus"
-L["ENTRIES_COUNT"] = "Total: %d entradas"
-L["ENTRIES_FILTERED"] = "Mostrando: %d de %d entradas"
 L["SEARCH"] = "Buscar..."
 L["SELECT_ALL"] = "Seleccionar Todo"
 L["ALL_WINNERS"] = "Todos los Ganadores"
-L["AWARDED_TO"] = "Otorgado a: %s"
-L["FROM_ENCOUNTER"] = "De: %s"
-L["WITH_VOTES"] = "Votos: %d"
 L["CLEAR"] = "Limpiar"
 
 -- Tabs
@@ -169,7 +125,6 @@ L["TAB_SESSION"] = "Sesión"
 L["TAB_TRADE"] = "Intercambio"
 L["TAB_HISTORY"] = "Historial"
 L["TAB_ROSTER"] = "Lista"
-L["TAB_SETTINGS"] = "Configuración"
 
 -- Roster
 L["ROSTER_SUMMARY"] = "%d Miembros | %d Conectados | %d Instalados | %d Consejo"
@@ -189,23 +144,13 @@ L["ROSTER_REMOVE_OBSERVER"] = "Quitar como Observador"
 -- Settings
 L["SETTINGS"] = "Configuración"
 L["GENERAL"] = "General"
-L["VOTING_SETTINGS"] = "Configuración de Votación"
-L["COUNCIL_SETTINGS"] = "Configuración del Consejo"
-L["UI_SETTINGS"] = "Configuración de Interfaz"
 L["VOTING_MODE"] = "Modo de Votación"
-L["MODE_SIMPLE"] = "Simple (Más votos gana)"
-L["MODE_RANKED"] = "Elección Clasificada"
 L["SIMPLE_VOTING"] = "Simple (Más votos gana)"
 L["RANKED_VOTING"] = "Elección Clasificada"
 L["VOTING_TIMEOUT"] = "Tiempo de Votación"
 L["SECONDS"] = "segundos"
-L["AUTO_START"] = "Iniciar automáticamente sesión al matar jefe"
-L["AUTO_START_SESSION"] = "Iniciar automáticamente sesión al matar jefe"
 L["AUTO_INCLUDE_OFFICERS"] = "Incluir automáticamente oficiales"
 L["AUTO_INCLUDE_LEADER"] = "Incluir automáticamente líder de banda"
-L["SHOW_MINIMAP"] = "Mostrar botón de minimapa"
-L["SHOW_MINIMAP_BUTTON"] = "Mostrar botón de minimapa"
-L["UI_SCALE"] = "Escala de Interfaz"
 L["ADD"] = "Agregar"
 
 -- Auto-Pass
@@ -213,23 +158,12 @@ L["AUTOPASS_SETTINGS"] = "Configuración de Paso Automático"
 L["ENABLE_AUTOPASS"] = "Habilitar Paso Automático"
 L["AUTOPASS_DESC"] = "Pasar automáticamente en objetos que no puedes usar"
 L["AUTOPASS_WEAPONS"] = "Pasar automáticamente armas (estadísticas principales incorrectas)"
-L["AUTOPASS_BOE"] = "Pasar automáticamente objetos ligados al equiparlo"
-L["AUTOPASS_TRANSMOG"] = "Pasar automáticamente apariencias de transfiguración conocidas"
 
 -- Announcement Settings
 L["ANNOUNCEMENT_SETTINGS"] = "Configuración de Anuncios"
 L["ANNOUNCE_AWARDS"] = "Anunciar Otorgamientos"
 L["ANNOUNCE_ITEMS"] = "Anunciar Objetos"
 L["ANNOUNCE_BOSS_KILL"] = "Anunciar Inicio/Fin de Sesión"
-L["AWARD_CHANNEL"] = "Canal de Otorgamiento"
-L["SECONDARY_CHANNEL"] = "Canal Secundario"
-L["AWARD_TEXT"] = "Texto de Otorgamiento"
-L["AWARD_TEXT_DESC"] = "Usa marcadores de posición {item}, {winner}, {reason}"
-L["ITEM_CHANNEL"] = "Canal de Objetos"
-L["ITEM_TEXT"] = "Texto de Anuncio de Objeto"
-L["ITEM_TEXT_DESC"] = "Usa marcador de posición {item}"
-L["SESSION_START_TEXT"] = "Texto de Inicio de Sesión"
-L["SESSION_END_TEXT"] = "Texto de Fin de Sesión"
 L["CHANNEL_RAID"] = "Banda"
 L["CHANNEL_RAID_WARNING"] = "Advertencia de Banda"
 L["CHANNEL_OFFICER"] = "Oficial"
@@ -241,13 +175,8 @@ L["CHANNEL_NONE"] = "Ninguno"
 L["AUTO_AWARD_SETTINGS"] = "Configuración de Otorgamiento Automático"
 L["AUTO_AWARD_ENABLE"] = "Habilitar Otorgamiento Automático"
 L["AUTO_AWARD_DESC"] = "Otorgar automáticamente objetos por debajo del umbral de calidad"
-L["AUTO_AWARD_LOWER"] = "Umbral de Calidad Inferior"
-L["AUTO_AWARD_UPPER"] = "Umbral de Calidad Superior"
 L["AUTO_AWARD_TO"] = "Otorgar a"
-L["AUTO_AWARD_REASON"] = "Motivo de Otorgamiento"
-L["AUTO_AWARD_BOE"] = "Incluir Objetos BoE"
 L["AUTO_AWARD_TO_DESC"] = "Nombre del jugador o 'desencantador'"
-L["AUTO_AWARD_QUALITY_DESC"] = "Los objetos entre los umbrales inferior y superior se otorgarán automáticamente"
 
 -- Ignore Items
 L["IGNORE_ITEMS_SETTINGS"] = "Ignorar Objetos"
@@ -255,15 +184,10 @@ L["ENABLE_IGNORE_LIST"] = "Habilitar Lista de Ignorados"
 L["IGNORE_LIST_DESC"] = "Los objetos en la lista de ignorados no serán rastreados por el consejo de botín"
 L["IGNORED_ITEMS"] = "Objetos Ignorados"
 L["NO_IGNORED_ITEMS"] = "Actualmente no hay objetos ignorados"
-L["IGNORE_ENCHANTING"] = "Ignorar Materiales de Encantamiento"
-L["IGNORE_CRAFTING"] = "Ignorar Reactivos de Creación"
-L["IGNORE_CONSUMABLES"] = "Ignorar Consumibles"
-L["IGNORE_PERMANENT_ENHANCEMENTS"] = "Ignorar Mejoras Permanentes (Gemas)"
 L["ADD_IGNORED_ITEM"] = "Agregar Objeto a Lista de Ignorados"
 L["REMOVE_IGNORED_ITEM"] = "Eliminar de lista de ignorados"
 L["ITEM_IGNORED"] = "%s agregado a la lista de ignorados"
 L["ITEM_UNIGNORED"] = "%s eliminado de la lista de ignorados"
-L["ITEM_ALREADY_IGNORED"] = "%s ya está en la lista de ignorados"
 L["SLASH_IGNORE"] = "/loothing ignore [enlace de objeto] - Agregar/eliminar objeto de la lista de ignorados"
 L["CLEAR_IGNORED_ITEMS"] = "Limpiar Todo"
 L["CONFIRM_CLEAR_IGNORED"] = "¿Limpiar todos los objetos ignorados?"
@@ -272,39 +196,19 @@ L["IGNORE_CATEGORIES"] = "Filtros de Categoría"
 L["IGNORE_ADD_DESC"] = "Pega un enlace de objeto o introduce un ID de objeto."
 
 -- Errors
-L["ERROR_NOT_IN_RAID"] = "Debes estar en una banda"
-L["ERROR_NOT_LEADER"] = "Debes ser el líder de banda o asistente"
-L["ERROR_NO_ITEM"] = "Sin objeto seleccionado"
-L["ERROR_SESSION_ACTIVE"] = "Ya hay una sesión activa"
 L["ERROR_NO_SESSION"] = "Sin sesión activa"
-L["ERROR_VOTING_ACTIVE"] = "La votación ya está en progreso"
-L["ERROR_SYNC_FAILED"] = "No se pudo sincronizar con el líder de banda"
 
 -- Communication
-L["SYNCING"] = "Sincronizando..."
 L["SYNC_COMPLETE"] = "Sincronización completada"
-L["SYNC_REQUEST"] = "Solicitando sincronización del líder de banda"
 
 -- Guild Sync
-L["SYNC_SETTINGS"] = "Configuración de Sincronización"
-L["SYNC_HISTORY"] = "Historial de Sincronización"
-L["SYNC_SETTINGS_GUILD"] = "Sincronizar Configuración a Hermandad"
-L["SYNC_HISTORY_GUILD"] = "Sincronizar Historial a Hermandad"
-L["SYNC_SETTINGS_REQUEST"] = "%s quiere sincronizar su configuración contigo"
-L["SYNC_HISTORY_REQUEST"] = "%s quiere sincronizar su historial (%d días) contigo"
-L["ACCEPT_SYNC"] = "Aceptar Sincronización"
-L["DECLINE_SYNC"] = "Rechazar Sincronización"
-L["SETTINGS_SYNCED"] = "Configuración sincronizada desde %s"
 L["HISTORY_SYNCED"] = "%d entradas de historial sincronizadas desde %s"
 L["SYNC_IN_PROGRESS"] = "Sincronización ya en progreso"
 L["SYNC_TIMEOUT"] = "Sincronización agotada"
-L["SYNC_DAYS"] = "Días de historial"
 
 -- Tooltips
 L["TOOLTIP_ITEM_LEVEL"] = "Nivel de Objeto: %d"
-L["TOOLTIP_LOOTER"] = "Obtenido por: %s"
 L["TOOLTIP_VOTES"] = "Votos: %d"
-L["TOOLTIP_STATUS"] = "Estado: %s"
 
 -- Status
 L["STATUS_PENDING"] = "Pendiente"
@@ -314,20 +218,14 @@ L["STATUS_AWARDED"] = "Otorgado"
 L["STATUS_SKIPPED"] = "Omitido"
 
 -- Response Settings
-L["RESPONSE_SETTINGS"] = "Configuración de Respuestas"
 L["RESET_RESPONSES"] = "Restablecer a Predeterminados"
 
 -- Award Reason Settings
-L["AWARD_REASON_SETTINGS"] = "Configuración de Motivos de Otorgamiento"
-L["ENABLE_AWARD_REASONS"] = "Habilitar Motivos de Otorgamiento"
 L["REQUIRE_AWARD_REASON"] = "Requerir motivo al otorgar"
 L["AWARD_REASONS"] = "Motivos de Otorgamiento"
 L["ADD_REASON"] = "Agregar Motivo"
 L["REASON_NAME"] = "Nombre del Motivo"
-L["SELECT_AWARD_REASON"] = "Seleccionar Motivo de Otorgamiento"
-L["RESET_AWARD_REASONS"] = "Restablecer a Predeterminados"
 L["AWARD_REASON"] = "Motivo de Otorgamiento"
-L["NO_REASON"] = "Sin Motivo"
 
 -- Trade Panel
 L["TRADE_QUEUE"] = "Cola de Intercambio"
@@ -340,11 +238,8 @@ L["AUTO_TRADE"] = "Intercambio Automático"
 L["CLEAR_COMPLETED"] = "Limpiar Completados"
 
 -- Minimap
-L["MINIMAP_LEFT_CLICK"] = "Clic izquierdo para alternar ventana"
-L["MINIMAP_RIGHT_CLICK"] = "Clic derecho para opciones"
 
 -- Voting Options
-L["VOTING_OPTIONS"] = "Opciones de Votación"
 L["SELF_VOTE"] = "Permitir Auto-Voto"
 L["SELF_VOTE_DESC"] = "Permitir que miembros del consejo voten por sí mismos"
 L["MULTI_VOTE"] = "Permitir Multi-Voto"
@@ -354,33 +249,22 @@ L["ANONYMOUS_VOTING_DESC"] = "Ocultar quién votó por quién hasta que se otorg
 L["HIDE_VOTES"] = "Ocultar Recuentos de Votos"
 L["HIDE_VOTES_DESC"] = "No mostrar recuentos de votos hasta que estén todos"
 L["OBSERVE_MODE"] = "Modo Observador"
-L["OBSERVE_MODE_DESC"] = "Ver votación pero no puedes emitir votos"
 L["AUTO_ADD_ROLLS"] = "Agregar Tiradas Automáticamente"
 L["AUTO_ADD_ROLLS_DESC"] = "Agregar automáticamente resultados de /roll a candidatos"
 L["REQUIRE_NOTES"] = "Requerir Notas"
 L["REQUIRE_NOTES_DESC"] = "Los votantes deben agregar una nota con su voto"
-L["NUM_BUTTONS"] = "Número de Botones"
-L["NUM_BUTTONS_DESC"] = "Número de botones de respuesta a mostrar (1-10)"
 
 -- Button Sets
 L["BUTTON_SETS"] = "Conjuntos de Botones"
-L["BUTTON_SET_SETTINGS"] = "Configuración de Conjunto de Botones"
 L["ACTIVE_SET"] = "Conjunto Activo"
-L["SET_NAME"] = "Nombre del Conjunto"
 L["NEW_SET"] = "Nuevo Conjunto"
-L["DELETE_SET"] = "Eliminar Conjunto"
 L["CONFIRM_DELETE_SET"] = "¿Eliminar conjunto de botones '%s'?"
 L["ADD_BUTTON"] = "Agregar Botón"
-L["BUTTON_TEXT"] = "Texto del Botón"
-L["WHISPER_KEY"] = "Clave de Susurro"
-L["WHISPER_KEY_DESC"] = "Los jugadores pueden susurrar esto para responder (ej: !need)"
 L["MAX_BUTTONS"] = "Máximo 10 botones por conjunto"
 L["MIN_BUTTONS"] = "Se requiere al menos 1 botón"
 L["DEFAULT_SET"] = "Predeterminado"
 L["SORT_ORDER"] = "Orden de Clasificación"
 L["BUTTON_COLOR"] = "Color del Botón"
-L["MOVE_UP"] = "Mover Arriba"
-L["MOVE_DOWN"] = "Mover Abajo"
 
 -- Filters
 L["FILTERS"] = "Filtros"
@@ -398,7 +282,6 @@ L["FILTERS_ACTIVE"] = "%d filtro(s) activo(s)"
 -- Generic / Missing strings
 L["YES"] = "Sí"
 L["NO"] = "No"
-L["NO_SELECTION"] = "Sin selección"
 L["TIME_EXPIRED"] = "Tiempo agotado"
 L["END_SESSION"] = "Finalizar Sesión"
 L["END_VOTE"] = "Finalizar Votación"
@@ -415,145 +298,42 @@ L["MINIMAP_TOOLTIP_RIGHT"] = "Clic derecho: Opciones"
 L["RESULTS_TITLE"] = "Resultados"
 L["VOTE_TITLE"] = "Respuesta de Botín"
 L["VOTES"] = "Votos"
-L["VOTING_STATE_PENDING"] = "Pendiente"
-L["VOTING_STATE_VOTING"] = "Votación"
-L["VOTING_STATE_DECIDED"] = "Decidido"
-L["VOTING_STATE_TALLYING"] = "Contabilizando"
-L["VOTING_STATE_REVOTING"] = "Re-Votando"
 L["ITEMS_PENDING"] = "%d objetos pendientes"
 L["ITEMS_VOTING"] = "%d objetos votando"
 L["LINK_IN_CHAT"] = "Enlazar en Chat"
 L["VIEW"] = "Ver"
 
 -- Group Loot
-L["GROUP_LOOT"] = "Botín de Grupo"
-L["ENABLE_AUTO_ROLL"] = "Habilitar Tirada Automática"
-L["ENABLE_AUTO_ROLL_DESC"] = "Tirar automáticamente en botín de grupo (MD tira Necesidad, otros Pasan)"
-L["HIDE_LOOT_FRAMES"] = "Ocultar Marcos de Botín"
-L["HIDE_LOOT_FRAMES_DESC"] = "Ocultar la interfaz de tirada de botín de grupo después de tirar automáticamente"
-L["GROUP_LOOT_QUALITY"] = "Umbral de Calidad"
-L["GROUP_LOOT_QUALITY_DESC"] = "Calidad de objeto mínima para tirada automática"
 
 -- Frame/UI Settings
-L["CONFIG_FRAME_SETTINGS"] = "Configuración de Marco"
-L["CONFIG_FRAME_AUTOOPEN"] = "Abrir Marcos Automáticamente"
-L["CONFIG_FRAME_AUTOOPEN_DESC"] = "Abrir automáticamente marcos cuando hay botín disponible"
-L["CONFIG_FRAME_AUTOCLOSE"] = "Cerrar Marcos Automáticamente"
-L["CONFIG_FRAME_AUTOCLOSE_DESC"] = "Cerrar automáticamente marcos cuando termina la sesión"
-L["CONFIG_FRAME_MINIMIZEINCOMBAT"] = "Minimizar en Combate"
-L["CONFIG_FRAME_MINIMIZEINCOMBAT_DESC"] = "Ocultar marcos durante el combate"
-L["CONFIG_FRAME_SHOWSPECICON"] = "Mostrar Icono de Especialidad"
-L["CONFIG_FRAME_SHOWSPECICON_DESC"] = "Mostrar iconos de especialidad en lugar de iconos de clase"
-L["CONFIG_FRAME_CLOSEWITHESCAPE"] = "Cerrar con Escape"
-L["CONFIG_FRAME_CLOSEWITHESCAPE_DESC"] = "Permitir que la tecla ESC cierre marcos"
-L["CONFIG_FRAME_TIMEOUTFLASH"] = "Parpadeo de Tiempo Agotado"
-L["CONFIG_FRAME_TIMEOUTFLASH_DESC"] = "Parpadear el marco cuando se aproxima el tiempo de votación agotado"
-L["CONFIG_FRAME_BLOCKTRADES"] = "Bloquear Intercambios Durante Votación"
-L["CONFIG_FRAME_BLOCKTRADES_DESC"] = "Prevenir solicitudes de intercambio mientras la votación está activa"
-L["CONFIG_FRAME_CHATFRAME"] = "Marco de Chat de Salida"
-L["CONFIG_FRAME_CHATFRAME_DESC"] = "Qué marco de chat usar para enviar mensajes"
 
 -- Master Looter Settings
 L["CONFIG_ML_SETTINGS"] = "Configuración de Maestro Despojador"
-L["CONFIG_ML_USAGEMODE"] = "Modo de Uso"
-L["CONFIG_ML_USAGEMODE_DESC"] = "Cuándo iniciar automáticamente como Maestro Despojador"
-L["CONFIG_ML_USAGEMODE_NEVER"] = "Nunca"
-L["CONFIG_ML_USAGEMODE_GL"] = "Botín de Grupo"
-L["CONFIG_ML_USAGEMODE_ASKGL"] = "Preguntar en Botín de Grupo"
-L["CONFIG_ML_ONLYINRAIDS"] = "Solo Usar en Bandas"
-L["CONFIG_ML_ONLYINRAIDS_DESC"] = "Desabilitar Maestro Despojador en mazmorras"
-L["CONFIG_ML_ALLOWOUTOFRAID"] = "Permitir Fuera de Banda"
-L["CONFIG_ML_ALLOWOUTOFRAID_DESC"] = "Permitir iniciar sesión cuando no estés en la instancia"
-L["CONFIG_ML_SKIPSESSIONFRAME"] = "Saltar Marco de Sesión"
-L["CONFIG_ML_SKIPSESSIONFRAME_DESC"] = "Iniciar votación automáticamente sin marco de configuración de sesión"
-L["CONFIG_ML_SORTITEMS"] = "Clasificar Objetos Automáticamente"
-L["CONFIG_ML_SORTITEMS_DESC"] = "Clasificar automáticamente objetos por calidad/nivel"
-L["CONFIG_ML_AUTOADDBOES"] = "Agregar BoEs Automáticamente"
-L["CONFIG_ML_AUTOADDBOES_DESC"] = "Incluir objetos Vinculados al Equipo en agregación automática"
-L["CONFIG_ML_AUTOADDPETS"] = "Agregar Mascotas Automáticamente"
-L["CONFIG_ML_AUTOADDPETS_DESC"] = "Incluir mascotas en agregación automática"
-L["CONFIG_ML_PRINTCOMPLETEDTRADES"] = "Imprimir Intercambios Completados"
-L["CONFIG_ML_PRINTCOMPLETEDTRADES_DESC"] = "Imprimir confirmación cuando se completan los intercambios"
-L["CONFIG_ML_REJECTTRADE"] = "Rechazar Intercambios Inválidos"
-L["CONFIG_ML_REJECTTRADE_DESC"] = "Rechazar automáticamente intercambios no de ganadores de otorgamiento"
-L["CONFIG_ML_AWARDLATER"] = "Otorgar Después"
-L["CONFIG_ML_AWARDLATER_DESC"] = "Permitir otorgar objetos a MB para distribución posterior"
 
 -- History Settings
 L["CONFIG_HISTORY_SETTINGS"] = "Configuración de Historial"
 L["CONFIG_HISTORY_ENABLED"] = "Habilitar Historial de Botín"
-L["CONFIG_HISTORY_ENABLED_DESC"] = "Rastrear y guardar historial de botín"
-L["CONFIG_HISTORY_SENDHISTORY"] = "Enviar Historial"
-L["CONFIG_HISTORY_SENDHISTORY_DESC"] = "Compartir historial con miembros del grupo"
-L["CONFIG_HISTORY_SENDTOGUILD"] = "Enviar a Hermandad"
-L["CONFIG_HISTORY_SENDTOGUILD_DESC"] = "Enviar historial a hermandad en lugar de grupo"
-L["CONFIG_HISTORY_SAVEPERSONAL"] = "Guardar Botín Personal"
-L["CONFIG_HISTORY_SAVEPERSONAL_DESC"] = "Incluir botín personal en historial"
-L["CONFIG_HISTORY_DELETEBYPLAYER"] = "Eliminar por Jugador"
-L["CONFIG_HISTORY_DELETEBYPLAYER_DESC"] = "Eliminar todas las entradas de historial para un jugador"
-L["CONFIG_HISTORY_DELETEBYAGE"] = "Eliminar por Edad"
-L["CONFIG_HISTORY_DELETEBYAGE_DESC"] = "Eliminar entradas más antiguas que el período seleccionado"
-L["CONFIG_HISTORY_CLEARALL"] = "Limpiar Todo el Historial"
 L["CONFIG_HISTORY_CLEARALL_CONFIRM"] = "¿Estás seguro de que deseas eliminar TODAS las entradas de historial? ¡Esto no se puede deshacer!"
-L["CONFIG_HISTORY_DELETED"] = "Eliminadas %d entradas de historial"
 
 -- Enhanced Announcements
-L["CONFIG_ANN_CONSIDERATIONS"] = "Anunciar Consideraciones"
-L["CONFIG_ANN_CONSIDERATIONS_DESC"] = "Anunciar cuando el MD está considerando un objeto"
-L["CONFIG_ANN_CONSIDERATIONS_CHANNEL"] = "Canal de Consideraciones"
-L["CONFIG_ANN_CONSIDERATIONS_TEXT"] = "Mensaje de Consideraciones"
-L["CONFIG_ANN_CONSIDERATIONS_TEXT_DESC"] = "Etiquetas: {ml}, {item}, {ilvl}, {type}"
-L["CONFIG_ANN_LINE_ENABLED"] = "Habilitar Línea %d"
-L["CONFIG_ANN_LINE_CHANNEL"] = "Canal de Línea %d"
-L["CONFIG_ANN_LINE_TEXT"] = "Mensaje de Línea %d"
-L["CONFIG_ANN_TOKENS"] = "Etiquetas disponibles: {item}, {winner}, {reason}, {notes}, {ilvl}, {type}, {oldItem}, {ml}, {session}, {votes}"
-L["CONFIG_ANN_AWARD_LINES"] = "Anuncios de Otorgamiento"
-L["CONFIG_ANN_ITEM_LINES"] = "Anuncios de Objeto"
-L["CONFIG_ANN_SESSION_START_CHANNEL"] = "Canal de Inicio de Sesión"
-L["CONFIG_ANN_SESSION_END_CHANNEL"] = "Canal de Fin de Sesión"
 
 -- Enhanced Award Reasons
-L["CONFIG_REASON_NUMREASONS"] = "Número de Motivos"
-L["CONFIG_REASON_NUMREASONS_DESC"] = "Cuántos motivos de otorgamiento mostrar (1-20)"
 L["CONFIG_REASON_LOG"] = "Registrar en Historial"
-L["CONFIG_REASON_LOG_DESC"] = "Incluir otorgamientos con este motivo en el historial"
 L["CONFIG_REASON_DISENCHANT"] = "Tratar como Desencantamiento"
-L["CONFIG_REASON_DISENCHANT_DESC"] = "Marcar este motivo como desencantamiento para estadísticas"
-L["CONFIG_REASON_MOVEUP"] = "Mover Arriba"
-L["CONFIG_REASON_MOVEDOWN"] = "Mover Abajo"
-L["CONFIG_REASON_RESET"] = "Restablecer a Predeterminados"
 L["CONFIG_REASON_RESET_CONFIRM"] = "¿Restablecer todos los motivos de otorgamiento a predeterminados?"
 
 -- Council Management
-L["CONFIG_COUNCIL_ADDBYRANK"] = "Agregar por Rango de Hermandad"
-L["CONFIG_COUNCIL_ADDBYRANK_DESC"] = "Agregar todos los miembros de hermandad con este rango"
-L["CONFIG_COUNCIL_ADDFROMGROUP"] = "Agregar desde Grupo"
-L["CONFIG_COUNCIL_ADDFROMGROUP_DESC"] = "Agregar miembros del grupo seleccionados al consejo"
-L["CONFIG_COUNCIL_REMOVEALL"] = "Eliminar Todos los Miembros"
-L["CONFIG_COUNCIL_REMOVEALL_DESC"] = "Limpiar la lista completa del consejo"
 L["CONFIG_COUNCIL_REMOVEALL_CONFIRM"] = "¿Eliminar todos los miembros del consejo?"
-L["CONFIG_COUNCIL_MEMBERS_ADDED"] = "Agregados %d miembros del consejo"
-L["CONFIG_COUNCIL_MEMBERS_REMOVED"] = "Eliminados %d miembros del consejo"
 
 -- Auto-Pass Enhancements
 L["CONFIG_AUTOPASS_TRINKETS"] = "Pasar Automáticamente Joyas"
-L["CONFIG_AUTOPASS_TRINKETS_DESC"] = "Pasar automáticamente en caídas de joyas"
-L["CONFIG_AUTOPASS_TRANSMOGSOURCE"] = "Pasar Automáticamente Fuente de Transfiguración"
-L["CONFIG_AUTOPASS_TRANSMOGSOURCE_DESC"] = "Pasar en objetos que puedes aprender para transfiguración"
 L["CONFIG_AUTOPASS_SILENT"] = "Paso Automático Silencioso"
-L["CONFIG_AUTOPASS_SILENT_DESC"] = "No imprimir mensajes cuando se pasa automáticamente"
 
 -- Voting Enhancements
 L["CONFIG_VOTING_MLSEESVOTES"] = "MD Ve Votos"
 L["CONFIG_VOTING_MLSEESVOTES_DESC"] = "El Maestro Despojador puede ver votos incluso cuando es anónimo"
 
 -- General Enhancements
-L["CONFIG_GENERAL_APPENDREALM"] = "Agregar Nombres de Reino"
-L["CONFIG_GENERAL_APPENDREALM_DESC"] = "Mostrar nombres de reino para jugadores de entre reinos"
-L["CONFIG_GENERAL_PRINTRESPONSES"] = "Imprimir Respuestas"
-L["CONFIG_GENERAL_PRINTRESPONSES_DESC"] = "Imprimir respuestas al chat cuando se reciben"
-L["CONFIG_GENERAL_AUTOLOOTGUILDONLY"] = "Auto Botín Solo Hermandad"
-L["CONFIG_GENERAL_AUTOLOOTGUILDONLY_DESC"] = "Solo habilitar auto-botín en grupos de hermandad"
 
 -- Locale Override
 L["CONFIG_LOCALE_OVERRIDE"] = "Anular idioma"
@@ -591,59 +371,19 @@ L["VOTING_TIMEOUT_DURATION"] = "Duración del tiempo límite"
 -- ============================================================================
 
 -- RollFrame UI
-L["ROLL_FRAME_TITLE"] = "Tirada de Botín"
-L["ROLL_YOUR_RESPONSE"] = "Tu Respuesta"
-L["ROLL_SELECT_RESPONSE"] = "Selecciona tu respuesta:"
-L["ROLL_YOUR_CURRENT_GEAR"] = "Tu Equipo Actual:"
-L["ROLL_UPGRADE_VALUE"] = "Mejora: %+d ilvl"
-L["ROLL_DOWNGRADE_VALUE"] = "Degradación: %d ilvl"
-L["ROLL_NO_CHANGE"] = "Sin cambios"
-L["ROLL_NOTE_LABEL"] = "Nota (opcional):"
-L["ROLL_NOTE_PLACEHOLDER"] = "¿Por qué quieres este objeto?"
-L["ROLL_AUTO_ROLL"] = "Tirada automática"
-L["ROLL_NOW"] = "Tirar Ahora"
 L["ROLL_YOUR_ROLL"] = "Tu Tirada:"
-L["ROLL_SUBMIT"] = "Enviar Respuesta"
-L["ROLL_TIME_REMAINING"] = "Tiempo: %ds"
-L["ROLL_TIME_EXPIRED"] = "Tiempo agotado"
-L["ROLL_RESPONSE_SUBMITTED"] = "Respuesta enviada"
-L["ROLL_NOTE_REQUIRED"] = "Se requiere una nota"
-L["ROLL_SELECT_REQUIRED"] = "Por favor, selecciona una respuesta"
-L["ROLL_REOPEN"] = "Reabrir Marco de Tirada"
 
 -- RollFrame Settings
-L["ROLL_FRAME_SETTINGS"] = "Marco de Tirada"
-L["ROLL_FRAME_DESC"] = "Configuración para la ventana emergente que aparece cuando comienza la votación en un objeto."
-L["ROLL_AUTO_SHOW_ROLL_FRAME"] = "Mostrar Automáticamente Marco de Tirada"
-L["ROLL_AUTO_SHOW_ROLL_FRAME_DESC"] = "Mostrar automáticamente el marco de tirada cuando la votación comienza en un objeto"
-L["ROLL_AUTO_ROLL_ON_SUBMIT"] = "Tirada Automática al Enviar"
-L["ROLL_AUTO_ROLL_ON_SUBMIT_DESC"] = "Tirar automáticamente /roll al enviar tu respuesta"
-L["ROLL_REQUIRE_NOTE"] = "Requerir Nota"
-L["ROLL_REQUIRE_NOTE_DESC"] = "Requerir una nota antes de enviar la respuesta"
-L["ROLL_SHOW_GEAR_COMPARISON"] = "Mostrar Comparación de Equipo"
-L["ROLL_SHOW_GEAR_COMPARISON_DESC"] = "Mostrar tu equipo equipado actualmente para comparación"
-L["ROLL_RANGE"] = "Rango de Tirada"
-L["ROLL_MIN"] = "Mínimo"
-L["ROLL_MAX"] = "Máximo"
 
 -- CouncilTable UI
-L["COUNCIL_TABLE_TITLE"] = "Consejo de Botín - Candidatos"
 L["COUNCIL_NO_CANDIDATES"] = "Aún no hay candidatos que hayan respondido"
-L["COUNCIL_SELECTED"] = "Seleccionado: %s"
-L["COUNCIL_NONE_SELECTED"] = "Sin candidato seleccionado"
 L["COUNCIL_AWARD"] = "Otorgar"
 L["COUNCIL_REVOTE"] = "Re-Votar"
 L["COUNCIL_SKIP"] = "Saltar"
-L["COUNCIL_CONFIRM_AWARD"] = "¿Otorgar %s a %s?"
-L["COUNCIL_CONFIRM_SKIP"] = "¿Saltar este objeto?"
 L["COUNCIL_CONFIRM_REVOTE"] = "¿Limpiar todos los votos y reiniciar la votación?"
 
 -- CouncilTable Settings
-L["COUNCIL_TABLE_SETTINGS"] = "Tabla de Consejo"
-L["COUNCIL_TABLE_DESC"] = "Configurar qué columnas son visibles en la tabla de candidatos del consejo."
-L["COUNCIL_VISIBLE_COLUMNS"] = "Columnas Visibles"
 L["COUNCIL_COLUMN_PLAYER"] = "Nombre del Jugador"
-L["COUNCIL_COLUMN_CLASS"] = "Clase"
 L["COUNCIL_COLUMN_RESPONSE"] = "Respuesta"
 L["COUNCIL_COLUMN_ROLL"] = "Tirada"
 L["COUNCIL_COLUMN_NOTE"] = "Nota"
@@ -651,8 +391,6 @@ L["COUNCIL_COLUMN_ILVL"] = "Nivel de Objeto"
 L["COUNCIL_COLUMN_ILVL_DIFF"] = "Mejora (+/-)"
 L["COUNCIL_COLUMN_GEAR1"] = "Ranura de Equipo 1"
 L["COUNCIL_COLUMN_GEAR2"] = "Ranura de Equipo 2"
-L["COUNCIL_COLUMN_ITEMS_WON"] = "Objetos Ganados"
-L["COUNCIL_COLUMN_VOTES"] = "Votos del Consejo"
 
 -- Winner Determination Settings
 L["WINNER_DETERMINATION"] = "Determinación del Ganador"
@@ -673,85 +411,34 @@ L["WINNER_REQUIRE_CONFIRMATION"] = "Requerir Confirmación"
 L["WINNER_REQUIRE_CONFIRMATION_DESC"] = "Mostrar diálogo de confirmación antes de otorgar objetos"
 
 -- Communication messages
-L["ROLL_RESPONSE_RECEIVED"] = "%s ha enviado su respuesta"
-L["ROLL_RESPONSE_ACK"] = "El Maestro Despojador ha recibido tu respuesta"
 
 -- Council Management (Guild/Group based)
-L["CONFIG_COUNCIL_GUILD_HEADER"] = "Agregar por Rango de Hermandad"
-L["CONFIG_COUNCIL_GUILD_RANK"] = "Rango de Hermandad"
-L["CONFIG_COUNCIL_GUILD_RANK_DESC"] = "Selecciona un rango de hermandad para agregar a todos los miembros de ese rango"
-L["CONFIG_COUNCIL_GROUP_HEADER"] = "Agregar desde Grupo Actual"
-L["CONFIG_COUNCIL_GROUP_MEMBERS"] = "Miembros del Grupo"
-L["CONFIG_COUNCIL_GROUP_MEMBERS_DESC"] = "Selecciona miembros del grupo para agregar al consejo"
-L["CONFIG_COUNCIL_ADD_ALL_GROUP"] = "Agregar Todos los Miembros del Grupo"
-L["CONFIG_COUNCIL_ADD_ALL_GROUP_DESC"] = "Agregar todos los miembros del grupo actual al consejo"
 
 -- Announcements - Considerations
 L["CONFIG_CONSIDERATIONS"] = "Consideraciones"
 L["CONFIG_CONSIDERATIONS_CHANNEL"] = "Canal"
-L["CONFIG_CONSIDERATIONS_CHANNEL_DESC"] = "Canal para anunciar consideraciones"
 L["CONFIG_CONSIDERATIONS_TEXT"] = "Plantilla de Mensaje"
-L["CONFIG_CONSIDERATIONS_TEXT_DESC"] = "Plantilla para anuncios de consideración. Etiquetas: {ml}, {item}, {ilvl}"
 
 -- Announcements - Line Configuration
 L["CONFIG_LINE"] = "Línea"
 L["CONFIG_ENABLED"] = "Habilitado"
 L["CONFIG_CHANNEL"] = "Canal"
-L["CONFIG_TEXT"] = "Texto"
-L["CONFIG_AWARD_LINES_DESC"] = "Configurar hasta 5 líneas de anuncio. Etiquetas: {item}, {winner}, {reason}, {notes}, {ilvl}, {type}, {oldItem}, {ml}, {session}, {votes}"
-L["CONFIG_ITEM_LINES_DESC"] = "Configurar hasta 5 líneas de anuncio. Etiquetas: {item}, {ilvl}, {type}, {slot}, {ml}, {session}"
 
 -- Session Announcements
-L["CONFIG_SESSION_START_CHANNEL"] = "Canal de Inicio"
-L["CONFIG_SESSION_START_CHANNEL_DESC"] = "Canal para anuncios de inicio de sesión"
-L["CONFIG_SESSION_END_CHANNEL"] = "Canal de Fin"
-L["CONFIG_SESSION_END_CHANNEL_DESC"] = "Canal para anuncios de fin de sesión"
 
 -- Award Reasons
-L["CONFIG_NUM_REASONS"] = "Número de Motivos"
 L["CONFIG_NUM_REASONS_DESC"] = "Número de motivos de otorgamiento activos (1-20)"
 L["CONFIG_AWARD_REASONS_DESC"] = "Configurar motivos de otorgamiento. Cada motivo puede alternarse para registro y marcarse como desencantamiento."
 L["CONFIG_RESET_REASONS"] = "Restablecer a Predeterminados"
-L["CONFIG_RESET_REASONS_DESC"] = "Restablecer todos los motivos de otorgamiento a valores predeterminados"
 
 -- Frame Settings (using OptionsTable naming convention)
 L["CONFIG_FRAME_MINIMIZE_COMBAT"] = "Minimizar en Combate"
-L["CONFIG_FRAME_MINIMIZE_COMBAT_DESC"] = "Ocultar marcos durante el combate"
-L["CONFIG_FRAME_SPEC_ICON"] = "Mostrar Iconos de Especialidad"
-L["CONFIG_FRAME_SPEC_ICON_DESC"] = "Mostrar iconos de especialidad en lugar de iconos de clase"
-L["CONFIG_FRAME_CLOSE_ESC"] = "Cerrar con Escape"
-L["CONFIG_FRAME_CLOSE_ESC_DESC"] = "Permitir que la tecla ESC cierre marcos"
 L["CONFIG_FRAME_TIMEOUT_FLASH"] = "Parpadear al Tiempo Agotado"
-L["CONFIG_FRAME_TIMEOUT_FLASH_DESC"] = "Parpadear el marco cuando la votación está a punto de agotarse"
 L["CONFIG_FRAME_BLOCK_TRADES"] = "Bloquear Intercambios Durante Votación"
-L["CONFIG_FRAME_BLOCK_TRADES_DESC"] = "Prevenir intercambios mientras una sesión de votación está activa"
-L["CONFIG_FRAME_CHAT_FRAME"] = "Marco de Chat de Salida"
-L["CONFIG_FRAME_CHAT_FRAME_DESC"] = "Selecciona qué marco de chat usar para los mensajes de salida"
 
 -- History Settings
-L["CONFIG_HISTORY_ENABLED"] = "Habilitar Historial"
-L["CONFIG_HISTORY_ENABLED_DESC"] = "Registrar otorgamientos de botín en el historial"
 L["CONFIG_HISTORY_SEND"] = "Enviar Historial"
-L["CONFIG_HISTORY_SEND_DESC"] = "Enviar datos de historial a miembros del grupo"
-L["CONFIG_HISTORY_GUILD"] = "Enviar a Hermandad"
-L["CONFIG_HISTORY_GUILD_DESC"] = "Enviar historial a hermandad en lugar de grupo"
-L["CONFIG_HISTORY_PERSONAL"] = "Guardar Botín Personal"
-L["CONFIG_HISTORY_PERSONAL_DESC"] = "Incluir botín personal en el historial"
-L["CONFIG_HISTORY_DELETE_HEADER"] = "Eliminar Historial"
-L["CONFIG_HISTORY_DELETE_PLAYER"] = "Eliminar por Jugador"
-L["CONFIG_HISTORY_DELETE_PLAYER_DESC"] = "Selecciona un jugador para eliminar todas sus entradas de historial"
-L["CONFIG_HISTORY_DELETE_AGE"] = "Eliminar por Edad"
-L["CONFIG_HISTORY_DELETE_AGE_DESC"] = "Eliminar entradas más antiguas que el período seleccionado"
 L["CONFIG_HISTORY_CLEAR_ALL"] = "Limpiar Todo"
-L["CONFIG_HISTORY_CLEAR_ALL_DESC"] = "Eliminar todas las entradas de historial"
-L["CONFIG_HISTORY_7_DAYS"] = "7 Días"
-L["CONFIG_HISTORY_14_DAYS"] = "14 Días"
-L["CONFIG_HISTORY_30_DAYS"] = "30 Días"
-L["CONFIG_HISTORY_60_DAYS"] = "60 Días"
-L["CONFIG_HISTORY_90_DAYS"] = "90 Días"
-L["CONFIG_HISTORY_120_DAYS"] = "120 Días"
-L["CONFIG_HISTORY_180_DAYS"] = "180 Días"
-L["CONFIG_HISTORY_365_DAYS"] = "365 Días"
 L["CONFIG_HISTORY_AUTO_EXPORT_WEB"] = "Mostrar exportación web automáticamente"
 L["CONFIG_HISTORY_AUTO_EXPORT_WEB_DESC"] = "Al terminar una sesión, abrir automáticamente el diálogo de exportación con la exportación web lista para copiar"
 
@@ -762,7 +449,6 @@ L["WHISPER_NO_VOTING_ITEMS"] = "Loothing: No hay objetos abiertos para votación
 L["WHISPER_UNKNOWN_COMMAND"] = "Loothing: Comando desconocido '%s'. Susurra !help para opciones"
 L["WHISPER_HELP_HEADER"] = "Loothing: Comandos por susurro:"
 L["WHISPER_HELP_LINE"] = "  %s - %s"
-L["WHISPER_ALREADY_RESPONDED"] = "Loothing: Ya respondiste a %s"
 L["WHISPER_ITEM_SPECIFIED"] = "Loothing: Respuesta '%s' recibida para %s (#%d)"
 L["WHISPER_INVALID_ITEM_NUM"] = "Loothing: Número de objeto inválido %d (la sesión tiene %d objetos)"
 
@@ -795,14 +481,12 @@ L["SLASH_DESC_LOG"] = "Ver registros recientes"
 
 -- Session Panel
 L["ADD_ITEM"] = "Agregar Objeto"
-L["ADD_ITEM_PROMPT"] = "Introduce un enlace de objeto o arrastra un objeto:"
 L["ADD_ITEM_TITLE"] = "Agregar Objeto a la Sesión"
 L["ENTER_ITEM"] = "Introducir Objeto"
 L["RECENT_DROPS"] = "Botín Reciente"
 L["FROM_BAGS"] = "Desde Bolsas"
 L["ENTER_ITEM_HINT"] = "Pega un enlace de objeto, ID de objeto, o arrastra un objeto aquí"
 L["DRAG_ITEM_HERE"] = "Suelta el objeto aquí"
-L["ADD_SELECTED"] = "Agregar Seleccionados"
 L["NO_RECENT_DROPS"] = "No se encontraron objetos intercambiables recientes"
 L["NO_BAG_ITEMS"] = "No hay objetos elegibles en las bolsas"
 L["EQUIPMENT_ONLY"] = "Solo Equipamiento"
@@ -810,12 +494,9 @@ L["SLASH_DESC_ADD"] = "Agregar objeto a la sesión"
 L["AWARD_LATER_ALL"] = "Otorgar Después (Todos)"
 
 -- Session Trigger Modes (legacy -- kept for backward compat)
-L["SESSION_TRIGGER_MODE"] = "Modo de Activación de Sesión"
-L["SESSION_TRIGGER_MODE_DESC"] = "Cómo se inician las sesiones de botín tras la muerte de un jefe"
 L["TRIGGER_MANUAL"] = "Manual (usa /loothing start)"
 L["TRIGGER_AUTO"] = "Automático (iniciar inmediatamente)"
 L["TRIGGER_PROMPT"] = "Preguntar (consultar antes de iniciar)"
-L["TRIGGER_AFTER_ROLLS"] = "Tras Tiradas (esperar a que el MD reciba el botín)"
 
 -- Session Trigger Policy (split model)
 L["SESSION_TRIGGER_HEADER"] = "Activación de Sesión"
@@ -836,73 +517,49 @@ L["TRIGGER_SCOPE_OPEN_WORLD_DESC"] = "Activar en encuentros de mundo abierto (ej
 L["CONFIG_AUTOPASS_BOE"] = "Paso Automático en Objetos BoE"
 L["CONFIG_AUTOPASS_BOE_DESC"] = "Pasar automáticamente en objetos Vinculados al Equipo"
 L["CONFIG_AUTOPASS_TRANSMOG"] = "Paso Automático en Transfiguración"
-L["CONFIG_AUTOPASS_TRANSMOG_DESC"] = "Pasar automáticamente en objetos ya recolectados para transfiguración"
 L["CONFIG_AUTOPASS_TRANSMOG_SOURCE"] = "Saltar Apariencias Conocidas"
-L["CONFIG_AUTOPASS_TRANSMOG_SOURCE_DESC"] = "Pasar automáticamente en fuentes de transfiguración ya aprendidas"
 
 -- Auto Award Options
 L["CONFIG_AUTO_AWARD_LOWER_THRESHOLD"] = "Umbral de Calidad Inferior"
-L["CONFIG_AUTO_AWARD_LOWER_THRESHOLD_DESC"] = "Calidad mínima para otorgamiento automático"
 L["CONFIG_AUTO_AWARD_UPPER_THRESHOLD"] = "Umbral de Calidad Superior"
-L["CONFIG_AUTO_AWARD_UPPER_THRESHOLD_DESC"] = "Calidad máxima para otorgamiento automático"
 L["CONFIG_AUTO_AWARD_REASON"] = "Motivo de Otorgamiento"
-L["CONFIG_AUTO_AWARD_REASON_DESC"] = "Motivo mostrado en el historial para otorgamientos automáticos"
 L["CONFIG_AUTO_AWARD_INCLUDE_BOE"] = "Incluir Objetos BoE"
-L["CONFIG_AUTO_AWARD_INCLUDE_BOE_DESC"] = "Incluir objetos Vinculados al Equipo en otorgamientos automáticos"
 
 -- Frame Behavior Options
 L["CONFIG_FRAME_BEHAVIOR"] = "Comportamiento del Marco"
 L["CONFIG_FRAME_AUTO_OPEN"] = "Abrir Marcos Automáticamente"
-L["CONFIG_FRAME_AUTO_OPEN_DESC"] = "Mostrar marcos automáticamente cuando hay botín disponible"
 L["CONFIG_FRAME_AUTO_CLOSE"] = "Cerrar Marcos Automáticamente"
-L["CONFIG_FRAME_AUTO_CLOSE_DESC"] = "Cerrar marcos automáticamente cuando termina la sesión"
 L["CONFIG_FRAME_SHOW_SPEC_ICON"] = "Mostrar Iconos de Especialidad"
-L["CONFIG_FRAME_SHOW_SPEC_ICON_DESC"] = "Mostrar iconos de especialidad en lugar de iconos de clase"
 L["CONFIG_FRAME_CLOSE_ESCAPE"] = "Cerrar con Escape"
-L["CONFIG_FRAME_CLOSE_ESCAPE_DESC"] = "Permitir que la tecla Escape cierre los marcos de Loothing"
 L["CONFIG_FRAME_CHAT_OUTPUT"] = "Marco de Chat de Salida"
-L["CONFIG_FRAME_CHAT_OUTPUT_DESC"] = "Qué marco de chat usar para los mensajes de Loothing"
 
 -- ML Usage Options
 L["CONFIG_ML_USAGE_MODE"] = "Modo de Uso"
-L["CONFIG_ML_USAGE_MODE_DESC"] = "Cuándo activar Loothing como maestro de botín"
 L["CONFIG_ML_USAGE_NEVER"] = "Nunca"
 L["CONFIG_ML_USAGE_GL"] = "Botín de Grupo"
 L["CONFIG_ML_USAGE_ASK_GL"] = "Preguntar en Botín de Grupo"
 L["CONFIG_ML_RAIDS_ONLY"] = "Solo en Bandas"
-L["CONFIG_ML_RAIDS_ONLY_DESC"] = "Solo activar en instancias de banda"
 L["CONFIG_ML_ALLOW_OUTSIDE"] = "Permitir Fuera de Bandas"
-L["CONFIG_ML_ALLOW_OUTSIDE_DESC"] = "Permitir gestión de botín fuera de instancias de banda"
 L["CONFIG_ML_SKIP_SESSION"] = "Saltar Marco de Sesión"
-L["CONFIG_ML_SKIP_SESSION_DESC"] = "Iniciar sesiones inmediatamente sin el marco de configuración de sesión"
 L["CONFIG_ML_SORT_ITEMS"] = "Clasificar Objetos"
-L["CONFIG_ML_SORT_ITEMS_DESC"] = "Clasificar automáticamente objetos por tipo y nivel de objeto"
 L["CONFIG_ML_AUTO_ADD_BOES"] = "Agregar BoEs Automáticamente"
-L["CONFIG_ML_AUTO_ADD_BOES_DESC"] = "Agregar automáticamente objetos Vinculados al Equipo a las sesiones"
 L["CONFIG_ML_PRINT_TRADES"] = "Imprimir Intercambios Completados"
-L["CONFIG_ML_PRINT_TRADES_DESC"] = "Imprimir un mensaje cuando se completa un intercambio"
 L["CONFIG_ML_REJECT_TRADE"] = "Rechazar Intercambios Inválidos"
-L["CONFIG_ML_REJECT_TRADE_DESC"] = "Rechazar automáticamente intercambios que no son parte de una sesión"
 L["CONFIG_ML_AWARD_LATER"] = "Otorgar Después"
-L["CONFIG_ML_AWARD_LATER_DESC"] = "Permitir que el MD guarde objetos y los otorgue después"
 
 -- History Options
 L["CONFIG_HISTORY_SEND_GUILD"] = "Enviar a Hermandad"
-L["CONFIG_HISTORY_SEND_GUILD_DESC"] = "Transmitir historial al canal de hermandad"
 L["CONFIG_HISTORY_SAVE_PL"] = "Guardar Botín Personal"
-L["CONFIG_HISTORY_SAVE_PL_DESC"] = "Registrar botín personal en el historial"
 
 -- Ignore Item Options
 L["CONFIG_IGNORE_ENCHANTING_MATS"] = "Ignorar Materiales de Encantamiento"
 L["CONFIG_IGNORE_CRAFTING_REAGENTS"] = "Ignorar Reactivos de Creación"
 L["CONFIG_IGNORE_CONSUMABLES"] = "Ignorar Consumibles"
 L["CONFIG_IGNORE_PERMANENT_ENHANCEMENTS"] = "Ignorar Mejoras Permanentes"
-L["CONFIG_IGNORE_PERMANENT_ENHANCEMENTS_DESC"] = "Gemas, encantamientos y otras mejoras permanentes"
 
 -- Announcement Options
 L["CONFIG_ANNOUNCEMENT_TOKENS_DESC"] = "Etiquetas disponibles: {item}, {winner}, {reason}, {notes}, {ilvl}, {type}, {oldItem}, {ml}, {session}, {votes}"
 L["CONFIG_ANNOUNCE_CONSIDERATIONS"] = "Anunciar Consideraciones"
-L["CONFIG_ANNOUNCE_CONSIDERATIONS_DESC"] = "Anunciar cuando un objeto está siendo considerado para distribución"
 L["CONFIG_ITEM_ANNOUNCEMENTS"] = "Anuncios de Objeto"
 L["CONFIG_SESSION_ANNOUNCEMENTS"] = "Anuncios de Sesión"
 L["CONFIG_SESSION_START"] = "Inicio de Sesión"
@@ -923,11 +580,9 @@ L["CONFIG_GUILD_RANK_DESC"] = "Incluir automáticamente a miembros de hermandad 
 L["CONFIG_MIN_RANK"] = "Rango Mínimo de Hermandad"
 L["CONFIG_MIN_RANK_DESC"] = "Los miembros de hermandad con este rango o superior se incluirán automáticamente como consejeros. 0 = desactivado, 1 = Líder de Hermandad, 2 = Oficiales, etc."
 L["CONFIG_COUNCIL_REMOVE_ALL"] = "Eliminar Todos los Miembros"
-L["CONFIG_COUNCIL_REMOVE_ALL_DESC"] = "Eliminar todos los miembros del consejo de la lista"
 
 -- Council Table UI
 L["CHANGE_RESPONSE"] = "Cambiar Respuesta"
-L["YOUR_RANKING"] = "Tu Clasificación"
 
 -- Sync Panel UI
 L["SYNC_DATA"] = "Sincronizar Datos"
@@ -947,14 +602,7 @@ L["FILTER_BY_WINNER"] = "Filtrar por %s"
 L["DELETE_ENTRY"] = "Eliminar Entrada"
 
 -- Observer System
-L["OBSERVERS"] = "Observadores"
 L["OBSERVER"] = "Observador"
-L["OBSERVER_LIST"] = "Lista de Observadores"
-L["ADD_OBSERVER"] = "Agregar Observador"
-L["REMOVE_OBSERVER"] = "Eliminar Observador"
-L["IS_OBSERVER"] = "%s es ahora un observador"
-L["REMOVED_OBSERVER"] = "%s eliminado de los observadores"
-L["NO_OBSERVERS"] = "No hay observadores agregados"
 
 -- ML Observer
 L["CONFIG_ML_OBSERVER"] = "Modo Observador del MD"
@@ -974,8 +622,6 @@ L["OBSERVER_SEE_RESPONSES"] = "Ver Respuestas"
 L["OBSERVER_SEE_RESPONSES_DESC"] = "Los observadores pueden ver qué respuesta seleccionó cada candidato"
 L["OBSERVER_SEE_NOTES"] = "Ver Notas"
 L["OBSERVER_SEE_NOTES_DESC"] = "Los observadores pueden ver las notas de los candidatos"
-L["CONFIG_OBSERVER_REMOVE_ALL"] = "Eliminar Todos los Observadores"
-L["CONFIG_OBSERVER_REMOVE_ALL_DESC"] = "Eliminar todos los observadores de la lista"
 
 -- Bulk Actions
 L["BULK_START_VOTE"] = "Iniciar Votación (%d)"
@@ -1003,27 +649,18 @@ L["MAX_RANKS_DESC"] = "Número máximo de opciones que un votante puede clasific
 L["MIN_RANKS_DESC"] = "Número mínimo de opciones requeridas para enviar un voto"
 L["RANK_LIMIT_REACHED"] = "Máximo de %d clasificaciones alcanzado"
 L["RANK_MINIMUM_REQUIRED"] = "Clasifica al menos %d opciones"
-L["UNLIMITED"] = "Ilimitado"
 L["MAX_REVOTES"] = "Máximo de Re-Votaciones"
 
 -- ML Sees Votes
-L["ML_SEES_VOTES"] = "MD Ve Votos"
-L["ML_SEES_VOTES_DESC"] = "El Maestro Despojador puede ver votos incluso cuando es anónimo"
 
 -- IRV Round Visualization
 L["SHOW_IRV_ROUNDS"] = "Mostrar Rondas IRV (%d rondas)"
 L["HIDE_IRV_ROUNDS"] = "Ocultar Rondas IRV"
-L["IRV_ROUND"] = "Ronda %d"
-L["IRV_ELIMINATED"] = "eliminado"
-L["IRV_WINNER_FOUND"] = "GANADOR"
 
 -- Settings Export/Import
 L["PROFILES"] = "Perfiles"
-L["PROFILES_DESC"] = "Crear, cambiar, copiar, eliminar y restablecer perfiles. Exportar e importar configuración como cadenas compartibles."
 L["EXPORT_SETTINGS"] = "Exportar Configuración"
-L["EXPORT_SETTINGS_DESC"] = "Exportar tu perfil actual como una cadena compartible"
 L["IMPORT_SETTINGS"] = "Importar Configuración"
-L["IMPORT_SETTINGS_DESC"] = "Importar configuración desde una cadena exportada"
 L["EXPORT_TITLE"] = "Exportar Configuración"
 L["EXPORT_DESC"] = "Presiona Ctrl+A para seleccionar todo, luego Ctrl+C para copiar."
 L["EXPORT_FAILED"] = "Exportación fallida: %s"
@@ -1058,7 +695,311 @@ L["PROFILE_LIST_HEADER"] = "Perfiles:"
 L["PROFILE_SWITCHED"] = "Cambiado al perfil: %s"
 L["PROFILE_CREATED"] = "Creado y cambiado al perfil: %s"
 
--- Make locale available globally
-Loothing.Locale = L
-ns.Locale = L
-return L
+-- ============================================================================
+-- Additional Translations (207 keys)
+-- ============================================================================
+
+-- General UI Actions
+L["ACCEPT"] = "Aceptar"
+L["COPY"] = "Copiar"
+L["COPY_SUFFIX"] = "(Copia)"
+L["DECLINE"] = "Rechazar"
+L["DELETE"] = "Eliminar"
+L["EDIT"] = "Editar"
+L["KEEP"] = "Conservar"
+L["LESS"] = "Menos"
+L["NEW"] = "Nuevo"
+L["OK"] = "Aceptar"
+L["OVERWRITE"] = "Sobrescribir"
+L["RECOMMENDED"] = "Recomendado"
+L["REMOVE"] = "Eliminar"
+L["RENAME"] = "Renombrar"
+L["RESET"] = "Restablecer"
+L["UNKNOWN"] = "Desconocido"
+L["VIEW_GEAR"] = "Ver Equipo"
+
+-- Labels & Prefixes
+L["ADD_NOTE_PLACEHOLDER"] = "Agregar una nota..."
+L["CURRENT_COLON"] = "Actual: "
+L["DISPLAY_TEXT_LABEL"] = "Texto de Visualización:"
+L["EQUIPPED_GEAR"] = "Equipo Equipado"
+L["ICON_LABEL"] = "Icono:"
+L["ICON_SET"] = "Icono: ✓"
+L["ILVL_PREFIX"] = "iLvl "
+L["NOTE_OPTIONAL"] = "Nota (opcional):"
+L["SET_LABEL"] = "Conjunto:"
+L["WHISPER_KEYS_LABEL"] = "Claves de Susurro:"
+L["RESPONSE_TEXT_LABEL"] = "Texto de Respuesta:"
+
+-- Announcements
+L["ANN_CONSIDERATIONS_DEFAULT"] = "{ml} está considerando {item} para distribución"
+L["SESSION_ENDED_DEFAULT"] = "Sesión del consejo de botín finalizada"
+L["SESSION_STARTED_DEFAULT"] = "Sesión del consejo de botín iniciada"
+
+-- Awards
+L["AWARD_FOR"] = "Otorgar a..."
+L["AWARD_LATER_ALL_DESC"] = "Marcar todos los objetos para otorgar después de la sesión"
+L["AWARD_LATER_ITEM_DESC"] = "Marcar este objeto para otorgar después de la sesión"
+L["AWARD_LATER_SHORT"] = "Después"
+
+-- Auto-Award
+L["AUTO_AWARD_TARGET_NOT_IN_RAID"] = "El objetivo de otorgamiento automático %s no está en la banda"
+
+-- Columns
+L["COLUMN_INST"] = "Inst"
+L["COLUMN_ROLE"] = "Rol"
+L["COLUMN_TOOLTIP_WON_INSTANCE"] = "Objetos ganados en esta instancia + dificultad"
+L["COLUMN_TOOLTIP_WON_SESSION"] = "Objetos ganados esta sesión"
+L["COLUMN_TOOLTIP_WON_WEEKLY"] = "Objetos ganados esta semana"
+L["COLUMN_VOTE"] = "Voto"
+L["COLUMN_WK"] = "Sem"
+L["COLUMN_WON"] = "Gan"
+
+-- Config: General
+L["APPLY_TO_CURRENT"] = "Aplicar al Actual"
+L["CONFIG_AWARD_REASONS_ENABLED_DESC"] = "Habilitar o deshabilitar el sistema de motivos de otorgamiento"
+L["CONFIG_BUTTON_SETS_DESC"] = "Configurar conjuntos de botones de respuesta, iconos, claves de susurro y asignaciones de código de tipo usando el editor visual."
+L["CONFIG_CONFIRM_REMOVE_REASON"] = "¿Eliminar este motivo de otorgamiento?"
+L["CONFIG_CONFIRM_RESET_REASONS"] = "¿Restablecer todos los motivos de otorgamiento a sus valores predeterminados? Esto no se puede deshacer."
+L["CONFIG_LOCAL_PREFS_DESC"] = "Estas configuraciones solo te afectan a ti. No se transmiten a la banda."
+L["CONFIG_LOCAL_PREFS_NOTE"] = " Estas configuraciones solo afectan tu cliente. Nunca se envían a otros miembros de banda."
+L["CONFIG_MANAGE"] = "Administrar"
+L["CONFIG_MAX_REVOTES_DESC"] = "Número máximo de re-votaciones permitidas por objeto (0 = sin re-votaciones)"
+L["CONFIG_NEW_REASON_DEFAULT"] = "Nuevo Motivo"
+L["CONFIG_OBSERVER_PERMISSIONS_DESC"] = "Controlar lo que los observadores pueden ver durante las sesiones de votación."
+L["CONFIG_OPEN_BUTTON_EDITOR"] = "Abrir Editor de Botones de Respuesta"
+L["CONFIG_REASON_DEFAULT"] = "Motivo"
+L["CONFIG_REASONS"] = "Motivos"
+L["CONFIG_REQUIRE_AWARD_REASON_DESC"] = "Requerir seleccionar un motivo de otorgamiento antes de otorgar un objeto"
+L["CONFIG_ROLLFRAME_TIMER_ENABLED_DESC"] = "Mostrar un temporizador de cuenta regresiva en el marco de respuesta. Cuando está deshabilitado, el marco permanece abierto hasta que respondas o el MD finalice la votación."
+L["CONFIG_SESSION_BROADCAST_DESC"] = "Estas configuraciones se transmiten a todos los miembros de banda cuando eres el Maestro Despojador. Controlan la sesión para todos."
+L["CONFIG_SESSION_BROADCAST_NOTE"] = "Estas configuraciones se transmiten a todos los miembros de banda cuando inicias una sesión como Maestro Despojador."
+L["CONFIG_TRIGGER_SCOPE_NOTE"] = "Los encuentros de JcJ, arena y escenarios nunca activan sesiones. Solo banda es el valor predeterminado."
+L["CONFIG_VOTING_TIMEOUT_DESC"] = "Cuando está deshabilitado, la votación continúa hasta que el MD la finalice manualmente."
+
+-- Config: Council
+L["CONFIG_COUNCIL_ADD_HELP"] = "Los miembros del consejo pueden votar en la distribución de botín. Usa el campo a continuación para agregar miembros por nombre."
+L["CONFIG_COUNCIL_ADD_NAME_DESC"] = "Introduce nombre del personaje (ej: 'NombreJugador' o 'NombreJugador-Reino')"
+L["CONFIG_COUNCIL_ALL_REMOVED"] = "Todos los miembros del consejo eliminados"
+L["CONFIG_COUNCIL_CONFIRM_REMOVE"] = "¿Eliminar a %s del consejo?"
+L["CONFIG_COUNCIL_CONFIRM_REMOVE_ALL"] = "¿Eliminar a TODOS los miembros del consejo?"
+L["CONFIG_COUNCIL_MEMBER_REMOVED"] = "%s eliminado del consejo"
+L["CONFIG_COUNCIL_NO_MEMBERS"] = "Aún no se han agregado miembros al consejo."
+L["CONFIG_COUNCIL_REMOVE_DESC"] = "Selecciona un miembro para eliminar del consejo"
+
+-- Config: History
+L["CONFIG_HISTORY_ALL_CLEARED"] = "Todo el historial limpiado"
+
+-- Response Sets
+L["CANNOT_DELETE_LAST_SET"] = "No se puede eliminar el último conjunto de respuestas."
+L["NEW_BUTTON"] = "Nuevo Botón"
+L["PICK_ICON"] = "Elegir Icono…"
+L["RESPONSE_BUTTON_EDITOR"] = "Editor de Botones de Respuesta"
+
+-- Council Voting
+L["CLICK_SELECT_ENCHANTER"] = "Haz clic para seleccionar un encantador"
+L["COUNCIL_VOTING_PROGRESS"] = "Progreso de Votación del Consejo"
+L["DISENCHANT_TARGET"] = "Objetivo de Desencantamiento"
+L["LOOT_COUNCIL"] = "Consejo de Botín"
+L["LOOT_RESPONSE_TITLE"] = "Respuesta de Botín"
+L["NO_COUNCIL_VOTES"] = "No se han emitido votos del consejo"
+L["SELECT_ENCHANTER"] = "Seleccionar Encantador"
+L["VOTE_RANK"] = "Rango"
+L["VOTE_RANKED"] = "Clasificado"
+L["VOTES_LABEL"] = "votos"
+L["VOTE_VOTED"] = "Votado"
+
+-- Response States
+L["RESPONSE_AUTO_PASS"] = "Paso Automático"
+L["RESPONSE_WAITING"] = "Esperando..."
+
+-- Group Status
+L["NOT_IN_GROUP"] = "No estás en una banda o grupo"
+L["NOT_IN_GUILD"] = "No estás en una hermandad"
+
+-- Profiles
+L["CREATE_NEW_PROFILE"] = "Crear Nuevo Perfil"
+L["IMPORT_SUMMARY"] = "Perfil: %s | Exportado: %s | Versión: %s"
+L["PROFILE_ERR_EMPTY"] = "El nombre no puede estar vacío"
+L["PROFILE_ERR_INVALID_CHARS"] = "El nombre contiene caracteres inválidos"
+L["PROFILE_ERR_NOT_STRING"] = "El nombre debe ser una cadena de texto"
+L["PROFILE_ERR_TOO_LONG"] = "El nombre debe tener 48 caracteres o menos"
+L["PROFILE_SHARE_BUTTON"] = "Compartir"
+L["PROFILE_SHARE_DESC"] = "Enviar la cadena de exportación actual directamente a un miembro del grupo conectado."
+L["PROFILE_SHARE_FAILED"] = "La configuración compartida de %s no pudo importarse: %s"
+L["PROFILE_SHARE_FAILED_GENERIC"] = "Error al compartir: %s"
+L["PROFILE_SHARE_RECEIVED"] = "Configuración compartida recibida de %s."
+L["PROFILE_SHARE_SENT"] = "Perfil actual compartido con %s."
+L["PROFILE_SHARE_TARGET"] = "Compartir Con"
+L["PROFILE_SHARE_TARGET_REQUIRED"] = "Selecciona un objetivo primero."
+L["PROFILE_SHARE_UNAVAILABLE"] = "El compartir perfiles no está disponible."
+
+-- Quality Names
+L["QUALITY_ARTIFACT"] = "Artefacto"
+L["QUALITY_COMMON"] = "Común"
+L["QUALITY_EPIC"] = "Épico"
+L["QUALITY_HEIRLOOM"] = "Reliquia"
+L["QUALITY_LEGENDARY"] = "Legendario"
+L["QUALITY_POOR"] = "Pobre"
+L["QUALITY_RARE"] = "Raro"
+L["QUALITY_UNCOMMON"] = "Poco Común"
+L["QUALITY_UNKNOWN"] = "Desconocido"
+
+-- Item Categories
+L["ITEM_CATEGORY_CONSUMABLE"] = "Consumible"
+L["ITEM_CATEGORY_CRAFTING"] = "Reactivo de Creación"
+L["ITEM_CATEGORY_ENCHANTING"] = "Material de Encantamiento"
+L["ITEM_CATEGORY_GEM"] = "Gema"
+L["ITEM_CATEGORY_TRADE_GOODS"] = "Materiales de Comercio"
+
+-- Session Items
+L["QUEUED_ITEMS_HINT"] = "Los objetos en cola aparecerán aquí"
+L["REMOVE_FROM_QUEUE"] = "Eliminar de la cola"
+L["REMOVE_FROM_SESSION"] = "Eliminar de la sesión"
+L["TOO_MANY_ITEMS_WARNING"] = "Demasiados objetos (%d). Solo se muestran botones para los primeros %d objetos. Usa la navegación para acceder a todos."
+
+-- Roster
+L["ROSTER_COUNCIL_MEMBER"] = "Miembro del Consejo"
+L["ROSTER_DEAD"] = "Muerto"
+L["ROSTER_MASTER_LOOTER"] = "Maestro Despojador"
+L["ROSTER_NO_ROLE"] = "Sin Rol"
+L["ROSTER_NOT_INSTALLED"] = "No Instalado"
+L["ROSTER_OFFLINE"] = "Desconectado"
+L["ROSTER_RANK_MEMBER"] = "Miembro"
+L["ROSTER_TOOLTIP_GROUP"] = "Grupo: "
+L["ROSTER_TOOLTIP_LOOT_HISTORY"] = "Historial de Botín: %d objetos"
+L["ROSTER_TOOLTIP_ROLE"] = "Rol: "
+L["ROSTER_TOOLTIP_TEST_VERSION"] = "Versión de Prueba: "
+L["ROSTER_TOOLTIP_VERSION"] = "Loothing: "
+L["ROSTER_UNKNOWN"] = "Desconocido"
+
+-- Popups: Confirmations
+L["POPUP_AWARD_LATER"] = "¿Otorgar {item} a ti mismo para distribuir después?"
+L["POPUP_CLEAR_COUNCIL"] = "¿Eliminar todos los miembros del consejo?"
+L["POPUP_CLEAR_COUNCIL_COUNT"] = "¿Eliminar los %d miembros del consejo?"
+L["POPUP_CLEAR_IGNORED"] = "¿Limpiar todos los objetos ignorados?"
+L["POPUP_CLEAR_IGNORED_COUNT"] = "¿Limpiar los %d objetos ignorados?"
+L["POPUP_CONFIRM_END_SESSION"] = "¿Estás seguro de que quieres finalizar la sesión de botín actual? Todos los objetos pendientes serán cerrados."
+L["POPUP_CONFIRM_REVOTE"] = "¿Limpiar todos los votos y reiniciar la votación para {item}?"
+L["POPUP_CONFIRM_REVOTE_FMT"] = "¿Limpiar todos los votos y reiniciar la votación para %s?"
+L["POPUP_CONFIRM_USAGE"] = "¿Quieres usar Loothing para la distribución de botín en esta banda?"
+L["POPUP_DELETE_HISTORY_ALL"] = "¿Eliminar TODAS las entradas del historial? Esto no se puede deshacer."
+L["POPUP_DELETE_HISTORY_MULTI"] = "¿Eliminar %d entradas del historial? Esto no se puede deshacer."
+L["POPUP_DELETE_HISTORY_SELECTED"] = "¿Eliminar las entradas del historial seleccionadas? Esto no se puede deshacer."
+L["POPUP_DELETE_HISTORY_SINGLE"] = "¿Eliminar 1 entrada del historial? Esto no se puede deshacer."
+L["POPUP_DELETE_RESPONSE_BUTTON"] = "¿Eliminar este botón de respuesta?"
+L["POPUP_DELETE_RESPONSE_SET"] = "¿Eliminar este conjunto de respuestas? Esto no se puede deshacer."
+L["POPUP_KEEP_OR_TRADE"] = "¿Qué quieres hacer con {item}?"
+L["POPUP_KEEP_OR_TRADE_FMT"] = "¿Qué quieres hacer con %s?"
+L["POPUP_REANNOUNCE"] = "¿Re-anunciar todos los objetos al grupo?"
+L["POPUP_REANNOUNCE_TITLE"] = "Re-anunciar Objetos"
+L["POPUP_RENAME_SET"] = "Introduce un nuevo nombre para el conjunto:"
+L["POPUP_RESET_ALL_SETS"] = "¿Restablecer TODOS los conjuntos de respuestas a predeterminados? Esto no se puede deshacer."
+L["POPUP_SKIP_ITEM"] = "¿Saltar {item} sin otorgarlo?"
+L["POPUP_SKIP_ITEM_FMT"] = "¿Saltar %s sin otorgarlo?"
+L["POPUP_START_SESSION"] = "¿Iniciar sesión de botín para {boss}?"
+L["POPUP_START_SESSION_FMT"] = "¿Iniciar sesión de botín para %s?"
+L["POPUP_START_SESSION_GENERIC"] = "¿Iniciar sesión de botín?"
+L["POPUP_OVERWRITE_PROFILE"] = "Esto sobrescribirá la configuración de tu perfil actual. ¿Continuar?"
+L["POPUP_OVERWRITE_PROFILE_TITLE"] = "Sobrescribir Perfil"
+
+-- Popups: Import
+L["POPUP_IMPORT_OVERWRITE"] = "Esta importación sobrescribirá {count} entradas de historial existentes. ¿Continuar?"
+L["POPUP_IMPORT_OVERWRITE_MULTI"] = "Esta importación sobrescribirá %d entradas de historial existentes. ¿Continuar?"
+L["POPUP_IMPORT_OVERWRITE_SINGLE"] = "Esta importación sobrescribirá 1 entrada de historial existente. ¿Continuar?"
+L["POPUP_IMPORT_SETTINGS"] = "Elige cómo aplicar la configuración importada:"
+L["POPUP_IMPORT_SETTINGS_TITLE"] = "Importar Configuración"
+
+-- Popups: Sync
+L["POPUP_SYNC_GENERIC_FMT"] = "%s quiere sincronizar su %s contigo. ¿Aceptar?"
+L["POPUP_SYNC_HISTORY_FMT"] = "%s quiere sincronizar su historial de botín (%d días) contigo. ¿Aceptar?"
+L["POPUP_SYNC_REQUEST"] = "{player} quiere sincronizar su {type} contigo. ¿Aceptar?"
+L["POPUP_SYNC_REQUEST_TITLE"] = "Solicitud de Sincronización"
+L["POPUP_SYNC_SETTINGS_FMT"] = "%s quiere sincronizar su configuración de Loothing contigo. ¿Aceptar?"
+
+-- Popups: Trade
+L["POPUP_TRADE_ADD_ITEMS"] = "¿Agregar {count} objetos otorgados al intercambio con {player}?"
+L["POPUP_TRADE_ADD_MULTI"] = "¿Agregar %d objetos otorgados al intercambio con %s?"
+L["POPUP_TRADE_ADD_SINGLE"] = "¿Agregar 1 objeto otorgado al intercambio con %s?"
+
+-- Sync Messages
+L["SYNC_ACCEPTED_FROM"] = "Sincronización aceptada de %s"
+L["SYNC_HISTORY_COMPLETED"] = "Sincronización de historial completada a %d destinatarios"
+L["SYNC_HISTORY_GUILD_DAYS"] = "Solicitando sincronización de historial (%d días) a la hermandad..."
+L["SYNC_HISTORY_SENT"] = "Enviadas %d entradas de historial a %s"
+L["SYNC_HISTORY_TO_PLAYER"] = "Solicitando sincronización de historial (%d días) a %s"
+L["SYNC_SETTINGS_APPLIED"] = "Configuración aplicada de %s"
+L["SYNC_SETTINGS_COMPLETED"] = "Sincronización de configuración completada a %d destinatarios"
+L["SYNC_SETTINGS_SENT"] = "Configuración enviada a %s"
+L["SYNC_SETTINGS_TO_GUILD"] = "Solicitando sincronización de configuración a la hermandad..."
+L["SYNC_SETTINGS_TO_PLAYER"] = "Solicitando sincronización de configuración a %s"
+
+-- Trade Messages
+L["TRADE_BTN"] = "Intercambiar"
+L["TRADE_COMPLETED"] = "Intercambiado %s a %s"
+L["TRADE_ITEM_LOCKED"] = "Objeto bloqueado: %s"
+L["TRADE_ITEM_NOT_FOUND"] = "No se pudo encontrar el objeto para intercambiar: %s"
+L["TRADE_ITEMS_PENDING"] = "Tienes %d objeto(s) para intercambiar con %s. Haz clic en los objetos para agregarlos a la ventana de intercambio."
+L["TRADE_TOO_MANY_ITEMS"] = "Demasiados objetos para intercambiar - solo se agregarán los primeros 6."
+L["TRADE_WINDOW_URGENT"] = "|cffff0000¡URGENTE:|r ¡La ventana de intercambio para %s (otorgado a %s) expira en %d minutos!"
+L["TRADE_WINDOW_WARNING"] = "|cffff9900Advertencia:|r La ventana de intercambio para %s (otorgado a %s) expira en %d minutos!"
+L["TRADE_WRONG_RECIPIENT"] = "Advertencia: Se intercambió %s a %s (fue otorgado a %s)"
+
+-- Version Check
+L["VERSION_AND_MORE"] = " y %d más"
+L["VERSION_CHECK_IN_PROGRESS"] = "Verificación de versión ya en progreso"
+L["VERSION_OUTDATED_MEMBERS"] = "|cffff9900%d miembro(s) del grupo tienen Loothing desactualizado:|r %s"
+L["VERSION_RESULTS_CURRENT"] = "  Actualizado: %d"
+L["VERSION_RESULTS_HINT"] = "Usa /lt version show para ver resultados detallados"
+L["VERSION_RESULTS_NOT_INSTALLED"] = "  |cff888888No Instalado: %d|r"
+L["VERSION_RESULTS_OUTDATED"] = "  |cffff0000Desactualizado: %d|r"
+L["VERSION_RESULTS_TEST"] = "  |cff00ff00Versiones de prueba: %d|r"
+L["VERSION_RESULTS_TOTAL"] = "Resultados de Verificación de Versión: %d total"
+
+-- Profile Broadcast
+L["PROFILE_SHARE_BROADCAST_BUTTON"] = "Transmitir al Grupo"
+L["PROFILE_SHARE_BROADCAST_DESC"] = "Transmitir la cadena de exportación actual a la banda o grupo activo. Solo el Maestro Despojador de la sesión activa puede hacer esto."
+L["PROFILE_SHARE_BROADCAST_SENT"] = "Perfil actual transmitido al grupo activo."
+L["PROFILE_SHARE_BROADCAST_CONFIRM"] = "¿Transmitir tu perfil de configuración actual a todo el grupo activo?"
+L["PROFILE_SHARE_BROADCAST_NO_SESSION"] = "Necesitas una sesión activa de Loothing para transmitir la configuración."
+L["PROFILE_SHARE_BROADCAST_NOT_ML"] = "Solo el Maestro Despojador de la sesión activa puede transmitir la configuración."
+L["PROFILE_SHARE_BROADCAST_BUSY"] = "La cola de comunicación del addon está ocupada. Inténtalo de nuevo en un momento."
+L["PROFILE_SHARE_BROADCAST_COOLDOWN"] = "La configuración fue transmitida recientemente. Inténtalo de nuevo en %d segundos."
+L["PROFILE_SHARE_QUEUE_FULL"] = "La configuración compartida de %s fue descartada porque otra importación ya está en espera."
+
+
+-- Restored keys (accessed via Loothing.Locale)
+L["SESSION_STARTED"] = "Sesión de consejo de botín iniciada para %s"
+L["SESSION_ENDED"] = "Sesión de consejo de botín finalizada"
+L["AWARD_TO"] = "Otorgar a %s"
+L["TOTAL_VOTES"] = "Total: %d votos"
+L["LOOTED_BY"] = "Obtenido por: %s"
+L["ENTRIES_COUNT"] = "Total: %d entradas"
+L["ENTRIES_FILTERED"] = "Mostrando: %d de %d entradas"
+L["AWARDED_TO"] = "Otorgado a: %s"
+L["FROM_ENCOUNTER"] = "De: %s"
+L["WITH_VOTES"] = "Votos: %d"
+L["TAB_SETTINGS"] = "Configuración"
+L["SELECT_AWARD_REASON"] = "Seleccionar Motivo de Otorgamiento"
+L["NO_SELECTION"] = "Sin selección"
+L["YOUR_RANKING"] = "Tu Clasificación"
+L["AWARD_NO_REASON"] = "Otorgar (Sin Motivo)"
+L["CLEARED_TRADES"] = "Se borraron %d intercambio(s) completado(s)"
+L["NO_COMPLETED_TRADES"] = "No hay intercambios completados para borrar"
+L["OBSERVE_MODE_MSG"] = "Estás en modo observador y no puedes votar."
+L["VOTE_NOTE_REQUIRED"] = "Debes añadir una nota con tu voto."
+L["SELF_VOTE_DISABLED"] = "La autovotación está desactivada para esta sesión."
+
+
+
+-- Voting States
+L["VOTING_STATE_PENDING"] = "Pendiente"
+L["VOTING_STATE_VOTING"] = "Votación"
+L["VOTING_STATE_TALLYING"] = "Contabilizando"
+L["VOTING_STATE_DECIDED"] = "Decidido"
+L["VOTING_STATE_REVOTING"] = "Re-Votando"
+
+-- Enchanter/Disenchant
+L["NO_ENCHANTERS"] = "No se detectaron encantadores en el grupo"
+L["DISENCHANT_TARGET_SET"] = "Objetivo de desencantar establecido en: %s"
+L["DISENCHANT_TARGET_CLEARED"] = "Objetivo de desencantar eliminado"

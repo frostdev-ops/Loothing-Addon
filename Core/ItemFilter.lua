@@ -6,6 +6,7 @@
 local ADDON_NAME, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
+local L = ns.Locale
 local Utils = ns.Utils
 
 --[[--------------------------------------------------------------------
@@ -121,23 +122,23 @@ function ItemFilterMixin:GetItemCategory(itemLink)
 
     -- Consumables
     if classID == ITEM_CLASS_CONSUMABLE then
-        return "Consumable"
+        return L["ITEM_CATEGORY_CONSUMABLE"]
     end
 
     -- Trade Goods
     if classID == ITEM_CLASS_TRADE_GOODS then
         if subclassID == TRADE_GOODS_ENCHANTING then
-            return "Enchanting Material"
+            return L["ITEM_CATEGORY_ENCHANTING"]
         elseif subclassID == TRADE_GOODS_REAGENT or subclassID == TRADE_GOODS_OPTIONAL_REAGENT then
-            return "Crafting Reagent"
+            return L["ITEM_CATEGORY_CRAFTING"]
         else
-            return "Trade Goods"
+            return L["ITEM_CATEGORY_TRADE_GOODS"]
         end
     end
 
     -- Gems
     if classID == ITEM_CLASS_GEM then
-        return "Gem"
+        return L["ITEM_CATEGORY_GEM"]
     end
 
     return nil

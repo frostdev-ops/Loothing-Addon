@@ -77,7 +77,7 @@ function TradePanelMixin:CreateHeader()
     -- Title
     self.titleText = header:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     self.titleText:SetPoint("TOPLEFT")
-    self.titleText:SetText(L["TRADE_QUEUE"] or "Trade Queue")
+    self.titleText:SetText(L["TRADE_QUEUE"])
 
     -- Item count
     self.countText = header:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -87,7 +87,7 @@ function TradePanelMixin:CreateHeader()
     -- Help text
     self.helpText = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     self.helpText:SetPoint("TOPRIGHT")
-    self.helpText:SetText(L["TRADE_PANEL_HELP"] or "Click a player name to initiate trade")
+    self.helpText:SetText(L["TRADE_PANEL_HELP"])
     self.helpText:SetTextColor(0.7, 0.7, 0.7)
 
     self.header = header
@@ -119,17 +119,17 @@ function TradePanelMixin:CreateList()
 
     local itemHeader = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     itemHeader:SetPoint("LEFT", 40, 0)
-    itemHeader:SetText(L["ITEM"] or "Item")
+    itemHeader:SetText(L["ITEM"])
     itemHeader:SetTextColor(0.7, 0.7, 0.7)
 
     local winnerHeader = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     winnerHeader:SetPoint("LEFT", 280, 0)
-    winnerHeader:SetText(L["WINNER"] or "Winner")
+    winnerHeader:SetText(L["WINNER"])
     winnerHeader:SetTextColor(0.7, 0.7, 0.7)
 
     local timeHeader = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     timeHeader:SetPoint("RIGHT", -60, 0)
-    timeHeader:SetText(L["TIME_REMAINING"] or "Time Left")
+    timeHeader:SetText(L["TIME_REMAINING"])
     timeHeader:SetTextColor(0.7, 0.7, 0.7)
 
     -- Separator
@@ -159,7 +159,7 @@ function TradePanelMixin:CreateList()
     -- Empty state text
     self.emptyText = container:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     self.emptyText:SetPoint("CENTER")
-    self.emptyText:SetText(L["NO_PENDING_TRADES"] or "No items pending trade")
+    self.emptyText:SetText(L["NO_PENDING_TRADES"])
     self.emptyText:SetTextColor(0.5, 0.5, 0.5)
 end
 
@@ -176,7 +176,7 @@ function TradePanelMixin:CreateFooter()
     self.refreshButton = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
     self.refreshButton:SetSize(80, 26)
     self.refreshButton:SetPoint("LEFT")
-    self.refreshButton:SetText(L["REFRESH"] or "Refresh")
+    self.refreshButton:SetText(L["REFRESH"])
     self.refreshButton:SetScript("OnClick", function()
         self:Refresh()
     end)
@@ -185,7 +185,7 @@ function TradePanelMixin:CreateFooter()
     self.clearButton = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
     self.clearButton:SetSize(120, 26)
     self.clearButton:SetPoint("LEFT", self.refreshButton, "RIGHT", 8, 0)
-    self.clearButton:SetText(L["CLEAR_COMPLETED"] or "Clear Completed")
+    self.clearButton:SetText(L["CLEAR_COMPLETED"])
     self.clearButton:SetScript("OnClick", function()
         self:ClearCompleted()
     end)
@@ -203,7 +203,7 @@ function TradePanelMixin:CreateFooter()
 
     local checkboxLabel = footer:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     checkboxLabel:SetPoint("RIGHT", self.autoTradeCheckbox, "LEFT", -4, 0)
-    checkboxLabel:SetText(L["AUTO_TRADE"] or "Auto-trade")
+    checkboxLabel:SetText(L["AUTO_TRADE"])
 
     self.footer = footer
 end
@@ -253,11 +253,11 @@ function TradePanelMixin:UpdateHeader()
     local count = #pending
 
     if count == 0 then
-        self.countText:SetText(L["NO_ITEMS_TO_TRADE"] or "No items to trade")
+        self.countText:SetText(L["NO_ITEMS_TO_TRADE"])
     elseif count == 1 then
-        self.countText:SetText(L["ONE_ITEM_TO_TRADE"] or "1 item awaiting trade")
+        self.countText:SetText(L["ONE_ITEM_TO_TRADE"])
     else
-        self.countText:SetText(string.format(L["N_ITEMS_TO_TRADE"] or "%d items awaiting trade", count))
+        self.countText:SetText(string.format(L["N_ITEMS_TO_TRADE"], count))
     end
 end
 
@@ -452,7 +452,8 @@ function TradePanelMixin:CreateRow()
     row.tradeButton = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
     row.tradeButton:SetSize(50, 20)
     row.tradeButton:SetPoint("RIGHT", -32, 0)
-    row.tradeButton:SetText("Trade")
+    local L = Loothing.Locale
+    row.tradeButton:SetText(L["TRADE_BTN"])
 
     -- Arrow indicator (shows direction: you -> winner)
     row.arrowText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -560,7 +561,7 @@ function TradePanelMixin:CreateRow()
         -- Remove button
         self.removeButton:SetScript("OnEnter", function()
             GameTooltip:SetOwner(self.removeButton, "ANCHOR_RIGHT")
-            GameTooltip:SetText("Remove from queue", nil, nil, nil, nil, true)
+            GameTooltip:SetText(L["REMOVE_FROM_QUEUE"], nil, nil, nil, nil, true)
             GameTooltip:Show()
         end)
 
@@ -635,9 +636,9 @@ function TradePanelMixin:ClearCompleted()
     end
 
     if removed > 0 then
-        Loothing:Print(string.format("Cleared %d completed trade(s)", removed))
+        Loothing:Print(string.format(Loothing.Locale["CLEARED_TRADES"], removed))
     else
-        Loothing:Print("No completed trades to clear")
+        Loothing:Print(Loothing.Locale["NO_COMPLETED_TRADES"])
     end
 
     self:Refresh()

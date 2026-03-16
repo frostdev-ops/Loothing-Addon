@@ -3,7 +3,7 @@
 ## Title: Loothing
 ## Notes: Loot Council addon for WoW 12.0+ with ranked choice voting
 ## Author: James Kueller
-## Version: 1.2.7
+## Version: 1.2.8
 ## SavedVariables: LoolibDB
 ## Dependencies: Loolib
 ## IconTexture: Interface\AddOns\Loothing\Media\logo
@@ -39,6 +39,7 @@ Locale\koKR.lua
 Locale\zhCN.lua
 Locale\zhTW.lua
 Locale\brainrot.lua
+Locale\Resolver.lua
 
 # Core (early - no UI dependencies)
 Core\Constants.lua

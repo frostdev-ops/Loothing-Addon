@@ -6,6 +6,7 @@
 local _, ns = ...
 local Loothing = ns.Addon
 local Utils = ns.Utils
+local L = Loothing.Locale
 
 local CouncilTableMixin = ns.CouncilTableMixin or {}
 ns.CouncilTableMixin = CouncilTableMixin
@@ -13,21 +14,21 @@ ns.CouncilTableMixin = CouncilTableMixin
 local CELL_PADDING = 2
 
 CouncilTableMixin.COLUMNS = {
-    { id = "priority",     name = "#",         width = 30,  maxWidth = 36,  flex = 0, sortable = true,  settingsKey = "priority" },
-    { id = "class",        name = "",          width = 22,  maxWidth = 22,  flex = 0, sortable = true,  settingsKey = "class" },
-    { id = "player",       name = "Player",    width = 100, maxWidth = 180, flex = 2, sortable = true,  settingsKey = "player" },
-    { id = "role",         name = "Role",      width = 30,  maxWidth = 36,  flex = 0, sortable = true,  settingsKey = "role" },
-    { id = "response",     name = "Response",  width = 120, maxWidth = 200, flex = 2, sortable = true,  settingsKey = "response" },
-    { id = "ilvl",         name = "iLvl",      width = 40,  maxWidth = 48,  flex = 0, sortable = true,  settingsKey = "ilvl" },
-    { id = "ilvlDiff",     name = "+/-",       width = 40,  maxWidth = 48,  flex = 0, sortable = true,  settingsKey = "ilvlDiff" },
-    { id = "wonSession",   name = "Won",       width = 32,  maxWidth = 40,  flex = 0, sortable = true,  settingsKey = "wonSession" },
-    { id = "wonInstance",  name = "Inst",      width = 32,  maxWidth = 40,  flex = 0, sortable = true,  settingsKey = "wonInstance" },
-    { id = "wonWeekly",    name = "Wk",        width = 32,  maxWidth = 40,  flex = 0, sortable = true,  settingsKey = "wonWeekly" },
-    { id = "gear1",        name = "G1",        width = 28,  maxWidth = 28,  flex = 0, sortable = false, settingsKey = "gear1" },
-    { id = "gear2",        name = "G2",        width = 28,  maxWidth = 28,  flex = 0, sortable = false, settingsKey = "gear2" },
-    { id = "roll",         name = "Roll",      width = 40,  maxWidth = 55,  flex = 1, sortable = true,  settingsKey = "roll" },
-    { id = "note",         name = "Note",      width = 24,  maxWidth = 28,  flex = 0, sortable = false, settingsKey = "note" },
-    { id = "vote",         name = "Vote",      width = 55,  maxWidth = 70,  flex = 1, sortable = true,  settingsKey = "vote" },
+    { id = "priority",     name = "#",                              width = 30,  maxWidth = 36,  flex = 0, sortable = true,  settingsKey = "priority" },
+    { id = "class",        name = "",                               width = 22,  maxWidth = 22,  flex = 0, sortable = true,  settingsKey = "class" },
+    { id = "player",       name = L["COUNCIL_COLUMN_PLAYER"],       width = 100, maxWidth = 180, flex = 2, stretch = 4, sortable = true,  settingsKey = "player" },
+    { id = "role",         name = L["COLUMN_ROLE"],                 width = 30,  maxWidth = 36,  flex = 0, sortable = true,  settingsKey = "role" },
+    { id = "response",     name = L["COUNCIL_COLUMN_RESPONSE"],     width = 120, maxWidth = 200, flex = 2, stretch = 4, sortable = true,  settingsKey = "response" },
+    { id = "ilvl",         name = L["COUNCIL_COLUMN_ILVL"],         width = 40,  maxWidth = 48,  flex = 0, sortable = true,  settingsKey = "ilvl" },
+    { id = "ilvlDiff",     name = L["COUNCIL_COLUMN_ILVL_DIFF"],    width = 40,  maxWidth = 48,  flex = 0, sortable = true,  settingsKey = "ilvlDiff" },
+    { id = "wonSession",   name = L["COLUMN_WON"],                  width = 32,  maxWidth = 40,  flex = 0, sortable = true,  settingsKey = "wonSession" },
+    { id = "wonInstance",  name = L["COLUMN_INST"],                 width = 32,  maxWidth = 40,  flex = 0, sortable = true,  settingsKey = "wonInstance" },
+    { id = "wonWeekly",    name = L["COLUMN_WK"],                   width = 32,  maxWidth = 40,  flex = 0, sortable = true,  settingsKey = "wonWeekly" },
+    { id = "gear1",        name = L["COUNCIL_COLUMN_GEAR1"],        width = 28,  maxWidth = 28,  flex = 0, sortable = false, settingsKey = "gear1" },
+    { id = "gear2",        name = L["COUNCIL_COLUMN_GEAR2"],        width = 28,  maxWidth = 28,  flex = 0, sortable = false, settingsKey = "gear2" },
+    { id = "roll",         name = L["COUNCIL_COLUMN_ROLL"],         width = 40,  maxWidth = 55,  flex = 1, sortable = true,  settingsKey = "roll" },
+    { id = "note",         name = L["COUNCIL_COLUMN_NOTE"],         width = 24,  maxWidth = 28,  flex = 0, sortable = false, settingsKey = "note" },
+    { id = "vote",         name = L["COLUMN_VOTE"],                 width = 55,  maxWidth = 70,  flex = 1, stretch = 1, sortable = true,  settingsKey = "vote" },
 }
 
 CouncilTableMixin.COLUMN_SORT_MAP = {
@@ -46,9 +47,9 @@ CouncilTableMixin.COLUMN_SORT_MAP = {
 }
 
 CouncilTableMixin.COLUMN_TOOLTIPS = {
-    wonSession = "Items won this session",
-    wonInstance = "Items won in this instance + difficulty",
-    wonWeekly = "Items won this week",
+    wonSession = L["COLUMN_TOOLTIP_WON_SESSION"],
+    wonInstance = L["COLUMN_TOOLTIP_WON_INSTANCE"],
+    wonWeekly = L["COLUMN_TOOLTIP_WON_WEEKLY"],
 }
 
 -- Role icon textures
@@ -103,10 +104,51 @@ end
     Column Layout
 ----------------------------------------------------------------------]]
 
+local function DistributeRemainingWidth(widths, visible, extra, key)
+    if extra <= 0 then
+        return 0
+    end
+
+    local weighted = {}
+    local totalWeight = 0
+    for i, col in ipairs(visible) do
+        local weight = col[key] or 0
+        if weight > 0 then
+            weighted[#weighted + 1] = { index = i, weight = weight }
+            totalWeight = totalWeight + weight
+        end
+    end
+
+    if totalWeight == 0 then
+        return 0
+    end
+
+    local distributed = 0
+    for _, entry in ipairs(weighted) do
+        local bonus = math.floor(extra * entry.weight / totalWeight)
+        widths[entry.index] = widths[entry.index] + bonus
+        distributed = distributed + bonus
+    end
+
+    local remainder = extra - distributed
+    local cursor = 1
+    while remainder > 0 and #weighted > 0 do
+        local entry = weighted[cursor]
+        widths[entry.index] = widths[entry.index] + 1
+        remainder = remainder - 1
+        cursor = cursor + 1
+        if cursor > #weighted then
+            cursor = 1
+        end
+    end
+
+    return extra
+end
+
 --- Compute column widths that fill available space proportionally.
 -- Each column starts at its base width. Extra space is distributed to flex
--- columns, but no column exceeds its maxWidth. Runs multiple passes so that
--- space freed by capped columns is redistributed to uncapped ones.
+-- columns up to their soft maxWidth, then any remaining space stretches the
+-- most important columns so wide windows still use their available space.
 -- @param availableWidth number - Total width to fill
 -- @return table - Array of {col, computedWidth} matching visible column order
 function CouncilTableMixin:ComputeColumnWidths(availableWidth)
@@ -158,6 +200,15 @@ function CouncilTableMixin:ComputeColumnWidths(availableWidth)
         end
     end
 
+    if extra > 0 then
+        local stretchDistributed = DistributeRemainingWidth(widths, visible, extra, "stretch")
+        extra = math.max(0, extra - stretchDistributed)
+    end
+
+    if extra > 0 then
+        extra = math.max(0, extra - DistributeRemainingWidth(widths, visible, extra, "flex"))
+    end
+
     local result = {}
     for i, col in ipairs(visible) do
         result[#result + 1] = { col = col, width = widths[i] }
@@ -180,7 +231,7 @@ function CouncilTableMixin:RebuildColumnHeaders()
 
     if not self.headersContainer then return end
 
-    local containerWidth = self.headersContainer:GetWidth()
+    local containerWidth = self.scrollFrame and self.scrollFrame:GetWidth() or self.headersContainer:GetWidth()
     if containerWidth < 1 then containerWidth = 600 end -- fallback before layout
     local padding = CELL_PADDING
     local computed = self:ComputeColumnWidths(containerWidth)
@@ -201,7 +252,10 @@ function CouncilTableMixin:RebuildColumnHeaders()
         btn:SetPoint("LEFT", xOffset, 0)
 
         local text = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        text:SetPoint("CENTER")
+        text:SetPoint("LEFT", btn, "LEFT", 2, 0)
+        text:SetPoint("RIGHT", btn, "RIGHT", col.sortable and -10 or -2, 0)
+        text:SetJustifyH("CENTER")
+        text:SetWordWrap(false)
         text:SetText(col.name)
         text:SetTextColor(0.8, 0.8, 0.6)
         btn.text = text
@@ -359,14 +413,14 @@ CouncilTableMixin.CellUpdaters.response = function(_, cell, candidate)
             cell.colorBar:Show()
         end
     elseif candidate.response == "AUTOPASS" then
-        cell.text:SetText("Auto Pass")
+        cell.text:SetText(L["RESPONSE_AUTO_PASS"])
         cell.text:SetTextColor(0.5, 0.5, 0.5)
         if cell.colorBar then
             cell.colorBar:SetColorTexture(0.5, 0.5, 0.5, 1)
             cell.colorBar:Show()
         end
     elseif candidate.response == "WAIT" or not candidate.response then
-        cell.text:SetText("Waiting...")
+        cell.text:SetText(L["RESPONSE_WAITING"])
         cell.text:SetTextColor(0.5, 0.5, 0.5)
         if cell.colorBar then
             cell.colorBar:Hide()
@@ -527,7 +581,7 @@ CouncilTableMixin.CellUpdaters.note = function(_, cell, candidate)
             cell:SetScript("OnEnter", function(c)
                 if c.candidate and c.candidate.note and c.candidate.note ~= "" then
                     GameTooltip:SetOwner(c, "ANCHOR_RIGHT")
-                    GameTooltip:AddLine("Note:", 1, 0.82, 0)
+                    GameTooltip:AddLine(L["COUNCIL_COLUMN_NOTE"] .. ":", 1, 0.82, 0)
                     GameTooltip:AddLine(c.candidate.note, 1, 1, 1, true)
                     GameTooltip:Show()
                 end
@@ -568,9 +622,11 @@ CouncilTableMixin.CellUpdaters.vote = function(_, cell, candidate)
             if not voters or #voters == 0 then return end
             local canSeeCount = not Loothing.Observer or Loothing.Observer:CanPlayerSeeVoteCounts()
             if not canSeeCount then return end
+            local _isML = Loothing.Session and Loothing.Session:IsMasterLooter()
+            if Loothing.Settings and Loothing.Settings:GetHideVotes() and not _isML then return end
             local anonymous = Loothing.Settings and Loothing.Settings:GetAnonymousVoting()
             GameTooltip:SetOwner(c, "ANCHOR_RIGHT")
-            GameTooltip:AddLine("Votes: " .. #voters, 1, 0.82, 0)
+            GameTooltip:AddLine(string.format(L["TOOLTIP_VOTES"], #voters), 1, 0.82, 0)
             local canSeeIds = not Loothing.Observer or Loothing.Observer:CanPlayerSeeVoterIdentities()
             if not anonymous and canSeeIds then
                 for _, voterName in ipairs(voters) do
@@ -605,12 +661,12 @@ CouncilTableMixin.CellUpdaters.vote = function(_, cell, candidate)
                 cell.voteButton:Show()
                 cell.voteButton:SetAlpha(0.4)
                 cell.voteButton:Disable()
-                cell.voteButton:SetText(isRCV and "Rank" or "Vote")
+                cell.voteButton:SetText(isRCV and L["VOTE_RANK"] or L["COLUMN_VOTE"])
             else
                 cell.voteButton:Show()
                 cell.voteButton:SetAlpha(1)
                 cell.voteButton:Enable()
-                cell.voteButton:SetText(hasVoted and (isRCV and "|cff33ee33Ranked|r" or "|cff33ee33Voted|r") or (isRCV and "Rank" or "Vote"))
+                cell.voteButton:SetText(hasVoted and (isRCV and "|cff33ee33" .. L["VOTE_RANKED"] .. "|r" or "|cff33ee33" .. L["VOTE_VOTED"] .. "|r") or (isRCV and L["VOTE_RANK"] or L["COLUMN_VOTE"]))
             end
         else
             local isObserver = Loothing.Observer and (Loothing.Observer:IsPlayerObserver() or Loothing.Observer:IsMLObserver())
@@ -618,7 +674,7 @@ CouncilTableMixin.CellUpdaters.vote = function(_, cell, candidate)
                 cell.voteButton:Show()
                 cell.voteButton:SetAlpha(0.4)
                 cell.voteButton:Disable()
-                cell.voteButton:SetText(isRCV and "Rank" or "Vote")
+                cell.voteButton:SetText(isRCV and L["VOTE_RANK"] or L["COLUMN_VOTE"])
             else
                 cell.voteButton:Hide()
             end

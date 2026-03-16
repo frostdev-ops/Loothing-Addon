@@ -798,10 +798,28 @@ end
 --- Send a shareable settings export string directly to another player.
 -- @param exportString string
 -- @param target string
-function CommMixin:SendProfileExport(exportString, target)
+-- @param options table|nil
+function CommMixin:SendProfileExport(exportString, target, options)
+    options = options or {}
     self:Send(Loothing.MsgType.PROFILE_EXPORT_SHARE, {
         exportString = exportString,
+        shareID = options.shareID,
+        scope = options.scope,
+        sessionID = options.sessionID,
     }, target, "BULK")
+end
+
+--- Broadcast a shareable settings export string to the active raid/party.
+-- @param exportString string
+-- @param shareID string
+-- @param sessionID string|nil
+function CommMixin:BroadcastProfileExport(exportString, shareID, sessionID)
+    self:Send(Loothing.MsgType.PROFILE_EXPORT_SHARE, {
+        exportString = exportString,
+        shareID = shareID,
+        scope = "group",
+        sessionID = sessionID,
+    }, nil, "BULK")
 end
 
 -- ns.CommMixin exported above

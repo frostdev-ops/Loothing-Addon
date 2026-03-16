@@ -6,6 +6,7 @@
 local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
+local L = ns.Locale
 local Utils = ns.Utils
 local CallbackRegistryMixin = Loolib.CallbackRegistryMixin
 local CreateFromMixins = Loolib.CreateFromMixins
@@ -288,7 +289,7 @@ function TradeQueueMixin:OnTradeShow()
             self:AddItemsToTradeWindow(pending)
         else
             -- Show confirmation
-            Loothing:Print(string.format("You have %d item(s) to trade to %s. Click items to add them to the trade window.", count, Utils.GetShortName(self.tradeTarget)))
+            Loothing:Print(string.format(L["TRADE_ITEMS_PENDING"], count, Utils.GetShortName(self.tradeTarget)))
         end
 
         -- Trigger event for UI updates
@@ -352,7 +353,7 @@ function TradeQueueMixin:AddItemsToTradeWindow(items)
     local delay = 0.1
     for i, entry in ipairs(items) do
         if i > MAX_TRADE_ITEMS - 1 then
-            Loothing:Print("Too many items to trade - only first 6 will be added.")
+            Loothing:Print(L["TRADE_TOO_MANY_ITEMS"])
             break
         end
 
@@ -372,14 +373,14 @@ function TradeQueueMixin:AddSingleItemToTrade(entry)
     -- Find the item in bags
     local bag, slot = self:FindItemInBags(entry.itemLink)
     if not bag or not slot then
-        Loothing:Print("Could not find item to trade:", entry.itemLink)
+        Loothing:Print(string.format(L["TRADE_ITEM_NOT_FOUND"], entry.itemLink))
         return
     end
 
     -- Check if item is locked
     local containerInfo = C_Container.GetContainerItemInfo(bag, slot)
     if containerInfo and containerInfo.isLocked then
-        Loothing:Print("Item is locked:", entry.itemLink)
+        Loothing:Print(string.format(L["TRADE_ITEM_LOCKED"], entry.itemLink))
         return
     end
 
@@ -459,9 +460,9 @@ function TradeQueueMixin:MarkItemTraded(itemLink, tradedTo)
 
         -- Check if traded to correct winner
         if entry.winner == tradedTo then
-            Loothing:Print(string.format("Traded %s to %s", entry.itemLink, Utils.GetShortName(tradedTo)))
+            Loothing:Print(string.format(L["TRADE_COMPLETED"], entry.itemLink, Utils.GetShortName(tradedTo)))
         else
-            Loothing:Print(string.format("Warning: Traded %s to %s (was awarded to %s)", entry.itemLink, Utils.GetShortName(tradedTo), Utils.GetShortName(entry.winner)))
+            Loothing:Print(string.format(L["TRADE_WRONG_RECIPIENT"], entry.itemLink, Utils.GetShortName(tradedTo), Utils.GetShortName(entry.winner)))
         end
     end
 end
@@ -690,7 +691,7 @@ function TradeQueueMixin:CheckTradeTimers()
                     warnings.warned20 = true
                     local minutesLeft = math.floor(remaining / 60)
                     Loothing:Print(string.format(
-                        "|cffff9900Warning:|r Trade window for %s (awarded to %s) expires in %d minutes!",
+                        L["TRADE_WINDOW_WARNING"],
                         entry.itemLink,
                         Utils.GetShortName(entry.winner),
                         minutesLeft
@@ -702,7 +703,7 @@ function TradeQueueMixin:CheckTradeTimers()
                     warnings.warned5 = true
                     local minutesLeft = math.floor(remaining / 60)
                     Loothing:Print(string.format(
-                        "|cffff0000URGENT:|r Trade window for %s (awarded to %s) expires in %d minutes!",
+                        L["TRADE_WINDOW_URGENT"],
                         entry.itemLink,
                         Utils.GetShortName(entry.winner),
                         minutesLeft

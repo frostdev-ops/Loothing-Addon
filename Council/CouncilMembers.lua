@@ -18,6 +18,10 @@ local CouncilMixin = ns.CouncilMixin
 ----------------------------------------------------------------------]]
 
 function CouncilMixin:AddMember(name)
+    if not Utils.CanManageCouncilRoster() then
+        return false, "Only the Master Looter can change the council roster while grouped"
+    end
+
     name = Utils.NormalizeName(name)
 
     if self.members[name] then
@@ -39,6 +43,10 @@ function CouncilMixin:AddMember(name)
 end
 
 function CouncilMixin:RemoveMember(name)
+    if not Utils.CanManageCouncilRoster() then
+        return false
+    end
+
     name = Utils.NormalizeName(name)
 
     if not self.members[name] then
@@ -57,19 +65,15 @@ end
 function CouncilMixin:IsMember(name)
     name = Utils.NormalizeName(name)
 
+    if self.remotePrimary then
+        return self.remoteRoster[name] == true
+    end
+
     if self.members[name] then
         return true
     end
 
-    if self.remotePrimary and self.remoteRoster[name] then
-        return true
-    end
-
-    if self:IsAutoIncluded(name) then
-        return true
-    end
-
-    return false
+    return self:IsAutoIncluded(name)
 end
 
 function CouncilMixin:IsAutoIncluded(name)
@@ -104,6 +108,15 @@ function CouncilMixin:GetMembers()
 end
 
 function CouncilMixin:GetAllMembers()
+    if self.remotePrimary then
+        local remoteMembers = {}
+        for name in pairs(self.remoteRoster) do
+            remoteMembers[#remoteMembers + 1] = name
+        end
+        table.sort(remoteMembers)
+        return remoteMembers
+    end
+
     local result = {}
     local seen = {}
 
@@ -111,15 +124,6 @@ function CouncilMixin:GetAllMembers()
         if not seen[name] then
             seen[name] = true
             result[#result + 1] = name
-        end
-    end
-
-    if self.remotePrimary then
-        for name in pairs(self.remoteRoster) do
-            if not seen[name] then
-                seen[name] = true
-                result[#result + 1] = name
-            end
         end
     end
 
@@ -150,9 +154,15 @@ function CouncilMixin:GetMemberCount()
 end
 
 function CouncilMixin:ClearMembers()
+    if not Utils.CanManageCouncilRoster() then
+        return false
+    end
+
     wipe(self.members)
     self:SaveToSettings()
     self:TriggerEvent("OnRosterChanged")
+
+    return true
 end
 
 --[[--------------------------------------------------------------------

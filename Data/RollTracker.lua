@@ -164,7 +164,7 @@ function RollTrackerMixin:RequestRolls(itemLink)
     self:ClearAllRolls()
 
     -- Build message
-    local message = L["ROLL_REQUEST"] or "Please /roll for loot"
+    local message = L["ROLL_REQUEST"]
     if itemLink then
         message = string.format("%s: %s", message, itemLink)
     end
@@ -176,7 +176,7 @@ function RollTrackerMixin:RequestRolls(itemLink)
         C_ChatInfo.SendChatMessage(message, "PARTY")
     end
 
-    Loothing:Print(L["ROLL_REQUEST_SENT"] or "Roll request sent to raid")
+    Loothing:Print(L["ROLL_REQUEST_SENT"])
 end
 
 --[[--------------------------------------------------------------------

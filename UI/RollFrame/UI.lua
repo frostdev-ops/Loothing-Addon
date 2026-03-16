@@ -84,7 +84,8 @@ function RollFrameMixin:CreateFrame()
 
     local titleText = titleBar:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     titleText:SetPoint("LEFT", 5, 0)
-    titleText:SetText("Loot Response")
+    local L = Loothing.Locale
+    titleText:SetText(L["LOOT_RESPONSE_TITLE"])
     self.titleText = titleText
 
     local counterText = titleBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -126,7 +127,7 @@ function RollFrameMixin:CreateElements()
 
     local submitLabel = submitBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     submitLabel:SetPoint("CENTER")
-    submitLabel:SetText(L["SUBMIT_RESPONSE"] or "Submit Response")
+    submitLabel:SetText(L["SUBMIT_RESPONSE"])
     submitLabel:SetTextColor(0.9, 1, 0.9)
     submitBtn.label = submitLabel
 
@@ -320,9 +321,8 @@ function RollFrameMixin:UpdateSessionButtons()
     local displayedCount = math.min(#self.items, MAX_SESSION_BUTTONS)
 
     if #self.items > MAX_SESSION_BUTTONS and not self.sessionButtonWarningShown then
-        Loothing:Warn(string.format(
-            "Too many items (%d). Only showing buttons for first %d items. Use navigation to access all.",
-            #self.items, MAX_SESSION_BUTTONS))
+        local L = Loothing.Locale
+        Loothing:Warn(string.format(L["TOO_MANY_ITEMS_WARNING"], #self.items, MAX_SESSION_BUTTONS))
         self.sessionButtonWarningShown = true
     end
 
@@ -573,7 +573,8 @@ function RollFrameMixin:CreateGearComparison()
 
     local label = container:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     label:SetPoint("TOPLEFT", 8, -6)
-    label:SetText("Equipped Gear")
+    local L = Loothing.Locale
+    label:SetText(L["EQUIPPED_GEAR"])
     label:SetTextColor(0.8, 0.8, 0.8)
 
     -- Horizontal divider under label
@@ -675,7 +676,7 @@ function RollFrameMixin:CreateResponseSection()
 
     local label = container:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     label:SetPoint("TOPLEFT")
-    label:SetText(L["SELECT_RESPONSE"] or "SELECT YOUR RESPONSE:")
+    label:SetText(L["SELECT_RESPONSE"])
 
     self.responseButtons = {}
     self.responseButtonsArray = {}
@@ -1012,6 +1013,7 @@ end
 ----------------------------------------------------------------------]]
 
 function RollFrameMixin:CreateNoteInput()
+    local L = Loothing.Locale
     local container = CreateFrame("Frame", nil, self.frame)
     container:SetPoint("TOPLEFT", 20, -285)
     container:SetPoint("TOPRIGHT", -20, -285)
@@ -1019,7 +1021,7 @@ function RollFrameMixin:CreateNoteInput()
 
     local label = container:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     label:SetPoint("TOPLEFT")
-    label:SetText("Note (optional):")
+    label:SetText(L["NOTE_OPTIONAL"])
     label:SetTextColor(0.7, 0.7, 0.7)
 
     local editBox = CreateFrame("EditBox", nil, container, "BackdropTemplate")
@@ -1043,7 +1045,7 @@ function RollFrameMixin:CreateNoteInput()
     -- Placeholder text
     local placeholder = editBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     placeholder:SetPoint("LEFT", editBox, "LEFT", 8, 0)
-    placeholder:SetText("Add a note...")
+    placeholder:SetText(L["ADD_NOTE_PLACEHOLDER"])
     placeholder:SetTextColor(0.4, 0.4, 0.4, 1)
     editBox.placeholder = placeholder
 
@@ -1084,6 +1086,7 @@ end
 ----------------------------------------------------------------------]]
 
 function RollFrameMixin:CreateRollSection()
+    local L = Loothing.Locale
     local container = CreateFrame("Frame", nil, self.frame)
     container:SetPoint("TOPLEFT", 20, -335)
     container:SetPoint("TOPRIGHT", -20, -335)
@@ -1091,7 +1094,7 @@ function RollFrameMixin:CreateRollSection()
 
     local rollLabel = container:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     rollLabel:SetPoint("LEFT")
-    rollLabel:SetText("Your Roll:")
+    rollLabel:SetText(L["ROLL_YOUR_ROLL"])
     rollLabel:SetTextColor(0.7, 0.7, 0.7)
 
     local rollText = container:CreateFontString(nil, "OVERLAY", "GameFontNormal")

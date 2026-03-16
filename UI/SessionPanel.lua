@@ -6,8 +6,8 @@
 local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
+local L = ns.Locale
 local Utils = ns.Utils
-local Loothing = ns.Addon
 local Popups = ns.Popups
 
 --[[--------------------------------------------------------------------
@@ -51,7 +51,7 @@ end
 
 --- Create UI elements
 function SessionPanelMixin:CreateElements()
-    local L = Loothing.Locale
+
 
     -- Header area
     self:CreateHeader()
@@ -71,7 +71,7 @@ end
 
 --- Create header
 function SessionPanelMixin:CreateHeader()
-    local L = Loothing.Locale
+
 
     local header = CreateFrame("Frame", nil, self.frame)
     header:SetPoint("TOPLEFT", 8, -8)
@@ -136,7 +136,7 @@ end
 
 --- Create item list
 function SessionPanelMixin:CreateItemList()
-    local L = Loothing.Locale
+
 
     -- List container
     local container = CreateFrame("Frame", nil, self.frame, "BackdropTemplate")
@@ -351,7 +351,7 @@ end
 
 --- Create the bulk action bar (hidden by default)
 function SessionPanelMixin:CreateBulkActionBar()
-    local L = Loothing.Locale
+
 
     local bar = CreateFrame("Frame", nil, self.listContainer, "BackdropTemplate")
     bar:SetPoint("TOPLEFT", 0, -25)
@@ -479,7 +479,7 @@ end
 function SessionPanelMixin:UpdateBulkBarButtons()
     if not self.bulkBar then return end
 
-    local L = Loothing.Locale
+
     local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
     local count = self:GetSelectedCount()
 
@@ -582,7 +582,7 @@ end
 function SessionPanelMixin:OnBulkSkip()
     if not Loothing.Session then return end
 
-    local L = Loothing.Locale
+
     local pending = self:GetSelectedItemsByState(Loothing.ItemState.PENDING)
     local voting = self:GetSelectedItemsByState(Loothing.ItemState.VOTING)
     local count = #pending + #voting
@@ -608,7 +608,7 @@ end
 function SessionPanelMixin:OnBulkRemove()
     if not Loothing.Session then return end
 
-    local L = Loothing.Locale
+
     local items = self:GetSelectedItemsByState(Loothing.ItemState.PENDING)
     if #items == 0 then return end
 
@@ -629,7 +629,7 @@ end
 function SessionPanelMixin:OnBulkRevote()
     if not Loothing.Session then return end
 
-    local L = Loothing.Locale
+
     local items = self:GetSelectedItemsByState(Loothing.ItemState.TALLIED)
     if #items == 0 then return end
 
@@ -667,7 +667,7 @@ end
 --- Show context menu for multi-selected items
 -- @param row table - The right-clicked row
 function SessionPanelMixin:ShowBulkContextMenu(row)
-    local L = Loothing.Locale
+
     local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
     local count = self:GetSelectedCount()
 
@@ -719,7 +719,7 @@ end
 
 --- Create footer with controls
 function SessionPanelMixin:CreateFooter()
-    local L = Loothing.Locale
+
 
     local footer = CreateFrame("Frame", nil, self.frame)
     footer:SetPoint("BOTTOMLEFT", 8, 8)
@@ -749,7 +749,7 @@ function SessionPanelMixin:CreateFooter()
     self.addItemBtn = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
     self.addItemBtn:SetSize(80, 26)
     self.addItemBtn:SetPoint("LEFT", self.startAllButton, "RIGHT", 8, 0)
-    self.addItemBtn:SetText(L["ADD_ITEM"] or "Add Item")
+    self.addItemBtn:SetText(L["ADD_ITEM"])
     self.addItemBtn:SetScript("OnClick", function()
         if Loothing.AddItemFrame then
             Loothing.AddItemFrame:Show()
@@ -763,7 +763,7 @@ function SessionPanelMixin:CreateFooter()
     self.awardLaterCheck:SetPoint("LEFT", self.addItemBtn, "RIGHT", 8, 0)
     self.awardLaterCheck.text = self.awardLaterCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     self.awardLaterCheck.text:SetPoint("LEFT", self.awardLaterCheck, "RIGHT", 2, 0)
-    self.awardLaterCheck.text:SetText(L["AWARD_LATER_ALL"] or "Award Later (All)")
+    self.awardLaterCheck.text:SetText(L["AWARD_LATER_ALL"])
     self.awardLaterCheck.text:SetTextColor(0.7, 0.7, 0.7)
     self.awardLaterCheck:SetScript("OnClick", function(btn)
         local checked = btn:GetChecked()
@@ -779,8 +779,8 @@ function SessionPanelMixin:CreateFooter()
     end)
     self.awardLaterCheck:SetScript("OnEnter", function(btn)
         GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
-        GameTooltip:SetText(L["AWARD_LATER_ALL"] or "Award Later (All)", 1, 0.82, 0)
-        GameTooltip:AddLine("Set all items to be awarded after the session", 1, 1, 1, true)
+        GameTooltip:SetText(L["AWARD_LATER_ALL"], 1, 0.82, 0)
+        GameTooltip:AddLine(L["AWARD_LATER_ALL_DESC"], 1, 1, 1, true)
         GameTooltip:Show()
     end)
     self.awardLaterCheck:SetScript("OnLeave", function()
@@ -867,7 +867,7 @@ end
 
 --- Update header display
 function SessionPanelMixin:UpdateHeader()
-    local L = Loothing.Locale
+
 
     if not Loothing.Session then
         self.statusText:SetText(L["NO_SESSION"])
@@ -939,7 +939,7 @@ end
 
 --- Update footer buttons
 function SessionPanelMixin:UpdateFooter()
-    local L = Loothing.Locale
+
     local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
 
     if not Loothing.Session then
@@ -1195,7 +1195,7 @@ function SessionPanelMixin:AddMLControls(row, item)
         deleteBtn:SetHighlightTexture("Interface\\Buttons\\UI-GROUPLOOT-PASS-HIGHLIGHT")
         deleteBtn:SetScript("OnEnter", function(btn)
             GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
-            GameTooltip:SetText("Remove from session", nil, nil, nil, nil, true)
+            GameTooltip:SetText(L["REMOVE_FROM_SESSION"], nil, nil, nil, nil, true)
             GameTooltip:Show()
         end)
         deleteBtn:SetScript("OnLeave", function()
@@ -1220,14 +1220,14 @@ function SessionPanelMixin:AddMLControls(row, item)
 
         local label = cb:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         label:SetPoint("RIGHT", cb, "LEFT", -2, 0)
-        label:SetText("Later")
+        label:SetText(L["AWARD_LATER_SHORT"])
         label:SetTextColor(0.6, 0.6, 0.6)
         cb._label = label
 
         cb:SetScript("OnEnter", function(btn)
             GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
-            GameTooltip:SetText("Award Later", 1, 0.82, 0)
-            GameTooltip:AddLine("Mark this item to be awarded after the session", 1, 1, 1, true)
+            GameTooltip:SetText(L["BULK_AWARD_LATER"], 1, 0.82, 0)
+            GameTooltip:AddLine(L["AWARD_LATER_ITEM_DESC"], 1, 1, 1, true)
             GameTooltip:Show()
         end)
         cb:SetScript("OnLeave", function()

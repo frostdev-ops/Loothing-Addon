@@ -3,15 +3,14 @@
     Locale - English (US) localization
 ----------------------------------------------------------------------]]
 
-local _, ns = ...
-local Loothing = ns.Addon
-
-local L = ns.Locale
+local ADDON_NAME, ns = ...
+local Loolib = LibStub("Loolib")
+local LoolibLocale = Loolib.Locale or Loolib:GetModule("Locale")
+local L = LoolibLocale:NewLocale(ADDON_NAME, "enUS", true)
 
 -- General
 L["ADDON_NAME"] = "Loothing"
 L["ADDON_LOADED"] = "Loothing v%s loaded. Type /loothing or /lt for options."
-L["SLASH_HELP"] = "Commands: /loothing [show|hide|config|history|council]"
 L["SLASH_HELP_HEADER"] = "Loothing commands (use /lt help <command>):"
 L["SLASH_HELP_DETAIL"] = "Usage for /lt %s:"
 L["SLASH_HELP_UNKNOWN"] = "Unknown command '%s'. Use /lt help."
@@ -46,13 +45,7 @@ L["SLASH_DESC_START"] = "Activate loot handling"
 L["SLASH_DESC_STOP"] = "Deactivate loot handling"
 
 -- Session
-L["SESSION"] = "Session"
-L["SESSION_START"] = "Start Session"
-L["SESSION_END"] = "End Session"
 L["SESSION_ACTIVE"] = "Session Active"
-L["SESSION_INACTIVE"] = "No Active Session"
-L["SESSION_STARTED"] = "Loot council session started for %s"
-L["SESSION_ENDED"] = "Loot council session ended"
 L["SESSION_CLOSED"] = "Session Closed"
 L["NO_ITEMS"] = "No items in session"
 L["MANUAL_SESSION"] = "Manual Session"
@@ -70,7 +63,6 @@ L["ML_USAGE_PROMPT_TEXT"] = "You are the raid leader. Use Loothing for loot dist
 L["ML_USAGE_PROMPT_TEXT_INSTANCE"] = "You are the raid leader.\nUse Loothing for %s?"
 L["ML_STOPPED_HANDLING"] = "Stopped handling loot distribution."
 L["RECONNECT_RESTORED"] = "Restored session state from cache."
-L["ERROR_NOT_ML"] = "Only the Master Looter can do this"
 L["ERROR_NOT_ML_OR_RL"] = "Only the Master Looter or Raid Leader can do this"
 L["REFRESH"] = "Refresh"
 L["ITEM"] = "Item"
@@ -81,81 +73,45 @@ L["DATE"] = "Date"
 -- Voting
 L["VOTE"] = "Vote"
 L["VOTING"] = "Voting"
-L["VOTE_NOW"] = "Vote Now"
 L["START_VOTE"] = "Start Vote"
-L["VOTING_OPEN"] = "Voting open for %s"
-L["VOTING_CLOSED"] = "Voting closed"
-L["VOTES_RECEIVED"] = "%d/%d votes received"
 L["TIME_REMAINING"] = "%d seconds remaining"
 L["SUBMIT_VOTE"] = "Submit Vote"
 L["SUBMIT_RESPONSE"] = "Submit Response"
 L["CHANGE_VOTE"] = "Change Vote"
-L["VOTE_SUBMITTED"] = "Vote submitted"
-L["ALREADY_VOTED"] = "You have already voted on this item"
-
--- Responses
-L["NEED"] = "Need"
-L["GREED"] = "Greed"
-L["OFFSPEC"] = "Offspec"
-L["TRANSMOG"] = "Transmog"
-L["PASS"] = "Pass"
-
--- Response descriptions
-L["NEED_DESC"] = "Main spec upgrade"
-L["GREED_DESC"] = "General interest"
-L["OFFSPEC_DESC"] = "Offspec or alt"
-L["TRANSMOG_DESC"] = "Appearance only"
-L["PASS_DESC"] = "Not interested"
 
 -- Awards
 L["AWARD"] = "Award"
-L["AWARD_TO"] = "Award to %s"
 L["AWARD_ITEM"] = "Award Item"
 L["CONFIRM_AWARD"] = "Award %s to %s?"
 L["ITEM_AWARDED"] = "%s awarded to %s"
 L["SKIP_ITEM"] = "Skip Item"
-L["ITEM_SKIPPED"] = "Item skipped"
 L["DISENCHANT"] = "Disenchant"
 
 -- Results
 L["RESULTS"] = "Results"
 L["WINNER"] = "Winner"
-L["NO_VOTES"] = "No votes received"
 L["TIE"] = "Tie"
-L["TIE_BREAKER"] = "Tie breaker required"
-L["TOTAL_VOTES"] = "Total: %d votes"
-L["LOOTED_BY"] = "Looted by: %s"
 
 -- Council
 L["COUNCIL"] = "Council"
 L["COUNCIL_MEMBERS"] = "Council Members"
 L["ADD_MEMBER"] = "Add Member"
 L["REMOVE_MEMBER"] = "Remove Member"
-L["NOT_COUNCIL"] = "You are not a council member"
 L["IS_COUNCIL"] = "%s is a council member"
-L["COUNCIL_ONLY"] = "Only council members can vote"
 L["AUTO_OFFICERS"] = "Auto-include officers"
 L["AUTO_RAID_LEADER"] = "Auto-include raid leader"
 
 -- History
 L["HISTORY"] = "History"
-L["LOOT_HISTORY"] = "Loot History"
 L["NO_HISTORY"] = "No loot history"
 L["CLEAR_HISTORY"] = "Clear History"
-L["CONFIRM_CLEAR"] = "Clear all loot history?"
 L["CONFIRM_CLEAR_HISTORY"] = "Clear all loot history?"
 L["EXPORT"] = "Export"
 L["EXPORT_HISTORY"] = "Export History"
 L["EXPORT_EQDKP"] = "EQdkp"
-L["EXPORT_EQDKP_DESC"] = "Export to EQdkp-Plus XML format"
-L["ENTRIES_COUNT"] = "Total: %d entries"
-L["ENTRIES_FILTERED"] = "Showing: %d of %d entries"
 L["SEARCH"] = "Search..."
 L["SELECT_ALL"] = "Select All"
 L["ALL_WINNERS"] = "All Winners"
-L["AWARDED_TO"] = "Awarded to: %s"
-L["FROM_ENCOUNTER"] = "From: %s"
-L["WITH_VOTES"] = "Votes: %d"
 L["CLEAR"] = "Clear"
 
 -- Tabs
@@ -163,7 +119,6 @@ L["TAB_SESSION"] = "Session"
 L["TAB_TRADE"] = "Trade"
 L["TAB_HISTORY"] = "History"
 L["TAB_ROSTER"] = "Roster"
-L["TAB_SETTINGS"] = "Settings"
 
 -- Roster
 L["ROSTER_SUMMARY"] = "%d Members | %d Online | %d Installed | %d Council"
@@ -183,23 +138,13 @@ L["ROSTER_REMOVE_OBSERVER"] = "Remove as Observer"
 -- Settings
 L["SETTINGS"] = "Settings"
 L["GENERAL"] = "General"
-L["VOTING_SETTINGS"] = "Voting Settings"
-L["COUNCIL_SETTINGS"] = "Council Settings"
-L["UI_SETTINGS"] = "UI Settings"
 L["VOTING_MODE"] = "Voting Mode"
-L["MODE_SIMPLE"] = "Simple (Most votes wins)"
-L["MODE_RANKED"] = "Ranked Choice"
 L["SIMPLE_VOTING"] = "Simple (Most votes wins)"
 L["RANKED_VOTING"] = "Ranked Choice"
 L["VOTING_TIMEOUT"] = "Voting Timeout"
 L["SECONDS"] = "seconds"
-L["AUTO_START"] = "Auto-start session on boss kill"
-L["AUTO_START_SESSION"] = "Auto-start session on boss kill"
 L["AUTO_INCLUDE_OFFICERS"] = "Auto-include officers"
 L["AUTO_INCLUDE_LEADER"] = "Auto-include raid leader"
-L["SHOW_MINIMAP"] = "Show minimap button"
-L["SHOW_MINIMAP_BUTTON"] = "Show minimap button"
-L["UI_SCALE"] = "UI Scale"
 L["ADD"] = "Add"
 
 -- Auto-Pass
@@ -207,23 +152,12 @@ L["AUTOPASS_SETTINGS"] = "Auto-Pass Settings"
 L["ENABLE_AUTOPASS"] = "Enable Auto-Pass"
 L["AUTOPASS_DESC"] = "Automatically pass on items you cannot use"
 L["AUTOPASS_WEAPONS"] = "Auto-pass weapons (wrong primary stats)"
-L["AUTOPASS_BOE"] = "Auto-pass Bind-on-Equip items"
-L["AUTOPASS_TRANSMOG"] = "Auto-pass known transmog appearances"
 
 -- Announcement Settings
 L["ANNOUNCEMENT_SETTINGS"] = "Announcement Settings"
 L["ANNOUNCE_AWARDS"] = "Announce Awards"
 L["ANNOUNCE_ITEMS"] = "Announce Items"
 L["ANNOUNCE_BOSS_KILL"] = "Announce Session Start/End"
-L["AWARD_CHANNEL"] = "Award Channel"
-L["SECONDARY_CHANNEL"] = "Secondary Channel"
-L["AWARD_TEXT"] = "Award Text"
-L["AWARD_TEXT_DESC"] = "Use {item}, {winner}, {reason} placeholders"
-L["ITEM_CHANNEL"] = "Item Channel"
-L["ITEM_TEXT"] = "Item Announcement Text"
-L["ITEM_TEXT_DESC"] = "Use {item} placeholder"
-L["SESSION_START_TEXT"] = "Session Start Text"
-L["SESSION_END_TEXT"] = "Session End Text"
 L["CHANNEL_RAID"] = "Raid"
 L["CHANNEL_RAID_WARNING"] = "Raid Warning"
 L["CHANNEL_OFFICER"] = "Officer"
@@ -235,13 +169,8 @@ L["CHANNEL_NONE"] = "None"
 L["AUTO_AWARD_SETTINGS"] = "Auto Award Settings"
 L["AUTO_AWARD_ENABLE"] = "Enable Auto Award"
 L["AUTO_AWARD_DESC"] = "Automatically award items below quality threshold"
-L["AUTO_AWARD_LOWER"] = "Lower Quality Threshold"
-L["AUTO_AWARD_UPPER"] = "Upper Quality Threshold"
 L["AUTO_AWARD_TO"] = "Award To"
-L["AUTO_AWARD_REASON"] = "Award Reason"
-L["AUTO_AWARD_BOE"] = "Include BoE Items"
 L["AUTO_AWARD_TO_DESC"] = "Player name or 'disenchanter'"
-L["AUTO_AWARD_QUALITY_DESC"] = "Items between lower and upper thresholds will be auto-awarded"
 
 -- Ignore Items
 L["IGNORE_ITEMS_SETTINGS"] = "Ignore Items"
@@ -249,15 +178,10 @@ L["ENABLE_IGNORE_LIST"] = "Enable Ignore List"
 L["IGNORE_LIST_DESC"] = "Items on the ignore list will not be tracked by the loot council"
 L["IGNORED_ITEMS"] = "Ignored Items"
 L["NO_IGNORED_ITEMS"] = "No items are currently ignored"
-L["IGNORE_ENCHANTING"] = "Ignore Enchanting Materials"
-L["IGNORE_CRAFTING"] = "Ignore Crafting Reagents"
-L["IGNORE_CONSUMABLES"] = "Ignore Consumables"
-L["IGNORE_PERMANENT_ENHANCEMENTS"] = "Ignore Permanent Enhancements (Gems)"
 L["ADD_IGNORED_ITEM"] = "Add Item to Ignore List"
 L["REMOVE_IGNORED_ITEM"] = "Remove from ignore list"
 L["ITEM_IGNORED"] = "%s added to ignore list"
 L["ITEM_UNIGNORED"] = "%s removed from ignore list"
-L["ITEM_ALREADY_IGNORED"] = "%s is already on the ignore list"
 L["SLASH_IGNORE"] = "/loothing ignore [itemlink] - Add/remove item from ignore list"
 L["CLEAR_IGNORED_ITEMS"] = "Clear All"
 L["CONFIRM_CLEAR_IGNORED"] = "Clear all ignored items?"
@@ -270,10 +194,9 @@ L["CLOSE"] = "Close"
 L["CANCEL"] = "Cancel"
 L["NO_LIMIT"] = "No Limit"
 
--- Locale Override
-L["CONFIG_LOCALE_OVERRIDE"] = "Language Override"
-L["CONFIG_LOCALE_OVERRIDE_DESC"] = "Set addon language manually (requires /reload)"
-L["LOCALE_AUTO"] = "Automatic (game language)"
+-- Brainrot Mode
+L["CONFIG_BRAINROT_MODE"] = "Brainrot Mode"
+L["CONFIG_BRAINROT_MODE_DESC"] = "Replace addon text with the brainrot variant (requires /reload)"
 
 -- Personal Preferences
 L["PERSONAL_PREFERENCES"] = "Personal Preferences"
@@ -297,62 +220,41 @@ L["SESSION_SETTINGS_ML"] = "Session Settings (ML)"
 L["VOTING_TIMEOUT_DURATION"] = "Timeout Duration"
 
 -- Errors
-L["ERROR_NOT_IN_RAID"] = "You must be in a raid"
-L["ERROR_NOT_LEADER"] = "You must be the raid leader or assistant"
-L["ERROR_NO_ITEM"] = "No item selected"
-L["ERROR_SESSION_ACTIVE"] = "A session is already active"
 L["ERROR_NO_SESSION"] = "No active session"
-L["ERROR_VOTING_ACTIVE"] = "Voting is already in progress"
-L["ERROR_SYNC_FAILED"] = "Failed to sync with raid leader"
 
 -- Communication
-L["SYNCING"] = "Syncing..."
 L["SYNC_COMPLETE"] = "Sync complete"
-L["SYNC_REQUEST"] = "Requesting sync from raid leader"
 
 -- Guild Sync
-L["SYNC_SETTINGS"] = "Sync Settings"
-L["SYNC_HISTORY"] = "Sync History"
-L["SYNC_SETTINGS_GUILD"] = "Sync Settings to Guild"
-L["SYNC_HISTORY_GUILD"] = "Sync History to Guild"
-L["SYNC_SETTINGS_REQUEST"] = "%s wants to sync their settings to you"
-L["SYNC_HISTORY_REQUEST"] = "%s wants to sync their history (%d days) to you"
-L["ACCEPT_SYNC"] = "Accept Sync"
-L["DECLINE_SYNC"] = "Decline Sync"
-L["SETTINGS_SYNCED"] = "Settings synced from %s"
 L["HISTORY_SYNCED"] = "%d history entries synced from %s"
 L["SYNC_IN_PROGRESS"] = "Sync already in progress"
 L["SYNC_TIMEOUT"] = "Sync timed out"
-L["SYNC_DAYS"] = "Days of history"
 
 -- Tooltips
 L["TOOLTIP_ITEM_LEVEL"] = "Item Level: %d"
-L["TOOLTIP_LOOTER"] = "Looted by: %s"
 L["TOOLTIP_VOTES"] = "Votes: %d"
-L["TOOLTIP_STATUS"] = "Status: %s"
 
 -- Status
 L["STATUS_PENDING"] = "Pending"
+L["VOTING_STATE_PENDING"] = "Pending"
+L["VOTING_STATE_VOTING"] = "Voting"
+L["VOTING_STATE_TALLYING"] = "Tallying"
+L["VOTING_STATE_DECIDED"] = "Decided"
+L["VOTING_STATE_REVOTING"] = "Re-voting"
 L["STATUS_VOTING"] = "Voting"
 L["STATUS_TALLIED"] = "Tallied"
 L["STATUS_AWARDED"] = "Awarded"
 L["STATUS_SKIPPED"] = "Skipped"
 
 -- Response Settings
-L["RESPONSE_SETTINGS"] = "Response Settings"
 L["RESET_RESPONSES"] = "Reset to Defaults"
 
 -- Award Reason Settings
-L["AWARD_REASON_SETTINGS"] = "Award Reason Settings"
-L["ENABLE_AWARD_REASONS"] = "Enable Award Reasons"
 L["REQUIRE_AWARD_REASON"] = "Require reason when awarding"
 L["AWARD_REASONS"] = "Award Reasons"
 L["ADD_REASON"] = "Add Reason"
 L["REASON_NAME"] = "Reason Name"
-L["SELECT_AWARD_REASON"] = "Select Award Reason"
-L["RESET_AWARD_REASONS"] = "Reset to Defaults"
 L["AWARD_REASON"] = "Award Reason"
-L["NO_REASON"] = "No Reason"
 
 -- Trade Panel
 L["TRADE_QUEUE"] = "Trade Queue"
@@ -364,12 +266,7 @@ L["N_ITEMS_TO_TRADE"] = "%d items awaiting trade"
 L["AUTO_TRADE"] = "Auto-trade"
 L["CLEAR_COMPLETED"] = "Clear Completed"
 
--- Minimap
-L["MINIMAP_LEFT_CLICK"] = "Left-click to toggle window"
-L["MINIMAP_RIGHT_CLICK"] = "Right-click for options"
-
 -- Voting Options
-L["VOTING_OPTIONS"] = "Voting Options"
 L["SELF_VOTE"] = "Allow Self-Vote"
 L["SELF_VOTE_DESC"] = "Allow council members to vote for themselves"
 L["MULTI_VOTE"] = "Allow Multi-Vote"
@@ -379,33 +276,22 @@ L["ANONYMOUS_VOTING_DESC"] = "Hide who voted for whom until item is awarded"
 L["HIDE_VOTES"] = "Hide Vote Counts"
 L["HIDE_VOTES_DESC"] = "Don't show vote counts until all votes are in"
 L["OBSERVE_MODE"] = "Observe Mode"
-L["OBSERVE_MODE_DESC"] = "View voting but cannot cast votes"
 L["AUTO_ADD_ROLLS"] = "Auto-add Rolls"
 L["AUTO_ADD_ROLLS_DESC"] = "Automatically add /roll results to candidates"
 L["REQUIRE_NOTES"] = "Require Notes"
 L["REQUIRE_NOTES_DESC"] = "Voters must add a note with their vote"
-L["NUM_BUTTONS"] = "Number of Buttons"
-L["NUM_BUTTONS_DESC"] = "Number of response buttons to show (1-10)"
 
 -- Button Sets
 L["BUTTON_SETS"] = "Button Sets"
-L["BUTTON_SET_SETTINGS"] = "Button Set Settings"
 L["ACTIVE_SET"] = "Active Set"
-L["SET_NAME"] = "Set Name"
 L["NEW_SET"] = "New Set"
-L["DELETE_SET"] = "Delete Set"
 L["CONFIRM_DELETE_SET"] = "Delete button set '%s'?"
 L["ADD_BUTTON"] = "Add Button"
-L["BUTTON_TEXT"] = "Button Text"
-L["WHISPER_KEY"] = "Whisper Key"
-L["WHISPER_KEY_DESC"] = "Players can whisper this to respond (e.g., !need)"
 L["MAX_BUTTONS"] = "Maximum 10 buttons per set"
 L["MIN_BUTTONS"] = "At least 1 button required"
 L["DEFAULT_SET"] = "Default"
 L["SORT_ORDER"] = "Sort Order"
 L["BUTTON_COLOR"] = "Button Color"
-L["MOVE_UP"] = "Move Up"
-L["MOVE_DOWN"] = "Move Down"
 
 -- Filters
 L["FILTERS"] = "Filters"
@@ -423,7 +309,6 @@ L["FILTERS_ACTIVE"] = "%d filter(s) active"
 -- Generic / Missing strings
 L["YES"] = "Yes"
 L["NO"] = "No"
-L["NO_SELECTION"] = "No selection"
 L["TIME_EXPIRED"] = "Time expired"
 L["END_SESSION"] = "End Session"
 L["END_VOTE"] = "End Vote"
@@ -440,204 +325,47 @@ L["MINIMAP_TOOLTIP_RIGHT"] = "Right-click: Options"
 L["RESULTS_TITLE"] = "Results"
 L["VOTE_TITLE"] = "Loot Response"
 L["VOTES"] = "Votes"
-L["VOTING_STATE_PENDING"] = "Pending"
-L["VOTING_STATE_VOTING"] = "Voting"
-L["VOTING_STATE_DECIDED"] = "Decided"
-L["VOTING_STATE_TALLYING"] = "Tallying"
-L["VOTING_STATE_REVOTING"] = "Re-voting"
 L["ITEMS_PENDING"] = "%d items pending"
 L["ITEMS_VOTING"] = "%d items voting"
 L["LINK_IN_CHAT"] = "Link in Chat"
 L["VIEW"] = "View"
 
--- Group Loot
-L["GROUP_LOOT"] = "Group Loot"
-L["ENABLE_AUTO_ROLL"] = "Enable Auto-Roll"
-L["ENABLE_AUTO_ROLL_DESC"] = "Automatically roll on group loot (ML rolls Need, others Pass)"
-L["HIDE_LOOT_FRAMES"] = "Hide Loot Frames"
-L["HIDE_LOOT_FRAMES_DESC"] = "Hide the group loot roll UI after auto-rolling"
-L["GROUP_LOOT_QUALITY"] = "Quality Threshold"
-L["GROUP_LOOT_QUALITY_DESC"] = "Minimum item quality for auto-roll"
-
--- Frame/UI Settings
-L["CONFIG_FRAME_SETTINGS"] = "Frame Settings"
-L["CONFIG_FRAME_AUTOOPEN"] = "Auto Open Frames"
-L["CONFIG_FRAME_AUTOOPEN_DESC"] = "Automatically open frames when loot is available"
-L["CONFIG_FRAME_AUTOCLOSE"] = "Auto Close Frames"
-L["CONFIG_FRAME_AUTOCLOSE_DESC"] = "Automatically close frames when session ends"
-L["CONFIG_FRAME_MINIMIZEINCOMBAT"] = "Minimize in Combat"
-L["CONFIG_FRAME_MINIMIZEINCOMBAT_DESC"] = "Hide frames during combat"
-L["CONFIG_FRAME_SHOWSPECICON"] = "Show Spec Icon"
-L["CONFIG_FRAME_SHOWSPECICON_DESC"] = "Show specialization icons instead of class icons"
-L["CONFIG_FRAME_CLOSEWITHESCAPE"] = "Close with Escape"
-L["CONFIG_FRAME_CLOSEWITHESCAPE_DESC"] = "Allow ESC key to close frames"
-L["CONFIG_FRAME_TIMEOUTFLASH"] = "Timeout Flash"
-L["CONFIG_FRAME_TIMEOUTFLASH_DESC"] = "Flash the frame when voting timeout approaches"
-L["CONFIG_FRAME_BLOCKTRADES"] = "Block Trades During Voting"
-L["CONFIG_FRAME_BLOCKTRADES_DESC"] = "Prevent trade requests while voting is active"
-L["CONFIG_FRAME_CHATFRAME"] = "Output Chat Frame"
-L["CONFIG_FRAME_CHATFRAME_DESC"] = "Which chat frame to send messages to"
-
 -- Master Looter Settings
 L["CONFIG_ML_SETTINGS"] = "Master Looter Settings"
-L["CONFIG_ML_USAGEMODE"] = "Usage Mode"
-L["CONFIG_ML_USAGEMODE_DESC"] = "When to automatically start as Master Looter"
-L["CONFIG_ML_USAGEMODE_NEVER"] = "Never"
-L["CONFIG_ML_USAGEMODE_GL"] = "Group Loot"
-L["CONFIG_ML_USAGEMODE_ASKGL"] = "Ask on Group Loot"
-L["CONFIG_ML_ONLYINRAIDS"] = "Only Use in Raids"
-L["CONFIG_ML_ONLYINRAIDS_DESC"] = "Disable Master Looter in dungeons"
-L["CONFIG_ML_ALLOWOUTOFRAID"] = "Allow Out of Raid"
-L["CONFIG_ML_ALLOWOUTOFRAID_DESC"] = "Allow starting session when not in instance"
-L["CONFIG_ML_SKIPSESSIONFRAME"] = "Skip Session Frame"
-L["CONFIG_ML_SKIPSESSIONFRAME_DESC"] = "Auto-start voting without session setup frame"
-L["CONFIG_ML_SORTITEMS"] = "Auto Sort Items"
-L["CONFIG_ML_SORTITEMS_DESC"] = "Automatically sort items by quality/level"
-L["CONFIG_ML_AUTOADDBOES"] = "Auto Add BoEs"
-L["CONFIG_ML_AUTOADDBOES_DESC"] = "Include Bind-on-Equip items in auto-add"
-L["CONFIG_ML_AUTOADDPETS"] = "Auto Add Pets"
-L["CONFIG_ML_AUTOADDPETS_DESC"] = "Include pets in auto-add"
-L["CONFIG_ML_PRINTCOMPLETEDTRADES"] = "Print Completed Trades"
-L["CONFIG_ML_PRINTCOMPLETEDTRADES_DESC"] = "Print confirmation when trades complete"
-L["CONFIG_ML_REJECTTRADE"] = "Reject Invalid Trades"
-L["CONFIG_ML_REJECTTRADE_DESC"] = "Auto-reject trades not from award winners"
-L["CONFIG_ML_AWARDLATER"] = "Award Later"
-L["CONFIG_ML_AWARDLATER_DESC"] = "Allow awarding items to ML for later distribution"
 
 -- History Settings
 L["CONFIG_HISTORY_SETTINGS"] = "History Settings"
 L["CONFIG_HISTORY_ENABLED"] = "Enable Loot History"
-L["CONFIG_HISTORY_ENABLED_DESC"] = "Track and save loot history"
-L["CONFIG_HISTORY_SENDHISTORY"] = "Send History"
-L["CONFIG_HISTORY_SENDHISTORY_DESC"] = "Share history with group members"
-L["CONFIG_HISTORY_SENDTOGUILD"] = "Send to Guild"
-L["CONFIG_HISTORY_SENDTOGUILD_DESC"] = "Send history to guild instead of group"
-L["CONFIG_HISTORY_SAVEPERSONAL"] = "Save Personal Loot"
-L["CONFIG_HISTORY_SAVEPERSONAL_DESC"] = "Include personal loot in history"
-L["CONFIG_HISTORY_DELETEBYPLAYER"] = "Delete by Player"
-L["CONFIG_HISTORY_DELETEBYPLAYER_DESC"] = "Remove all history entries for a player"
-L["CONFIG_HISTORY_DELETEBYAGE"] = "Delete by Age"
-L["CONFIG_HISTORY_DELETEBYAGE_DESC"] = "Remove entries older than selected period"
-L["CONFIG_HISTORY_CLEARALL"] = "Clear All History"
 L["CONFIG_HISTORY_CLEARALL_CONFIRM"] = "Are you sure you want to delete ALL history entries? This cannot be undone!"
-L["CONFIG_HISTORY_DELETED"] = "Deleted %d history entries"
-
--- Enhanced Announcements
-L["CONFIG_ANN_CONSIDERATIONS"] = "Announce Considerations"
-L["CONFIG_ANN_CONSIDERATIONS_DESC"] = "Announce when ML is considering an item"
-L["CONFIG_ANN_CONSIDERATIONS_CHANNEL"] = "Considerations Channel"
-L["CONFIG_ANN_CONSIDERATIONS_TEXT"] = "Considerations Message"
-L["CONFIG_ANN_CONSIDERATIONS_TEXT_DESC"] = "Tokens: {ml}, {item}, {ilvl}, {type}"
-L["CONFIG_ANN_LINE_ENABLED"] = "Enable Line %d"
-L["CONFIG_ANN_LINE_CHANNEL"] = "Line %d Channel"
-L["CONFIG_ANN_LINE_TEXT"] = "Line %d Message"
-L["CONFIG_ANN_TOKENS"] = "Available tokens: {item}, {winner}, {reason}, {notes}, {ilvl}, {type}, {oldItem}, {ml}, {session}, {votes}"
-L["CONFIG_ANN_AWARD_LINES"] = "Award Announcements"
-L["CONFIG_ANN_ITEM_LINES"] = "Item Announcements"
-L["CONFIG_ANN_SESSION_START_CHANNEL"] = "Session Start Channel"
-L["CONFIG_ANN_SESSION_END_CHANNEL"] = "Session End Channel"
 
 -- Enhanced Award Reasons
-L["CONFIG_REASON_NUMREASONS"] = "Number of Reasons"
-L["CONFIG_REASON_NUMREASONS_DESC"] = "How many award reasons to show (1-20)"
 L["CONFIG_REASON_LOG"] = "Log to History"
-L["CONFIG_REASON_LOG_DESC"] = "Include awards with this reason in history"
 L["CONFIG_REASON_DISENCHANT"] = "Treat as Disenchant"
-L["CONFIG_REASON_DISENCHANT_DESC"] = "Mark this reason as disenchant for statistics"
-L["CONFIG_REASON_MOVEUP"] = "Move Up"
-L["CONFIG_REASON_MOVEDOWN"] = "Move Down"
-L["CONFIG_REASON_RESET"] = "Reset to Defaults"
 L["CONFIG_REASON_RESET_CONFIRM"] = "Reset all award reasons to defaults?"
 
 -- Council Management
-L["CONFIG_COUNCIL_ADDBYRANK"] = "Add by Guild Rank"
-L["CONFIG_COUNCIL_ADDBYRANK_DESC"] = "Add all guild members with this rank"
-L["CONFIG_COUNCIL_ADDFROMGROUP"] = "Add from Group"
-L["CONFIG_COUNCIL_ADDFROMGROUP_DESC"] = "Add selected group members to council"
-L["CONFIG_COUNCIL_REMOVEALL"] = "Remove All Members"
-L["CONFIG_COUNCIL_REMOVEALL_DESC"] = "Clear the entire council list"
 L["CONFIG_COUNCIL_REMOVEALL_CONFIRM"] = "Remove all council members?"
-L["CONFIG_COUNCIL_MEMBERS_ADDED"] = "Added %d council members"
-L["CONFIG_COUNCIL_MEMBERS_REMOVED"] = "Removed %d council members"
 
 -- Auto-Pass Enhancements
 L["CONFIG_AUTOPASS_TRINKETS"] = "Auto-pass Trinkets"
-L["CONFIG_AUTOPASS_TRINKETS_DESC"] = "Automatically pass on trinket drops"
-L["CONFIG_AUTOPASS_TRANSMOGSOURCE"] = "Auto-pass Transmog Source"
-L["CONFIG_AUTOPASS_TRANSMOGSOURCE_DESC"] = "Pass on items you can learn for transmog"
 L["CONFIG_AUTOPASS_SILENT"] = "Silent Auto-Pass"
-L["CONFIG_AUTOPASS_SILENT_DESC"] = "Don't print messages when auto-passing"
 
 -- Voting Enhancements
 L["CONFIG_VOTING_MLSEESVOTES"] = "ML Sees Votes"
 L["CONFIG_VOTING_MLSEESVOTES_DESC"] = "Master Looter can see votes even when anonymous"
 
--- General Enhancements
-L["CONFIG_GENERAL_APPENDREALM"] = "Append Realm Names"
-L["CONFIG_GENERAL_APPENDREALM_DESC"] = "Show realm names for cross-realm players"
-L["CONFIG_GENERAL_PRINTRESPONSES"] = "Print Responses"
-L["CONFIG_GENERAL_PRINTRESPONSES_DESC"] = "Print responses to chat when received"
-L["CONFIG_GENERAL_AUTOLOOTGUILDONLY"] = "Auto Loot Guild Only"
-L["CONFIG_GENERAL_AUTOLOOTGUILDONLY_DESC"] = "Only enable auto-loot in guild groups"
-
--- ============================================================================
--- Roll/Vote System Locale Strings
--- ============================================================================
-
 -- RollFrame UI
-L["ROLL_FRAME_TITLE"] = "Loot Roll"
-L["ROLL_YOUR_RESPONSE"] = "Your Response"
-L["ROLL_SELECT_RESPONSE"] = "Select your response:"
-L["ROLL_YOUR_CURRENT_GEAR"] = "Your Current Gear:"
-L["ROLL_UPGRADE_VALUE"] = "Upgrade: %+d ilvl"
-L["ROLL_DOWNGRADE_VALUE"] = "Downgrade: %d ilvl"
-L["ROLL_NO_CHANGE"] = "No change"
-L["ROLL_NOTE_LABEL"] = "Note (optional):"
-L["ROLL_NOTE_PLACEHOLDER"] = "Why do you want this item?"
-L["ROLL_AUTO_ROLL"] = "Auto-roll"
-L["ROLL_NOW"] = "Roll Now"
 L["ROLL_YOUR_ROLL"] = "Your Roll:"
-L["ROLL_SUBMIT"] = "Submit Response"
-L["ROLL_TIME_REMAINING"] = "Time: %ds"
-L["ROLL_TIME_EXPIRED"] = "Time expired"
-L["ROLL_RESPONSE_SUBMITTED"] = "Response submitted"
-L["ROLL_NOTE_REQUIRED"] = "A note is required"
-L["ROLL_SELECT_REQUIRED"] = "Please select a response"
-L["ROLL_REOPEN"] = "Reopen Roll Frame"
-
--- RollFrame Settings
-L["ROLL_FRAME_SETTINGS"] = "Roll Frame"
-L["ROLL_FRAME_DESC"] = "Settings for the popup that appears when voting starts on an item."
-L["ROLL_AUTO_SHOW_ROLL_FRAME"] = "Auto-show Roll Frame"
-L["ROLL_AUTO_SHOW_ROLL_FRAME_DESC"] = "Automatically show the roll frame when voting starts for an item"
-L["ROLL_AUTO_ROLL_ON_SUBMIT"] = "Auto-roll on Submit"
-L["ROLL_AUTO_ROLL_ON_SUBMIT_DESC"] = "Automatically /roll when submitting your response"
-L["ROLL_REQUIRE_NOTE"] = "Require Note"
-L["ROLL_REQUIRE_NOTE_DESC"] = "Require a note before submitting response"
-L["ROLL_SHOW_GEAR_COMPARISON"] = "Show Gear Comparison"
-L["ROLL_SHOW_GEAR_COMPARISON_DESC"] = "Display your currently equipped gear for comparison"
-L["ROLL_RANGE"] = "Roll Range"
-L["ROLL_MIN"] = "Minimum"
-L["ROLL_MAX"] = "Maximum"
 
 -- CouncilTable UI
-L["COUNCIL_TABLE_TITLE"] = "Loot Council - Candidates"
 L["COUNCIL_NO_CANDIDATES"] = "No candidates have responded yet"
-L["COUNCIL_SELECTED"] = "Selected: %s"
-L["COUNCIL_NONE_SELECTED"] = "No candidate selected"
 L["COUNCIL_AWARD"] = "Award"
 L["COUNCIL_REVOTE"] = "Re-vote"
 L["COUNCIL_SKIP"] = "Skip"
-L["COUNCIL_CONFIRM_AWARD"] = "Award %s to %s?"
-L["COUNCIL_CONFIRM_SKIP"] = "Skip this item?"
 L["COUNCIL_CONFIRM_REVOTE"] = "Clear all votes and restart voting?"
 
 -- CouncilTable Settings
-L["COUNCIL_TABLE_SETTINGS"] = "Council Table"
-L["COUNCIL_TABLE_DESC"] = "Configure which columns are visible in the council candidate table."
-L["COUNCIL_VISIBLE_COLUMNS"] = "Visible Columns"
 L["COUNCIL_COLUMN_PLAYER"] = "Player Name"
-L["COUNCIL_COLUMN_CLASS"] = "Class"
 L["COUNCIL_COLUMN_RESPONSE"] = "Response"
 L["COUNCIL_COLUMN_ROLL"] = "Roll"
 L["COUNCIL_COLUMN_NOTE"] = "Note"
@@ -645,8 +373,6 @@ L["COUNCIL_COLUMN_ILVL"] = "Item Level"
 L["COUNCIL_COLUMN_ILVL_DIFF"] = "Upgrade (+/-)"
 L["COUNCIL_COLUMN_GEAR1"] = "Gear Slot 1"
 L["COUNCIL_COLUMN_GEAR2"] = "Gear Slot 2"
-L["COUNCIL_COLUMN_ITEMS_WON"] = "Items Won"
-L["COUNCIL_COLUMN_VOTES"] = "Council Votes"
 
 -- Winner Determination Settings
 L["WINNER_DETERMINATION"] = "Winner Determination"
@@ -666,86 +392,29 @@ L["WINNER_AUTO_AWARD_UNANIMOUS_DESC"] = "Automatically award when all council me
 L["WINNER_REQUIRE_CONFIRMATION"] = "Require Confirmation"
 L["WINNER_REQUIRE_CONFIRMATION_DESC"] = "Show confirmation dialog before awarding items"
 
--- Communication messages
-L["ROLL_RESPONSE_RECEIVED"] = "%s has submitted their response"
-L["ROLL_RESPONSE_ACK"] = "Your response has been received by the Master Looter"
-
--- Council Management (Guild/Group based)
-L["CONFIG_COUNCIL_GUILD_HEADER"] = "Add by Guild Rank"
-L["CONFIG_COUNCIL_GUILD_RANK"] = "Guild Rank"
-L["CONFIG_COUNCIL_GUILD_RANK_DESC"] = "Select a guild rank to add all members of that rank"
-L["CONFIG_COUNCIL_GROUP_HEADER"] = "Add from Current Group"
-L["CONFIG_COUNCIL_GROUP_MEMBERS"] = "Group Members"
-L["CONFIG_COUNCIL_GROUP_MEMBERS_DESC"] = "Select group members to add to council"
-L["CONFIG_COUNCIL_ADD_ALL_GROUP"] = "Add All Group Members"
-L["CONFIG_COUNCIL_ADD_ALL_GROUP_DESC"] = "Add all current group members to the council"
-
 -- Announcements - Considerations
 L["CONFIG_CONSIDERATIONS"] = "Considerations"
 L["CONFIG_CONSIDERATIONS_CHANNEL"] = "Channel"
-L["CONFIG_CONSIDERATIONS_CHANNEL_DESC"] = "Channel to announce considerations"
 L["CONFIG_CONSIDERATIONS_TEXT"] = "Message Template"
-L["CONFIG_CONSIDERATIONS_TEXT_DESC"] = "Template for consideration announcements. Tokens: {ml}, {item}, {ilvl}"
 
 -- Announcements - Line Configuration
 L["CONFIG_LINE"] = "Line"
 L["CONFIG_ENABLED"] = "Enabled"
 L["CONFIG_CHANNEL"] = "Channel"
-L["CONFIG_TEXT"] = "Text"
-L["CONFIG_AWARD_LINES_DESC"] = "Configure up to 5 announcement lines. Tokens: {item}, {winner}, {reason}, {notes}, {ilvl}, {type}, {oldItem}, {ml}, {session}, {votes}"
-L["CONFIG_ITEM_LINES_DESC"] = "Configure up to 5 announcement lines. Tokens: {item}, {ilvl}, {type}, {slot}, {ml}, {session}"
-
--- Session Announcements
-L["CONFIG_SESSION_START_CHANNEL"] = "Start Channel"
-L["CONFIG_SESSION_START_CHANNEL_DESC"] = "Channel for session start announcements"
-L["CONFIG_SESSION_END_CHANNEL"] = "End Channel"
-L["CONFIG_SESSION_END_CHANNEL_DESC"] = "Channel for session end announcements"
 
 -- Award Reasons
-L["CONFIG_NUM_REASONS"] = "Number of Reasons"
 L["CONFIG_NUM_REASONS_DESC"] = "Number of active award reasons (1-20)"
 L["CONFIG_AWARD_REASONS_DESC"] = "Configure award reasons. Each reason can be toggled for logging and marked as disenchant."
 L["CONFIG_RESET_REASONS"] = "Reset to Defaults"
-L["CONFIG_RESET_REASONS_DESC"] = "Reset all award reasons to default values"
 
 -- Frame Settings (using OptionsTable naming convention)
 L["CONFIG_FRAME_MINIMIZE_COMBAT"] = "Minimize in Combat"
-L["CONFIG_FRAME_MINIMIZE_COMBAT_DESC"] = "Hide frames during combat"
-L["CONFIG_FRAME_SPEC_ICON"] = "Show Spec Icons"
-L["CONFIG_FRAME_SPEC_ICON_DESC"] = "Show specialization icons instead of class icons"
-L["CONFIG_FRAME_CLOSE_ESC"] = "Close with Escape"
-L["CONFIG_FRAME_CLOSE_ESC_DESC"] = "Allow ESC key to close frames"
 L["CONFIG_FRAME_TIMEOUT_FLASH"] = "Flash on Timeout"
-L["CONFIG_FRAME_TIMEOUT_FLASH_DESC"] = "Flash the frame when voting is about to timeout"
 L["CONFIG_FRAME_BLOCK_TRADES"] = "Block Trades During Voting"
-L["CONFIG_FRAME_BLOCK_TRADES_DESC"] = "Prevent trades while a voting session is active"
-L["CONFIG_FRAME_CHAT_FRAME"] = "Chat Output Frame"
-L["CONFIG_FRAME_CHAT_FRAME_DESC"] = "Select which chat frame to output messages to"
 
--- History Settings
-L["CONFIG_HISTORY_ENABLED"] = "Enable History"
-L["CONFIG_HISTORY_ENABLED_DESC"] = "Record loot awards to history"
+-- History Settings (CONFIG_HISTORY_ENABLED/DESC defined above in Config section)
 L["CONFIG_HISTORY_SEND"] = "Send History"
-L["CONFIG_HISTORY_SEND_DESC"] = "Send history data to group members"
-L["CONFIG_HISTORY_GUILD"] = "Send to Guild"
-L["CONFIG_HISTORY_GUILD_DESC"] = "Send history to guild instead of group"
-L["CONFIG_HISTORY_PERSONAL"] = "Save Personal Loot"
-L["CONFIG_HISTORY_PERSONAL_DESC"] = "Include personal loot in history"
-L["CONFIG_HISTORY_DELETE_HEADER"] = "Delete History"
-L["CONFIG_HISTORY_DELETE_PLAYER"] = "Delete by Player"
-L["CONFIG_HISTORY_DELETE_PLAYER_DESC"] = "Select a player to delete all their history entries"
-L["CONFIG_HISTORY_DELETE_AGE"] = "Delete by Age"
-L["CONFIG_HISTORY_DELETE_AGE_DESC"] = "Delete entries older than selected period"
 L["CONFIG_HISTORY_CLEAR_ALL"] = "Clear All"
-L["CONFIG_HISTORY_CLEAR_ALL_DESC"] = "Delete all history entries"
-L["CONFIG_HISTORY_7_DAYS"] = "7 Days"
-L["CONFIG_HISTORY_14_DAYS"] = "14 Days"
-L["CONFIG_HISTORY_30_DAYS"] = "30 Days"
-L["CONFIG_HISTORY_60_DAYS"] = "60 Days"
-L["CONFIG_HISTORY_90_DAYS"] = "90 Days"
-L["CONFIG_HISTORY_120_DAYS"] = "120 Days"
-L["CONFIG_HISTORY_180_DAYS"] = "180 Days"
-L["CONFIG_HISTORY_365_DAYS"] = "365 Days"
 L["CONFIG_HISTORY_AUTO_EXPORT_WEB"] = "Auto-Show Web Export"
 L["CONFIG_HISTORY_AUTO_EXPORT_WEB_DESC"] = "When a loot session ends, automatically open the export dialog with the Web export ready to copy"
 
@@ -756,13 +425,8 @@ L["WHISPER_NO_VOTING_ITEMS"] = "Loothing: No items currently open for voting"
 L["WHISPER_UNKNOWN_COMMAND"] = "Loothing: Unknown command '%s'. Whisper !help for options"
 L["WHISPER_HELP_HEADER"] = "Loothing: Whisper commands:"
 L["WHISPER_HELP_LINE"] = "  %s - %s"
-L["WHISPER_ALREADY_RESPONDED"] = "Loothing: You already responded to %s"
 L["WHISPER_ITEM_SPECIFIED"] = "Loothing: Response '%s' received for %s (#%d)"
 L["WHISPER_INVALID_ITEM_NUM"] = "Loothing: Invalid item number %d (session has %d items)"
-
--- ============================================================================
--- Phase 1-6 Additional Locale Strings
--- ============================================================================
 
 -- General / UI
 L["ADDON_TAGLINE"] = "Loot Council Addon"
@@ -789,14 +453,12 @@ L["SLASH_DESC_LOG"] = "View recent logs"
 
 -- Session Panel
 L["ADD_ITEM"] = "Add Item"
-L["ADD_ITEM_PROMPT"] = "Enter an item link or drag an item:"
 L["ADD_ITEM_TITLE"] = "Add Item to Session"
 L["ENTER_ITEM"] = "Enter Item"
 L["RECENT_DROPS"] = "Recent Drops"
 L["FROM_BAGS"] = "From Bags"
 L["ENTER_ITEM_HINT"] = "Paste item link, item ID, or drag an item here"
 L["DRAG_ITEM_HERE"] = "Drop item here"
-L["ADD_SELECTED"] = "Add Selected"
 L["NO_RECENT_DROPS"] = "No recent tradeable items found"
 L["NO_BAG_ITEMS"] = "No eligible items in bags"
 L["EQUIPMENT_ONLY"] = "Equipment Only"
@@ -804,12 +466,9 @@ L["SLASH_DESC_ADD"] = "Add item to session"
 L["AWARD_LATER_ALL"] = "Award Later (All)"
 
 -- Session Trigger Modes (legacy — kept for backward compat)
-L["SESSION_TRIGGER_MODE"] = "Session Trigger Mode"
-L["SESSION_TRIGGER_MODE_DESC"] = "How loot sessions are started after a boss kill"
 L["TRIGGER_MANUAL"] = "Manual (use /loothing start)"
 L["TRIGGER_AUTO"] = "Automatic (start immediately)"
 L["TRIGGER_PROMPT"] = "Prompt (ask before starting)"
-L["TRIGGER_AFTER_ROLLS"] = "After Rolls (wait for ML to receive loot)"
 
 -- Session Trigger Policy (split model)
 L["SESSION_TRIGGER_HEADER"] = "Session Trigger"
@@ -830,73 +489,49 @@ L["TRIGGER_SCOPE_OPEN_WORLD_DESC"] = "Trigger on open-world encounters (e.g. wor
 L["CONFIG_AUTOPASS_BOE"] = "AutoPass BoE Items"
 L["CONFIG_AUTOPASS_BOE_DESC"] = "Automatically pass on Bind on Equip items"
 L["CONFIG_AUTOPASS_TRANSMOG"] = "AutoPass Transmog"
-L["CONFIG_AUTOPASS_TRANSMOG_DESC"] = "Auto-pass items already collected for transmog"
 L["CONFIG_AUTOPASS_TRANSMOG_SOURCE"] = "Skip Known Appearances"
-L["CONFIG_AUTOPASS_TRANSMOG_SOURCE_DESC"] = "Auto-pass transmog sources already learned"
 
 -- Auto Award Options
 L["CONFIG_AUTO_AWARD_LOWER_THRESHOLD"] = "Lower Quality Threshold"
-L["CONFIG_AUTO_AWARD_LOWER_THRESHOLD_DESC"] = "Minimum quality for auto-award"
 L["CONFIG_AUTO_AWARD_UPPER_THRESHOLD"] = "Upper Quality Threshold"
-L["CONFIG_AUTO_AWARD_UPPER_THRESHOLD_DESC"] = "Maximum quality for auto-award"
 L["CONFIG_AUTO_AWARD_REASON"] = "Award Reason"
-L["CONFIG_AUTO_AWARD_REASON_DESC"] = "Reason shown in history for auto-awards"
 L["CONFIG_AUTO_AWARD_INCLUDE_BOE"] = "Include BoE Items"
-L["CONFIG_AUTO_AWARD_INCLUDE_BOE_DESC"] = "Include Bind on Equip items in auto-awards"
 
 -- Frame Behavior Options
 L["CONFIG_FRAME_BEHAVIOR"] = "Frame Behavior"
 L["CONFIG_FRAME_AUTO_OPEN"] = "Auto-Open Frames"
-L["CONFIG_FRAME_AUTO_OPEN_DESC"] = "Automatically show frames when loot is available"
 L["CONFIG_FRAME_AUTO_CLOSE"] = "Auto-Close Frames"
-L["CONFIG_FRAME_AUTO_CLOSE_DESC"] = "Automatically close frames when session ends"
 L["CONFIG_FRAME_SHOW_SPEC_ICON"] = "Show Spec Icons"
-L["CONFIG_FRAME_SHOW_SPEC_ICON_DESC"] = "Show specialization icons instead of class icons"
 L["CONFIG_FRAME_CLOSE_ESCAPE"] = "Close with Escape"
-L["CONFIG_FRAME_CLOSE_ESCAPE_DESC"] = "Allow Escape key to close Loothing frames"
 L["CONFIG_FRAME_CHAT_OUTPUT"] = "Chat Output Frame"
-L["CONFIG_FRAME_CHAT_OUTPUT_DESC"] = "Which chat frame to use for Loothing messages"
 
 -- ML Usage Options
 L["CONFIG_ML_USAGE_MODE"] = "Usage Mode"
-L["CONFIG_ML_USAGE_MODE_DESC"] = "When to activate Loothing as loot master"
 L["CONFIG_ML_USAGE_NEVER"] = "Never"
 L["CONFIG_ML_USAGE_GL"] = "Group Loot"
 L["CONFIG_ML_USAGE_ASK_GL"] = "Ask on Group Loot"
 L["CONFIG_ML_RAIDS_ONLY"] = "Raids Only"
-L["CONFIG_ML_RAIDS_ONLY_DESC"] = "Only activate in raid instances"
 L["CONFIG_ML_ALLOW_OUTSIDE"] = "Allow Outside Raids"
-L["CONFIG_ML_ALLOW_OUTSIDE_DESC"] = "Allow loot handling outside raid instances"
 L["CONFIG_ML_SKIP_SESSION"] = "Skip Session Frame"
-L["CONFIG_ML_SKIP_SESSION_DESC"] = "Start sessions immediately without the session setup frame"
 L["CONFIG_ML_SORT_ITEMS"] = "Sort Items"
-L["CONFIG_ML_SORT_ITEMS_DESC"] = "Automatically sort items by type and item level"
 L["CONFIG_ML_AUTO_ADD_BOES"] = "Auto-Add BoEs"
-L["CONFIG_ML_AUTO_ADD_BOES_DESC"] = "Automatically add Bind on Equip items to sessions"
 L["CONFIG_ML_PRINT_TRADES"] = "Print Completed Trades"
-L["CONFIG_ML_PRINT_TRADES_DESC"] = "Print a message when a trade is completed"
 L["CONFIG_ML_REJECT_TRADE"] = "Reject Invalid Trades"
-L["CONFIG_ML_REJECT_TRADE_DESC"] = "Automatically reject trades that aren't part of a session"
 L["CONFIG_ML_AWARD_LATER"] = "Award Later"
-L["CONFIG_ML_AWARD_LATER_DESC"] = "Allow ML to bag items and award them later"
 
 -- History Options
 L["CONFIG_HISTORY_SEND_GUILD"] = "Send to Guild"
-L["CONFIG_HISTORY_SEND_GUILD_DESC"] = "Broadcast history to guild channel"
 L["CONFIG_HISTORY_SAVE_PL"] = "Save Personal Loot"
-L["CONFIG_HISTORY_SAVE_PL_DESC"] = "Record personal loot in history"
 
 -- Ignore Item Options
 L["CONFIG_IGNORE_ENCHANTING_MATS"] = "Ignore Enchanting Materials"
 L["CONFIG_IGNORE_CRAFTING_REAGENTS"] = "Ignore Crafting Reagents"
 L["CONFIG_IGNORE_CONSUMABLES"] = "Ignore Consumables"
 L["CONFIG_IGNORE_PERMANENT_ENHANCEMENTS"] = "Ignore Permanent Enhancements"
-L["CONFIG_IGNORE_PERMANENT_ENHANCEMENTS_DESC"] = "Gems, enchants, and other permanent enhancements"
 
 -- Announcement Options
 L["CONFIG_ANNOUNCEMENT_TOKENS_DESC"] = "Available tokens: {item}, {winner}, {reason}, {notes}, {ilvl}, {type}, {oldItem}, {ml}, {session}, {votes}"
 L["CONFIG_ANNOUNCE_CONSIDERATIONS"] = "Announce Considerations"
-L["CONFIG_ANNOUNCE_CONSIDERATIONS_DESC"] = "Announce when an item is being considered for distribution"
 L["CONFIG_ITEM_ANNOUNCEMENTS"] = "Item Announcements"
 L["CONFIG_SESSION_ANNOUNCEMENTS"] = "Session Announcements"
 L["CONFIG_SESSION_START"] = "Session Start"
@@ -917,11 +552,9 @@ L["CONFIG_GUILD_RANK_DESC"] = "Automatically include guild members at or above a
 L["CONFIG_MIN_RANK"] = "Minimum Guild Rank"
 L["CONFIG_MIN_RANK_DESC"] = "Guild members at this rank or higher will be auto-included as council members. 0 = disabled, 1 = Guild Master, 2 = Officers, etc."
 L["CONFIG_COUNCIL_REMOVE_ALL"] = "Remove All Members"
-L["CONFIG_COUNCIL_REMOVE_ALL_DESC"] = "Remove all council members from the list"
 
 -- Council Table UI
 L["CHANGE_RESPONSE"] = "Change Response"
-L["YOUR_RANKING"] = "Your Ranking"
 
 -- Sync Panel UI
 L["SYNC_DATA"] = "Sync Data"
@@ -941,14 +574,7 @@ L["FILTER_BY_WINNER"] = "Filter by %s"
 L["DELETE_ENTRY"] = "Delete Entry"
 
 -- Observer System
-L["OBSERVERS"] = "Observers"
 L["OBSERVER"] = "Observer"
-L["OBSERVER_LIST"] = "Observer List"
-L["ADD_OBSERVER"] = "Add Observer"
-L["REMOVE_OBSERVER"] = "Remove Observer"
-L["IS_OBSERVER"] = "%s is now an observer"
-L["REMOVED_OBSERVER"] = "%s removed from observers"
-L["NO_OBSERVERS"] = "No observers added"
 
 -- ML Observer
 L["CONFIG_ML_OBSERVER"] = "ML Observer Mode"
@@ -968,8 +594,6 @@ L["OBSERVER_SEE_RESPONSES"] = "See Responses"
 L["OBSERVER_SEE_RESPONSES_DESC"] = "Observers can see what response each candidate selected"
 L["OBSERVER_SEE_NOTES"] = "See Notes"
 L["OBSERVER_SEE_NOTES_DESC"] = "Observers can see candidate notes"
-L["CONFIG_OBSERVER_REMOVE_ALL"] = "Remove All Observers"
-L["CONFIG_OBSERVER_REMOVE_ALL_DESC"] = "Remove all observers from the list"
 
 -- Bulk Actions
 L["BULK_START_VOTE"] = "Start Vote (%d)"
@@ -985,10 +609,6 @@ L["CONFIRM_BULK_SKIP"] = "Skip %d selected items?"
 L["CONFIRM_BULK_REMOVE"] = "Remove %d selected items from the session?"
 L["CONFIRM_BULK_REVOTE"] = "Re-vote on %d selected items?"
 
--- ============================================================================
--- RCV (Ranked Choice Voting) Audit Strings
--- ============================================================================
-
 -- RCV Settings
 L["RCV_SETTINGS"] = "Ranked Choice Settings"
 L["MAX_RANKS"] = "Maximum Rankings"
@@ -997,27 +617,16 @@ L["MAX_RANKS_DESC"] = "Maximum number of choices a voter can rank (0 = unlimited
 L["MIN_RANKS_DESC"] = "Minimum number of choices required to submit a vote"
 L["RANK_LIMIT_REACHED"] = "Maximum %d ranks reached"
 L["RANK_MINIMUM_REQUIRED"] = "Rank at least %d choices"
-L["UNLIMITED"] = "Unlimited"
 L["MAX_REVOTES"] = "Maximum Re-votes"
-
--- ML Sees Votes
-L["ML_SEES_VOTES"] = "ML Sees Votes"
-L["ML_SEES_VOTES_DESC"] = "Master Looter can see votes even when anonymous"
 
 -- IRV Round Visualization
 L["SHOW_IRV_ROUNDS"] = "Show IRV Rounds (%d rounds)"
 L["HIDE_IRV_ROUNDS"] = "Hide IRV Rounds"
-L["IRV_ROUND"] = "Round %d"
-L["IRV_ELIMINATED"] = "eliminated"
-L["IRV_WINNER_FOUND"] = "WINNER"
 
 -- Settings Export/Import
 L["PROFILES"] = "Profiles"
-L["PROFILES_DESC"] = "Create, switch, copy, delete, and reset profiles. Export and import settings as shareable strings."
 L["EXPORT_SETTINGS"] = "Export Settings"
-L["EXPORT_SETTINGS_DESC"] = "Export your current profile as a shareable string"
 L["IMPORT_SETTINGS"] = "Import Settings"
-L["IMPORT_SETTINGS_DESC"] = "Import settings from an exported string"
 L["EXPORT_TITLE"] = "Export Settings"
 L["EXPORT_DESC"] = "Press Ctrl+A to select all, then Ctrl+C to copy."
 L["EXPORT_FAILED"] = "Export failed: %s"
@@ -1057,12 +666,315 @@ L["PROFILE_SHARE_FAILED"] = "Shared settings from %s could not be imported: %s"
 L["PROFILE_SHARE_FAILED_GENERIC"] = "Share failed: %s"
 L["PROFILE_SHARE_TARGET_REQUIRED"] = "Select a target first."
 L["PROFILE_SHARE_UNAVAILABLE"] = "Profile sharing is unavailable."
+L["PROFILE_SHARE_BROADCAST_BUTTON"] = "Broadcast to Group"
+L["PROFILE_SHARE_BROADCAST_DESC"] = "Broadcast the current export string to the active raid or party. Only the active session's Master Looter can do this."
+L["PROFILE_SHARE_BROADCAST_SENT"] = "Broadcast current profile to the active group."
+L["PROFILE_SHARE_BROADCAST_CONFIRM"] = "Broadcast your current settings profile to the entire active group?"
+L["PROFILE_SHARE_BROADCAST_NO_SESSION"] = "You need an active Loothing session to broadcast settings."
+L["PROFILE_SHARE_BROADCAST_NOT_ML"] = "Only the active session's Master Looter can broadcast settings."
+L["PROFILE_SHARE_BROADCAST_NO_GROUP"] = "You must be in the active raid or party to broadcast settings."
+L["PROFILE_SHARE_BROADCAST_BUSY"] = "The addon comm queue is busy. Try again in a moment."
+L["PROFILE_SHARE_BROADCAST_COOLDOWN"] = "Settings were broadcast recently. Try again in %d seconds."
+L["PROFILE_SHARE_QUEUE_FULL"] = "Shared settings from %s were dropped because too many other imports are already waiting."
 L["PROFILE_LIST_HEADER"] = "Profiles:"
 L["PROFILE_SWITCHED"] = "Switched to profile: %s"
 L["PROFILE_CREATED"] = "Created and switched to profile: %s"
 
--- Make locale available globally
-Loothing.Locale = L
+--[[--------------------------------------------------------------------
+    Localization Pass: UI Panels
+----------------------------------------------------------------------]]
 
--- Return for module use
+-- RosterPanel rank names
+L["ROSTER_RANK_MEMBER"] = "Member"
+
+-- RosterPanel misc
+L["ROSTER_NOT_INSTALLED"] = "Not Installed"
+L["ROSTER_NO_ROLE"] = "No Role"
+
+-- RosterPanel tooltip
+L["ROSTER_TOOLTIP_ROLE"] = "Role: "
+L["ROSTER_TOOLTIP_GROUP"] = "Group: "
+L["ROSTER_OFFLINE"] = "Offline"
+L["ROSTER_DEAD"] = "Dead"
+L["ROSTER_TOOLTIP_VERSION"] = "Loothing: "
+L["ROSTER_TOOLTIP_TEST_VERSION"] = "Test Version: "
+L["ROSTER_UNKNOWN"] = "Unknown"
+L["ROSTER_COUNCIL_MEMBER"] = "Council Member"
+L["ROSTER_MASTER_LOOTER"] = "Master Looter"
+L["ROSTER_TOOLTIP_LOOT_HISTORY"] = "Loot History: %d items"
+
+-- CouncilTable/Columns
+L["COLUMN_ROLE"] = "Role"
+L["COLUMN_WON"] = "Won"
+L["COLUMN_INST"] = "Inst"
+L["COLUMN_WK"] = "Wk"
+L["COLUMN_VOTE"] = "Vote"
+L["COLUMN_TOOLTIP_WON_SESSION"] = "Items won this session"
+L["COLUMN_TOOLTIP_WON_INSTANCE"] = "Items won in this instance + difficulty"
+L["COLUMN_TOOLTIP_WON_WEEKLY"] = "Items won this week"
+L["RESPONSE_AUTO_PASS"] = "Auto Pass"
+L["RESPONSE_WAITING"] = "Waiting..."
+L["VOTE_RANK"] = "Rank"
+L["VOTE_RANKED"] = "Ranked"
+L["VOTE_VOTED"] = "Voted"
+
+-- CouncilTable
+L["LOOT_COUNCIL"] = "Loot Council"
+L["DISENCHANT_TARGET"] = "Disenchant Target"
+L["CLICK_SELECT_ENCHANTER"] = "Click to select an enchanter"
+L["CURRENT_COLON"] = "Current: "
+L["SELECT_ENCHANTER"] = "Select Enchanter"
+L["COUNCIL_VOTING_PROGRESS"] = "Council Voting Progress"
+L["NO_ENCHANTERS"] = "No enchanters detected in the group"
+L["DISENCHANT_TARGET_SET"] = "Disenchant target set to: %s"
+L["DISENCHANT_TARGET_CLEARED"] = "Disenchant target cleared"
+
+-- ResultsPanel
+L["NO_COUNCIL_VOTES"] = "No council votes cast"
+L["RECOMMENDED"] = "Recommended"
+L["VOTES_LABEL"] = "votes"
+
+-- TradePanel
+L["TRADE_BTN"] = "Trade"
+L["REMOVE_FROM_QUEUE"] = "Remove from queue"
+
+-- AddItemFrame
+L["QUEUED_ITEMS_HINT"] = "Queued items will appear here"
+L["ILVL_PREFIX"] = "iLvl "
+
+-- SessionPanel
+L["AWARD_LATER_ALL_DESC"] = "Set all items to be awarded after the session"
+L["REMOVE_FROM_SESSION"] = "Remove from session"
+L["AWARD_LATER_SHORT"] = "Later"
+L["AWARD_LATER_ITEM_DESC"] = "Mark this item to be awarded after the session"
+
+-- RollFrame/UI
+L["LOOT_RESPONSE_TITLE"] = "Loot Response"
+L["TOO_MANY_ITEMS_WARNING"] = "Too many items (%d). Only showing buttons for first %d items. Use navigation to access all."
+L["EQUIPPED_GEAR"] = "Equipped Gear"
+L["NOTE_OPTIONAL"] = "Note (optional):"
+L["ADD_NOTE_PLACEHOLDER"] = "Add a note..."
+
+-- CouncilTable/Rows
+L["VIEW_GEAR"] = "View Gear"
+L["AWARD_FOR"] = "Award For..."
+
+--[[--------------------------------------------------------------------
+    Localization Pass: Popups
+----------------------------------------------------------------------]]
+
+L["POPUP_CONFIRM_USAGE"] = "Do you want to use Loothing for loot distribution in this raid?"
+L["POPUP_CONFIRM_END_SESSION"] = "Are you sure you want to end the current loot session? All pending items will be closed."
+L["POPUP_AWARD_LATER"] = "Award {item} to yourself to distribute later?"
+L["POPUP_TRADE_ADD_ITEMS"] = "Add {count} awarded items to trade with {player}?"
+L["POPUP_TRADE_ADD_SINGLE"] = "Add 1 awarded item to trade with %s?"
+L["POPUP_TRADE_ADD_MULTI"] = "Add %d awarded items to trade with %s?"
+L["POPUP_KEEP_OR_TRADE"] = "What would you like to do with {item}?"
+L["POPUP_KEEP_OR_TRADE_FMT"] = "What would you like to do with %s?"
+L["KEEP"] = "Keep"
+L["POPUP_SYNC_REQUEST_TITLE"] = "Sync Request"
+L["POPUP_SYNC_REQUEST"] = "{player} wants to sync their {type} to you. Accept?"
+L["POPUP_SYNC_SETTINGS_FMT"] = "%s wants to sync their Loothing settings to you. Accept?"
+L["POPUP_SYNC_HISTORY_FMT"] = "%s wants to sync their loot history (%d days) to you. Accept?"
+L["POPUP_SYNC_GENERIC_FMT"] = "%s wants to sync their %s to you. Accept?"
+L["ACCEPT"] = "Accept"
+L["DECLINE"] = "Decline"
+L["UNKNOWN"] = "Unknown"
+L["POPUP_IMPORT_OVERWRITE"] = "This import will overwrite {count} existing history entries. Continue?"
+L["POPUP_IMPORT_OVERWRITE_SINGLE"] = "This import will overwrite 1 existing history entry. Continue?"
+L["POPUP_IMPORT_OVERWRITE_MULTI"] = "This import will overwrite %d existing history entries. Continue?"
+L["POPUP_DELETE_HISTORY_SINGLE"] = "Delete 1 history entry? This cannot be undone."
+L["POPUP_DELETE_HISTORY_ALL"] = "Delete ALL history entries? This cannot be undone."
+L["POPUP_DELETE_HISTORY_MULTI"] = "Delete %d history entries? This cannot be undone."
+L["POPUP_DELETE_HISTORY_SELECTED"] = "Delete selected history entries? This cannot be undone."
+L["POPUP_CLEAR_COUNCIL_COUNT"] = "Remove all %d council members?"
+L["POPUP_CLEAR_COUNCIL"] = "Remove all council members?"
+L["POPUP_SKIP_ITEM"] = "Skip {item} without awarding it?"
+L["POPUP_SKIP_ITEM_FMT"] = "Skip %s without awarding it?"
+L["POPUP_CONFIRM_REVOTE"] = "Clear all votes and restart voting for {item}?"
+L["POPUP_CONFIRM_REVOTE_FMT"] = "Clear all votes and restart voting for %s?"
+L["POPUP_CLEAR_IGNORED_COUNT"] = "Clear all %d ignored items?"
+L["POPUP_CLEAR_IGNORED"] = "Clear all ignored items?"
+L["POPUP_REANNOUNCE_TITLE"] = "Re-announce Items"
+L["POPUP_REANNOUNCE"] = "Re-announce all items to the group?"
+L["POPUP_START_SESSION"] = "Start loot session for {boss}?"
+L["POPUP_START_SESSION_FMT"] = "Start loot session for %s?"
+L["POPUP_START_SESSION_GENERIC"] = "Start loot session?"
+L["POPUP_OVERWRITE_PROFILE_TITLE"] = "Overwrite Profile"
+L["POPUP_OVERWRITE_PROFILE"] = "This will overwrite your current profile settings. Continue?"
+L["OVERWRITE"] = "Overwrite"
+L["POPUP_IMPORT_SETTINGS_TITLE"] = "Import Settings"
+L["POPUP_IMPORT_SETTINGS"] = "Choose how to apply the imported settings:"
+L["CREATE_NEW_PROFILE"] = "Create New Profile"
+L["APPLY_TO_CURRENT"] = "Apply to Current"
+L["OK"] = "OK"
+
+--[[--------------------------------------------------------------------
+    Localization Pass: ResponseButtonSettingsFrame
+----------------------------------------------------------------------]]
+
+L["RESPONSE_BUTTON_EDITOR"] = "Response Button Editor"
+L["SET_LABEL"] = "Set:"
+L["NEW"] = "New"
+L["COPY"] = "Copy"
+L["RENAME"] = "Rename"
+L["COPY_SUFFIX"] = "(Copy)"
+L["POPUP_RENAME_SET"] = "Enter new name for set:"
+L["POPUP_DELETE_RESPONSE_SET"] = "Delete this response set? This cannot be undone."
+L["DELETE"] = "Delete"
+L["CANNOT_DELETE_LAST_SET"] = "Cannot delete the last response set."
+L["POPUP_RESET_ALL_SETS"] = "Reset ALL response sets to defaults? This cannot be undone."
+L["RESET"] = "Reset"
+L["NEW_BUTTON"] = "New Button"
+L["LESS"] = "Less"
+L["EDIT"] = "Edit"
+L["POPUP_DELETE_RESPONSE_BUTTON"] = "Delete this response button?"
+L["DISPLAY_TEXT_LABEL"] = "Display Text:"
+L["RESPONSE_TEXT_LABEL"] = "Response Text:"
+L["ICON_LABEL"] = "Icon:"
+L["WHISPER_KEYS_LABEL"] = "Whisper Keys:"
+L["ICON_SET"] = "Icon: ✓"
+L["PICK_ICON"] = "Pick Icon…"
+
+--[[--------------------------------------------------------------------
+    Localization Pass: Options (SessionSettings, LocalPreferences, ProfileOptions)
+----------------------------------------------------------------------]]
+
+-- SessionSettings
+L["CONFIG_SESSION_BROADCAST_DESC"] = "These settings are broadcast to all raid members when you are the Master Looter. They control the session for everyone."
+L["CONFIG_SESSION_BROADCAST_NOTE"] = "These settings are broadcast to all raid members when you start a session as Master Looter."
+L["CONFIG_VOTING_TIMEOUT_DESC"] = "When disabled, voting runs until the ML manually ends it."
+L["CONFIG_TRIGGER_SCOPE_NOTE"] = "PvP, arena, and scenario encounters never trigger sessions. Raid-only is the default."
+L["CONFIG_BUTTON_SETS_DESC"] = "Configure response button sets, icons, whisper keys, and type-code assignments using the visual editor."
+L["CONFIG_OPEN_BUTTON_EDITOR"] = "Open Response Button Editor"
+L["CONFIG_MAX_REVOTES_DESC"] = "Maximum number of re-votes allowed per item (0 = no re-votes)"
+L["CONFIG_COUNCIL_NO_MEMBERS"] = "No council members added yet."
+L["CONFIG_COUNCIL_ADD_HELP"] = "Council members can vote on loot distribution. Use the field below to add members by name."
+L["CONFIG_COUNCIL_ADD_NAME_DESC"] = "Enter character name (e.g., 'Playername' or 'Playername-Realm')"
+L["CONFIG_COUNCIL_REMOVE_DESC"] = "Select a member to remove from the council"
+L["CONFIG_COUNCIL_MEMBER_REMOVED"] = "%s removed from council"
+L["CONFIG_COUNCIL_CONFIRM_REMOVE"] = "Remove %s from the council?"
+L["CONFIG_COUNCIL_ALL_REMOVED"] = "All council members removed"
+L["CONFIG_COUNCIL_CONFIRM_REMOVE_ALL"] = "Remove ALL council members?"
+L["CONFIG_AWARD_REASONS_ENABLED_DESC"] = "Enable or disable the award reasons system"
+L["CONFIG_REQUIRE_AWARD_REASON_DESC"] = "Require an award reason to be selected before awarding an item"
+L["CONFIG_OBSERVER_PERMISSIONS_DESC"] = "Control what observers can see during voting sessions."
+L["CONFIG_REASON_DEFAULT"] = "Reason"
+L["REMOVE"] = "Remove"
+L["CONFIG_CONFIRM_REMOVE_REASON"] = "Remove this award reason?"
+L["CONFIG_REASONS"] = "Reasons"
+L["CONFIG_MANAGE"] = "Manage"
+L["CONFIG_NEW_REASON_DEFAULT"] = "New Reason"
+L["CONFIG_CONFIRM_RESET_REASONS"] = "Reset all award reasons to their default values? This cannot be undone."
+
+-- LocalPreferences
+L["QUALITY_POOR"] = "Poor"
+L["QUALITY_COMMON"] = "Common"
+L["QUALITY_UNCOMMON"] = "Uncommon"
+L["QUALITY_RARE"] = "Rare"
+L["QUALITY_EPIC"] = "Epic"
+L["QUALITY_LEGENDARY"] = "Legendary"
+L["QUALITY_ARTIFACT"] = "Artifact"
+L["QUALITY_HEIRLOOM"] = "Heirloom"
+L["QUALITY_UNKNOWN"] = "Unknown"
+L["CONFIG_LOCAL_PREFS_DESC"] = "These settings only affect you. They are not broadcast to the raid."
+L["CONFIG_LOCAL_PREFS_NOTE"] = " These settings only affect your client. They are never sent to other raid members."
+L["CONFIG_ROLLFRAME_TIMER_ENABLED_DESC"] = "Show a countdown timer on the response frame. When disabled, the frame stays open until you respond or the ML ends voting."
+L["CONFIG_HISTORY_ALL_CLEARED"] = "All history cleared"
+
+-- ProfileOptions
+L["PROFILE_ERR_NOT_STRING"] = "Name must be a string"
+L["PROFILE_ERR_EMPTY"] = "Name cannot be empty"
+L["PROFILE_ERR_TOO_LONG"] = "Name must be 48 characters or fewer"
+L["PROFILE_ERR_INVALID_CHARS"] = "Name contains invalid characters"
+
+--[[--------------------------------------------------------------------
+    Localization Pass: Comm / Core / Modules
+----------------------------------------------------------------------]]
+
+-- Sync
+L["SYNC_SETTINGS_TO_GUILD"] = "Requesting settings sync to guild..."
+L["SYNC_SETTINGS_TO_PLAYER"] = "Requesting settings sync to %s"
+L["SYNC_SETTINGS_COMPLETED"] = "Settings sync completed to %d recipients"
+L["SYNC_ACCEPTED_FROM"] = "Accepted sync from %s"
+L["SYNC_SETTINGS_SENT"] = "Sent settings to %s"
+L["SYNC_SETTINGS_APPLIED"] = "Applied settings from %s"
+L["SYNC_HISTORY_GUILD_DAYS"] = "Requesting history sync (%d days) to guild..."
+L["SYNC_HISTORY_TO_PLAYER"] = "Requesting history sync (%d days) to %s"
+L["SYNC_HISTORY_COMPLETED"] = "History sync completed to %d recipients"
+L["SYNC_HISTORY_SENT"] = "Sent %d history entries to %s"
+
+-- ItemFilter categories
+L["ITEM_CATEGORY_CONSUMABLE"] = "Consumable"
+L["ITEM_CATEGORY_ENCHANTING"] = "Enchanting Material"
+L["ITEM_CATEGORY_CRAFTING"] = "Crafting Reagent"
+L["ITEM_CATEGORY_TRADE_GOODS"] = "Trade Goods"
+L["ITEM_CATEGORY_GEM"] = "Gem"
+
+-- AutoAward
+L["AUTO_AWARD_TARGET_NOT_IN_RAID"] = "Auto-award target %s is not in the raid"
+
+-- Announcer defaults
+L["ANN_CONSIDERATIONS_DEFAULT"] = "{ml} is considering {item} for distribution"
+L["SESSION_STARTED_DEFAULT"] = "Loot council session started"
+L["SESSION_ENDED_DEFAULT"] = "Loot council session ended"
+
+-- VersionCheck
+L["VERSION_CHECK_IN_PROGRESS"] = "Version check already in progress"
+L["NOT_IN_GUILD"] = "You are not in a guild"
+L["NOT_IN_GROUP"] = "You are not in a raid or party"
+L["VERSION_OUTDATED_MEMBERS"] = "|cffff9900%d group member(s) have outdated Loothing:|r %s"
+L["VERSION_AND_MORE"] = " and %d more"
+L["VERSION_RESULTS_TOTAL"] = "Version Check Results: %d total"
+L["VERSION_RESULTS_CURRENT"] = "  Up to date: %d"
+L["VERSION_RESULTS_TEST"] = "  |cff00ff00Test versions: %d|r"
+L["VERSION_RESULTS_OUTDATED"] = "  |cffff0000Outdated: %d|r"
+L["VERSION_RESULTS_NOT_INSTALLED"] = "  |cff888888Not Installed: %d|r"
+L["VERSION_RESULTS_HINT"] = "Use /lt version show to see detailed results"
+
+-- TradeQueue
+L["TRADE_ITEMS_PENDING"] = "You have %d item(s) to trade to %s. Click items to add them to the trade window."
+L["TRADE_TOO_MANY_ITEMS"] = "Too many items to trade - only first 6 will be added."
+L["TRADE_ITEM_NOT_FOUND"] = "Could not find item to trade: %s"
+L["TRADE_ITEM_LOCKED"] = "Item is locked: %s"
+L["TRADE_COMPLETED"] = "Traded %s to %s"
+L["TRADE_WRONG_RECIPIENT"] = "Warning: Traded %s to %s (was awarded to %s)"
+L["TRADE_WINDOW_WARNING"] = "|cffff9900Warning:|r Trade window for %s (awarded to %s) expires in %d minutes!"
+L["TRADE_WINDOW_URGENT"] = "|cffff0000URGENT:|r Trade window for %s (awarded to %s) expires in %d minutes!"
+
+-- SettingsExport
+L["IMPORT_SUMMARY"] = "Profile: %s | Exported: %s | Version: %s"
+
+--[[--------------------------------------------------------------------
+    Keys accessed via Loothing.Locale["KEY"] (not L["KEY"])
+----------------------------------------------------------------------]]
+
+-- Session / Awards
+L["SESSION_STARTED"] = "Loot council session started for %s"
+L["SESSION_ENDED"] = "Loot council session ended"
+L["AWARD_TO"] = "Award to %s"
+L["AWARDED_TO"] = "Awarded to: %s"
+L["AWARD_NO_REASON"] = "Award (No Reason)"
+L["SELECT_AWARD_REASON"] = "Select Award Reason"
+
+-- History / Results
+L["ENTRIES_COUNT"] = "Total: %d entries"
+L["ENTRIES_FILTERED"] = "Showing: %d of %d entries"
+L["LOOTED_BY"] = "Looted by: %s"
+L["FROM_ENCOUNTER"] = "From: %s"
+L["TOTAL_VOTES"] = "Total: %d votes"
+L["WITH_VOTES"] = "Votes: %d"
+L["YOUR_RANKING"] = "Your Ranking"
+L["NO_SELECTION"] = "No selection"
+L["TAB_SETTINGS"] = "Settings"
+
+-- Trade
+L["CLEARED_TRADES"] = "Cleared %d completed trade(s)"
+L["NO_COMPLETED_TRADES"] = "No completed trades to clear"
+
+-- Voting / Council
+L["OBSERVE_MODE_MSG"] = "You are in observe mode and cannot cast votes."
+L["VOTE_NOTE_REQUIRED"] = "You must add a note with your vote."
+L["SELF_VOTE_DISABLED"] = "Self-voting is disabled for this session."
+
 return L

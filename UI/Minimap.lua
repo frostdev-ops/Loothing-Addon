@@ -33,8 +33,8 @@ local function OnAddonCompartmentEnter(_, menuButtonFrame)
     GameTooltip:AddLine(" ")
     local L = Loothing.Locale
     if L then
-        GameTooltip:AddLine(L["MINIMAP_TOOLTIP_LEFT"] or "|cffffffffLeft-Click|r Toggle main window", 1, 1, 1)
-        GameTooltip:AddLine(L["MINIMAP_TOOLTIP_RIGHT"] or "|cffffffffRight-Click|r Open settings", 1, 1, 1)
+        GameTooltip:AddLine(L["MINIMAP_TOOLTIP_LEFT"], 1, 1, 1)
+        GameTooltip:AddLine(L["MINIMAP_TOOLTIP_RIGHT"], 1, 1, 1)
     end
     GameTooltip:Show()
 end
@@ -201,18 +201,18 @@ function MinimapButtonMixin:ShowContextMenu()
 
     MenuUtil.CreateContextMenu(self.button, function(_, rootDescription)
         rootDescription:CreateTitle("Loothing")
-        rootDescription:CreateButton(L["OPEN_MAIN_WINDOW"] or "Open Main Window", function()
+        rootDescription:CreateButton(L["OPEN_MAIN_WINDOW"], function()
             if Loothing.UI and Loothing.UI.MainFrame then
                 Loothing.UI.MainFrame:Show()
             end
         end)
-        rootDescription:CreateButton(L["SETTINGS"] or "Settings", function()
+        rootDescription:CreateButton(L["SETTINGS"], function()
             if Config then
                 Config:Open("Loothing")
             end
         end)
         rootDescription:CreateDivider()
-        rootDescription:CreateButton(L["HIDE_MINIMAP_BUTTON"] or "Hide Minimap Button", function()
+        rootDescription:CreateButton(L["HIDE_MINIMAP_BUTTON"], function()
             self:Hide()
             if Loothing.Settings then
                 Loothing.Settings:Set("ui.showMinimapButton", false)
@@ -232,8 +232,8 @@ function MinimapButtonMixin:OnEnter()
     GameTooltip:AddLine(string.format("v%s", version), 0.5, 0.5, 0.5)
 
     GameTooltip:AddLine(" ")
-    GameTooltip:AddLine(L["MINIMAP_TOOLTIP_LEFT"] or "|cffffffffLeft-Click|r Toggle window", 1, 1, 1)
-    GameTooltip:AddLine(L["MINIMAP_TOOLTIP_RIGHT"] or "|cffffffffRight-Click|r Options", 1, 1, 1)
+    GameTooltip:AddLine(L["MINIMAP_TOOLTIP_LEFT"], 1, 1, 1)
+    GameTooltip:AddLine(L["MINIMAP_TOOLTIP_RIGHT"], 1, 1, 1)
 
     if Loothing.Session then
         local isML = Loothing.Session.IsMasterLooter and Loothing.Session:IsMasterLooter()
@@ -250,7 +250,7 @@ function MinimapButtonMixin:OnEnter()
 
         if Loothing.Session:GetState() ~= Loothing.SessionState.INACTIVE then
             GameTooltip:AddLine(" ")
-            GameTooltip:AddLine(L["SESSION_ACTIVE"] or "Session Active", 0, 1, 0)
+            GameTooltip:AddLine(L["SESSION_ACTIVE"], 0, 1, 0)
 
             local items = Loothing.Session:GetItems()
             if items then
@@ -265,10 +265,10 @@ function MinimapButtonMixin:OnEnter()
                 end
 
                 if pending > 0 then
-                    GameTooltip:AddLine(string.format(L["ITEMS_PENDING"] or "Pending: %d", pending), 1, 1, 0)
+                    GameTooltip:AddLine(string.format(L["ITEMS_PENDING"], pending), 1, 1, 0)
                 end
                 if voting > 0 then
-                    GameTooltip:AddLine(string.format(L["ITEMS_VOTING"] or "Voting: %d", voting), 0, 1, 0)
+                    GameTooltip:AddLine(string.format(L["ITEMS_VOTING"], voting), 0, 1, 0)
                 end
             end
         end

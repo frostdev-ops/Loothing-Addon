@@ -6,6 +6,7 @@
 local ADDON_NAME, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
+local L = ns.Locale
 local Utils = ns.Utils
 
 --[[--------------------------------------------------------------------
@@ -248,7 +249,7 @@ function AutoAwardMixin:ProcessItem(itemLink, itemGUID)
 
     -- Check if target is in the raid
     if not self:IsPlayerInRaid(target) then
-        Loothing:Print(string.format("Auto-award target %s is not in the raid", target))
+        Loothing:Print(string.format(L["AUTO_AWARD_TARGET_NOT_IN_RAID"], target))
         return false
     end
 
@@ -284,7 +285,7 @@ function AutoAwardMixin:AwardItem(itemLink, itemGUID, targetPlayer)
         Loothing.Session:AwardItem(sessionItem.id, targetPlayer, reason)
 
         -- Log the auto-award
-        Loothing:Print(string.format("Auto-awarded %s to %s", itemLink, targetPlayer))
+        Loothing:Print(string.format(L["ITEM_AWARDED"], itemLink, targetPlayer))
 
         return true
     end
@@ -297,16 +298,16 @@ end
 -- @return string - Quality name
 function AutoAwardMixin:GetQualityName(quality)
     local names = {
-        [0] = "Poor",
-        [1] = "Common",
-        [2] = "Uncommon",
-        [3] = "Rare",
-        [4] = "Epic",
-        [5] = "Legendary",
-        [6] = "Artifact",
-        [7] = "Heirloom",
+        [0] = L["QUALITY_POOR"],
+        [1] = L["QUALITY_COMMON"],
+        [2] = L["QUALITY_UNCOMMON"],
+        [3] = L["QUALITY_RARE"],
+        [4] = L["QUALITY_EPIC"],
+        [5] = L["QUALITY_LEGENDARY"],
+        [6] = L["QUALITY_ARTIFACT"],
+        [7] = L["QUALITY_HEIRLOOM"],
     }
-    return names[quality] or "Unknown"
+    return names[quality] or L["QUALITY_UNKNOWN"]
 end
 
 --[[--------------------------------------------------------------------

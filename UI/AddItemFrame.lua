@@ -82,7 +82,7 @@ function AddItemFrameMixin:BuildFrame()
     -- Title
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     title:SetPoint("TOPLEFT", 8, -8)
-    title:SetText(L["ADD_ITEM_TITLE"] or "Add Item to Session")
+    title:SetText(L["ADD_ITEM_TITLE"])
     title:SetTextColor(1, 0.82, 0)
 
     -- Close button
@@ -100,9 +100,9 @@ function AddItemFrameMixin:BuildFrame()
 
     -- Tab buttons
     local tabLabels = {
-        L["ENTER_ITEM"] or "Enter Item",
-        L["RECENT_DROPS"] or "Recent Drops",
-        L["FROM_BAGS"] or "From Bags",
+        L["ENTER_ITEM"],
+        L["RECENT_DROPS"],
+        L["FROM_BAGS"],
     }
     self.tabButtons = {}
     local tabW = (380 - 16) / 3
@@ -158,7 +158,7 @@ function AddItemFrameMixin:BuildFrame()
     self.addBtn = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
     self.addBtn:SetSize(110, 24)
     self.addBtn:SetPoint("RIGHT")
-    self.addBtn:SetText(L["ADD"] or "Add")
+    self.addBtn:SetText(L["ADD"])
     self.addBtn:SetEnabled(false)
     self.addBtn:SetScript("OnClick", function() self:OnAddClick() end)
 
@@ -189,7 +189,7 @@ function AddItemFrameMixin:BuildEnterItemPanel()
     -- Hint text
     local hint = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     hint:SetPoint("TOPLEFT")
-    hint:SetText(L["ENTER_ITEM_HINT"] or "Paste item link, item ID, or drag an item here")
+    hint:SetText(L["ENTER_ITEM_HINT"])
     hint:SetTextColor(0.7, 0.7, 0.7)
     hint:SetJustifyH("LEFT")
 
@@ -246,7 +246,7 @@ function AddItemFrameMixin:BuildEnterItemPanel()
 
     local dragLabel = dragArea:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     dragLabel:SetPoint("CENTER")
-    dragLabel:SetText(L["DRAG_ITEM_HERE"] or "Drop item here")
+    dragLabel:SetText(L["DRAG_ITEM_HERE"])
     dragLabel:SetTextColor(0.5, 0.5, 0.7)
 
     -- Queue list (replaces single-item preview)
@@ -268,7 +268,7 @@ function AddItemFrameMixin:BuildQueueList(panel)
     -- Empty hint
     local emptyHint = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     emptyHint:SetPoint("TOP", 0, -118)
-    emptyHint:SetText("Queued items will appear here")
+    emptyHint:SetText(L["QUEUED_ITEMS_HINT"])
     emptyHint:SetTextColor(0.4, 0.4, 0.4)
     self.queueEmptyHint = emptyHint
 end
@@ -345,7 +345,7 @@ function AddItemFrameMixin:CreateQueueRow(parent, itemData)
     ilvlText:SetPoint("BOTTOMLEFT", icon, "BOTTOMRIGHT", 6, 3)
     ilvlText:SetTextColor(0.7, 0.7, 0.7)
     if itemData.ilvl and itemData.ilvl > 0 then
-        ilvlText:SetText("iLvl " .. itemData.ilvl)
+        ilvlText:SetText(L["ILVL_PREFIX"] .. itemData.ilvl)
     end
 
     -- Remove button
@@ -431,7 +431,7 @@ function AddItemFrameMixin:BuildRecentDropsPanel()
 
     local empty = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     empty:SetPoint("CENTER")
-    empty:SetText(L["NO_RECENT_DROPS"] or "No recent tradeable items found")
+    empty:SetText(L["NO_RECENT_DROPS"])
     empty:SetTextColor(0.5, 0.5, 0.5)
     self.recentEmpty = empty
 
@@ -523,12 +523,12 @@ function AddItemFrameMixin:BuildFromBagsPanel()
 
     local equipLabel = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     equipLabel:SetPoint("LEFT", equipOnly, "RIGHT", 2, 0)
-    equipLabel:SetText(L["EQUIPMENT_ONLY"] or "Equipment Only")
+    equipLabel:SetText(L["EQUIPMENT_ONLY"])
     equipLabel:SetTextColor(0.8, 0.8, 0.8)
 
     local empty = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     empty:SetPoint("CENTER")
-    empty:SetText(L["NO_BAG_ITEMS"] or "No eligible items in bags")
+    empty:SetText(L["NO_BAG_ITEMS"])
     empty:SetTextColor(0.5, 0.5, 0.5)
     self.bagsEmpty = empty
 
@@ -646,7 +646,7 @@ function AddItemFrameMixin:CreateItemRow(parent, itemData)
     ilvlText:SetPoint("BOTTOMLEFT", icon, "BOTTOMRIGHT", 6, 3)
     ilvlText:SetTextColor(0.7, 0.7, 0.7)
     if itemData.ilvl and itemData.ilvl > 0 then
-        ilvlText:SetText("iLvl " .. itemData.ilvl)
+        ilvlText:SetText(L["ILVL_PREFIX"] .. itemData.ilvl)
     end
 
     -- Time remaining (for recent drops tab)
@@ -726,10 +726,10 @@ function AddItemFrameMixin:UpdateAddButton()
     local count = #self.itemQueue
     if count == 0 then
         self.addBtn:SetEnabled(false)
-        self.addBtn:SetText(L["ADD"] or "Add")
+        self.addBtn:SetText(L["ADD"])
     else
         self.addBtn:SetEnabled(true)
-        self.addBtn:SetText((L["ADD"] or "Add") .. " (" .. count .. ")")
+        self.addBtn:SetText((L["ADD"]) .. " (" .. count .. ")")
     end
 end
 
