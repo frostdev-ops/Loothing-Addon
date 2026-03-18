@@ -42,7 +42,7 @@ function CandidateMixin:Init(playerName, playerClass)
 end
 
 --- Set candidate's response
--- @param response number - Loothing.Response value
+-- @param response number|string - Loothing.Response or SystemResponse value
 -- @param note string|nil - Optional note from player
 function CandidateMixin:SetResponse(response, note)
     self.response = response

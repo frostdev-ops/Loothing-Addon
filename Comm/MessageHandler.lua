@@ -601,7 +601,7 @@ end
 
 --- Send player response (raid member -> ML)
 -- @param itemGUID string
--- @param response number - Loothing.Response value
+-- @param response number|string - Loothing.Response or SystemResponse value
 -- @param note string|nil
 -- @param roll number|nil
 -- @param rollMin number|nil

@@ -386,7 +386,7 @@ function CouncilTableMixin:UpdateMoreInfoPanel(candidate)
     end
 
     -- Response
-    local responseInfo = candidate.response and Loothing.ResponseInfo[candidate.response]
+    local responseInfo = candidate.response and (Loothing.ResponseInfo[candidate.response] or Loothing.SystemResponseInfo[candidate.response])
     if responseInfo then
         self.moreInfoResponse:SetText(responseInfo.name)
         self.moreInfoResponse:SetTextColor(responseInfo.color.r, responseInfo.color.g, responseInfo.color.b)
