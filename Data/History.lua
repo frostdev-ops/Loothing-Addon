@@ -951,12 +951,12 @@ function HistoryMixin:ExportLua()
 
         parts[#parts + 1] = string.format(
             '    {date="%s", item="%s", itemID=%d, itemLevel=%d, quality=%d, winner="%s", winnerClass="%s",' ..
-            ' response="%s", responseID=%d, votes=%d, encounter="%s", instance="%s", difficultyID=%d,' ..
+            ' response="%s", responseID="%s", votes=%d, encounter="%s", instance="%s", difficultyID=%d,' ..
             ' groupSize=%d, gear1="%s", gear2="%s", note="%s", typeCode="%s", subType="%s", owner="%s"},',
             dateStr,
             esc(entry.itemName), entry.itemID or 0, entry.itemLevel or 0, entry.quality or 0,
             esc(entry.winner), esc(entry.winnerClass),
-            esc(responseName), entry.winnerResponse or 0, entry.votes or 0,
+            esc(responseName), tostring(entry.winnerResponse or 0), entry.votes or 0,
             esc(entry.encounterName), esc(entry.instance), entry.difficultyID or 0,
             entry.groupSize or 0,
             esc(entry.winnerGear1), esc(entry.winnerGear2),
@@ -1304,7 +1304,7 @@ function HistoryMixin:ExportCompactJSON()
 
         -- Fixed template: 35 scalar fields + 2 array fields
         buf[#buf + 1] = string.format(
-            '{"guid":"%s","date":"%s","timestamp":%d,"itemID":%d,"itemLink":"%s","itemName":"%s","itemLevel":%d,"quality":%d,"equipSlot":"%s","typeCode":"%s","subType":"%s","bindType":%d,"isBoe":%s,"winner":"%s","winnerClass":"%s","response":"%s","responseID":%d,"winnerNote":"%s","winnerRoll":%d,"winnerGear1":"%s","winnerGear2":"%s","winnerGear1ilvl":%d,"winnerGear2ilvl":%d,"winnerIlvlDiff":%d,"encounterID":%d,"encounterName":"%s","instance":"%s","difficultyID":%d,"difficultyName":"%s","groupSize":%d,"mapID":%d,"votes":%d,"awardReasonId":%d,"awardReason":"%s","owner":"%s","candidates":%s,"councilVotes":%s}',
+            '{"guid":"%s","date":"%s","timestamp":%d,"itemID":%d,"itemLink":"%s","itemName":"%s","itemLevel":%d,"quality":%d,"equipSlot":"%s","typeCode":"%s","subType":"%s","bindType":%d,"isBoe":%s,"winner":"%s","winnerClass":"%s","response":"%s","responseID":"%s","winnerNote":"%s","winnerRoll":%d,"winnerGear1":"%s","winnerGear2":"%s","winnerGear1ilvl":%d,"winnerGear2ilvl":%d,"winnerIlvlDiff":%d,"encounterID":%d,"encounterName":"%s","instance":"%s","difficultyID":%d,"difficultyName":"%s","groupSize":%d,"mapID":%d,"votes":%d,"awardReasonId":"%s","awardReason":"%s","owner":"%s","candidates":%s,"councilVotes":%s}',
             EscapeJSONStringForExport(entry.guid or ""),
             EscapeJSONStringForExport(dateStr),
             ts,
@@ -1321,7 +1321,7 @@ function HistoryMixin:ExportCompactJSON()
             EscapeJSONStringForExport(entry.winner or ""),
             EscapeJSONStringForExport(entry.winnerClass or ""),
             EscapeJSONStringForExport(responseName),
-            entry.winnerResponse or 0,
+            tostring(entry.winnerResponse or 0),
             EscapeJSONStringForExport(entry.winnerNote or ""),
             entry.winnerRoll or 0,
             EscapeJSONStringForExport(entry.winnerGear1 or ""),
@@ -1337,7 +1337,7 @@ function HistoryMixin:ExportCompactJSON()
             entry.groupSize or 0,
             entry.mapID or 0,
             entry.votes or 0,
-            entry.awardReasonId or 0,
+            tostring(entry.awardReasonId or 0),
             EscapeJSONStringForExport(entry.awardReason or ""),
             EscapeJSONStringForExport(entry.owner or ""),
             SerializeCompactJSONValue(entry.candidates or {}),

@@ -337,6 +337,14 @@ function CouncilTableMixin:SortCandidates(candidates)
             return nameA < nameB
         end
 
+        -- Normalize mixed types (numeric responses vs string system responses)
+        -- to prevent Lua comparison errors
+        local tA, tB = type(valA), type(valB)
+        if tA ~= tB then
+            valA = tostring(valA)
+            valB = tostring(valB)
+        end
+
         if asc then
             return valA < valB
         else

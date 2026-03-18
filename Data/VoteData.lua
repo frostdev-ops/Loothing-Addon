@@ -93,7 +93,7 @@ function VoteMixin:GetResponseInfo(rank)
         return nil
     end
 
-    return Loothing.ResponseInfo[response]
+    return Loothing.ResponseInfo[response] or Loothing.SystemResponseInfo[response]
 end
 
 --- Set gear comparison data

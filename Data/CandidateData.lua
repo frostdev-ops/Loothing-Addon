@@ -147,7 +147,7 @@ function CandidateMixin:GetResponseInfo()
         return nil
     end
 
-    return Loothing.ResponseInfo[self.response]
+    return Loothing.ResponseInfo[self.response] or Loothing.SystemResponseInfo[self.response]
 end
 
 --- Get response name

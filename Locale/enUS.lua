@@ -349,6 +349,7 @@ L["CONFIG_COUNCIL_REMOVEALL_CONFIRM"] = "Remove all council members?"
 -- Auto-Pass Enhancements
 L["CONFIG_AUTOPASS_TRINKETS"] = "Auto-pass Trinkets"
 L["CONFIG_AUTOPASS_SILENT"] = "Silent Auto-Pass"
+L["CONFIG_AUTOPASS_SILENT_DESC"] = "Suppress auto-pass chat notifications for all raid members"
 
 -- Voting Enhancements
 L["CONFIG_VOTING_MLSEESVOTES"] = "ML Sees Votes"

@@ -846,21 +846,21 @@ end
 --- @return number classFlags Bitmask of classes that can use this token (same as C_Item.GetItemClassInfo)
 function TokenData:GetClasses(itemLink)
     if not itemLink then
-        return 0xFFFFFFFF -- All classes if no link provided
+        return bit.lshift(1, 13) - 1 -- All classes if no link provided
     end
 
     -- Use the tooltip API to determine usability
     -- This leverages the game's built-in logic for token class restrictions
     local tooltipData = C_TooltipInfo.GetHyperlink(itemLink)
     if not tooltipData or not tooltipData.lines then
-        return 0xFFFFFFFF
+        return bit.lshift(1, 13) - 1
     end
 
     -- Parse tooltip for "Classes: ..." line
     -- The actual implementation would need to parse class names and convert to bitmask
     -- For now, return a default value
     -- TODO: Implement full class parsing from tooltip
-    return 0xFFFFFFFF
+    return bit.lshift(1, 13) - 1
 end
 
 --- Get a human-readable slot name from a slot constant

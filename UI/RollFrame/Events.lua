@@ -59,6 +59,8 @@ function RollFrameMixin:RegisterSessionEvents()
             if AutoPass then
                 item:RegisterCallback("OnItemInfoLoaded", function()
                     item:UnregisterCallback("OnItemInfoLoaded", self)
+                    -- Bail if session ended while item info was loading
+                    if not Loothing.Session or not Loothing.Session:IsActive() then return end
                     -- Only retry if player hasn't already responded
                     local resp = self:GetItemResponse(item.guid)
                     if resp and (resp.pending or resp.submitted) then return end

@@ -276,6 +276,7 @@ local function GetSessionSettingsOptions()
                     autoPassSilent = {
                         type = "toggle",
                         name = L["CONFIG_AUTOPASS_SILENT"],
+                        desc = L["CONFIG_AUTOPASS_SILENT_DESC"],
                         order = 19.5,
                         width = "half",
                         get = function() return Loothing.Settings:Get("autoPass.silent") end,
