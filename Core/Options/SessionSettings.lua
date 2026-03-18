@@ -273,6 +273,17 @@ local function GetSessionSettingsOptions()
                         get = function() return Loothing.Settings:GetMlSeesVotes() end,
                         set = function(_, v) Loothing.Settings:SetMlSeesVotes(v) end,
                     },
+                    autoPassSilent = {
+                        type = "toggle",
+                        name = L["CONFIG_AUTOPASS_SILENT"],
+                        order = 19.5,
+                        width = "half",
+                        get = function() return Loothing.Settings:Get("autoPass.silent") end,
+                        set = function(_, v)
+                            Loothing.Settings:Set("autoPass.silent", v)
+                            BroadcastMLDBIfNeeded()
+                        end,
+                    },
                     rcvSettingsHeader = {
                         type = "header",
                         name = L["RCV_SETTINGS"],

@@ -23,6 +23,7 @@ local Utils = ns.Utils
 
 local ITEM_INFO_MAX_RETRIES = 20
 local ITEM_INFO_RETRY_INTERVAL = 0.05
+local ALL_CLASSES_FLAG = bit.lshift(1, 13) - 1  -- 13 classes, matches AutoPass.ALL_CLASSES_FLAG
 
 --- Fetch item info with retry loop for uncached items
 -- @param itemLink string - Item link or item ID
@@ -276,8 +277,8 @@ function ItemMixin:Init(itemLink, looter, encounterID)
     -- Instance data snapshot (captured at item creation time)
     self.instanceData = CaptureInstanceData()
 
-    -- Class restriction flag (bitwise, 0xFFFFFFFF = all classes)
-    self.classesFlag = 0xFFFFFFFF
+    -- Class restriction flag (bitwise, ALL_CLASSES_FLAG = all classes)
+    self.classesFlag = ALL_CLASSES_FLAG
 
     -- BoE tracking
     self.isBoe = false
@@ -700,7 +701,7 @@ function ItemMixin:Deserialize(data)
     self.typeCode = data.typeCode or "default"
     self.transmitString = data.transmitString
     self.neutralizedString = data.neutralizedString
-    self.classesFlag = data.classesFlag or 0xFFFFFFFF
+    self.classesFlag = data.classesFlag or ALL_CLASSES_FLAG
     self.isBoe = data.isBoe or false
     self.instanceData = data.instanceData
     self.looter = data.looter
@@ -759,7 +760,7 @@ function ItemMixin.PrepareLootTableEntry(entry, callback)
     item.itemLevel = entry.l
     item.equipSlot = entry.e
     item.typeCode = entry.t or "default"
-    item.classesFlag = entry.c or 0xFFFFFFFF
+    item.classesFlag = entry.c or ALL_CLASSES_FLAG
     item.isBoe = entry.b or false
     item.looter = entry.o
     item.state = Loothing.ItemState.PENDING

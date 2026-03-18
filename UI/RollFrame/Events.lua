@@ -19,31 +19,14 @@ function RollFrameMixin:RegisterSessionEvents()
         self.responseTimeout = timeout or Loothing.Timing.DEFAULT_VOTE_TIMEOUT or 30
 
         -- AutoPass: check if item should be auto-passed before showing to player
-        local AutoPass = ns.AutoPass
-        if AutoPass and AutoPass:CheckItem(item) then
-            local ml = Loothing.Session and Loothing.Session:GetMasterLooter()
-            local sessionID = Loothing.Session and Loothing.Session:GetSessionID()
-            if Loothing.Comm and ml then
-                pcall(function()
-                    Loothing.Comm:SendPlayerResponse(
-                        item.guid,
-                        Loothing.SystemResponse.AUTOPASS,
-                        "",
-                        0, 1, 100,
-                        ml,
-                        sessionID
-                    )
-                end)
+        -- Skip if already responded (double-fire guard for re-broadcasts)
+        local existingResp = self:GetItemResponse(item.guid)
+        if not (existingResp and (existingResp.pending or existingResp.submitted)) then
+            local AutoPass = ns.AutoPass
+            if AutoPass and AutoPass:CheckItem(item) then
+                self:AutoPassItem(item)
+                return
             end
-            -- Track as pending so ack flow works
-            self:SetItemResponse(item.guid, Loothing.SystemResponse.AUTOPASS, "", false, true)
-            -- Notify player unless silent
-            if not (Loothing.Settings and Loothing.Settings:Get("autoPass.silent", false)) then
-                local _, reason = AutoPass:ShouldAutoPass(item.itemLink)
-                Loothing:Print(string.format("Auto-passed: %s (%s)",
-                    item.itemLink or item.name or "?", reason or "unusable"))
-            end
-            return
         end
 
         local foundIndex = nil
@@ -67,6 +50,22 @@ function RollFrameMixin:RegisterSessionEvents()
             if existingItem.guid == item.guid then
                 self:SwitchToItem(i)
                 break
+            end
+        end
+
+        -- Deferred AutoPass: if item info wasn't cached, retry when it loads
+        if item.IsItemInfoLoaded and not item:IsItemInfoLoaded() then
+            local AutoPass = ns.AutoPass
+            if AutoPass then
+                item:RegisterCallback("OnItemInfoLoaded", function()
+                    item:UnregisterCallback("OnItemInfoLoaded", self)
+                    -- Only retry if player hasn't already responded
+                    local resp = self:GetItemResponse(item.guid)
+                    if resp and (resp.pending or resp.submitted) then return end
+                    if AutoPass:CheckItem(item) then
+                        self:AutoPassItem(item)
+                    end
+                end, self)
             end
         end
     end, self)
@@ -118,6 +117,52 @@ function RollFrameMixin:UnregisterSessionEvents()
     Loothing.Session:UnregisterCallback("OnItemAwarded", self)
     Loothing.Session:UnregisterCallback("OnVotingEnded", self)
     Loothing.Session:UnregisterCallback("OnSessionEnded", self)
+    Loothing.Session:UnregisterCallback("OnPlayerResponseAck", self)
+end
+
+--- Send an AUTOPASS response for an item and remove it from display
+-- Used by both the immediate and deferred (OnItemInfoLoaded) autopass paths
+-- @param item table - LoothingItem instance
+function RollFrameMixin:AutoPassItem(item)
+    local ml = Loothing.Session and Loothing.Session:GetMasterLooter()
+    local sessionID = Loothing.Session and Loothing.Session:GetSessionID()
+    if Loothing.Comm and ml then
+        local ok = pcall(function()
+            Loothing.Comm:SendPlayerResponse(
+                item.guid,
+                Loothing.SystemResponse.AUTOPASS,
+                "",
+                0, 1, 100,
+                ml,
+                sessionID
+            )
+        end)
+        if ok then
+            self:SetItemResponse(item.guid, Loothing.SystemResponse.AUTOPASS, "", false, true)
+        else
+            Loothing:Debug("AutoPass: failed to send response for", item.name or "?")
+        end
+    end
+    -- Notify player unless silent
+    if not (Loothing.Settings and Loothing.Settings:Get("autoPass.silent", false)) then
+        local AutoPass = ns.AutoPass
+        local _, reason = AutoPass and AutoPass:ShouldAutoPass(item.itemLink)
+        Loothing:Print(string.format("Auto-passed: %s (%s)",
+            item.itemLink or item.name or "?", reason or "unusable"))
+    end
+    -- Remove from display and advance to next item
+    for i, existingItem in ipairs(self.items) do
+        if existingItem.guid == item.guid then
+            table.remove(self.items, i)
+            break
+        end
+    end
+    self:UpdateSessionButtons()
+    if self.item and self.item.guid == item.guid then
+        if not self:SwitchToNextUnrespondedItem() then
+            self:Close(true)
+        end
+    end
 end
 
 --- Parse roll message from chat

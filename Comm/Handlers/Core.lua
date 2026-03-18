@@ -110,7 +110,7 @@ end
 local SCHEMAS = {
     ITEM_ADD        = { { "itemLink",  "string", true }, { "guid",      "string", true } },
     VOTE_AWARD      = { { "itemGUID",  "string", true }, { "winner",    "string", true } },
-    PLAYER_RESPONSE = { { "itemGUID",  "string", true }, { "response",  "number", true } },
+    PLAYER_RESPONSE = { { "itemGUID",  "string", true }, { "response",  nil,      true } },
     VOTE_COMMIT     = { { "itemGUID",  "string", true }, { "responses", "table",  true } },
     BATCH           = { { "messages",  "table",  true } },
     MLDB_BROADCAST  = { { "data",      "table",  true } },

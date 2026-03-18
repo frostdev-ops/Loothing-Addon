@@ -2115,8 +2115,8 @@ function SessionMixin:HandlePlayerResponse(data)
         return
     end
 
-    -- Validate response is a known response value
-    if not Loothing.ResponseInfo[response] then
+    -- Validate response is a known response value (numeric or system string)
+    if not Loothing.ResponseInfo[response] and not Loothing.SystemResponseInfo[response] then
         Loothing:Debug("HandlePlayerResponse: invalid_response -", tostring(response), "from", sender)
         sendAck(false)
         return

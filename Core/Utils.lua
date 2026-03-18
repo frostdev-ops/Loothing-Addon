@@ -280,7 +280,10 @@ function Utils.IsPlayerLeaderOrAssistant(name)
             end
         end
     else
-        -- In party, check if sender is the party leader
+        -- In party, check self first then party1-4
+        if Utils.IsSamePlayer(name, Utils.GetPlayerFullName()) then
+            return UnitIsGroupLeader("player")
+        end
         for i = 1, 4 do
             local unit = "party" .. i
             if UnitExists(unit) then
@@ -716,7 +719,7 @@ function Utils.ValidateSchema(data, schema)
             if required then
                 return false, "missing required field: " .. field
             end
-        elseif type(val) ~= expectedType then
+        elseif expectedType and type(val) ~= expectedType then
             return false, "field '" .. field .. "' expected " .. expectedType .. " got " .. type(val)
         end
     end

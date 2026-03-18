@@ -188,7 +188,7 @@ local function RunAutoPassTests()
             assert(classInList(glaivePassList, "MAGE"), "Mage auto-passes Warglaives")
         end
 
-        -- Bows - limited to Hunter (and formerly Warrior/Rogue)
+        -- Bows - limited to Hunter only
         local bowPassList = AutoPass.weaponAutoPass[Enum.ItemWeaponSubclass.Bows]
         if bowPassList then
             local function classInList(list, className)
@@ -201,6 +201,39 @@ local function RunAutoPassTests()
             assert(not classInList(bowPassList, "HUNTER"), "Hunter does NOT auto-pass Bows")
             assert(classInList(bowPassList, "MAGE"), "Mage auto-passes Bows")
             assert(classInList(bowPassList, "PRIEST"), "Priest auto-passes Bows")
+            assert(classInList(bowPassList, "ROGUE"), "Rogue auto-passes Bows")
+        end
+
+        -- Crossbows - limited to Hunter only
+        local crossbowPassList = AutoPass.weaponAutoPass[Enum.ItemWeaponSubclass.Crossbow]
+        if crossbowPassList then
+            local function classInList(list, className)
+                for _, c in ipairs(list) do
+                    if c == className then return true end
+                end
+                return false
+            end
+
+            assert(not classInList(crossbowPassList, "HUNTER"), "Hunter does NOT auto-pass Crossbows")
+            assert(classInList(crossbowPassList, "MAGE"), "Mage auto-passes Crossbows")
+            assert(classInList(crossbowPassList, "PRIEST"), "Priest auto-passes Crossbows")
+            assert(classInList(crossbowPassList, "ROGUE"), "Rogue auto-passes Crossbows")
+        end
+
+        -- Guns - limited to Hunter only
+        local gunPassList = AutoPass.weaponAutoPass[Enum.ItemWeaponSubclass.Guns]
+        if gunPassList then
+            local function classInList(list, className)
+                for _, c in ipairs(list) do
+                    if c == className then return true end
+                end
+                return false
+            end
+
+            assert(not classInList(gunPassList, "HUNTER"), "Hunter does NOT auto-pass Guns")
+            assert(classInList(gunPassList, "MAGE"), "Mage auto-passes Guns")
+            assert(classInList(gunPassList, "PRIEST"), "Priest auto-passes Guns")
+            assert(classInList(gunPassList, "ROGUE"), "Rogue auto-passes Guns")
         end
     else
         print("|cffffcc00[SKIP]|r Enum.ItemWeaponSubclass not available")

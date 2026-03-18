@@ -293,14 +293,7 @@ local function GetLocalPreferencesOptions()
                         get = function() return Loothing.Settings:Get("autoPass.transmogSource") end,
                         set = function(_, v) Loothing.Settings:Set("autoPass.transmogSource", v) end,
                     },
-                    silent = {
-                        type = "toggle",
-                        name = L["CONFIG_AUTOPASS_SILENT"],
-                        order = 7,
-                        width = "half",
-                        get = function() return Loothing.Settings:Get("autoPass.silent") end,
-                        set = function(_, v) Loothing.Settings:Set("autoPass.silent", v) end,
-                    },
+                    -- silent is ML-controlled via MLDB, not a local preference
                 },
             },
             -- ============================================================
