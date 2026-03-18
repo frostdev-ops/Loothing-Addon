@@ -1,6 +1,6 @@
 # Loothing — Feature Reference
 
-**Version:** 1.2.8
+**Version:** 1.3.0
 **Target:** World of Warcraft 12.0+ (Midnight / Retail)
 **Interface:** 120000
 **Category:** Raid

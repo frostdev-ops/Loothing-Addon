@@ -143,6 +143,29 @@ local function RunAutoPassTests()
     end
 
     --[[--------------------------------------------------------------------
+        Test Group 4: Shield Users Are Never Auto-Passed By Shield Table
+    ----------------------------------------------------------------------]]
+    printGroup("Shield AutoPass Rules")
+
+    if Enum and Enum.ItemArmorSubclass then
+        local shieldPassList = AutoPass.armorAutoPass[Enum.ItemArmorSubclass.Shield]
+        if shieldPassList then
+            local function classInList(list, className)
+                for _, c in ipairs(list) do
+                    if c == className then return true end
+                end
+                return false
+            end
+
+            assert(not classInList(shieldPassList, "PALADIN"), "Paladin does NOT auto-pass Shields")
+            assert(not classInList(shieldPassList, "SHAMAN"), "Shaman does NOT auto-pass Shields")
+            assert(not classInList(shieldPassList, "WARRIOR"), "Warrior does NOT auto-pass Shields")
+            assert(classInList(shieldPassList, "MAGE"), "Mage auto-passes Shields")
+            assert(classInList(shieldPassList, "PRIEST"), "Priest auto-passes Shields")
+        end
+    end
+
+    --[[--------------------------------------------------------------------
         Test Group 4: Weapon AutoPass Tables
     ----------------------------------------------------------------------]]
     printGroup("Weapon AutoPass Tables")

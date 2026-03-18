@@ -9,7 +9,7 @@ local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 
 -- Addon info
-Loothing.VERSION = "1.2.8"
+Loothing.VERSION = "1.3.0"
 Loothing.PROTOCOL_VERSION = 4
 Loothing.ADDON_PREFIX = "LOOTHING"
 
@@ -265,11 +265,11 @@ Loothing.DefaultSettings = {
         sessionTriggerRaid = true,
         sessionTriggerDungeon = false,
         sessionTriggerOpenWorld = false,
+        groupLootMode = "active",        -- "active" = Loothing auto-rolls, "passive" = Blizzard rolls
         showMinimapButton = true,
         uiScale = 1.0,
         mainFramePosition = nil,
         autoTrade = true,
-        masterLooter = nil,  -- Explicit ML assignment (nil = use raid leader)
         appendRealmNames = false,   -- Append realm to cross-realm names
         printResponses = false,     -- Print responses to chat
         autoGroupLootGuildOnly = false, -- Only use in guild groups

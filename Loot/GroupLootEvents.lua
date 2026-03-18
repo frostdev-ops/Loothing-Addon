@@ -5,6 +5,7 @@
 
 local _, ns = ...
 local Loothing = ns.Addon
+local Utils = ns.Utils
 local CreateFrame = CreateFrame
 local GetLootRollItemLink = GetLootRollItemLink
 local IsInGroup = IsInGroup
@@ -46,6 +47,11 @@ function GroupLootMixin:OnStartLootRoll(_, rollID)
     local rolls = GroupLootRoll
 
     if not Loothing.Settings:Get("groupLoot.enabled") then
+        return
+    end
+
+    if Utils.GetEffectiveGroupLootMode() == "passive" then
+        Loothing:Debug("Group loot passive mode active — skipping auto-roll for rollID", rollID)
         return
     end
 
@@ -91,6 +97,7 @@ function GroupLootMixin:OnStartLootRoll(_, rollID)
         end
     else
         rollType = rolls.PASS
+        Loothing:Debug("Auto-passing group loot roll for ML collection:", link)
     end
 
     self.pendingRolls[rollID] = {

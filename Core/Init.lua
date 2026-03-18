@@ -27,6 +27,7 @@ Loothing.initialized = false
 -- ML detection state
 Loothing.isMasterLooter = false     -- Are we currently the ML?
 Loothing.masterLooter = nil         -- Player name of current ML (or nil)
+Loothing.explicitMasterLooter = nil -- Runtime-only explicit ML (per-session, synced via MLDB)
 Loothing.handleLoot = false         -- Is Loothing actively handling loot?
 Loothing.isInGuildGroup = false     -- Is group leader in our guild?
 Loothing.lootMethod = nil           -- Current loot method from GetLootMethod()
@@ -388,11 +389,13 @@ end
 --- Perform the actual ML determination
 -- @return string|nil - ML name or nil if unknown
 local function DetermineML()
-    -- Check explicit ML assignment first
-    if Loothing.Settings then
-        local explicit = Loothing.Settings:GetMasterLooterName()
-        if explicit then
+    -- Check runtime explicit ML assignment first, but only if they're in the group
+    local explicit = Loothing.explicitMasterLooter
+    if explicit then
+        if Utils.IsPlayerInCurrentGroup(explicit) then
             return explicit
+        else
+            Loothing:Debug("Explicit ML", explicit, "not in group, falling through to leader detection")
         end
     end
 
@@ -546,6 +549,9 @@ local function ScheduleMLCheck()
     mlRetryCount = 0
     mlCheckTimer = C_Timer.NewTimer(2, PerformMLCheck)
 end
+
+-- Expose for slash commands and RosterPanel after ML reassignment
+Loothing.ScheduleMLCheck = ScheduleMLCheck
 
 local function ScheduleRaidEnter(delay)
     local triggerAt = GetTime() + delay
@@ -702,6 +708,7 @@ local function RegisterEvents()
         end
         Loothing.isMasterLooter = false
         Loothing.masterLooter = nil
+        Loothing.explicitMasterLooter = nil
         Loothing.isInGuildGroup = false
         Loothing.lootMethod = nil
 
@@ -931,7 +938,7 @@ local function RegisterSlashCommands()
 
         if arg == "" then
             local ml = Loothing.Settings:GetMasterLooter()
-            local explicit = Loothing.Settings:GetMasterLooterName()
+            local explicit = Loothing.explicitMasterLooter
             if ml then
                 if explicit then
                     printLine(string.format(L["ML_IS_EXPLICIT"], ml))
@@ -953,7 +960,12 @@ local function RegisterSlashCommands()
                 printError(L["ERROR_NOT_ML_OR_RL"])
                 return
             end
-            Loothing.Settings:ClearMasterLooter()
+            -- Broadcast MLDB before clearing (we still have authority)
+            Loothing.explicitMasterLooter = nil
+            if Loothing.MLDB then
+                Loothing.MLDB:BroadcastToRaid(true)
+            end
+            ScheduleMLCheck()
             printLine(L["ML_CLEARED"])
             return
         end
@@ -963,7 +975,12 @@ local function RegisterSlashCommands()
             printError(L["ERROR_NOT_ML_OR_RL"])
             return
         end
-        Loothing.Settings:SetMasterLooterName(argText)
+        -- Set the new explicit ML and broadcast while we still have authority
+        Loothing.explicitMasterLooter = Utils.NormalizeName(argText)
+        if Loothing.MLDB then
+            Loothing.MLDB:BroadcastToRaid(true)
+        end
+        ScheduleMLCheck()
         printLine(string.format(L["ML_ASSIGNED"], argText))
     end
 
@@ -1737,6 +1754,7 @@ function Addon:CacheStateForReconnect()
         handleLoot = self.handleLoot,
         isMasterLooter = self.isMasterLooter,
         masterLooter = self.masterLooter,
+        explicitMasterLooter = self.explicitMasterLooter,
         isInGuildGroup = self.isInGuildGroup,
     }
 
@@ -1843,6 +1861,7 @@ function Addon:RestoreFromCache()
     self.handleLoot = cache.handleLoot or false
     self.isMasterLooter = cache.isMasterLooter or false
     self.masterLooter = cache.masterLooter
+    self.explicitMasterLooter = cache.explicitMasterLooter
     self.isInGuildGroup = cache.isInGuildGroup or false
 
     -- Restore MLDB

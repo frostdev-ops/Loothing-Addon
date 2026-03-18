@@ -31,6 +31,12 @@ local function CanManageCouncilRoster()
     return Utils and Utils.CanManageCouncilRoster and Utils.CanManageCouncilRoster() or false
 end
 
+local function BroadcastMLDBIfNeeded()
+    if Loothing.MLDB and Loothing.MLDB:IsML() then
+        Loothing.MLDB:BroadcastToRaid()
+    end
+end
+
 local function GetSessionSettingsOptions()
     local opts = {
         type = "group",
@@ -163,11 +169,28 @@ local function GetSessionSettingsOptions()
                         fontSize = "small",
                         width = "full",
                     },
+                    groupLootMode = {
+                        type = "select",
+                        name = L["GROUP_LOOT_MODE"],
+                        desc = L["GROUP_LOOT_MODE_DESC"],
+                        order = 10,
+                        width = "double",
+                        values = {
+                            active = L["GROUP_LOOT_MODE_ACTIVE"],
+                            passive = L["GROUP_LOOT_MODE_PASSIVE"],
+                        },
+                        sorting = { "active", "passive" },
+                        get = function() return Loothing.Settings:GetGroupLootMode() end,
+                        set = function(_, v)
+                            Loothing.Settings:SetGroupLootMode(v)
+                            BroadcastMLDBIfNeeded()
+                        end,
+                    },
                     selfVote = {
                         type = "toggle",
                         name = L["SELF_VOTE"],
                         desc = L["SELF_VOTE_DESC"],
-                        order = 10,
+                        order = 11,
                         width = "half",
                         get = function() return Loothing.Settings:GetSelfVote() end,
                         set = function(_, v) Loothing.Settings:SetSelfVote(v) end,
@@ -176,7 +199,7 @@ local function GetSessionSettingsOptions()
                         type = "toggle",
                         name = L["MULTI_VOTE"],
                         desc = L["MULTI_VOTE_DESC"],
-                        order = 11,
+                        order = 12,
                         width = "half",
                         get = function() return Loothing.Settings:GetMultiVote() end,
                         set = function(_, v) Loothing.Settings:SetMultiVote(v) end,
@@ -185,7 +208,7 @@ local function GetSessionSettingsOptions()
                         type = "toggle",
                         name = L["ANONYMOUS_VOTING"],
                         desc = L["ANONYMOUS_VOTING_DESC"],
-                        order = 12,
+                        order = 13,
                         width = "half",
                         get = function() return Loothing.Settings:GetAnonymousVoting() end,
                         set = function(_, v) Loothing.Settings:SetAnonymousVoting(v) end,
@@ -194,7 +217,7 @@ local function GetSessionSettingsOptions()
                         type = "toggle",
                         name = L["HIDE_VOTES"],
                         desc = L["HIDE_VOTES_DESC"],
-                        order = 13,
+                        order = 14,
                         width = "half",
                         get = function() return Loothing.Settings:GetHideVotes() end,
                         set = function(_, v) Loothing.Settings:SetHideVotes(v) end,
@@ -203,35 +226,31 @@ local function GetSessionSettingsOptions()
                         type = "toggle",
                         name = L["CONFIG_ML_OBSERVER"],
                         desc = L["CONFIG_ML_OBSERVER_DESC"],
-                        order = 14,
+                        order = 15,
                         width = "half",
                         get = function() return Loothing.Settings:GetMLIsObserver() end,
                         set = function(_, v)
                             Loothing.Settings:SetMLIsObserver(v)
-                            if Loothing.MLDB and Loothing.MLDB:IsML() then
-                                Loothing.MLDB:BroadcastToRaid()
-                            end
+                            BroadcastMLDBIfNeeded()
                         end,
                     },
                     openObservation = {
                         type = "toggle",
                         name = L["OPEN_OBSERVATION"],
                         desc = L["OPEN_OBSERVATION_DESC"],
-                        order = 15,
+                        order = 16,
                         width = "half",
                         get = function() return Loothing.Settings:GetOpenObservation() end,
                         set = function(_, v)
                             Loothing.Settings:SetOpenObservation(v)
-                            if Loothing.MLDB and Loothing.MLDB:IsML() then
-                                Loothing.MLDB:BroadcastToRaid()
-                            end
+                            BroadcastMLDBIfNeeded()
                         end,
                     },
                     autoAddRolls = {
                         type = "toggle",
                         name = L["AUTO_ADD_ROLLS"],
                         desc = L["AUTO_ADD_ROLLS_DESC"],
-                        order = 16,
+                        order = 17,
                         width = "half",
                         get = function() return Loothing.Settings:GetAutoAddRolls() end,
                         set = function(_, v) Loothing.Settings:SetAutoAddRolls(v) end,
@@ -240,7 +259,7 @@ local function GetSessionSettingsOptions()
                         type = "toggle",
                         name = L["REQUIRE_NOTES"],
                         desc = L["REQUIRE_NOTES_DESC"],
-                        order = 17,
+                        order = 18,
                         width = "half",
                         get = function() return Loothing.Settings:GetRequireNotes() end,
                         set = function(_, v) Loothing.Settings:SetRequireNotes(v) end,
@@ -249,7 +268,7 @@ local function GetSessionSettingsOptions()
                         type = "toggle",
                         name = L["CONFIG_VOTING_MLSEESVOTES"],
                         desc = L["CONFIG_VOTING_MLSEESVOTES_DESC"],
-                        order = 18,
+                        order = 19,
                         width = "half",
                         get = function() return Loothing.Settings:GetMlSeesVotes() end,
                         set = function(_, v) Loothing.Settings:SetMlSeesVotes(v) end,
@@ -257,7 +276,7 @@ local function GetSessionSettingsOptions()
                     rcvSettingsHeader = {
                         type = "header",
                         name = L["RCV_SETTINGS"],
-                        order = 19,
+                        order = 20,
                         hidden = function()
                             return Loothing.Settings:GetVotingMode() ~= Loothing.VotingMode.RANKED_CHOICE
                         end,
@@ -266,7 +285,7 @@ local function GetSessionSettingsOptions()
                         type = "range",
                         name = L["MAX_RANKS"],
                         desc = L["MAX_RANKS_DESC"],
-                        order = 20,
+                        order = 21,
                         min = 0,
                         max = 10,
                         step = 1,
@@ -280,7 +299,7 @@ local function GetSessionSettingsOptions()
                         type = "range",
                         name = L["MIN_RANKS"],
                         desc = L["MIN_RANKS_DESC"],
-                        order = 21,
+                        order = 22,
                         min = 1,
                         max = 10,
                         step = 1,

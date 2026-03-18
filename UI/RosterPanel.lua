@@ -967,18 +967,30 @@ function RosterPanelMixin:ShowRowContextMenu(row, entry)
         -- Master Looter assignment
         local canSetML = Loothing.Settings and (Loothing.Settings:IsMasterLooter() or isPlayerLeader)
         if canSetML then
-            local explicitML = Loothing.Settings:GetMasterLooterName()
+            local explicitML = Loothing.explicitMasterLooter
             local isExplicitML = explicitML and Utils.IsSamePlayer(entry.name, explicitML)
 
             if isExplicitML then
                 rootDescription:CreateButton(L["ROSTER_CLEAR_ML"], function()
-                    Loothing.Settings:ClearMasterLooter()
+                    Loothing.explicitMasterLooter = nil
+                    if Loothing.MLDB then
+                        Loothing.MLDB:BroadcastToRaid(true)
+                    end
+                    if Loothing.ScheduleMLCheck then
+                        Loothing.ScheduleMLCheck()
+                    end
                     Loothing:Print(string.format("%s is no longer Master Looter", entry.shortName or entry.name))
                     self:Refresh()
                 end)
             else
                 rootDescription:CreateButton(L["ROSTER_SET_ML"], function()
-                    Loothing.Settings:SetMasterLooterName(entry.name)
+                    Loothing.explicitMasterLooter = Utils.NormalizeName(entry.name)
+                    if Loothing.MLDB then
+                        Loothing.MLDB:BroadcastToRaid(true)
+                    end
+                    if Loothing.ScheduleMLCheck then
+                        Loothing.ScheduleMLCheck()
+                    end
                     Loothing:Print(string.format("%s is now Master Looter", entry.shortName or entry.name))
                     self:Refresh()
                 end)

@@ -592,12 +592,14 @@ TestRunner:Describe("Session Trigger Policy - MLDB Round-Trip", function()
             sessionTriggerRaid     = "str",
             sessionTriggerDungeon  = "std",
             sessionTriggerOpenWorld = "stow",
+            groupLootMode = "glm",
         }
         Assert.Equals("sta",  COMPRESSION_KEYS["sessionTriggerAction"])
         Assert.Equals("stt",  COMPRESSION_KEYS["sessionTriggerTiming"])
         Assert.Equals("str",  COMPRESSION_KEYS["sessionTriggerRaid"])
         Assert.Equals("std",  COMPRESSION_KEYS["sessionTriggerDungeon"])
         Assert.Equals("stow", COMPRESSION_KEYS["sessionTriggerOpenWorld"])
+        Assert.Equals("glm", COMPRESSION_KEYS["groupLootMode"])
     end, { category = "unit" })
 
     TestRunner:It("compress then decompress round-trips trigger fields", function()
@@ -607,6 +609,7 @@ TestRunner:Describe("Session Trigger Policy - MLDB Round-Trip", function()
             sessionTriggerRaid     = "str",
             sessionTriggerDungeon  = "std",
             sessionTriggerOpenWorld = "stow",
+            groupLootMode = "glm",
         }
         local DECOMP = {}
         for k, v in pairs(COMP) do DECOMP[v] = k end
@@ -617,6 +620,7 @@ TestRunner:Describe("Session Trigger Policy - MLDB Round-Trip", function()
             sessionTriggerRaid     = true,
             sessionTriggerDungeon  = true,
             sessionTriggerOpenWorld = false,
+            groupLootMode = "passive",
         }
 
         -- Compress
@@ -636,6 +640,7 @@ TestRunner:Describe("Session Trigger Policy - MLDB Round-Trip", function()
         Assert.Equals(original.sessionTriggerRaid,      restored.sessionTriggerRaid)
         Assert.Equals(original.sessionTriggerDungeon,   restored.sessionTriggerDungeon)
         Assert.Equals(original.sessionTriggerOpenWorld,  restored.sessionTriggerOpenWorld)
+        Assert.Equals(original.groupLootMode, restored.groupLootMode)
     end, { category = "unit" })
 end)
 
@@ -667,6 +672,44 @@ TestRunner:Describe("Settings - Session Trigger Accessors", function()
             Assert.IsTrue(valid[timing] or false, "Timing should be valid: " .. tostring(timing))
         end
     end, { category = "integration" })
+
+    TestRunner:It("GetGroupLootMode should return valid mode", function()
+        if Loothing and Loothing.Settings then
+            local mode = Loothing.Settings:GetGroupLootMode()
+            local valid = { active = true, passive = true }
+            Assert.IsTrue(valid[mode] or false, "Group loot mode should be valid: " .. tostring(mode))
+        end
+    end, { category = "integration" })
+
+    TestRunner:It("SetGroupLootMode should reject invalid values", function()
+        if Loothing and Loothing.Settings then
+            local original = Loothing.Settings:GetGroupLootMode()
+            Loothing.Settings:SetGroupLootMode("passive")
+            Assert.Equals("passive", Loothing.Settings:GetGroupLootMode(), "Valid mode should be applied")
+
+            Loothing.Settings:SetGroupLootMode("definitely_invalid")
+            Assert.Equals("passive", Loothing.Settings:GetGroupLootMode(), "Invalid mode should be ignored")
+
+            Loothing.Settings:SetGroupLootMode(original)
+        end
+    end, { category = "integration" })
+
+    TestRunner:It("authoritative group loot mode should prefer MLDB over local settings", function()
+        local function resolveMode(mldbMode, settingsMode)
+            if mldbMode == "active" or mldbMode == "passive" then
+                return mldbMode
+            end
+            if settingsMode == "passive" then
+                return "passive"
+            end
+            return "active"
+        end
+
+        Assert.Equals("passive", resolveMode("passive", "active"), "MLDB passive should override local active")
+        Assert.Equals("active", resolveMode("active", "passive"), "MLDB active should override local passive")
+        Assert.Equals("passive", resolveMode(nil, "passive"), "Local passive should apply without MLDB")
+        Assert.Equals("active", resolveMode(nil, "active"), "Local active should apply without MLDB")
+    end, { category = "unit" })
 
     TestRunner:It("GetAutoStartSession backward compat returns true only for auto action", function()
         local function getAutoStart(action)
@@ -814,6 +857,8 @@ TestRunner:Describe("Settings Integration", function()
             Assert.NotNil(Loothing.Settings.SetSessionTriggerDungeon,   "SetSessionTriggerDungeon should exist")
             Assert.NotNil(Loothing.Settings.GetSessionTriggerOpenWorld,  "GetSessionTriggerOpenWorld should exist")
             Assert.NotNil(Loothing.Settings.SetSessionTriggerOpenWorld,  "SetSessionTriggerOpenWorld should exist")
+            Assert.NotNil(Loothing.Settings.GetGroupLootMode, "GetGroupLootMode should exist")
+            Assert.NotNil(Loothing.Settings.SetGroupLootMode, "SetGroupLootMode should exist")
         end
     end, { category = "integration" })
 

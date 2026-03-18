@@ -78,6 +78,8 @@ local COMPRESSION_KEYS = {
     ["sessionTriggerRaid"] = "str",
     ["sessionTriggerDungeon"] = "std",
     ["sessionTriggerOpenWorld"] = "stow",
+    ["groupLootMode"] = "glm",
+    ["masterLooter"] = "ml2",
 
     -- AutoPass settings
     ["autoPass"] = "ap",
@@ -243,6 +245,8 @@ function MLDBMixin:GatherSettings()
     settings.sessionTriggerRaid     = Loothing.Settings:GetSessionTriggerRaid()
     settings.sessionTriggerDungeon  = Loothing.Settings:GetSessionTriggerDungeon()
     settings.sessionTriggerOpenWorld = Loothing.Settings:GetSessionTriggerOpenWorld()
+    settings.groupLootMode = Loothing.Settings:GetGroupLootMode()
+    settings.masterLooter = Loothing.explicitMasterLooter
 
     -- Sort order
     settings.sortOrder = Loothing.Settings:Get("councilTable.sortColumn", "response")
@@ -359,9 +363,11 @@ end
 ----------------------------------------------------------------------]]
 
 --- Broadcast settings to raid
--- Only the ML should call this
-function MLDBMixin:BroadcastToRaid()
-    if not self:IsML() then
+-- Only the ML should call this.
+-- @param force boolean? - Skip IsML check (used during ML reassignment where
+--   the caller has already verified authority but IsML() would re-evaluate)
+function MLDBMixin:BroadcastToRaid(force)
+    if not force and not self:IsML() then
         Loothing:Debug("Only ML can broadcast MLDB")
         return
     end
@@ -409,11 +415,20 @@ function MLDBMixin:OnMLDBBroadcast(data)
         return
     end
 
-    -- Only accept from the current ML
+    -- Verify sender is the ML (or a group leader if ML is unknown yet)
     local currentML = self:GetML()
-    if not currentML or not Utils.IsSamePlayer(sender, currentML) then
-        Loothing:Debug("Ignoring MLDB from non-ML:", sender)
-        return
+    if currentML then
+        if not Utils.IsSamePlayer(sender, currentML) then
+            Loothing:Debug("Ignoring MLDB from non-ML:", sender)
+            return
+        end
+    else
+        -- ML unknown locally — only accept from group leader/assistant so the
+        -- first MLDB can bootstrap explicitMasterLooter on fresh login/reconnect
+        if not Utils.IsPlayerLeaderOrAssistant(sender) then
+            Loothing:Debug("Ignoring MLDB from non-leader/assistant:", sender)
+            return
+        end
     end
 
     -- Decompress
@@ -522,6 +537,13 @@ function MLDBMixin:ApplyFromML(settings, sender)
         if settings.sessionTriggerOpenWorld ~= nil then
             Loothing.Settings:SetSessionTriggerOpenWorld(settings.sessionTriggerOpenWorld)
         end
+        if settings.groupLootMode then
+            Loothing.Settings:SetGroupLootMode(settings.groupLootMode)
+        end
+
+        -- Apply explicit ML override (runtime-only, not persisted)
+        -- nil means "use raid leader"; a name means that player is ML
+        Loothing.explicitMasterLooter = settings.masterLooter
 
         -- Apply sort order
         if settings.sortOrder then
@@ -540,34 +562,46 @@ function MLDBMixin:ApplyFromML(settings, sender)
             Loothing.Settings:Set("observers.permissions", settings.observerPermissions)
         end
 
-        -- Apply autoPass settings (full table override)
+        -- Apply autoPass settings (per-key merge to preserve newer client keys)
         if settings.autoPass then
-            Loothing.Settings:Set("autoPass", settings.autoPass)
+            for k, v in pairs(settings.autoPass) do
+                Loothing.Settings:Set("autoPass." .. k, v)
+            end
         end
 
-        -- Apply autoAward settings (full table override)
+        -- Apply autoAward settings (per-key merge)
         if settings.autoAward then
-            Loothing.Settings:Set("autoAward", settings.autoAward)
+            for k, v in pairs(settings.autoAward) do
+                Loothing.Settings:Set("autoAward." .. k, v)
+            end
         end
 
-        -- Apply award reasons (full table override)
+        -- Apply award reasons (per-key merge)
         if settings.awardReasons then
-            Loothing.Settings:Set("awardReasons", settings.awardReasons)
+            for k, v in pairs(settings.awardReasons) do
+                Loothing.Settings:Set("awardReasons." .. k, v)
+            end
         end
 
-        -- Apply winner determination (full table override)
+        -- Apply winner determination (per-key merge)
         if settings.winnerDetermination then
-            Loothing.Settings:Set("winnerDetermination", settings.winnerDetermination)
+            for k, v in pairs(settings.winnerDetermination) do
+                Loothing.Settings:Set("winnerDetermination." .. k, v)
+            end
         end
 
-        -- Apply announcements (full table override)
+        -- Apply announcements (per-key merge)
         if settings.announcements then
-            Loothing.Settings:Set("announcements", settings.announcements)
+            for k, v in pairs(settings.announcements) do
+                Loothing.Settings:Set("announcements." .. k, v)
+            end
         end
 
-        -- Apply ignore items (full table override)
+        -- Apply ignore items (per-key merge)
         if settings.ignoreItems then
-            Loothing.Settings:Set("ignoreItems", settings.ignoreItems)
+            for k, v in pairs(settings.ignoreItems) do
+                Loothing.Settings:Set("ignoreItems." .. k, v)
+            end
         end
     end
 

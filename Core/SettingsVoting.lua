@@ -120,6 +120,25 @@ function SettingsMixin:SetSessionTriggerOpenWorld(v)
     self:Set("settings.sessionTriggerOpenWorld", v == true)
 end
 
+-- Group loot handling during active Loothing sessions
+function SettingsMixin:GetGroupLootMode()
+    local mode = self:Get("settings.groupLootMode", "active")
+    if mode ~= "active" and mode ~= "passive" then
+        return "active"
+    end
+    return mode
+end
+
+function SettingsMixin:SetGroupLootMode(mode)
+    if mode == "active" or mode == "passive" then
+        self:Set("settings.groupLootMode", mode)
+    end
+end
+
+function SettingsMixin:IsPassiveGroupLootMode()
+    return self:GetGroupLootMode() == "passive"
+end
+
 --[[--------------------------------------------------------------------
     Legacy Compatibility Shims
 ----------------------------------------------------------------------]]
@@ -164,24 +183,27 @@ function SettingsMixin:SetAutoStartSession(enabled)
 end
 
 -- Master Looter controls
+-- The explicit ML is runtime-only state (per-session, synced via MLDB).
+-- It lives on Loothing.explicitMasterLooter, NOT in SavedVariables.
+
 function SettingsMixin:GetMasterLooterName()
-    return self:Get("settings.masterLooter", nil)
+    return Loothing.explicitMasterLooter
 end
 
 function SettingsMixin:SetMasterLooterName(name)
     if name and name ~= "" then
-        self:Set("settings.masterLooter", Utils.NormalizeName(name))
+        Loothing.explicitMasterLooter = Utils.NormalizeName(name)
     else
-        self:Set("settings.masterLooter", nil)
+        Loothing.explicitMasterLooter = nil
     end
 end
 
 function SettingsMixin:ClearMasterLooter()
-    self:Set("settings.masterLooter", nil)
+    Loothing.explicitMasterLooter = nil
 end
 
 function SettingsMixin:GetMasterLooter()
-    local explicit = self:GetMasterLooterName()
+    local explicit = Loothing.explicitMasterLooter
     if explicit then
         return explicit
     end

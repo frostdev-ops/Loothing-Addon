@@ -265,6 +265,36 @@ function Utils.IsRaidLeaderOrAssistant()
     return UnitIsGroupLeader("player") or UnitIsGroupAssistant("player")
 end
 
+--- Check if a named player is a group/raid leader or assistant
+-- @param name string - Player name (possibly realm-qualified)
+-- @return boolean
+function Utils.IsPlayerLeaderOrAssistant(name)
+    if not name or not IsInGroup() then return false end
+
+    if IsInRaid() then
+        for i = 1, GetNumGroupMembers() do
+            local rosterName, rank = Loolib.SecretUtil.SafeGetRaidRosterInfo(i)
+            if rosterName and Utils.IsSamePlayer(name, rosterName) then
+                -- rank: 2 = leader, 1 = assistant, 0 = member
+                return rank and rank >= 1
+            end
+        end
+    else
+        -- In party, check if sender is the party leader
+        for i = 1, 4 do
+            local unit = "party" .. i
+            if UnitExists(unit) then
+                local unitName = Loolib.SecretUtil.SafeUnitName(unit)
+                if unitName and Utils.IsSamePlayer(name, unitName) then
+                    return UnitIsGroupLeader(unit)
+                end
+            end
+        end
+    end
+
+    return false
+end
+
 --- Check if player is raid/party leader
 -- @return boolean
 function Utils.IsRaidLeader()
@@ -274,6 +304,30 @@ function Utils.IsRaidLeader()
     end
 
     return UnitIsGroupLeader("player")
+end
+
+--- Get the effective group loot mode (MLDB authoritative, local fallback)
+-- When MLDB hasn't arrived yet and a session is active, defaults to "passive"
+-- to prevent auto-rolling before the ML's intent is known (HIGH-1 race fix).
+-- @return string - "active" or "passive"
+function Utils.GetEffectiveGroupLootMode()
+    local mldb = Loothing and Loothing.MLDB and Loothing.MLDB:Get()
+    if mldb and (mldb.groupLootMode == "active" or mldb.groupLootMode == "passive") then
+        return mldb.groupLootMode
+    end
+
+    -- Conservative default: if MLDB hasn't arrived but a session is active,
+    -- assume passive to avoid auto-rolling when ML intended passive mode
+    if not mldb and Loothing and Loothing.Session
+        and Loothing.Session.state and Loothing.Session.state ~= Loothing.SessionState.INACTIVE then
+        return "passive"
+    end
+
+    if Loothing and Loothing.Settings and Loothing.Settings.GetGroupLootMode then
+        return Loothing.Settings:GetGroupLootMode()
+    end
+
+    return "active"
 end
 
 --- Check if player is the master looter
@@ -509,6 +563,40 @@ function Utils.GetRaidLeader()
     end
 
     return nil
+end
+
+--- Check if a player (by name) is in the current group/raid
+-- @param name string - Player name (short or normalized)
+-- @return boolean
+function Utils.IsPlayerInCurrentGroup(name)
+    if not name or Loolib.SecretUtil.IsSecretValue(name) then return false end
+    if not IsInGroup() then return false end
+
+    -- Check self first
+    if Utils.IsSamePlayer(name, Utils.GetPlayerFullName()) then
+        return true
+    end
+
+    if IsInRaid() then
+        for i = 1, GetNumGroupMembers() do
+            local rosterName = Loolib.SecretUtil.SafeGetRaidRosterInfo(i)
+            if rosterName and Utils.IsSamePlayer(name, rosterName) then
+                return true
+            end
+        end
+    else
+        for i = 1, 4 do
+            local unit = "party" .. i
+            if UnitExists(unit) then
+                local unitName = Loolib.SecretUtil.SafeUnitName(unit)
+                if unitName and Utils.IsSamePlayer(name, unitName) then
+                    return true
+                end
+            end
+        end
+    end
+
+    return false
 end
 
 --[[--------------------------------------------------------------------

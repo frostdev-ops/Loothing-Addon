@@ -21,6 +21,12 @@ local TooltipScan = ns.TooltipScan
 local AutoPass = {}
 ns.AutoPass = AutoPass
 
+local SHIELD_USERS = {
+    PALADIN = true,
+    SHAMAN = true,
+    WARRIOR = true,
+}
+
 --[[--------------------------------------------------------------------
     Class ID Lookup
 
@@ -112,13 +118,13 @@ AutoPass.weaponAutoPass = {
     -- Bows
     [Enum.ItemWeaponSubclass.Bows] = {
         "DEATHKNIGHT", "PALADIN", "DRUID", "MONK", "SHAMAN", "PRIEST",
-        "MAGE", "WARLOCK", "DEMONHUNTER", "WARRIOR", "EVOKER"
+        "MAGE", "WARLOCK", "DEMONHUNTER", "WARRIOR", "EVOKER", "ROGUE"
     },
 
     -- Crossbows
     [Enum.ItemWeaponSubclass.Crossbow] = {
         "DEATHKNIGHT", "PALADIN", "DRUID", "MONK", "SHAMAN", "PRIEST",
-        "MAGE", "WARLOCK", "DEMONHUNTER", "WARRIOR", "EVOKER"
+        "MAGE", "WARLOCK", "DEMONHUNTER", "WARRIOR", "EVOKER", "ROGUE"
     },
 
     -- Daggers
@@ -129,7 +135,7 @@ AutoPass.weaponAutoPass = {
     -- Guns
     [Enum.ItemWeaponSubclass.Guns] = {
         "DEATHKNIGHT", "PALADIN", "DRUID", "MONK", "SHAMAN", "PRIEST",
-        "MAGE", "WARLOCK", "DEMONHUNTER", "WARRIOR", "EVOKER"
+        "MAGE", "WARLOCK", "DEMONHUNTER", "WARRIOR", "EVOKER", "ROGUE"
     },
 
     -- One-Hand Maces
@@ -372,6 +378,10 @@ function AutoPass:ShouldAutoPass(itemLink, playerClass, classesFlag)
         return false, nil
     end
 
+    if Utils.GetEffectiveGroupLootMode() == "passive" then
+        return false, nil
+    end
+
     -- Default to player's class
     if not playerClass then
         -- FIX(Area4-4): Use SafeUnitClass to avoid secret value tainting
@@ -422,7 +432,8 @@ function AutoPass:ShouldAutoPass(itemLink, playerClass, classesFlag)
     -- Check armor types
     if classID == Enum.ItemClass.Armor then
         local autoPassList = self.armorAutoPass[subclassID]
-        if autoPassList and tContains(autoPassList, playerClass) then
+        local canUseShield = equipSlot == "INVTYPE_SHIELD" and SHIELD_USERS[playerClass] == true
+        if not canUseShield and autoPassList and tContains(autoPassList, playerClass) then
             -- Before auto-passing armor, check if transmog setting keeps it
             if self:ShouldKeepForTransmog(itemLink, itemID) then
                 return false, nil

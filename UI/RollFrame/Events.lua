@@ -18,6 +18,34 @@ function RollFrameMixin:RegisterSessionEvents()
     Loothing.Session:RegisterCallback("OnVotingStarted", function(_, item, timeout)
         self.responseTimeout = timeout or Loothing.Timing.DEFAULT_VOTE_TIMEOUT or 30
 
+        -- AutoPass: check if item should be auto-passed before showing to player
+        local AutoPass = ns.AutoPass
+        if AutoPass and AutoPass:CheckItem(item) then
+            local ml = Loothing.Session and Loothing.Session:GetMasterLooter()
+            local sessionID = Loothing.Session and Loothing.Session:GetSessionID()
+            if Loothing.Comm and ml then
+                pcall(function()
+                    Loothing.Comm:SendPlayerResponse(
+                        item.guid,
+                        Loothing.SystemResponse.AUTOPASS,
+                        "",
+                        0, 1, 100,
+                        ml,
+                        sessionID
+                    )
+                end)
+            end
+            -- Track as pending so ack flow works
+            self:SetItemResponse(item.guid, Loothing.SystemResponse.AUTOPASS, "", false, true)
+            -- Notify player unless silent
+            if not (Loothing.Settings and Loothing.Settings:Get("autoPass.silent", false)) then
+                local _, reason = AutoPass:ShouldAutoPass(item.itemLink)
+                Loothing:Print(string.format("Auto-passed: %s (%s)",
+                    item.itemLink or item.name or "?", reason or "unusable"))
+            end
+            return
+        end
+
         local foundIndex = nil
         for i, existingItem in ipairs(self.items) do
             if existingItem.guid == item.guid then
