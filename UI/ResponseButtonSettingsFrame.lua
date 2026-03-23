@@ -32,7 +32,6 @@ ns.ResponseButtonSettingsMixin = ResponseButtonSettingsMixin
 function ResponseButtonSettingsMixin:Show()
     self:BringToFront()
     self.frame:Show()
-    self:BringToFront()
     self:UpdateLayout()
     self:Refresh()
 end

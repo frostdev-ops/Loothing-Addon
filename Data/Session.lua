@@ -14,7 +14,7 @@ end
 
 local function IsTestModeEnabled()
     local TestMode = ns.TestMode
-    return (Loothing and Loothing.TestMode and Loothing.TestMode:IsActive())
+    return (Loothing.TestMode and Loothing.TestMode:IsActive())
         or (TestMode and TestMode:IsEnabled())
 end
 

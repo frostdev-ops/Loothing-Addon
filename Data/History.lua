@@ -1307,7 +1307,7 @@ function HistoryMixin:ExportCompactJSON()
         end
         first = false
 
-        -- Fixed template: 35 scalar fields + 2 array fields
+        -- Fixed template: 36 scalar fields + 2 array fields
         buf[#buf + 1] = string.format(
             '{"guid":"%s","date":"%s","timestamp":%d,"itemID":%d,"itemLink":"%s","itemName":"%s","itemLevel":%d,"quality":%d,"equipSlot":"%s","typeCode":"%s","subType":"%s","bindType":%d,"isBoe":%s,"winner":"%s","winnerClass":"%s","response":"%s","responseID":"%s","winnerNote":"%s","winnerRoll":%d,"winnerGear1":"%s","winnerGear2":"%s","winnerGear1ilvl":%d,"winnerGear2ilvl":%d,"winnerIlvlDiff":%d,"encounterID":%d,"encounterName":"%s","instance":"%s","difficultyID":%d,"difficultyName":"%s","groupSize":%d,"mapID":%d,"votes":%d,"awardReasonId":"%s","awardReason":"%s","owner":"%s","candidates":%s,"councilVotes":%s}',
             EscapeJSONStringForExport(entry.guid or ""),

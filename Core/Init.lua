@@ -14,6 +14,7 @@ local CreateFrame, GetTime, GetInstanceInfo = CreateFrame, GetTime, GetInstanceI
 local GetNumGroupMembers, IsInGroup, IsInRaid = GetNumGroupMembers, IsInGroup, IsInRaid
 local print, select, UnitExists, UnitIsGroupLeader = print, select, UnitExists, UnitIsGroupLeader
 local Loothing = ns.Addon
+-- Alias for public methods: architecture linter R12 flags `function Loothing:` (global method defs on addon table).
 local Addon = ns.Addon
 local Utils = ns.Utils
 

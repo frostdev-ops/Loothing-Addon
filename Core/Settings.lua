@@ -11,7 +11,7 @@
     need to know about profiles - self.db routes to the active profile.
 ----------------------------------------------------------------------]]
 
-local ADDON_NAME, ns = ...
+local _, ns = ...
 local Loolib = LibStub("Loolib")
 local SavedVariables = Loolib.Data.SavedVariables
 local Loothing = ns.Addon

@@ -6,6 +6,7 @@
 local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
+local L = ns.Locale
 local Utils = ns.Utils
 
 --[[--------------------------------------------------------------------
@@ -83,8 +84,6 @@ end
 
 --- Create UI elements
 function VotePanelMixin:CreateElements()
-    local L = Loothing.Locale
-
     -- Title
     self.title = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     self.title:SetPoint("TOP", 0, -20)
@@ -125,8 +124,6 @@ end
 
 --- Create note input field
 function VotePanelMixin:CreateNoteInput()
-    local L = Loothing.Locale
-
     -- Container for note input
     local container = CreateFrame("Frame", nil, self.frame)
     container:SetPoint("BOTTOMLEFT", 20, 80)
@@ -225,8 +222,6 @@ end
 
 --- Create response buttons
 function VotePanelMixin:CreateResponseButtons()
-    local L = Loothing.Locale
-
     local container = CreateFrame("Frame", nil, self.frame)
     container:SetPoint("TOPLEFT", 20, -120)
     container:SetPoint("TOPRIGHT", -20, -120)
@@ -574,17 +569,16 @@ end
 function VotePanelMixin:UpdateRankHelperText()
     if not self.rankHelperText then return end
 
-    local L = Loothing.Locale
     local count = #self.selectedResponses
     local maxRanks = Loothing.Settings and Loothing.Settings:GetMaxRanks() or 0
     local minRanks = Loothing.Settings and Loothing.Settings:GetMinRanks() or 1
 
     if maxRanks > 0 and count >= maxRanks then
-        self.rankHelperText:SetText(string.format(L and L["RANK_LIMIT_REACHED"], maxRanks))
+        self.rankHelperText:SetText(string.format(L["RANK_LIMIT_REACHED"], maxRanks))
         self.rankHelperText:SetTextColor(1, 0.5, 0.2)
         self.rankHelperText:Show()
     elseif count < minRanks then
-        self.rankHelperText:SetText(string.format(L and L["RANK_MINIMUM_REQUIRED"], minRanks))
+        self.rankHelperText:SetText(string.format(L["RANK_MINIMUM_REQUIRED"], minRanks))
         self.rankHelperText:SetTextColor(1, 0.3, 0.3)
         self.rankHelperText:Show()
     else
@@ -694,8 +688,6 @@ function VotePanelMixin:ApplyObserveMode()
     if not Loothing.Settings then return end
 
     local observeMode = Loothing.Settings:GetObserveMode()
-
-    local L = Loothing.Locale
 
     -- Disable submit button in observe mode
     if self.submitButton then

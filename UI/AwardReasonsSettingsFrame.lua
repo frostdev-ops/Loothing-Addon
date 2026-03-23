@@ -7,6 +7,7 @@ local _, ns = ...
 local Loolib = LibStub("Loolib")
 local GlobalBridge = Loolib.Compat.GlobalBridge
 local Loothing = ns.Addon
+local Utils = ns.Utils
 local L = ns.Locale
 
 local FRAME_W        = 600
@@ -26,31 +27,12 @@ local AwardReasonsSettingsMixin = ns.AwardReasonsSettingsMixin or {}
 ns.AwardReasonsSettingsMixin = AwardReasonsSettingsMixin
 
 --[[--------------------------------------------------------------------
-    Helpers
-----------------------------------------------------------------------]]
-
-local function RefreshSettingsDialog()
-    if Loolib.Config and type(Loolib.Config.NotifyChange) == "function" then
-        Loolib.Config:NotifyChange("Loothing")
-    elseif Loolib.Config and Loolib.Config.Dialog then
-        Loolib.Config.Dialog:RefreshContent("Loothing")
-    end
-end
-
-local function BroadcastMLDBIfNeeded()
-    if Loothing.MLDB and Loothing.MLDB:IsML() then
-        Loothing.MLDB:BroadcastToRaid()
-    end
-end
-
---[[--------------------------------------------------------------------
     Public API
 ----------------------------------------------------------------------]]
 
 function AwardReasonsSettingsMixin:Show()
     self:BringToFront()
     self.frame:Show()
-    self:BringToFront()
     self:UpdateLayout()
     self:Refresh()
 end
@@ -189,8 +171,8 @@ function AwardReasonsSettingsMixin:BuildFrame()
         local enabled = cb:GetChecked()
         Loothing.Settings:SetAwardReasonsEnabled(enabled)
         self:RefreshToggleState()
-        RefreshSettingsDialog()
-        BroadcastMLDBIfNeeded()
+        Utils.NotifySettingsDialogRefresh()
+        Utils.BroadcastMLDBIfML()
     end)
     self.enabledCB = enabledCB
 
@@ -205,8 +187,8 @@ function AwardReasonsSettingsMixin:BuildFrame()
     requireCB:SetPoint("LEFT", enabledLabel, "RIGHT", 24, 0)
     requireCB:SetScript("OnClick", function(cb)
         Loothing.Settings:SetRequireAwardReason(cb:GetChecked())
-        RefreshSettingsDialog()
-        BroadcastMLDBIfNeeded()
+        Utils.NotifySettingsDialogRefresh()
+        Utils.BroadcastMLDBIfML()
     end)
     self.requireCB = requireCB
 
@@ -244,8 +226,8 @@ function AwardReasonsSettingsMixin:BuildFrame()
                 Loothing.Settings:ResetAwardReasons()
                 self.expandedRow = nil
                 self:Refresh()
-                RefreshSettingsDialog()
-                BroadcastMLDBIfNeeded()
+                Utils.NotifySettingsDialogRefresh()
+                Utils.BroadcastMLDBIfML()
             end,
             timeout      = 0,
             whileDead    = true,
@@ -276,8 +258,8 @@ function AwardReasonsSettingsMixin:BuildFrame()
         if newId then
             self.expandedRow = newId
             self:Refresh()
-            RefreshSettingsDialog()
-            BroadcastMLDBIfNeeded()
+            Utils.NotifySettingsDialogRefresh()
+            Utils.BroadcastMLDBIfML()
         end
     end)
     self.addBtn = addBtn
@@ -527,22 +509,22 @@ function AwardReasonsSettingsMixin:PopulateRow(row, reasonData, idx, total, isEx
                 local na = ColorPickerFrame:GetColorAlpha()
                 Loothing.Settings:UpdateAwardReason(reasonData.id, { color = { nr, ng, nb, na } })
                 self:RebuildRows()
-                RefreshSettingsDialog()
-                BroadcastMLDBIfNeeded()
+                Utils.NotifySettingsDialogRefresh()
+                Utils.BroadcastMLDBIfML()
             end,
             opacityFunc = function()
                 local nr, ng, nb = ColorPickerFrame:GetColorRGB()
                 local na = ColorPickerFrame:GetColorAlpha()
                 Loothing.Settings:UpdateAwardReason(reasonData.id, { color = { nr, ng, nb, na } })
                 self:RebuildRows()
-                RefreshSettingsDialog()
-                BroadcastMLDBIfNeeded()
+                Utils.NotifySettingsDialogRefresh()
+                Utils.BroadcastMLDBIfML()
             end,
             cancelFunc = function()
                 Loothing.Settings:UpdateAwardReason(reasonData.id, { color = { origR, origG, origB, origA } })
                 self:RebuildRows()
-                RefreshSettingsDialog()
-                BroadcastMLDBIfNeeded()
+                Utils.NotifySettingsDialogRefresh()
+                Utils.BroadcastMLDBIfML()
             end,
         })
     end)
@@ -556,15 +538,15 @@ function AwardReasonsSettingsMixin:PopulateRow(row, reasonData, idx, total, isEx
     row.upBtn:SetScript("OnClick", function()
         Loothing.Settings:UpdateAwardReason(reasonData.id, { sort = reasonData.sort - 1 })
         self:Refresh()
-        RefreshSettingsDialog()
-        BroadcastMLDBIfNeeded()
+        Utils.NotifySettingsDialogRefresh()
+        Utils.BroadcastMLDBIfML()
     end)
     row.downBtn:SetEnabled(idx < total)
     row.downBtn:SetScript("OnClick", function()
         Loothing.Settings:UpdateAwardReason(reasonData.id, { sort = reasonData.sort + 1 })
         self:Refresh()
-        RefreshSettingsDialog()
-        BroadcastMLDBIfNeeded()
+        Utils.NotifySettingsDialogRefresh()
+        Utils.BroadcastMLDBIfML()
     end)
 
     -- Expand button
@@ -596,8 +578,8 @@ function AwardReasonsSettingsMixin:PopulateRow(row, reasonData, idx, total, isEx
                 end
                 Loothing.Settings:RemoveAwardReason(reasonData.id)
                 self:Refresh()
-                RefreshSettingsDialog()
-                BroadcastMLDBIfNeeded()
+                Utils.NotifySettingsDialogRefresh()
+                Utils.BroadcastMLDBIfML()
             end,
             timeout      = 0,
             whileDead    = true,
@@ -616,30 +598,30 @@ function AwardReasonsSettingsMixin:PopulateRow(row, reasonData, idx, total, isEx
             eb:ClearFocus()
             Loothing.Settings:UpdateAwardReason(reasonData.id, { name = eb:GetText() })
             self:RebuildRows()
-            RefreshSettingsDialog()
-            BroadcastMLDBIfNeeded()
+            Utils.NotifySettingsDialogRefresh()
+            Utils.BroadcastMLDBIfML()
         end)
         row.nameEB:SetScript("OnEditFocusLost", function(eb)
             Loothing.Settings:UpdateAwardReason(reasonData.id, { name = eb:GetText() })
             self:RebuildRows()
-            RefreshSettingsDialog()
-            BroadcastMLDBIfNeeded()
+            Utils.NotifySettingsDialogRefresh()
+            Utils.BroadcastMLDBIfML()
         end)
 
         -- Log to History
         row.logCB:SetChecked(reasonData.log or false)
         row.logCB:SetScript("OnClick", function(cb)
             Loothing.Settings:UpdateAwardReason(reasonData.id, { log = cb:GetChecked() })
-            RefreshSettingsDialog()
-            BroadcastMLDBIfNeeded()
+            Utils.NotifySettingsDialogRefresh()
+            Utils.BroadcastMLDBIfML()
         end)
 
         -- Disenchant
         row.deCB:SetChecked(reasonData.disenchant or false)
         row.deCB:SetScript("OnClick", function(cb)
             Loothing.Settings:UpdateAwardReason(reasonData.id, { disenchant = cb:GetChecked() })
-            RefreshSettingsDialog()
-            BroadcastMLDBIfNeeded()
+            Utils.NotifySettingsDialogRefresh()
+            Utils.BroadcastMLDBIfML()
         end)
     else
         row.expandedRegion:Hide()

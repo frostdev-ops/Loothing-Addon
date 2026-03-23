@@ -689,6 +689,27 @@ function Utils.EscapePattern(str)
 end
 
 --[[--------------------------------------------------------------------
+    Settings UI (config dialog refresh + MLDB sync)
+----------------------------------------------------------------------]]
+
+--- Refresh the Loothing entry in the Loolib settings / config dialog.
+function Utils.NotifySettingsDialogRefresh()
+    local Config = Loolib.Config
+    if Config and type(Config.NotifyChange) == "function" then
+        Config:NotifyChange("Loothing")
+    elseif Config and Config.Dialog then
+        Config.Dialog:RefreshContent("Loothing")
+    end
+end
+
+--- If this client is master looter, broadcast MLDB so the raid stays in sync after edits.
+function Utils.BroadcastMLDBIfML()
+    if Loothing.MLDB and Loothing.MLDB:IsML() then
+        Loothing.MLDB:BroadcastToRaid()
+    end
+end
+
+--[[--------------------------------------------------------------------
     Color Utilities
 ----------------------------------------------------------------------]]
 
