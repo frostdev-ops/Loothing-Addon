@@ -1290,12 +1290,42 @@ function SettingsMixin:SetRequireAwardReason(require)
     self:Set("awardReasons.requireReason", require)
 end
 
---- Get all award reasons
+--- Get all award reasons (normalized)
+-- Ensures every entry has required fields, deduplicates IDs, re-sorts.
+-- If array is empty and feature is enabled, restores defaults.
 -- @return table - Array of award reason entries (copy)
 function SettingsMixin:GetAwardReasons()
     local defaults = Loothing.DefaultSettings.awardReasons.reasons
     local reasons = self:Get("awardReasons.reasons", defaults)
     local copy = Utils.DeepCopy(reasons)
+
+    -- Normalize: fill missing fields with deterministic defaults
+    local seenIds = {}
+    local dedupedCopy = {}
+    for _, entry in ipairs(copy) do
+        entry.id = tonumber(entry.id) or 0
+        entry.name = type(entry.name) == "string" and entry.name or "Reason"
+        if type(entry.color) ~= "table" or #entry.color < 3 then
+            entry.color = { 1, 1, 1, 1 }
+        end
+        entry.sort = tonumber(entry.sort) or 0
+        if entry.log == nil then entry.log = true end
+        if entry.disenchant == nil then entry.disenchant = false end
+
+        -- Deduplicate IDs (keep first occurrence)
+        if not seenIds[entry.id] then
+            seenIds[entry.id] = true
+            dedupedCopy[#dedupedCopy + 1] = entry
+        end
+    end
+    copy = dedupedCopy
+
+    -- If array is empty and feature is enabled, restore defaults
+    if #copy == 0 and self:GetAwardReasonsEnabled() then
+        copy = Utils.DeepCopy(defaults)
+    end
+
+    -- Sort and renumber sort fields to be contiguous
     table.sort(copy, function(a, b)
         local aSort = tonumber(a and a.sort) or math.huge
         local bSort = tonumber(b and b.sort) or math.huge
@@ -1304,6 +1334,10 @@ function SettingsMixin:GetAwardReasons()
         end
         return aSort < bSort
     end)
+    for i, entry in ipairs(copy) do
+        entry.sort = i
+    end
+
     return copy
 end
 
@@ -1434,18 +1468,16 @@ function SettingsMixin:ResetAwardReasons()
     self:Set("awardReasons.reasons", defaults)
 end
 
---- Get number of active award reasons
--- @return number - Number of active reasons (1-20)
-function SettingsMixin:GetNumAwardReasons()
-    local num = self:Get("awardReasons.numReasons", 6)
-    return math.max(1, math.min(20, num))
+--- Get auto-award structured reason ID
+-- @return number|nil - Award reason ID or nil if unassigned
+function SettingsMixin:GetAutoAwardReasonId()
+    return self:Get("autoAward.reasonId")
 end
 
---- Set number of active award reasons
--- @param num number - Number of active reasons (clamped to 1-20)
-function SettingsMixin:SetNumAwardReasons(num)
-    num = math.max(1, math.min(20, num))
-    self:Set("awardReasons.numReasons", num)
+--- Set auto-award structured reason ID
+-- @param id number|nil - Award reason ID or nil to unassign
+function SettingsMixin:SetAutoAwardReasonId(id)
+    self:Set("autoAward.reasonId", id)
 end
 
 --- Get award reason log setting
@@ -1846,14 +1878,6 @@ local function NormalizeResponseSetData(setId, setData)
         normalized.icon = (type(btn) == "table" and btn.icon ~= nil) and btn.icon or (defaultBtn and defaultBtn.icon) or nil
         normalized.sort = i
         normalized.whisperKeys = NormalizeResponseWhisperKeys(type(btn) == "table" and btn.whisperKeys or nil, defaultBtn and defaultBtn.whisperKeys)
-        if type(btn) == "table" and btn.requireNotes ~= nil then
-            normalized.requireNotes = btn.requireNotes == true
-        elseif defaultBtn then
-            normalized.requireNotes = defaultBtn.requireNotes == true
-        else
-            normalized.requireNotes = false
-        end
-
         buttons[i] = normalized
     end
 
@@ -2053,7 +2077,7 @@ end
 
 --- Add a button to a response set
 -- @param setId number
--- @param data table - Button fields (text, responseText, color, icon, whisperKeys, requireNotes)
+-- @param data table - Button fields (text, responseText, color, icon, whisperKeys)
 -- @return number|nil - New button ID
 function SettingsMixin:AddResponseButton(setId, data)
     local rs = self:GetResponseSets()
@@ -2075,7 +2099,6 @@ function SettingsMixin:AddResponseButton(setId, data)
         icon         = data.icon,
         sort         = #buttons + 1,
         whisperKeys  = data.whisperKeys or {},
-        requireNotes = data.requireNotes or false,
     }
 
     buttons[#buttons + 1] = newBtn
@@ -2473,20 +2496,6 @@ end
 -- @param max number
 function SettingsMixin:SetRollRange(min, max)
     self:Set("rollFrame.rollRange", { min = min, max = max })
-end
-
---- Get whether notes are required in RollFrame
--- @return boolean
-function SettingsMixin:GetRollFrameRequireNote()
-    local value = self:Get("rollFrame.requireNote")
-    if value == nil then return false end
-    return value
-end
-
---- Set whether notes are required in RollFrame
--- @param value boolean
-function SettingsMixin:SetRollFrameRequireNote(value)
-    self:Set("rollFrame.requireNote", value)
 end
 
 --- Get whether to show gear comparison in RollFrame

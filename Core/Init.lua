@@ -65,7 +65,9 @@ Loothing.ErrorHandler = nil
 Loothing.Diagnostics = nil
 Loothing.Announcer = nil
 Loothing.AutoAward = nil
+Loothing.VotePanel = nil
 Loothing.ResponseButtonSettings = nil
+Loothing.AwardReasonsSettings = nil
 Loothing.UI = nil
 
 -- Localization shortcut
@@ -287,6 +289,11 @@ local function InitializeModules()
         Loothing.ResponseButtonSettings = ns.CreateResponseButtonSettings()
     end
 
+    -- Initialize award reasons settings frame
+    if ns.CreateAwardReasonsSettings then
+        Loothing.AwardReasonsSettings = ns.CreateAwardReasonsSettings()
+    end
+
     -- Initialize UI last (depends on all other modules)
     if ns.CreateMainFrame then
         Loothing.MainFrame = ns.CreateMainFrame()
@@ -337,6 +344,17 @@ local function InitializeModules()
         end
     end
 
+    -- Initialize Vote Panel (council ranked-choice voting modal)
+    if ns.CreateVotePanel then
+        local success, result = pcall(ns.CreateVotePanel)
+        if success and result then
+            Loothing.VotePanel = result
+            Loothing.UI.VotePanel = result
+        else
+            Loothing:Error("Failed to create VotePanel:", result or "unknown error")
+        end
+    end
+
     -- Initialize Roll Frame (popup for raid members to respond to loot)
     if ns.CreateRollFrame then
         local success, result = pcall(ns.CreateRollFrame)
@@ -378,9 +396,12 @@ local function ShouldSkipMLCheck()
         return true
     end
     -- Skip if "onlyUseInRaids" is set and we're not in a raid
+    -- (allowOutOfRaid bypasses the instance-type check entirely)
     if Loothing.Settings and Loothing.Settings:Get("ml.onlyUseInRaids", true) then
-        if not Utils.IsInRaidInstance() then
-            return true
+        if not Loothing.Settings:Get("ml.allowOutOfRaid", false) then
+            if not Utils.IsInRaidInstance() then
+                return true
+            end
         end
     end
     return false
@@ -582,7 +603,9 @@ OnRaidEnter = function()
     if Utils.IsInPvPOrScenario() then return end
 
     if Loothing.Settings and Loothing.Settings:Get("ml.onlyUseInRaids", true) then
-        if not Utils.IsInRaidInstance() then return end
+        if not (Loothing.Settings:Get("ml.allowOutOfRaid", false)) then
+            if not Utils.IsInRaidInstance() then return end
+        end
     end
 
     if Loothing.handleLoot then return end
@@ -661,7 +684,7 @@ function Addon:StopHandleLoot()
     if self.Comm and self.Comm.BroadcastStopHandleLoot then
         self.Comm:BroadcastStopHandleLoot()
     elseif self.Comm and self.Comm.Send then
-        self.Comm:Send(Loothing.MsgType.STOP_HANDLE_LOOT, {}, "group")
+        self.Comm:Send(Loothing.MsgType.STOP_HANDLE_LOOT, {})
     end
 
     -- Disable whisper command handler
@@ -767,6 +790,51 @@ local function RegisterEvents()
     Events.Registry:RegisterEventCallback("ENCOUNTER_LOOT_RECEIVED", function(_, encounterID, itemID, itemLink, quantity, playerName, className)
         if Loothing.Session then
             Loothing.Session:OnLootReceived(encounterID, itemID, itemLink, quantity, playerName, className)
+        end
+    end, Loothing)
+
+    -- Personal loot tracking (logs items received outside of council sessions)
+    Events.Registry:RegisterEventCallback("CHAT_MSG_LOOT", function(_, msg, _, _, _, playerName2)
+        -- Only proceed if setting is enabled
+        if not (Loothing.Settings and Loothing.Settings:Get("historySettings.savePersonalLoot", false)) then
+            return
+        end
+
+        -- Skip if a council session is actively handling loot
+        if Loothing.Session then
+            local state = Loothing.Session:GetState()
+            if state == Loothing.SessionState.ACTIVE or state == Loothing.SessionState.CLOSED then
+                return
+            end
+        end
+
+        -- Only track loot the player receives (not others)
+        local myName = Utils.GetPlayerFullName()
+        if not myName then return end
+
+        -- Match "You receive loot: |cff...|Hitem:...|h[...]|h|r" pattern
+        local itemLink = msg and msg:match("|c.-|Hitem:.-|h.-|h|r")
+        if not itemLink then return end
+
+        -- Only log items the player themselves received
+        if playerName2 and playerName2 ~= "" and not Utils.IsSamePlayer(playerName2, myName) then
+            return
+        end
+
+        -- Get instance info for context
+        local instanceName, _, difficultyID, difficultyName, _, _, _, mapID = GetInstanceInfo()
+
+        if Loothing.History then
+            Loothing.History:AddEntry({
+                itemLink       = itemLink,
+                winner         = myName,
+                source         = "personal",
+                instance       = instanceName,
+                difficultyID   = difficultyID,
+                difficultyName = difficultyName,
+                mapID          = mapID,
+                timestamp      = time(),
+            })
         end
     end, Loothing)
 
@@ -1693,7 +1761,10 @@ function Addon:Error(...)
 end
 
 function Addon:Print(...)
-    print("|cff00ccff[Loothing]|r", SecretUtil.SecretsForPrint(...))
+    local frameName = self.Settings and self.Settings:Get("frame.chatFrameName", "ChatFrame1") or "ChatFrame1"
+    local chatFrame = _G[frameName] or DEFAULT_CHAT_FRAME
+    local msg = table.concat({SecretUtil.SecretsForPrint(...)}, " ")
+    chatFrame:AddMessage("|cff00ccff[Loothing]|r " .. msg)
 end
 
 --[[--------------------------------------------------------------------

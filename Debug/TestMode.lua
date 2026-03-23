@@ -7,7 +7,9 @@
 local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
+local Protocol = ns.Protocol
 local Utils = ns.Utils
+local VotingEngine = ns.VotingEngine
 
 local function GetTestRunner()
     return ns.TestRunner
@@ -313,7 +315,7 @@ function TestMode:GenerateFakeCouncil(count)
 
     -- Add the real player as first member
     local playerName = Utils.GetPlayerFullName()
-    local _, playerClass = UnitClass("player")
+    local _, playerClass = Loolib.SecretUtil.SafeUnitClass("player")
     table.insert(self.fakeCouncilMembers, 1, {
         name = playerName,
         shortName = Loolib.SecretUtil.SafeUnitName("player"),
@@ -694,11 +696,23 @@ end
     UI Component Testing
 ----------------------------------------------------------------------]]
 
---- Show VotePanel with a fake item for testing (redirects to RollFrame)
+--- Show VotePanel with a fake item for testing
 function TestMode:ShowVotePanel()
-    -- VotePanel is deprecated, redirect to RollFrame
-    print("|cffff9900[Loothing Test]|r VotePanel is deprecated, using RollFrame instead")
-    self:ShowRollFrame()
+    if not Loothing.VotePanel then
+        print("|cffff9900[Loothing Test]|r VotePanel not initialized, using RollFrame instead")
+        self:ShowRollFrame()
+        return
+    end
+
+    -- Create a fake item with candidates for VotePanel
+    local fakeItem = self:CreateFakeItem()
+    if not fakeItem then return end
+
+    local votingMode = Loothing.Settings and Loothing.Settings:GetVotingMode()
+        or Loothing.VotingMode.RANKED_CHOICE
+    Loothing.VotePanel:SetVotingMode(votingMode)
+    Loothing.VotePanel:SetItem(fakeItem)
+    Loothing.VotePanel:Show()
 end
 
 --- Show RollFrame (what raid members see to respond to loot)
@@ -995,7 +1009,7 @@ function TestMode:RegisterFullWorkflowCallbacks()
         -- Add player as a candidate with their response
         if item and item.GetCandidateManager then
             local playerName = Loolib.SecretUtil.SafeUnitName("player")
-            local _, playerClass = UnitClass("player")
+            local _, playerClass = Loolib.SecretUtil.SafeUnitClass("player")
             local manager = item:GetCandidateManager()
             if manager then
                 local candidate = manager:GetOrCreateCandidate(playerName, playerClass)

@@ -113,12 +113,7 @@ function Migration:RegisterMigrations()
 
         -- Ensure new settings fields exist
         if profileDB.settings then
-            if profileDB.settings.appendRealmNames == nil then
-                profileDB.settings.appendRealmNames = false
-            end
-            if profileDB.settings.printResponses == nil then
-                profileDB.settings.printResponses = false
-            end
+            -- appendRealmNames and printResponses removed in 1.3.2 (dead settings)
             if profileDB.settings.autoGroupLootGuildOnly == nil then
                 profileDB.settings.autoGroupLootGuildOnly = false
             end
@@ -266,7 +261,6 @@ function Migration:RegisterMigrations()
                         icon         = icon,
                         sort         = btn.sort or #newButtons + 1,
                         whisperKeys  = whisperKeys,
-                        requireNotes = false,
                     }
                 end
 
@@ -289,6 +283,64 @@ function Migration:RegisterMigrations()
 
         profileDB.responseSets = rs
         Loothing:Debug("Migration 1.3.0: Merged responses + buttonSets -> responseSets")
+    end)
+
+    -- Migration 1.3.2: Settings audit cleanup + autoAward structured reasons
+    self:Register("1.3.2", "Settings audit cleanup and structured auto-award reasons", function(profileDB, globalDB)
+        -- Remove dead settings
+        if profileDB.settings then
+            profileDB.settings.appendRealmNames = nil
+            profileDB.settings.printResponses = nil
+        end
+        if profileDB.ml then
+            profileDB.ml.autoAddPets = nil
+        end
+        if profileDB.awardReasons then
+            profileDB.awardReasons.numReasons = nil
+        end
+
+        -- Migrate autoAward.reason (free-text) -> autoAward.reasonId (structured)
+        if profileDB.autoAward and profileDB.autoAward.reason and not profileDB.autoAward.reasonId then
+            local freeText = profileDB.autoAward.reason
+            local reasons = profileDB.awardReasons and profileDB.awardReasons.reasons
+            if reasons and type(reasons) == "table" then
+                local lowerText = freeText:lower()
+                -- Case-insensitive match against existing reasons
+                for _, reason in ipairs(reasons) do
+                    if reason.name and reason.name:lower() == lowerText then
+                        profileDB.autoAward.reasonId = reason.id
+                        Loothing:Debug("Migration 1.3.2: Mapped autoAward.reason '" .. freeText .. "' -> reasonId", reason.id)
+                        break
+                    end
+                end
+
+                -- No match found: create new reason if under cap
+                if not profileDB.autoAward.reasonId and freeText ~= "" then
+                    if #reasons < 20 then
+                        local maxId = 0
+                        for _, r in ipairs(reasons) do
+                            if r.id and r.id > maxId then maxId = r.id end
+                        end
+                        local newReason = {
+                            id = maxId + 1,
+                            name = freeText,
+                            color = { 1.0, 1.0, 1.0, 1.0 },
+                            sort = #reasons + 1,
+                            log = true,
+                            disenchant = false,
+                        }
+                        reasons[#reasons + 1] = newReason
+                        profileDB.autoAward.reasonId = newReason.id
+                        Loothing:Debug("Migration 1.3.2: Created new reason '" .. freeText .. "' with id", newReason.id)
+                    else
+                        Loothing:Debug("Migration 1.3.2: Could not map autoAward.reason '" .. freeText .. "' (at 20-reason cap)")
+                    end
+                end
+            end
+            -- Keep autoAward.reason in saved vars for backward compat (not actively read)
+        end
+
+        Loothing:Debug("Migration 1.3.2: Settings audit cleanup complete")
     end)
 end
 

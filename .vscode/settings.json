@@ -12,7 +12,7 @@
         "utf8": "disable"
     },
     "Lua.workspace.library": [
-        "~/.vscode/extensions/ketho.wow-api-0.22.3/Annotations/Core"
+        "/home/james/.cursor/extensions/ketho.wow-api-0.22.3/Annotations/Core"
     ],
     "Lua.diagnostics.globals": [
         "ChatFrame_AddMessageEventFilter",
@@ -70,7 +70,8 @@
         "ITEM_CLASSES_ALLOWED",
         "LOCALIZED_CLASS_NAMES_MALE",
         "nop",
-        "LOCALIZED_CLASS_NAMES_FEMALE"
+        "LOCALIZED_CLASS_NAMES_FEMALE",
+        "DEFAULT_CHAT_FRAME"
     ],
     "Lua.type.weakUnionCheck": true,
     "Lua.diagnostics.unusedLocalExclude": ["_*"]

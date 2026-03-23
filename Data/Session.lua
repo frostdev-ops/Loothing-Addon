@@ -109,11 +109,26 @@ function SessionMixin:ShowRollFrameForItem(item)
     end
 end
 
--- DEPRECATED: Use ShowRollFrameForItem instead. Kept for external consumer compatibility.
+--- Show the active voting UI for an item.
+-- RollFrame handles raid-member responses; VotePanel handles council voting.
+-- @param item table - The item to display
+function SessionMixin:ShowVotingUIForItem(item)
+    local votingMode = Loothing.Settings and Loothing.Settings:GetVotingMode()
+
+    if votingMode == Loothing.VotingMode.RANKED_CHOICE and Loothing.VotePanel then
+        Loothing.VotePanel:SetVotingMode(Loothing.VotingMode.RANKED_CHOICE)
+        Loothing.VotePanel:SetItem(item)
+        Loothing.VotePanel:Show()
+        return
+    end
+
+    self:ShowRollFrameForItem(item)
+end
+
+--- Compatibility shim for older callers.
 -- @param item table - The item to display
 function SessionMixin:ShowVotePanelForItem(item)
-    -- Redirect to RollFrame
-    self:ShowRollFrameForItem(item)
+    self:ShowVotingUIForItem(item)
 end
 
 --- Safely show ResultsPanel to council members
@@ -220,6 +235,7 @@ end
 --- Handle tradability status for a looted item
 -- @param data table - { itemLink, timeRemaining, playerName, guid, itemID }
 function SessionMixin:HandleTradable(data)
+    if not self:IsActive() then return end
     if not data or not data.itemLink then return end
 
     -- Find the matching item: prefer GUID > itemID+looter > itemLink fallback
@@ -254,6 +270,7 @@ end
 --- Handle non-tradability status for a looted item
 -- @param data table - { itemLink, playerName, guid, itemID }
 function SessionMixin:HandleNonTradable(data)
+    if not self:IsActive() then return end
     if not data or not data.itemLink then return end
 
     -- Find the matching item: prefer GUID > itemID+looter > itemLink fallback
@@ -338,6 +355,10 @@ function SessionMixin:StartSession(encounterID, encounterName)
 
     self:TriggerEvent("OnSessionStarted", self.sessionID, encounterID, encounterName)
     Loothing:Print(string.format(Loothing.Locale["SESSION_STARTED"], encounterName or "Manual Session"))
+
+    if Loothing.Settings:Get("frame.autoOpen") and Loothing.MainFrame then
+        Loothing.MainFrame:Show()
+    end
 
     -- Replay buffered loot items from before session started
     local bufferTTL = Loothing.Timing and Loothing.Timing.LOOT_BUFFER_TTL or 60
@@ -434,6 +455,10 @@ function SessionMixin:EndSession()
 
     self:TriggerEvent("OnSessionEnded", sessionID)
     Loothing:Print(Loothing.Locale["SESSION_ENDED"])
+
+    if Loothing.Settings:Get("frame.autoClose") and Loothing.MainFrame then
+        Loothing.MainFrame:Hide()
+    end
 
     return true
 end
@@ -550,6 +575,15 @@ function SessionMixin:AddItem(itemLink, looter, guid, force)
     if not force and Loothing.ItemFilter and Loothing.ItemFilter:ShouldIgnoreItem(itemLink) then
         Loothing:Debug("Item filtered:", itemLink)
         return nil
+    end
+
+    -- Skip BoE items unless ml.autoAddBoEs is enabled
+    if not force then
+        local _, _, _, _, _, _, _, _, _, _, _, _, _, bindType = C_Item.GetItemInfo(itemLink)
+        if bindType == 2 and not Loothing.Settings:Get("ml.autoAddBoEs", false) then
+            Loothing:Debug("BoE item skipped (ml.autoAddBoEs disabled):", itemLink)
+            return nil
+        end
     end
 
     -- Dedup by GUID
@@ -780,6 +814,9 @@ end
 --- Handle per-item vote timeout
 -- @param item table - The item that timed out
 function SessionMixin:OnItemVoteTimeout(item)
+    if self.state == Loothing.SessionState.INACTIVE then
+        return
+    end
     if not item or not item:IsVoting() then
         return
     end
@@ -1169,7 +1206,7 @@ end
 -- @param response number - Optional response type
 -- @param awardReasonId number - Optional award reason ID
 -- @return boolean
-function SessionMixin:AwardItem(guid, winner, response, awardReasonId)
+function SessionMixin:AwardItem(guid, winner, response, awardReasonId, awardReasonText)
     if not self:IsMasterLooter() then
         return false
     end
@@ -1188,6 +1225,17 @@ function SessionMixin:AwardItem(guid, winner, response, awardReasonId)
 
     -- Broadcast
     Loothing.Comm:BroadcastVoteAward(guid, winner, self.sessionID)
+
+    local awardReason = nil
+    if awardReasonId and Loothing.Settings then
+        local reason = Loothing.Settings:GetAwardReasonById(awardReasonId)
+        if reason then
+            awardReason = reason.name
+        end
+    end
+    if not awardReason and awardReasonText then
+        awardReason = awardReasonText
+    end
 
     -- Add to history
     if Loothing.History then
@@ -1231,15 +1279,9 @@ function SessionMixin:AwardItem(guid, winner, response, awardReasonId)
             }
         end
 
-        -- Resolve awardReason text
-        local awardReason = nil
-        if awardReasonId and Loothing.ResponseInfo and Loothing.ResponseInfo[awardReasonId] then
-            awardReason = Loothing.ResponseInfo[awardReasonId].name
-        end
-
         local instanceData = item.instanceData or {}
 
-        Loothing.History:AddEntry({
+        local historyEntry = {
             -- Item identification
             itemLink      = item.itemLink,
             itemID        = item.itemID,
@@ -1278,7 +1320,16 @@ function SessionMixin:AwardItem(guid, winner, response, awardReasonId)
             -- Full snapshots
             candidates   = candidatesSnapshot,
             councilVotes = councilVotesSnapshot,
-        })
+        }
+        Loothing.History:AddEntry(historyEntry)
+
+        -- Broadcast history entry to group/guild if enabled
+        if Loothing.Settings:Get("historySettings.sendHistory") and Loothing.Comm then
+            Loothing.Comm:Send(Loothing.MsgType.HISTORY_ENTRY, historyEntry)
+        end
+        if Loothing.Settings:Get("historySettings.sendToGuild") and Loothing.Comm then
+            Loothing.Comm:SendGuild(Loothing.MsgType.HISTORY_ENTRY, historyEntry)
+        end
     end
 
     self:TriggerEvent("OnItemAwarded", item, winner, response)
@@ -1286,6 +1337,7 @@ function SessionMixin:AwardItem(guid, winner, response, awardReasonId)
     -- Announce via Announcer (handles token replacement, multi-line, combat queueing)
     if Loothing.Announcer then
         Loothing.Announcer:AnnounceAward(item.itemLink, winner, response, {
+            awardReason = awardReason,
             itemLevel = item.itemLevel,
             itemType = item.subType,
             votes = item:GetVotes():GetSize(),
@@ -1633,6 +1685,10 @@ function SessionMixin:HandleRemoteSessionStart(data)
 
     self:TriggerEvent("OnSessionStarted", self.sessionID, data.encounterID, data.encounterName)
     Loothing:Print(string.format(Loothing.Locale["SESSION_STARTED"], data.encounterName or Loothing.Locale["MANUAL_SESSION"]))
+
+    if Loothing.Settings:Get("frame.autoOpen") and Loothing.MainFrame then
+        Loothing.MainFrame:Show()
+    end
 end
 
 function SessionMixin:HandleRemoteSessionEnd(data)
@@ -1645,6 +1701,11 @@ end
 
 function SessionMixin:HandleRemoteItemAdd(data)
     if data.masterLooter == Utils.GetPlayerFullName() then
+        return
+    end
+
+    if not self:IsCurrentSession(data.sessionID) then
+        Loothing:Debug("Ignoring item add for mismatched session", data.sessionID)
         return
     end
 
@@ -2424,4 +2485,8 @@ function SessionMixin:SyncFromData(data)
     end
 
     self:TriggerEvent("OnSessionStarted", self.sessionID, data.encounterID, data.encounterName)
+
+    if Loothing.Settings:Get("frame.autoOpen") and Loothing.MainFrame then
+        Loothing.MainFrame:Show()
+    end
 end

@@ -100,7 +100,8 @@ local COMPRESSION_KEYS = {
     -- Award reasons
     ["awardReasons"] = "ar",
     ["requireReason"] = "rr",
-    ["numReasons"] = "nr",
+    -- numReasons removed (source of truth is array length)
+    ["reasonId"] = "rid",
     ["reasons"] = "rsn",
     ["log"] = "lg",
     ["disenchant"] = "de",
@@ -272,6 +273,7 @@ function MLDBMixin:GatherSettings()
         upperThreshold = Loothing.Settings:Get("autoAward.upperThreshold", 4),
         awardTo        = Loothing.Settings:Get("autoAward.awardTo", ""),
         reason         = Loothing.Settings:Get("autoAward.reason", "Auto Award"),
+        reasonId       = Loothing.Settings:GetAutoAwardReasonId(),
         includeBoE     = Loothing.Settings:Get("autoAward.includeBoE") == true,
     }
 
@@ -279,7 +281,6 @@ function MLDBMixin:GatherSettings()
     settings.awardReasons = {
         enabled       = Loothing.Settings:Get("awardReasons.enabled") ~= false,
         requireReason = Loothing.Settings:Get("awardReasons.requireReason") == true,
-        numReasons    = Loothing.Settings:Get("awardReasons.numReasons", 6),
         reasons       = Loothing.Settings:GetAwardReasons(),
     }
 

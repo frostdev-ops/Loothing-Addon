@@ -9,7 +9,7 @@ local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 
 -- Addon info
-Loothing.VERSION = "1.3.0"
+Loothing.VERSION = "1.3.2"
 Loothing.PROTOCOL_VERSION = 4
 Loothing.ADDON_PREFIX = "LOOTHING"
 
@@ -241,6 +241,9 @@ Loothing.MsgType = {
 
     -- Observer roster
     OBSERVER_ROSTER = "OR",         -- ML -> Raid: Observer list + permissions
+
+    -- History sharing
+    HISTORY_ENTRY = "HE",           -- ML -> Group/Guild: Broadcast history entry after award
 }
 
 --[[--------------------------------------------------------------------
@@ -270,8 +273,8 @@ Loothing.DefaultSettings = {
         uiScale = 1.0,
         mainFramePosition = nil,
         autoTrade = true,
-        appendRealmNames = false,   -- Append realm to cross-realm names
-        printResponses = false,     -- Print responses to chat
+        -- appendRealmNames removed (never read at runtime)
+        -- printResponses removed (superseded by rollFrame.printResponseToChat)
         autoGroupLootGuildOnly = false, -- Only use in guild groups
     },
 
@@ -359,7 +362,8 @@ Loothing.DefaultSettings = {
         lowerThreshold = 2,      -- Uncommon
         upperThreshold = 4,      -- Epic (items between lower and upper will be auto-awarded)
         awardTo = "",            -- Player name or "disenchanter"
-        reason = "Auto Award",   -- Reason shown in history
+        reason = "Auto Award",   -- Legacy free-text reason (migration source; not actively read)
+        reasonId = nil,          -- Structured reason ID (references awardReasons.reasons[].id)
         includeBoE = false,      -- Include Bind on Equip items
     },
 
@@ -399,7 +403,7 @@ Loothing.DefaultSettings = {
     awardReasons = {
         enabled = true,
         requireReason = false,    -- Require selecting a reason before awarding
-        numReasons = 6,           -- Number of active reasons (1-20)
+        -- numReasons removed (source of truth is #reasons array)
         reasons = {
             { id = 1, name = "Main Spec", color = { 0.0, 1.0, 0.0, 1.0 }, sort = 1, log = true, disenchant = false },
             { id = 2, name = "Off Spec", color = { 1.0, 0.5, 0.0, 1.0 }, sort = 2, log = true, disenchant = false },
@@ -428,7 +432,7 @@ Loothing.DefaultSettings = {
         skipSessionFrame = true,    -- Auto-start without session frame
         sortItems = false,          -- Auto-sort items
         autoAddBoEs = false,        -- Include BoE in auto-add
-        autoAddPets = false,        -- Include pets in auto-add
+        -- autoAddPets removed (never read at runtime)
         printCompletedTrades = false, -- Print trade confirmations
         rejectTrade = false,        -- Reject invalid trades
         awardLater = false,         -- Allow awarding to ML for later
@@ -474,28 +478,28 @@ Loothing.DefaultSettings = {
     },
 
     -- Unified response sets (replaces separate responses + buttonSets)
-    -- Per-button schema: { id, text, responseText, color{array}, icon, sort, whisperKeys{array}, requireNotes }
+    -- Per-button schema: { id, text, responseText, color{array}, icon, sort, whisperKeys{array} }
     responseSets = {
         activeSet = 1,
         sets = {
             [1] = {
                 name = "Default",
                 buttons = {
-                    { id = 1, text = "Need",     responseText = "NEED",     color = { 0.0, 1.0, 0.0, 1.0 }, icon = "Interface\\Buttons\\UI-GroupLoot-Dice-Up", sort = 1, whisperKeys = { "need" },               requireNotes = false },
-                    { id = 2, text = "Greed",    responseText = "GREED",    color = { 1.0, 1.0, 0.0, 1.0 }, icon = "Interface\\Buttons\\UI-GroupLoot-Coin-Up", sort = 2, whisperKeys = { "greed" },              requireNotes = false },
-                    { id = 3, text = "Offspec",  responseText = "OFFSPEC",  color = { 1.0, 0.5, 0.0, 1.0 }, icon = "Interface\\Icons\\Ability_DualWield",     sort = 3, whisperKeys = { "offspec", "os" },       requireNotes = false },
-                    { id = 4, text = "Transmog", responseText = "TRANSMOG", color = { 1.0, 0.0, 1.0, 1.0 }, icon = "Interface\\Icons\\INV_Arcane_Orb",        sort = 4, whisperKeys = { "transmog", "tmog" },   requireNotes = false },
-                    { id = 5, text = "Pass",     responseText = "PASS",     color = { 0.5, 0.5, 0.5, 1.0 }, icon = "Interface\\Buttons\\UI-GroupLoot-Pass-Up",sort = 5, whisperKeys = { "pass" },               requireNotes = false },
+                    { id = 1, text = "Need",     responseText = "NEED",     color = { 0.0, 1.0, 0.0, 1.0 }, icon = "Interface\\Buttons\\UI-GroupLoot-Dice-Up", sort = 1, whisperKeys = { "need" } },
+                    { id = 2, text = "Greed",    responseText = "GREED",    color = { 1.0, 1.0, 0.0, 1.0 }, icon = "Interface\\Buttons\\UI-GroupLoot-Coin-Up", sort = 2, whisperKeys = { "greed" } },
+                    { id = 3, text = "Offspec",  responseText = "OFFSPEC",  color = { 1.0, 0.5, 0.0, 1.0 }, icon = "Interface\\Icons\\Ability_DualWield",     sort = 3, whisperKeys = { "offspec", "os" } },
+                    { id = 4, text = "Transmog", responseText = "TRANSMOG", color = { 1.0, 0.0, 1.0, 1.0 }, icon = "Interface\\Icons\\INV_Arcane_Orb",        sort = 4, whisperKeys = { "transmog", "tmog" } },
+                    { id = 5, text = "Pass",     responseText = "PASS",     color = { 0.5, 0.5, 0.5, 1.0 }, icon = "Interface\\Buttons\\UI-GroupLoot-Pass-Up",sort = 5, whisperKeys = { "pass" } },
                 },
             },
             [2] = {
                 name = "Gear Priority",
                 buttons = {
-                    { id = 1, text = "BIS",           responseText = "BIS",      color = { 1.0, 0.0, 0.0, 1.0 }, icon = "Interface\\Buttons\\UI-GroupLoot-Dice-Up", sort = 1, whisperKeys = { "bis" },                  requireNotes = false },
-                    { id = 2, text = "Major Upgrade",  responseText = "MAJOR",    color = { 0.0, 1.0, 0.0, 1.0 }, icon = nil,                                       sort = 2, whisperKeys = { "major", "upgrade" },      requireNotes = false },
-                    { id = 3, text = "Minor Upgrade",  responseText = "MINOR",    color = { 1.0, 1.0, 0.0, 1.0 }, icon = nil,                                       sort = 3, whisperKeys = { "minor" },                 requireNotes = false },
-                    { id = 4, text = "Sidegrade",      responseText = "SIDEGRADE",color = { 1.0, 0.5, 0.0, 1.0 }, icon = nil,                                       sort = 4, whisperKeys = { "sidegrade", "side" },    requireNotes = false },
-                    { id = 5, text = "Pass",           responseText = "PASS",     color = { 0.5, 0.5, 0.5, 1.0 }, icon = "Interface\\Buttons\\UI-GroupLoot-Pass-Up",sort = 5, whisperKeys = { "pass" },               requireNotes = false },
+                    { id = 1, text = "BIS",           responseText = "BIS",      color = { 1.0, 0.0, 0.0, 1.0 }, icon = "Interface\\Buttons\\UI-GroupLoot-Dice-Up", sort = 1, whisperKeys = { "bis" } },
+                    { id = 2, text = "Major Upgrade",  responseText = "MAJOR",    color = { 0.0, 1.0, 0.0, 1.0 }, icon = nil,                                       sort = 2, whisperKeys = { "major", "upgrade" } },
+                    { id = 3, text = "Minor Upgrade",  responseText = "MINOR",    color = { 1.0, 1.0, 0.0, 1.0 }, icon = nil,                                       sort = 3, whisperKeys = { "minor" } },
+                    { id = 4, text = "Sidegrade",      responseText = "SIDEGRADE",color = { 1.0, 0.5, 0.0, 1.0 }, icon = nil,                                       sort = 4, whisperKeys = { "sidegrade", "side" } },
+                    { id = 5, text = "Pass",           responseText = "PASS",     color = { 0.5, 0.5, 0.5, 1.0 }, icon = "Interface\\Buttons\\UI-GroupLoot-Pass-Up",sort = 5, whisperKeys = { "pass" } },
                 },
             },
         },
@@ -526,7 +530,6 @@ Loothing.DefaultSettings = {
         autoShow = true,           -- Auto-popup when voting starts
         autoRollOnSubmit = false,  -- Auto-trigger /roll when submitting response
         rollRange = { min = 1, max = 100 },  -- Roll range
-        requireNote = false,       -- Require note before submit
         showGearComparison = true, -- Show equipped gear comparison
         position = nil,            -- Saved position { point, x, y }
         timeoutEnabled = true,     -- Enable/disable timeout timer

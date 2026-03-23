@@ -20,8 +20,8 @@ local VOTE_PANEL_EVENTS = {
     "OnVoteCancelled",
 }
 
-local PANEL_WIDTH = 350
-local PANEL_HEIGHT = 400
+local PANEL_WIDTH = 380
+local PANEL_HEIGHT = 500
 
 -- Pool of recycled response button frames to avoid orphaning on each refresh
 local responseButtonPool = {}
@@ -230,12 +230,12 @@ function VotePanelMixin:CreateResponseButtons()
     local container = CreateFrame("Frame", nil, self.frame)
     container:SetPoint("TOPLEFT", 20, -120)
     container:SetPoint("TOPRIGHT", -20, -120)
-    container:SetHeight(320)  -- Increased to accommodate up to 10 buttons
+    container:SetHeight(400)  -- Accommodates up to ~12 candidates visible
 
     -- Label
     local label = container:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     label:SetPoint("TOPLEFT")
-    label:SetText(L["SELECT_RESPONSE"])
+    label:SetText(L["SELECT_CANDIDATE"] or L["SELECT_RESPONSE"] or "Select Candidate")
 
     self.responseButtons = {}
     self.responseButtonsArray = {}
@@ -307,7 +307,9 @@ local function ReleaseResponseButton(button)
     responseButtonPool[#responseButtonPool + 1] = button
 end
 
---- Refresh response buttons based on active button set
+--- Refresh candidate rows for the current item
+-- Populates from item.candidateManager instead of response button settings.
+-- Each button represents a candidate (player) who has responded to the loot.
 function VotePanelMixin:RefreshResponseButtons()
     -- Return existing buttons to the pool instead of orphaning them
     for _, button in ipairs(self.responseButtonsArray) do
@@ -316,30 +318,39 @@ function VotePanelMixin:RefreshResponseButtons()
     wipe(self.responseButtons)
     wipe(self.responseButtonsArray)
 
-    if not Loothing.Settings then return end
+    if not self.item or not self.item.candidateManager then return end
 
-    -- Get buttons from active response set
-    local buttons = Loothing.Settings:GetResponseButtons()
-    if not buttons or #buttons == 0 then return end
+    local candidates = self.item.candidateManager:GetAllCandidates()
+    if not candidates or #candidates == 0 then return end
 
-    -- Sort by sort order
-    local sortedButtons = {}
-    for _, btn in ipairs(buttons) do
-        table.insert(sortedButtons, btn)
+    -- Sort candidates: by response (NEED first), then by name
+    local sorted = {}
+    for _, c in ipairs(candidates) do
+        sorted[#sorted + 1] = c
     end
-    table.sort(sortedButtons, function(a, b) return a.sort < b.sort end)
+    table.sort(sorted, function(a, b)
+        local rA = a.response or 999
+        local rB = b.response or 999
+        if rA ~= rB then return rA < rB end
+        return (a.playerName or a.name or "") < (b.playerName or b.name or "")
+    end)
 
     local buttonHeight = 28
     local spacing = 4
     local yOffset = -24
 
-    for i, btnData in ipairs(sortedButtons) do
+    for i, candidate in ipairs(sorted) do
         local button = AcquireResponseButton(self.responseContainer)
         button:SetSize(PANEL_WIDTH - 50, buttonHeight)
         button:SetPoint("TOPLEFT", 0, yOffset - (i - 1) * (buttonHeight + spacing))
 
-        -- Parse color (normalize to array format in case of named-field colors from sync)
-        local r, g, b = unpack(Utils.ColorToArray(btnData.color))
+        -- Class color for candidate
+        local class = candidate.class
+        local r, g, b = 0.5, 0.5, 0.5
+        if class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class] then
+            local cc = RAID_CLASS_COLORS[class]
+            r, g, b = cc.r, cc.g, cc.b
+        end
 
         -- Update sub-region colors
         button.bg:SetColorTexture(r * 0.3, g * 0.3, b * 0.3, 0.5)
@@ -347,16 +358,32 @@ function VotePanelMixin:RefreshResponseButtons()
         button.selected:SetColorTexture(r, g, b, 0.5)
         button.colorBar:SetSize(4, buttonHeight - 4)
         button.colorBar:SetColorTexture(r, g, b, 1)
-        button.text:SetText(btnData.text)
 
-        button.buttonId = btnData.id
-        button.buttonData = btnData
+        -- Display: short name + response label
+        local displayName = Utils.GetShortName(candidate.playerName or candidate.name or "Unknown")
+        local responseInfo = candidate.response and (Loothing.ResponseInfo[candidate.response] or Loothing.SystemResponseInfo[candidate.response])
+        local responseLabel = responseInfo and responseInfo.name or ""
+        if responseLabel ~= "" then
+            button.text:SetText(string.format("%s  |cFF888888(%s)|r", displayName, responseLabel))
+        else
+            button.text:SetText(displayName)
+        end
+
+        -- Key by normalized candidate name (matches CastVote / UpdateCandidateVoters)
+        local candidateName = Utils.NormalizeName(candidate.playerName or candidate.name)
+        button.buttonId = candidateName
+        button.buttonData = {
+            text = displayName,
+            candidateName = candidateName,
+            class = class,
+            color = { r, g, b },
+        }
 
         button:SetScript("OnClick", function()
             self:OnResponseClick(button)
         end)
 
-        self.responseButtons[btnData.id] = button
+        self.responseButtons[candidateName] = button
         self.responseButtonsArray[i] = button
     end
 end
@@ -515,13 +542,13 @@ function VotePanelMixin:RefreshRankDisplay()
         row.rankNum:SetText(tostring(i))
         row.rankNum:SetTextColor(r, g, b)
 
-        -- Response info
+        -- Candidate info (buttonId is a candidate name string)
         local button = self.responseButtons[buttonId]
         if button and button.buttonData then
             local btnData = button.buttonData
             local cr, cg, cb = 0.5, 0.5, 0.5
             if btnData.color then
-                cr, cg, cb = unpack(Utils.ColorToArray(btnData.color))
+                cr, cg, cb = unpack(btnData.color)
             end
             row.colorBar:SetColorTexture(cr, cg, cb, 1)
             row.nameText:SetText(btnData.text)
@@ -632,17 +659,18 @@ function VotePanelMixin:SetItem(item)
         self.itemSlot:SetText("")
     end
 
-    -- Reset response buttons
+    -- Rebuild candidate buttons for this item
+    self:RefreshResponseButtons()
     self:ResetResponseButtons()
 
-    -- Check for existing vote (only if item has the method)
+    -- Restore existing vote (responses contain candidate names)
     local existingVote = item.GetVoteByVoter and item:GetVoteByVoter(Utils.GetPlayerFullName())
     if existingVote and existingVote.responses then
-        for i, response in ipairs(existingVote.responses) do
+        for i, candidateName in ipairs(existingVote.responses) do
             if self.votingMode == Loothing.VotingMode.RANKED_CHOICE then
-                self.selectedResponses[i] = response
+                self.selectedResponses[i] = candidateName
             else
-                self.selectedResponses[1] = response
+                self.selectedResponses[1] = candidateName
                 break
             end
         end
@@ -667,18 +695,19 @@ function VotePanelMixin:ApplyObserveMode()
 
     local observeMode = Loothing.Settings:GetObserveMode()
 
+    local L = Loothing.Locale
+
     -- Disable submit button in observe mode
     if self.submitButton then
         self.submitButton:SetEnabled(not observeMode)
         if observeMode then
             self.submitButton:SetText(L["OBSERVE_MODE"])
         else
-            local L = Loothing.Locale
             self.submitButton:SetText(L["SUBMIT_VOTE"])
         end
     end
 
-    -- Disable response buttons in observe mode
+    -- Disable candidate buttons in observe mode
     for _, button in pairs(self.responseButtons) do
         button:SetEnabled(not observeMode)
     end
@@ -703,8 +732,8 @@ function VotePanelMixin:OnResponseClick(button)
     end
 end
 
---- Add response to ranking (ranked choice mode)
--- @param buttonId number
+--- Add candidate to ranking (ranked choice mode)
+-- @param buttonId string - Normalized candidate name
 function VotePanelMixin:AddToRanking(buttonId)
     -- Check if already ranked
     for i, id in ipairs(self.selectedResponses) do
@@ -771,24 +800,6 @@ function VotePanelMixin:UpdateResponseButtons()
 
     -- Update submit button state
     self:UpdateSubmitButton()
-end
-
---- Update ranking text display
-function VotePanelMixin:UpdateRankingText()
-    if #self.selectedResponses == 0 then
-        self.rankingText:SetText(Loothing.Locale["NO_SELECTION"])
-        return
-    end
-
-    local parts = {}
-    for i, buttonId in ipairs(self.selectedResponses) do
-        local button = self.responseButtons[buttonId]
-        if button and button.buttonData then
-            parts[#parts + 1] = string.format("%d. %s", i, button.buttonData.text)
-        end
-    end
-
-    self.rankingText:SetText(table.concat(parts, " > "))
 end
 
 --- Update submit button state

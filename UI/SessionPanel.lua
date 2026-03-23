@@ -765,6 +765,7 @@ function SessionPanelMixin:CreateFooter()
     self.awardLaterCheck.text:SetPoint("LEFT", self.awardLaterCheck, "RIGHT", 2, 0)
     self.awardLaterCheck.text:SetText(L["AWARD_LATER_ALL"])
     self.awardLaterCheck.text:SetTextColor(0.7, 0.7, 0.7)
+    self.awardLaterCheck:SetChecked(Loothing.Settings:Get("ml.awardLater", false))
     self.awardLaterCheck:SetScript("OnClick", function(btn)
         local checked = btn:GetChecked()
         if Loothing.Session then
@@ -1236,7 +1237,7 @@ function SessionPanelMixin:AddMLControls(row, item)
         frame._awardLaterCB = cb
     end
 
-    frame._awardLaterCB:SetChecked(item.awardLater or false)
+    frame._awardLaterCB:SetChecked(item.awardLater or Loothing.Settings:Get("ml.awardLater", false))
     frame._awardLaterCB:SetScript("OnClick", function(cb)
         item.awardLater = cb:GetChecked()
     end)
@@ -1309,10 +1310,10 @@ function SessionPanelMixin:OnEndVote(item)
     self:RefreshItems()
 end
 
---- Open vote panel for an item (routes to RollFrame since VotePanel is disabled)
+--- Open the active voting UI for an item.
 function SessionPanelMixin:OnVote(item)
-    if Loothing.UI and Loothing.UI.RollFrame then
-        Loothing.UI.RollFrame:SetItem(item)
+    if Loothing.Session and Loothing.Session.ShowVotingUIForItem then
+        Loothing.Session:ShowVotingUIForItem(item)
     end
 end
 

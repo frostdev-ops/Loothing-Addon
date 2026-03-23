@@ -861,11 +861,8 @@ function RollFrameMixin:OnResponseClick(button)
     button:SetBackdropBorderColor(1, 0.82, 0, 0.9)
     self.selectedResponse = button.buttonId
 
-    -- Check per-button requireNotes
-    local btnData = button.buttonData
-    if btnData and btnData.requireNotes then
-        self.requireNotesForResponse = true
-        -- Expand notes section and focus if notes are empty
+    -- If session-level requireNotes is active, expand notes and focus when empty
+    if Loothing.Settings and Loothing.Settings:GetRequireNotes() then
         if self.noteEditBox then
             self.noteContainer:Show()
             local noteText = self.noteEditBox:GetText() or ""
@@ -873,8 +870,6 @@ function RollFrameMixin:OnResponseClick(button)
                 self.noteEditBox:SetFocus()
             end
         end
-    else
-        self.requireNotesForResponse = false
     end
 
     self:UpdateSubmitButton()

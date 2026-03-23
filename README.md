@@ -2,7 +2,7 @@
 
 A loot council addon for World of Warcraft 12.0+ (Midnight). Built on [Loolib](https://github.com/frostdev-ops/Loolib).
 
-**Version**: 1.3.0 | **Interface**: 120000 | **License**: MIT
+**Version**: 1.3.2 | **Interface**: 120000 | **License**: MIT
 
 ---
 

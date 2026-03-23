@@ -254,6 +254,13 @@ end
 
 --- Handle TRADE_SHOW event
 function TradeQueueMixin:OnTradeShow()
+    -- Block trades during active voting if setting is enabled
+    if Loothing.Settings and Loothing.Settings:Get("frame.blockTradesDuringVoting")
+        and Loothing.Session and Loothing.Session:IsActive() then
+        CancelTrade()
+        return
+    end
+
     -- Get trade target from Blizzard UI
     local target = TradeFrameRecipientNameText:GetText()
     local normalizedTarget = nil
@@ -274,6 +281,15 @@ function TradeQueueMixin:OnTradeShow()
 
     if not self.tradeTarget then
         return
+    end
+
+    -- Reject trades with players who have no queued items (if setting is enabled)
+    if Loothing.Settings and Loothing.Settings:Get("ml.rejectTrade") then
+        local pendingForTarget = self:GetPendingForPlayer(self.tradeTarget)
+        if #pendingForTarget == 0 then
+            CancelTrade()
+            return
+        end
     end
 
     -- Check if we have items for this player
@@ -458,11 +474,13 @@ function TradeQueueMixin:MarkItemTraded(itemLink, tradedTo)
         self:TriggerEvent("OnItemTraded", entry, tradedTo)
         self:SaveToDatabase()
 
-        -- Check if traded to correct winner
-        if entry.winner == tradedTo then
-            Loothing:Print(string.format(L["TRADE_COMPLETED"], entry.itemLink, Utils.GetShortName(tradedTo)))
-        else
-            Loothing:Print(string.format(L["TRADE_WRONG_RECIPIENT"], entry.itemLink, Utils.GetShortName(tradedTo), Utils.GetShortName(entry.winner)))
+        -- Print trade completion if enabled
+        if not Loothing.Settings or Loothing.Settings:Get("ml.printCompletedTrades", true) then
+            if entry.winner == tradedTo then
+                Loothing:Print(string.format(L["TRADE_COMPLETED"], entry.itemLink, Utils.GetShortName(tradedTo)))
+            else
+                Loothing:Print(string.format(L["TRADE_WRONG_RECIPIENT"], entry.itemLink, Utils.GetShortName(tradedTo), Utils.GetShortName(entry.winner)))
+            end
         end
     end
 end
@@ -621,7 +639,7 @@ function TradeQueueMixin:SendTradableComm(itemLink, timeRemaining)
     Loothing.Comm:Send(Loothing.MsgType.TRADABLE, {
         itemLink = itemLink,
         timeRemaining = timeRemaining,
-    }, "group")
+    })
 
     Loothing:Debug("Sent TRADABLE comm for", itemLink)
 end
@@ -634,7 +652,7 @@ function TradeQueueMixin:SendNonTradableComm(itemLink)
 
     Loothing.Comm:Send(Loothing.MsgType.NON_TRADABLE, {
         itemLink = itemLink,
-    }, "group")
+    })
 
     Loothing:Debug("Sent NON_TRADABLE comm for", itemLink)
 end

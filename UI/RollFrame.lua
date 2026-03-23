@@ -208,8 +208,6 @@ function RollFrameMixin:DisplayItem(item)
     self.item = item
     self.selectedResponse = nil
     self.note = ""
-    self.requireNotesForResponse = false
-
     if not item then return end
 
     -- Check if we've already responded to this item
@@ -674,6 +672,11 @@ function RollFrameMixin:UpdateTimer()
         if not self.timerFlashing then
             self.timerFlashing = true
             self:StartTimerFlash()
+
+            -- Flash the entire frame if the setting is enabled
+            if Loothing.Settings and Loothing.Settings:Get("frame.timeoutFlash") and self.frame then
+                UIFrameFlash(self.frame, 0.5, 0.5, remaining, false, 0, 0)
+            end
         end
     elseif remaining <= 10 then
         self.timerBar:SetStatusBarColor(0.8, 0.6, 0.2, 1)  -- Yellow
@@ -726,6 +729,10 @@ function RollFrameMixin:StopTimerFlash()
     if self.timerFlashOverlay then
         self.timerFlashOverlay:Hide()
     end
+    -- Stop frame-level flash
+    if self.frame then
+        UIFrameFlashStop(self.frame)
+    end
 end
 
 --[[--------------------------------------------------------------------
@@ -740,10 +747,10 @@ function RollFrameMixin:UpdateSubmitButton()
         canSubmit = false
     end
 
-    -- Check if notes are required (global setting or per-button)
-    local requireNote = Loothing.Settings and Loothing.Settings:Get("rollFrame.requireNote", false)
+    -- Check if notes are required (session-level MLDB setting)
+    local requireNote = Loothing.Settings and Loothing.Settings:GetRequireNotes()
     local noteText = self.noteEditBox and self.noteEditBox:GetText() or ""
-    local noteMissing = (requireNote or self.requireNotesForResponse) and noteText:len() == 0
+    local noteMissing = requireNote and noteText:len() == 0
 
     if noteMissing and self.selectedResponse then
         canSubmit = false

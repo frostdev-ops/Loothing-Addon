@@ -139,6 +139,7 @@ L["ROSTER_REMOVE_OBSERVER"] = "Remove as Observer"
 L["SETTINGS"] = "Settings"
 L["GENERAL"] = "General"
 L["VOTING_MODE"] = "Voting Mode"
+L["VOTING_MODE_DESC"] = "Simple: each council member casts one vote per candidate. Ranked Choice: members rank candidates by preference using instant-runoff elimination."
 L["SIMPLE_VOTING"] = "Simple (Most votes wins)"
 L["RANKED_VOTING"] = "Ranked Choice"
 L["VOTING_TIMEOUT"] = "Voting Timeout"
@@ -197,6 +198,16 @@ L["NO_LIMIT"] = "No Limit"
 -- Brainrot Mode
 L["CONFIG_BRAINROT_MODE"] = "Brainrot Mode"
 L["CONFIG_BRAINROT_MODE_DESC"] = "Replace addon text with the brainrot variant (requires /reload)"
+
+-- Settings Tab Names
+L["CONFIG_TAB_GENERAL"] = "General"
+L["CONFIG_TAB_GENERAL_DESC"] = "Personal preferences that only affect your client"
+L["CONFIG_TAB_MASTER_LOOTER"] = "Master Looter"
+L["CONFIG_TAB_MASTER_LOOTER_DESC"] = "ML behavior, auto-award, item filtering, and loot history"
+L["CONFIG_TAB_SESSION"] = "Session & Voting"
+L["CONFIG_TAB_SESSION_DESC"] = "Voting rules, winner determination, and response buttons"
+L["CONFIG_TAB_COUNCIL"] = "Council"
+L["CONFIG_TAB_COUNCIL_DESC"] = "Council roster, guild rank auto-include, and observer permissions"
 
 -- Personal Preferences
 L["PERSONAL_PREFERENCES"] = "Personal Preferences"
@@ -279,7 +290,7 @@ L["OBSERVE_MODE"] = "Observe Mode"
 L["AUTO_ADD_ROLLS"] = "Auto-add Rolls"
 L["AUTO_ADD_ROLLS_DESC"] = "Automatically add /roll results to candidates"
 L["REQUIRE_NOTES"] = "Require Notes"
-L["REQUIRE_NOTES_DESC"] = "Voters must add a note with their vote"
+L["REQUIRE_NOTES_DESC"] = "Require a note with votes and loot responses"
 
 -- Button Sets
 L["BUTTON_SETS"] = "Button Sets"
@@ -401,7 +412,10 @@ L["CONFIG_CONSIDERATIONS_TEXT"] = "Message Template"
 -- Announcements - Line Configuration
 L["CONFIG_LINE"] = "Line"
 L["CONFIG_ENABLED"] = "Enabled"
+L["CONFIG_ENABLED_DESC"] = "Enable or disable this announcement line"
 L["CONFIG_CHANNEL"] = "Channel"
+L["CONFIG_CHANNEL_DESC"] = "The chat channel to send this announcement to"
+L["CONFIG_MESSAGE_DESC"] = "The message template. Supports tokens like {item}, {winner}, {reason}, etc."
 
 -- Award Reasons
 L["CONFIG_NUM_REASONS_DESC"] = "Number of active award reasons (1-20)"
@@ -489,50 +503,89 @@ L["TRIGGER_SCOPE_OPEN_WORLD_DESC"] = "Trigger on open-world encounters (e.g. wor
 -- AutoPass Options
 L["CONFIG_AUTOPASS_BOE"] = "AutoPass BoE Items"
 L["CONFIG_AUTOPASS_BOE_DESC"] = "Automatically pass on Bind on Equip items"
+L["CONFIG_AUTOPASS_WEAPONS_DESC"] = "Auto-pass on weapons that don't match your class's primary stat (Strength, Agility, or Intellect)"
+L["CONFIG_AUTOPASS_TRINKETS_DESC"] = "Auto-pass on trinkets your class cannot equip or benefit from"
 L["CONFIG_AUTOPASS_TRANSMOG"] = "AutoPass Transmog"
+L["CONFIG_AUTOPASS_TRANSMOG_DESC"] = "Auto-pass on items whose armor type your class cannot equip"
 L["CONFIG_AUTOPASS_TRANSMOG_SOURCE"] = "Skip Known Appearances"
+L["CONFIG_AUTOPASS_TRANSMOG_SOURCE_DESC"] = "Auto-pass on items whose appearance you have already collected"
 
 -- Auto Award Options
 L["CONFIG_AUTO_AWARD_LOWER_THRESHOLD"] = "Lower Quality Threshold"
+L["CONFIG_AUTO_AWARD_LOWER_THRESHOLD_DESC"] = "Minimum item quality for auto-awarding. Items below this quality are ignored."
 L["CONFIG_AUTO_AWARD_UPPER_THRESHOLD"] = "Upper Quality Threshold"
+L["CONFIG_AUTO_AWARD_UPPER_THRESHOLD_DESC"] = "Maximum item quality for auto-awarding. Items above this quality go through the loot council."
 L["CONFIG_AUTO_AWARD_REASON"] = "Award Reason"
+L["CONFIG_AUTO_AWARD_REASON_DESC"] = "The reason recorded in loot history when items are auto-awarded"
 L["CONFIG_AUTO_AWARD_INCLUDE_BOE"] = "Include BoE Items"
+L["CONFIG_AUTO_AWARD_INCLUDE_BOE_DESC"] = "Also auto-award Bind on Equip items within the quality range. When off, BoE items always go through the council."
 
 -- Frame Behavior Options
 L["CONFIG_FRAME_BEHAVIOR"] = "Frame Behavior"
 L["CONFIG_FRAME_AUTO_OPEN"] = "Auto-Open Frames"
+L["CONFIG_FRAME_AUTO_OPEN_DESC"] = "Automatically open the voting and loot frames when a loot council session starts"
 L["CONFIG_FRAME_AUTO_CLOSE"] = "Auto-Close Frames"
+L["CONFIG_FRAME_AUTO_CLOSE_DESC"] = "Automatically close loot council frames when the session ends or all items are awarded"
 L["CONFIG_FRAME_SHOW_SPEC_ICON"] = "Show Spec Icons"
+L["CONFIG_FRAME_SHOW_SPEC_ICON_DESC"] = "Display the player's current specialization icon next to their name in the voting frame"
 L["CONFIG_FRAME_CLOSE_ESCAPE"] = "Close with Escape"
+L["CONFIG_FRAME_CLOSE_ESCAPE_DESC"] = "Allow pressing Escape to close loot council frames. When off, frames can only be closed via the X button."
 L["CONFIG_FRAME_CHAT_OUTPUT"] = "Chat Output Frame"
+L["CONFIG_FRAME_CHAT_OUTPUT_DESC"] = "Select which chat window Loothing messages are printed to"
+L["CONFIG_FRAME_MINIMIZE_COMBAT_DESC"] = "Minimize the main loot council window to a small bar when you enter combat. Restores when combat ends."
+L["CONFIG_FRAME_TIMEOUT_FLASH_DESC"] = "Flash the loot frame taskbar icon when the response timer is about to expire"
+L["CONFIG_FRAME_BLOCK_TRADES_DESC"] = "Block trade windows from opening while a voting session is active"
 
 -- ML Usage Options
 L["CONFIG_ML_USAGE_MODE"] = "Usage Mode"
+L["CONFIG_ML_USAGE_MODE_DESC"] = "Controls when Loothing activates. Never: disabled. Group Loot: auto-activate as leader. Ask: prompt before activating."
 L["CONFIG_ML_USAGE_NEVER"] = "Never"
 L["CONFIG_ML_USAGE_GL"] = "Group Loot"
 L["CONFIG_ML_USAGE_ASK_GL"] = "Ask on Group Loot"
 L["CONFIG_ML_RAIDS_ONLY"] = "Raids Only"
+L["CONFIG_ML_RAIDS_ONLY_DESC"] = "Only activate loot council features in raid groups. Disables ML functionality in dungeons and parties."
 L["CONFIG_ML_ALLOW_OUTSIDE"] = "Allow Outside Raids"
+L["CONFIG_ML_ALLOW_OUTSIDE_DESC"] = "Allow loot council sessions to start even when not inside a raid instance"
 L["CONFIG_ML_SKIP_SESSION"] = "Skip Session Frame"
+L["CONFIG_ML_SKIP_SESSION_DESC"] = "Skip the session setup frame and start sessions immediately with all detected loot items"
 L["CONFIG_ML_SORT_ITEMS"] = "Sort Items"
+L["CONFIG_ML_SORT_ITEMS_DESC"] = "Sort loot items by quality (highest first) in the session and voting frames"
 L["CONFIG_ML_AUTO_ADD_BOES"] = "Auto-Add BoEs"
+L["CONFIG_ML_AUTO_ADD_BOES_DESC"] = "Automatically add tradeable Bind on Equip items to the loot session alongside BoP items"
 L["CONFIG_ML_PRINT_TRADES"] = "Print Completed Trades"
+L["CONFIG_ML_PRINT_TRADES_DESC"] = "Print a chat message when a loot trade between players is completed"
 L["CONFIG_ML_REJECT_TRADE"] = "Reject Invalid Trades"
+L["CONFIG_ML_REJECT_TRADE_DESC"] = "Automatically cancel incoming trade windows from players not in the current loot trade queue"
 L["CONFIG_ML_AWARD_LATER"] = "Award Later"
+L["CONFIG_ML_AWARD_LATER_DESC"] = "Keep awarded items visible in the session frame, allowing you to change the winner until the session ends"
 
 -- History Options
+L["CONFIG_HISTORY_ENABLED_DESC"] = "Record all loot council awards in a persistent history log that you can browse and export"
+L["CONFIG_HISTORY_SEND_DESC"] = "Broadcast your loot history to other Loothing users in the raid so they can sync records"
 L["CONFIG_HISTORY_SEND_GUILD"] = "Send to Guild"
+L["CONFIG_HISTORY_SEND_GUILD_DESC"] = "Also send loot history entries over the guild channel so members not in the raid can sync"
 L["CONFIG_HISTORY_SAVE_PL"] = "Save Personal Loot"
+L["CONFIG_HISTORY_SAVE_PL_DESC"] = "Record items received via personal loot (not council-awarded) in your history log"
 
 -- Ignore Item Options
 L["CONFIG_IGNORE_ENCHANTING_MATS"] = "Ignore Enchanting Materials"
+L["CONFIG_IGNORE_ENCHANTING_MATS_DESC"] = "Exclude enchanting materials from loot council sessions"
 L["CONFIG_IGNORE_CRAFTING_REAGENTS"] = "Ignore Crafting Reagents"
+L["CONFIG_IGNORE_CRAFTING_REAGENTS_DESC"] = "Exclude crafting reagents from loot council sessions"
 L["CONFIG_IGNORE_CONSUMABLES"] = "Ignore Consumables"
+L["CONFIG_IGNORE_CONSUMABLES_DESC"] = "Exclude consumable items (potions, food, etc.) from loot council sessions"
 L["CONFIG_IGNORE_PERMANENT_ENHANCEMENTS"] = "Ignore Permanent Enhancements"
+L["CONFIG_IGNORE_PERMANENT_ENHANCEMENTS_DESC"] = "Exclude permanent enhancement items (enchant scrolls, etc.) from loot council sessions"
 
 -- Announcement Options
 L["CONFIG_ANNOUNCEMENT_TOKENS_DESC"] = "Available tokens: {item}, {winner}, {reason}, {notes}, {ilvl}, {type}, {oldItem}, {ml}, {session}, {votes}"
+L["CONFIG_ANNOUNCE_AWARDS_DESC"] = "Post a message in chat when an item is awarded to a player"
+L["CONFIG_ANNOUNCE_ITEMS_DESC"] = "Announce each loot item being considered by the council to chat"
+L["CONFIG_ANNOUNCE_BOSS_KILL_DESC"] = "Announce when a loot council session starts and ends"
 L["CONFIG_ANNOUNCE_CONSIDERATIONS"] = "Announce Considerations"
+L["CONFIG_ANNOUNCE_CONSIDERATIONS_DESC"] = "Announce the candidates and their responses being considered for each item"
+L["CONFIG_CONSIDERATIONS_CHANNEL_DESC"] = "The chat channel used for consideration announcements"
+L["CONFIG_CONSIDERATIONS_TEXT_DESC"] = "The message template for consideration announcements. Supports standard announcement tokens."
 L["CONFIG_ITEM_ANNOUNCEMENTS"] = "Item Announcements"
 L["CONFIG_SESSION_ANNOUNCEMENTS"] = "Session Announcements"
 L["CONFIG_SESSION_START"] = "Session Start"
@@ -546,6 +599,8 @@ L["CONFIG_TYPECODE_ASSIGNMENT"] = "Type Code Assignment"
 -- Award Reasons Options
 L["CONFIG_AWARD_REASONS"] = "Award Reasons"
 L["NUM_AWARD_REASONS"] = "Number of Reasons"
+L["CONFIG_REASON_LOG_DESC"] = "Record awards using this reason in the loot history log"
+L["CONFIG_REASON_DISENCHANT_DESC"] = "Mark this reason as a disenchant. Items awarded with this reason are tracked separately."
 
 -- Council Guild Rank Options
 L["CONFIG_GUILD_RANK"] = "Guild Rank Auto-Include"
@@ -981,5 +1036,21 @@ L["NO_COMPLETED_TRADES"] = "No completed trades to clear"
 L["OBSERVE_MODE_MSG"] = "You are in observe mode and cannot cast votes."
 L["VOTE_NOTE_REQUIRED"] = "You must add a note with your vote."
 L["SELF_VOTE_DISABLED"] = "Self-voting is disabled for this session."
+
+-- Award Reason Editor (Work Stream 1)
+L["AWARD_REASON_EDITOR"] = "Award Reason Editor"
+L["CONFIG_AWARD_REASONS_EDITOR_DESC"] = "Configure award reasons that appear when the Master Looter awards an item."
+L["CONFIG_OPEN_AWARD_REASON_EDITOR"] = "Open Editor"
+L["MAX_REASONS"] = "Maximum of 20 reasons reached."
+L["MIN_REASONS"] = "Cannot delete the last reason."
+L["POPUP_DELETE_AWARD_REASON"] = "Delete this award reason?"
+L["POPUP_RESET_ALL_REASONS"] = "Reset all award reasons to defaults? This cannot be undone."
+
+-- Settings Audit (Work Stream 4B)
+L["CONFIG_ML_GUILD_ONLY"] = "Guild Groups Only"
+L["CONFIG_ML_GUILD_ONLY_DESC"] = "Only enable automatic group loot handling in guild groups"
+L["CONFIG_HISTORY_MAX_ENTRIES"] = "Max History Entries"
+L["CONFIG_HISTORY_MAX_ENTRIES_DESC"] = "Maximum number of loot history entries to keep. Oldest entries are pruned when this limit is reached."
+L["NONE"] = "None"
 
 return L

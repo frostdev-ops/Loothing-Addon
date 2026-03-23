@@ -16,6 +16,7 @@ local CELL_PADDING = 2
 CouncilTableMixin.COLUMNS = {
     { id = "priority",     name = "#",                              width = 30,  maxWidth = 36,  flex = 0, sortable = true,  settingsKey = "priority" },
     { id = "class",        name = "",                               width = 22,  maxWidth = 22,  flex = 0, sortable = true,  settingsKey = "class" },
+    { id = "spec",         name = "",                               width = 24,  maxWidth = 24,  flex = 0, sortable = false, settingsKey = "spec" },
     { id = "player",       name = L["COUNCIL_COLUMN_PLAYER"],       width = 100, maxWidth = 180, flex = 2, stretch = 4, sortable = true,  settingsKey = "player" },
     { id = "role",         name = L["COLUMN_ROLE"],                 width = 30,  maxWidth = 36,  flex = 0, sortable = true,  settingsKey = "role" },
     { id = "response",     name = L["COUNCIL_COLUMN_RESPONSE"],     width = 120, maxWidth = 200, flex = 2, stretch = 4, sortable = true,  settingsKey = "response" },
@@ -69,6 +70,11 @@ local ROLE_COORDS = {
 ----------------------------------------------------------------------]]
 
 function CouncilTableMixin:IsColumnVisible(columnId)
+    -- Spec column is controlled by the frame.showSpecIcon setting
+    if columnId == "spec" then
+        return Loothing.Settings and Loothing.Settings:Get("frame.showSpecIcon") or false
+    end
+
     if not Loothing.Settings then
         return true
     end
@@ -393,6 +399,22 @@ CouncilTableMixin.CellUpdaters.role = function(_, cell, candidate)
     end
 end
 
+-- Spec icon
+CouncilTableMixin.CellUpdaters.spec = function(_, cell, candidate)
+    if not cell.icon then return end
+    local specID = candidate.specID
+    if specID then
+        local _, _, _, icon = C_SpecializationInfo.GetSpecializationInfoByID(specID)
+        if icon then
+            cell.icon:SetTexture(icon)
+            cell.icon:SetTexCoord(0, 1, 0, 1)
+            cell.icon:Show()
+            return
+        end
+    end
+    cell.icon:Hide()
+end
+
 -- Response (color bar + text)
 CouncilTableMixin.CellUpdaters.response = function(_, cell, candidate)
     local canSeeResponses = not Loothing.Observer or Loothing.Observer:CanPlayerSeeResponses()
@@ -625,10 +647,11 @@ CouncilTableMixin.CellUpdaters.vote = function(_, cell, candidate)
             local _isML = Loothing.Session and Loothing.Session:IsMasterLooter()
             if Loothing.Settings and Loothing.Settings:GetHideVotes() and not _isML then return end
             local anonymous = Loothing.Settings and Loothing.Settings:GetAnonymousVoting()
+            local mlOverride = _isML and Loothing.Settings and Loothing.Settings:GetMlSeesVotes()
             GameTooltip:SetOwner(c, "ANCHOR_RIGHT")
             GameTooltip:AddLine(string.format(L["TOOLTIP_VOTES"], #voters), 1, 0.82, 0)
             local canSeeIds = not Loothing.Observer or Loothing.Observer:CanPlayerSeeVoterIdentities()
-            if not anonymous and canSeeIds then
+            if (not anonymous or mlOverride) and canSeeIds then
                 for _, voterName in ipairs(voters) do
                     local short = voterName:match("^([^%-]+)")
                     GameTooltip:AddLine(short or voterName, 1, 1, 1)

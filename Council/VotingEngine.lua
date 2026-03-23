@@ -41,8 +41,7 @@ function VotingEngine:Tally(votes, mode, opts)
 
     -- Apply voting options
     -- Note: hideVotes and anonymousVoting are applied at the UI level
-    -- multiVote is handled in VotePanel
-    -- requireNotes is enforced in VotePanel submit logic
+    -- multiVote and requireNotes are enforced by the council voting UI
 
     if mode == Loothing.VotingMode.RANKED_CHOICE then
         -- For ranked choice, we need to extract candidates from the votes

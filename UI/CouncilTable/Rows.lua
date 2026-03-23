@@ -291,6 +291,22 @@ function CouncilTableMixin:EnrichCandidates(candidates)
             candidate.role = rosterEntry.role
         end
 
+        -- Spec ID from PlayerCache (if available)
+        if not candidate.specID and Loothing.PlayerCache then
+            local cached = Loothing.PlayerCache:Get(candidate.playerName or candidate.name)
+            if cached and cached.specID then
+                candidate.specID = cached.specID
+            end
+        end
+
+        -- For local player, always use the live spec
+        if not candidate.specID and Utils.IsSamePlayer(candidate.playerName or candidate.name, Utils.GetPlayerFullName()) then
+            local specIndex = GetSpecialization and GetSpecialization()
+            if specIndex then
+                candidate.specID = GetSpecializationInfo(specIndex)
+            end
+        end
+
         -- Equipped ilvl = best of gear1ilvl / gear2ilvl
         local g1 = candidate.gear1ilvl or 0
         local g2 = candidate.gear2ilvl or 0
@@ -586,23 +602,24 @@ end
 function CouncilTableMixin:OnVoteClick(candidate)
     Loothing:Debug("OnVoteClick: candidate =", candidate and candidate.name, "item =", self.currentItem and self.currentItem.guid)
 
-    -- In RCV mode, open the VotePanel instead of toggling a vote
+    if not self.currentItem then
+        Loothing:Debug("OnVoteClick: no currentItem")
+        return
+    end
+
+    -- In ranked mode, open the council voting modal instead of toggling a vote.
     local votingMode = Loothing.Settings and Loothing.Settings:GetVotingMode()
     if votingMode == Loothing.VotingMode.RANKED_CHOICE then
-        if Loothing.VotePanel then
-            Loothing.VotePanel:SetVotingMode(Loothing.VotingMode.RANKED_CHOICE)
-            Loothing.VotePanel:SetItem(self.currentItem)
-            Loothing.VotePanel:Show()
+        if Loothing.Session and Loothing.Session.ShowVotingUIForItem then
+            Loothing.Session:ShowVotingUIForItem(self.currentItem)
+        else
+            Loothing:Error("Council voting UI is unavailable.")
         end
         return
     end
 
     if not Loothing.Session then
         Loothing:Debug("OnVoteClick: no Session")
-        return
-    end
-    if not self.currentItem then
-        Loothing:Debug("OnVoteClick: no currentItem")
         return
     end
 

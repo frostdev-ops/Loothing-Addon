@@ -3,7 +3,7 @@
 ## Title: Loothing
 ## Notes: Loot Council addon for WoW 12.0+ with ranked choice voting
 ## Author: James Kueller
-## Version: 1.3.0
+## Version: 1.3.2
 ## SavedVariables: LoolibDB
 ## Dependencies: Loolib
 ## IconTexture: Interface\AddOns\Loothing\Media\logo
@@ -111,12 +111,13 @@ Comm\WhisperHandler.lua
 UI\IconList.lua
 UI\IconPickerFrame.lua
 UI\ResponseButtonSettingsFrame.lua
+UI\AwardReasonsSettingsFrame.lua
 UI\Skinning.lua
 UI\Minimap.lua
 UI\Filters.lua
 UI\Popups.lua
 UI\ItemRow.lua
-# UI\VotePanel.lua
+UI\VotePanel.lua
 UI\Components\ResponseRow.lua
 UI\Components\CandidateResultRow.lua
 UI\ResultsPanel.lua

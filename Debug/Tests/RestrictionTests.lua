@@ -145,16 +145,16 @@ local function RunRestrictionTests()
     if restrictions.QueueGuaranteed then
         -- Queue messages during restriction
         restrictions.restrictionsEnabled = true
-        restrictions:QueueGuaranteed("VOTE_COMMIT", { itemGUID = "g1" }, "group")
-        restrictions:QueueGuaranteed("VOTE_AWARD", { itemGUID = "g2", winner = "W" }, "group")
+        restrictions:QueueGuaranteed("VOTE_COMMIT", { itemGUID = "g1" }, nil)
+        restrictions:QueueGuaranteed("VOTE_AWARD", { itemGUID = "g2", winner = "W" }, nil)
 
         assertEqual(#restrictions.guaranteedQueue, 2, "Two messages queued")
         assertEqual(restrictions.guaranteedQueue[1].command, "VOTE_COMMIT", "First queued command")
         assertEqual(restrictions.guaranteedQueue[2].command, "VOTE_AWARD", "Second queued command")
     else
         -- Test queue structure manually
-        restrictions.guaranteedQueue[1] = { command = "VOTE_COMMIT", data = { itemGUID = "g1" }, target = "group" }
-        restrictions.guaranteedQueue[2] = { command = "VOTE_AWARD", data = { itemGUID = "g2" }, target = "group" }
+        restrictions.guaranteedQueue[1] = { command = "VOTE_COMMIT", data = { itemGUID = "g1" }, target = nil }
+        restrictions.guaranteedQueue[2] = { command = "VOTE_AWARD", data = { itemGUID = "g2" }, target = nil }
         assertEqual(#restrictions.guaranteedQueue, 2, "Manual queue: two messages")
     end
 

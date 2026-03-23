@@ -60,6 +60,11 @@ end
 --- Add a history entry
 -- @param entry table - History entry table (see complete schema in Loothing docs)
 function HistoryMixin:AddEntry(entry)
+    -- Guard: skip if history is disabled
+    if Loothing.Settings and not Loothing.Settings:Get("historySettings.enabled", true) then
+        return
+    end
+
     -- Ensure required fields
     entry.timestamp = entry.timestamp or time()
     entry.guid = entry.guid or Utils.GenerateGUID()

@@ -263,10 +263,15 @@ end
 -- @param targetPlayer string - Player name
 -- @return boolean - True if award was successful
 function AutoAwardMixin:AwardItem(itemLink, itemGUID, targetPlayer)
-    if not Loothing.Session then return false end
+    if not Loothing.Session or not Loothing.Session:IsActive() then return false end
 
-    -- Get the reason from settings
-    local reason = Loothing.Settings:GetAutoAwardReason()
+    -- Get the structured reason from settings
+    local reasonId = Loothing.Settings:GetAutoAwardReasonId()
+    local reasonText = nil
+    if reasonId then
+        local reason = Loothing.Settings:GetAwardReasonById(reasonId)
+        reasonText = reason and reason.name or nil
+    end
 
     -- Create a session item if one doesn't exist
     local sessionItem = Loothing.Session:FindItemByGUID(itemGUID)
@@ -282,7 +287,7 @@ function AutoAwardMixin:AwardItem(itemLink, itemGUID, targetPlayer)
     if Loothing.Session.AwardItem then
         -- Mark as pending before awarding to prevent re-entry from duplicate events
         self.pendingAwards[itemGUID] = true
-        Loothing.Session:AwardItem(sessionItem.id, targetPlayer, reason)
+        Loothing.Session:AwardItem(sessionItem.id, targetPlayer, nil, reasonId, reasonText)
 
         -- Log the auto-award
         Loothing:Print(string.format(L["ITEM_AWARDED"], itemLink, targetPlayer))

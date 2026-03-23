@@ -59,6 +59,11 @@ function GroupLootMixin:OnStartLootRoll(_, rollID)
         return
     end
 
+    -- Only auto-roll when a loot council session is active
+    if not Loothing.Session or not Loothing.Session:IsActive() then
+        return
+    end
+
     local link = GetLootRollItemLink(rollID)
     if not link then
         return

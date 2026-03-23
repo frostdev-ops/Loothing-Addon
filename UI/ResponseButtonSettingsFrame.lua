@@ -16,7 +16,7 @@ local FRAME_MIN_W    = 680
 local FRAME_MIN_H    = 680
 local ROW_H          = 30
 local ROW_PADDING    = 4
-local EXPANDED_H     = 130   -- Extra height when a row is expanded
+local EXPANDED_H     = 108   -- Extra height when a row is expanded
 local SWATCH_SIZE    = 20
 local SECTION_PAD    = 12
 local MAX_BUTTONS    = 10
@@ -658,18 +658,6 @@ function ResponseButtonSettingsMixin:CreateRow()
     row.whisperEB = whisperEB
     AddField(L["WHISPER_KEYS_LABEL"], -84, whisperEB)
 
-    -- Require Notes CheckButton
-    local requireCB = CreateFrame("CheckButton", nil, expanded, "ChatConfigCheckButtonTemplate")
-    requireCB:SetSize(20, 20)
-    row.requireCB = requireCB
-    local cbLbl = expanded:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    cbLbl:SetPoint("TOPLEFT", 28, -108)
-    cbLbl:SetText(L["REQUIRE_NOTES"])
-    cbLbl:SetTextColor(0.7, 0.7, 0.7)
-    requireCB:SetParent(expanded)
-    requireCB:ClearAllPoints()
-    requireCB:SetPoint("LEFT", cbLbl, "RIGHT", 6, 0)
-
     return row
 end
 
@@ -814,12 +802,6 @@ function ResponseButtonSettingsMixin:PopulateRow(row, setId, btnData, idx, total
             if Loothing.ResponseManager then Loothing.ResponseManager:LoadResponses() end
         end)
 
-        -- Require notes
-        row.requireCB:SetChecked(btnData.requireNotes or false)
-        row.requireCB:SetScript("OnClick", function(cb)
-            Loothing.Settings:UpdateResponseButton(setId, btnData.id, { requireNotes = cb:GetChecked() })
-            if Loothing.ResponseManager then Loothing.ResponseManager:LoadResponses() end
-        end)
     else
         row.expandedRegion:Hide()
     end

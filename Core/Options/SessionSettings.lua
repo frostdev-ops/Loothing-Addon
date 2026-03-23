@@ -12,7 +12,6 @@ ns.Options = Options
 
 local L = ns.Locale
 local Utils = ns.Utils
-local unpack = unpack
 
 local function RefreshSettingsDialog()
     if Loolib.Config and type(Loolib.Config.NotifyChange) == "function" then
@@ -22,10 +21,6 @@ local function RefreshSettingsDialog()
     end
 end
 
-local function GetAwardReasonAtIndex(index)
-    local reasons = Loothing.Settings:GetAwardReasons()
-    return reasons and reasons[index] or nil
-end
 
 local function CanManageCouncilRoster()
     return Utils and Utils.CanManageCouncilRoster and Utils.CanManageCouncilRoster() or false
@@ -64,6 +59,7 @@ local function GetSessionSettingsOptions()
                     votingMode = {
                         type = "select",
                         name = L["VOTING_MODE"],
+                        desc = L["VOTING_MODE_DESC"],
                         order = 1,
                         values = {
                             [Loothing.VotingMode.SIMPLE] = L["SIMPLE_VOTING"],
@@ -174,7 +170,7 @@ local function GetSessionSettingsOptions()
                         name = L["GROUP_LOOT_MODE"],
                         desc = L["GROUP_LOOT_MODE_DESC"],
                         order = 10,
-                        width = "double",
+                        width = "full",
                         values = {
                             active = L["GROUP_LOOT_MODE_ACTIVE"],
                             passive = L["GROUP_LOOT_MODE_PASSIVE"],
@@ -577,42 +573,22 @@ local function GetSessionSettingsOptions()
                 type = "group",
                 name = L["CONFIG_AWARD_REASONS"],
                 order = 5,
-                childGroups = "tree",
                 args = {
-                    general = {
-                        type = "group",
-                        name = L["GENERAL"],
+                    desc = {
+                        type = "description",
+                        name = L["CONFIG_AWARD_REASONS_EDITOR_DESC"],
                         order = 1,
-                        inline = false,
-                        args = {
-                            enabled = {
-                                type = "toggle",
-                                name = L["ENABLED"],
-                                desc = L["CONFIG_AWARD_REASONS_ENABLED_DESC"],
-                                order = 1,
-                                get = function() return Loothing.Settings:GetAwardReasonsEnabled() end,
-                                set = function(_, v) Loothing.Settings:SetAwardReasonsEnabled(v) end,
-                            },
-                            requireReason = {
-                                type = "toggle",
-                                name = L["REQUIRE_AWARD_REASON"],
-                                desc = L["CONFIG_REQUIRE_AWARD_REASON_DESC"],
-                                order = 2,
-                                get = function() return Loothing.Settings:GetRequireAwardReason() end,
-                                set = function(_, v) Loothing.Settings:SetRequireAwardReason(v) end,
-                            },
-                            numReasons = {
-                                type = "range",
-                                name = L["NUM_AWARD_REASONS"],
-                                desc = L["CONFIG_NUM_REASONS_DESC"],
-                                order = 3,
-                                min = 1,
-                                max = 20,
-                                step = 1,
-                                get = function() return Loothing.Settings:GetNumAwardReasons() end,
-                                set = function(_, v) Loothing.Settings:SetNumAwardReasons(v) end,
-                            },
-                        },
+                        width = "full",
+                    },
+                    openEditor = {
+                        type = "execute",
+                        name = L["CONFIG_OPEN_AWARD_REASON_EDITOR"],
+                        order = 2,
+                        func = function()
+                            if Loothing.AwardReasonsSettings then
+                                Loothing.AwardReasonsSettings:Show()
+                            end
+                        end,
                     },
                 },
             },
@@ -694,166 +670,6 @@ local function GetSessionSettingsOptions()
                         end,
                     },
                 },
-            },
-        },
-    }
-
-    -- Generate award reason entries (reasons 1-20)
-    local reasonArgs = opts.args.awardReasons.args
-    local perReasonArgs = {
-        desc = {
-            type = "description",
-            name = L["CONFIG_AWARD_REASONS_DESC"],
-            order = 0,
-        },
-    }
-    for i = 1, 20 do
-        local hiddenFunc = function()
-            return GetAwardReasonAtIndex(i) == nil
-        end
-        perReasonArgs["reason" .. i .. "Header"] = {
-            type = "header",
-            name = function()
-                local reason = GetAwardReasonAtIndex(i)
-                return reason and reason.name or (L["CONFIG_REASON_DEFAULT"] .. " " .. i)
-            end,
-            order = i * 10,
-            hidden = hiddenFunc,
-        }
-        perReasonArgs["reason" .. i .. "Name"] = {
-            type = "input",
-            name = L["REASON_NAME"],
-            order = i * 10 + 1,
-            hidden = hiddenFunc,
-            get = function()
-                local reason = GetAwardReasonAtIndex(i)
-                return reason and reason.name or ""
-            end,
-            set = function(_, v)
-                local reason = GetAwardReasonAtIndex(i)
-                if reason then
-                    Loothing.Settings:UpdateAwardReason(reason.id, { name = v })
-                end
-            end,
-        }
-        perReasonArgs["reason" .. i .. "Color"] = {
-            type = "color",
-            name = L["BUTTON_COLOR"],
-            order = i * 10 + 2,
-            hasAlpha = true,
-            hidden = hiddenFunc,
-            get = function()
-                local reason = GetAwardReasonAtIndex(i)
-                if reason and reason.color then
-                    return unpack(reason.color)
-                end
-                return 1, 1, 1, 1
-            end,
-            set = function(_, r, g, b, a)
-                local reason = GetAwardReasonAtIndex(i)
-                if reason then
-                    Loothing.Settings:UpdateAwardReason(reason.id, { color = { r, g, b, a } })
-                end
-            end,
-        }
-        perReasonArgs["reason" .. i .. "Sort"] = {
-            type = "range",
-            name = L["SORT_ORDER"],
-            order = i * 10 + 3,
-            min = 1,
-            max = 20,
-            step = 1,
-            hidden = hiddenFunc,
-            get = function()
-                local reason = GetAwardReasonAtIndex(i)
-                return reason and reason.sort or i
-            end,
-            set = function(_, v)
-                local reason = GetAwardReasonAtIndex(i)
-                if reason then
-                    Loothing.Settings:UpdateAwardReason(reason.id, { sort = v })
-                end
-            end,
-        }
-        perReasonArgs["reason" .. i .. "Log"] = {
-            type = "toggle",
-            name = L["CONFIG_REASON_LOG"],
-            order = i * 10 + 4,
-            hidden = hiddenFunc,
-            get = function()
-                local reason = GetAwardReasonAtIndex(i)
-                return reason and reason.log
-            end,
-            set = function(_, v)
-                local reason = GetAwardReasonAtIndex(i)
-                if reason then
-                    Loothing.Settings:UpdateAwardReason(reason.id, { log = v })
-                end
-            end,
-        }
-        perReasonArgs["reason" .. i .. "Disenchant"] = {
-            type = "toggle",
-            name = L["CONFIG_REASON_DISENCHANT"],
-            order = i * 10 + 5,
-            hidden = hiddenFunc,
-            get = function()
-                local reason = GetAwardReasonAtIndex(i)
-                return reason and reason.disenchant
-            end,
-            set = function(_, v)
-                local reason = GetAwardReasonAtIndex(i)
-                if reason then
-                    Loothing.Settings:UpdateAwardReason(reason.id, { disenchant = v })
-                end
-            end,
-        }
-        perReasonArgs["reason" .. i .. "Remove"] = {
-            type = "execute",
-            name = L["REMOVE"],
-            order = i * 10 + 6,
-            hidden = hiddenFunc,
-            confirm = L["CONFIG_CONFIRM_REMOVE_REASON"],
-            func = function()
-                local reason = GetAwardReasonAtIndex(i)
-                if reason then
-                    Loothing.Settings:RemoveAwardReason(reason.id)
-                    RefreshSettingsDialog()
-                end
-            end,
-        }
-    end
-
-    reasonArgs.reasons = {
-        type = "group",
-        name = L["CONFIG_REASONS"],
-        order = 2,
-        args = perReasonArgs,
-    }
-    reasonArgs.management = {
-        type = "group",
-        name = L["CONFIG_MANAGE"],
-        order = 3,
-        inline = true,
-        args = {
-            addReason = {
-                type = "execute",
-                name = L["ADD_REASON"],
-                order = 1,
-                func = function()
-                    if Loothing.Settings:AddAwardReason(L["CONFIG_NEW_REASON_DEFAULT"], { 1, 1, 1, 1 }) then
-                        RefreshSettingsDialog()
-                    end
-                end,
-            },
-            resetDefaults = {
-                type = "execute",
-                name = L["CONFIG_RESET_REASONS"],
-                order = 2,
-                confirm = L["CONFIG_CONFIRM_RESET_REASONS"],
-                func = function()
-                    Loothing.Settings:ResetAwardReasonsToDefaults()
-                    RefreshSettingsDialog()
-                end,
             },
         },
     }

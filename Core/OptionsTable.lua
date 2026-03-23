@@ -58,23 +58,71 @@ local function BuildArgs()
 
     local rootArgs = {}
 
-    addClonedGroup(rootArgs, "lootResponse", localArgs and localArgs.lootResponse, 10)
-    addClonedGroup(rootArgs, "frame", localArgs and localArgs.frame, 20)
-    addClonedGroup(rootArgs, "autopass", localArgs and localArgs.autopass, 30)
-    addClonedGroup(rootArgs, "autoaward", localArgs and localArgs.autoaward, 40)
-    addClonedGroup(rootArgs, "ignore", localArgs and localArgs.ignore, 50)
-    addClonedGroup(rootArgs, "ml", localArgs and localArgs.ml, 60)
-    addClonedGroup(rootArgs, "history", localArgs and localArgs.history, 70)
-    addClonedGroup(rootArgs, "voting", sessionArgs and sessionArgs.voting, 80)
-    addClonedGroup(rootArgs, "winnerDetermination", sessionArgs and sessionArgs.winnerDetermination, 90)
-    addClonedGroup(rootArgs, "responseButtons", sessionArgs and sessionArgs.responseButtons, 100)
-    addClonedGroup(rootArgs, "observerPermissions", sessionArgs and sessionArgs.observerPermissions, 110)
-    addClonedGroup(rootArgs, "council", sessionArgs and sessionArgs.council, 120)
-    addClonedGroup(rootArgs, "awardReasons", sessionArgs and sessionArgs.awardReasons, 130)
-    addClonedGroup(rootArgs, "announcements", localArgs and localArgs.announcements, 140, {
+    -- Tab 1: General (lootResponse + frame + autopass)
+    local generalArgs = {}
+    addClonedGroup(generalArgs, "lootResponse", localArgs and localArgs.lootResponse, 1)
+    addClonedGroup(generalArgs, "frame", localArgs and localArgs.frame, 2)
+    addClonedGroup(generalArgs, "autopass", localArgs and localArgs.autopass, 3)
+    rootArgs.general = {
+        type = "group",
+        name = L["CONFIG_TAB_GENERAL"],
+        desc = L["CONFIG_TAB_GENERAL_DESC"],
+        order = 10,
+        childGroups = "tree",
+        args = generalArgs,
+    }
+
+    -- Tab 2: Master Looter (ml + autoaward + ignore + history)
+    local mlArgs = {}
+    addClonedGroup(mlArgs, "ml", localArgs and localArgs.ml, 1)
+    addClonedGroup(mlArgs, "autoaward", localArgs and localArgs.autoaward, 2)
+    addClonedGroup(mlArgs, "ignore", localArgs and localArgs.ignore, 3)
+    addClonedGroup(mlArgs, "history", localArgs and localArgs.history, 4)
+    rootArgs.masterLooter = {
+        type = "group",
+        name = L["CONFIG_TAB_MASTER_LOOTER"],
+        desc = L["CONFIG_TAB_MASTER_LOOTER_DESC"],
+        order = 20,
+        childGroups = "tree",
+        args = mlArgs,
+    }
+
+    -- Tab 3: Session & Voting (voting + winnerDetermination + awardReasons + responseButtons)
+    -- All sub-groups are tree nodes (voting has 20+ settings, awardReasons has its own sub-tree)
+    local sessionVotingArgs = {}
+    addClonedGroup(sessionVotingArgs, "voting", sessionArgs and sessionArgs.voting, 1)
+    addClonedGroup(sessionVotingArgs, "winnerDetermination", sessionArgs and sessionArgs.winnerDetermination, 2)
+    addClonedGroup(sessionVotingArgs, "awardReasons", sessionArgs and sessionArgs.awardReasons, 3)
+    addClonedGroup(sessionVotingArgs, "responseButtons", sessionArgs and sessionArgs.responseButtons, 4)
+    rootArgs.sessionVoting = {
+        type = "group",
+        name = L["CONFIG_TAB_SESSION"],
+        desc = L["CONFIG_TAB_SESSION_DESC"],
+        order = 30,
+        childGroups = "tree",
+        args = sessionVotingArgs,
+    }
+
+    -- Tab 4: Council (council + observerPermissions)
+    local councilArgs = {}
+    addClonedGroup(councilArgs, "council", sessionArgs and sessionArgs.council, 1)
+    addClonedGroup(councilArgs, "observerPermissions", sessionArgs and sessionArgs.observerPermissions, 2)
+    rootArgs.councilTab = {
+        type = "group",
+        name = L["CONFIG_TAB_COUNCIL"],
+        desc = L["CONFIG_TAB_COUNCIL_DESC"],
+        order = 40,
+        childGroups = "tree",
+        args = councilArgs,
+    }
+
+    -- Tab 5: Announcements (keeps existing sub-tree structure)
+    addClonedGroup(rootArgs, "announcements", localArgs and localArgs.announcements, 50, {
         childGroups = "tree",
     })
-    addClonedGroup(rootArgs, "profiles", resolveOptions("GetProfileOptions"), 150)
+
+    -- Tab 6: Profiles
+    addClonedGroup(rootArgs, "profiles", resolveOptions("GetProfileOptions"), 60)
 
     return rootArgs
 end
@@ -102,18 +150,32 @@ function Options.BuildOptionsTable()
 end
 
 local PATH_ALIASES = {
-    general = { "lootResponse" },
-    personal = { "lootResponse" },
-    session = { "voting" },
-    raidSession = { "voting" },
-    councilAwards = { "council" },
-    councilManagement = { "council" },
-    council = { "council" },
-    announcements = { "announcements" },
-    history = { "history" },
-    ml = { "ml" },
-    responseButtons = { "responseButtons" },
-    profiles = { "profiles" },
+    -- General tab children
+    general        = { "general" },
+    personal       = { "general" },
+    lootResponse   = { "general", "lootResponse" },
+    frame          = { "general", "frame" },
+    autopass       = { "general", "autopass" },
+    -- ML tab children
+    ml             = { "masterLooter", "ml" },
+    autoaward      = { "masterLooter", "autoaward" },
+    ignore         = { "masterLooter", "ignore" },
+    history        = { "masterLooter", "history" },
+    -- Session & Voting (unchanged)
+    session        = { "sessionVoting" },
+    raidSession    = { "sessionVoting" },
+    voting         = { "sessionVoting", "voting" },
+    winnerDetermination = { "sessionVoting", "winnerDetermination" },
+    responseButtons = { "sessionVoting", "responseButtons" },
+    awardReasons   = { "sessionVoting", "awardReasons" },
+    -- Council tab children
+    council        = { "councilTab", "council" },
+    councilAwards  = { "councilTab" },
+    councilManagement = { "councilTab" },
+    observerPermissions = { "councilTab", "observerPermissions" },
+    -- Others (unchanged)
+    announcements  = { "announcements" },
+    profiles       = { "profiles" },
 }
 
 function Options.ResolveOptionsPath(section)
