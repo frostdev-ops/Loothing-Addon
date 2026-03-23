@@ -23,7 +23,6 @@ local function RunCommunicationTests()
 
     local passed = 0
     local failed = 0
-    local testGroup = ""
 
     local function assert(condition, testName)
         if condition then
@@ -67,7 +66,6 @@ local function RunCommunicationTests()
 
     local function printGroup(groupName)
         print("\n|cffFFFF00Test Group: " .. groupName .. "|r")
-        testGroup = groupName
     end
 
     print("|cff00ccff========== Communication Protocol Tests (v3) ==========|r")

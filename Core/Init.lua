@@ -900,7 +900,7 @@ local function RegisterEvents()
 
     -- Wire Announcer to Session events (session start, end, item added, voting started)
     if Loothing.Session and Loothing.Announcer then
-        Loothing.Session:RegisterCallback("OnSessionStarted", function(_, sessionID, encounterID, encounterName)
+        Loothing.Session:RegisterCallback("OnSessionStarted", function(_, _sessionID, _encounterID, encounterName)
             Loothing.Announcer:AnnounceSessionStart(encounterName)
         end, Loothing)
 
@@ -1255,7 +1255,7 @@ local function RegisterSlashCommands()
                     -- Direct add: resolve and add without opening the frame
                     local function tryAdd(link, retries)
                         retries = retries or 0
-                        local name, resolvedLink = C_Item.GetItemInfo(link or input)
+                        local resolvedLink = select(2, C_Item.GetItemInfo(link or input))
                         if resolvedLink then
                             -- FIX(Area4-4): Use SafeUnitName to avoid secret value tainting
                             local item = Loothing.Session:AddItem(resolvedLink, Loolib.SecretUtil.SafeUnitName("player"), nil, true)

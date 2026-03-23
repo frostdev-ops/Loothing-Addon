@@ -171,7 +171,7 @@ function ResponseButtonSettingsMixin:BuildFrame()
     self.setSelectBtn = setSelectBtn
 
     setSelectBtn:SetScript("OnClick", function(btn)
-        MenuUtil.CreateContextMenu(btn, function(ownerRegion, rootDescription)
+        MenuUtil.CreateContextMenu(btn, function(_ownerRegion, rootDescription)
             local rs = Loothing.Settings:GetResponseSets()
             for id, set in pairs(rs.sets or {}) do
                 rootDescription:CreateRadio(set.name,
@@ -381,7 +381,7 @@ function ResponseButtonSettingsMixin:BuildTypeCodeMap(container)
         local dd = CreateFrame("Button", nil, container, "UIPanelButtonTemplate")
 
         dd:SetScript("OnClick", function(btn)
-            MenuUtil.CreateContextMenu(btn, function(ownerRegion, rootDescription)
+            MenuUtil.CreateContextMenu(btn, function(_ownerRegion, rootDescription)
                 local tcMap = Loothing.Settings:GetTypeCodeMap()
 
                 local defaultLabel = (capturedTc == "default") and L["ACTIVE_SET"] or L["DEFAULT_SET"]
@@ -674,7 +674,7 @@ function ResponseButtonSettingsMixin:PopulateRow(row, setId, btnData, idx, total
     end
     row.swatch:SetBackdropColor(cr, cg, cb, ca)
 
-    row.swatch:SetScript("OnClick", function(btn)
+    row.swatch:SetScript("OnClick", function(_btn)
         local origR, origG, origB, origA = cr, cg, cb, ca
         ColorPickerFrame:SetupColorPickerAndShow({
             r = cr, g = cg, b = cb, opacity = ca,

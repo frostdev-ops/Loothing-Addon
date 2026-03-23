@@ -283,15 +283,15 @@ local function RunTest(test)
 
     -- Run afterEach hooks (even if test failed)
     for _, hook in ipairs(test.suite.afterEach) do
-        local success, err = pcall(hook)
-        if not success then
+        local hookOk, hookErr = pcall(hook)
+        if not hookOk then
             -- Don't override test failure, but report hook failure
             if result.status == "pass" then
                 result.status = "fail"
-                result.error = "AfterEach hook failed: " .. tostring(err)
+                result.error = "AfterEach hook failed: " .. tostring(hookErr)
                 result.stackTrace = debugstack(2)
             else
-                print(COLOR.ORANGE .. "  [Warning] AfterEach hook failed: " .. tostring(err) .. COLOR.RESET)
+                print(COLOR.ORANGE .. "  [Warning] AfterEach hook failed: " .. tostring(hookErr) .. COLOR.RESET)
             end
         end
     end

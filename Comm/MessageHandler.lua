@@ -145,7 +145,7 @@ function CommMixin:Init()
 
     -- Register with Loolib.Comm for incoming addon messages
     -- Loolib.Comm handles: prefix registration, message reassembly, throttling
-    Comm:RegisterComm(Loothing.ADDON_PREFIX, function(prefix, message, distribution, sender)
+    Comm:RegisterComm(Loothing.ADDON_PREFIX, function(_prefix, message, distribution, sender)
         self:OnMessage(message, distribution, sender)
     end, self)
 end
@@ -400,7 +400,7 @@ end
 -- @param data table - { target, command, data }
 -- @param sender string
 -- @param distribution string
-function CommMixin:HandleXRealm(data, sender, distribution)
+function CommMixin:HandleXRealm(data, sender, _distribution)
     if not data or not data.target then return end
 
     -- Prevent recursive processing: inner message must not be XREALM or BATCH

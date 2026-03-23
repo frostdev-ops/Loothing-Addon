@@ -18,7 +18,6 @@ local function RunItemTests()
 
     local passed = 0
     local failed = 0
-    local testGroup = ""
 
     local function assert(condition, testName)
         if condition then
@@ -52,7 +51,6 @@ local function RunItemTests()
 
     local function printGroup(groupName)
         print("\n|cffFFFF00Test Group: " .. groupName .. "|r")
-        testGroup = groupName
     end
 
     print("|cff00ccff========== Item Management Tests ==========|r")
@@ -119,10 +117,10 @@ local function RunItemTests()
     assert(stateItem:IsComplete(), "IsComplete returns true for AWARDED state")
 
     -- Change to SKIPPED
-    local skipItem = CreateItem(testItemLink, testLooter, testEncounterID)
-    skipItem:SetState(Loothing.ItemState.SKIPPED)
-    assert(skipItem:IsSkipped(), "IsSkipped returns true for SKIPPED state")
-    assert(skipItem:IsComplete(), "IsComplete returns true for SKIPPED state")
+    local stateSkipItem = CreateItem(testItemLink, testLooter, testEncounterID)
+    stateSkipItem:SetState(Loothing.ItemState.SKIPPED)
+    assert(stateSkipItem:IsSkipped(), "IsSkipped returns true for SKIPPED state")
+    assert(stateSkipItem:IsComplete(), "IsComplete returns true for SKIPPED state")
 
     -- Test state change events
     local eventFired = false

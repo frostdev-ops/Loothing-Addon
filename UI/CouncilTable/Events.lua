@@ -86,7 +86,7 @@ function CouncilTableMixin:OnVotingEnded(item)
     end
 end
 
-function CouncilTableMixin:OnItemAwarded(item, winner)
+function CouncilTableMixin:OnItemAwarded(item, _winner)
     self:RefreshItemTabs()
     if self.currentItem and self.currentItem.guid == item.guid then
         self:ThrottledRefresh()
@@ -94,13 +94,13 @@ function CouncilTableMixin:OnItemAwarded(item, winner)
     end
 end
 
-function CouncilTableMixin:OnCandidateAdded(item, candidate)
+function CouncilTableMixin:OnCandidateAdded(item, _candidate)
     if self.currentItem and self.currentItem.guid == item.guid then
         self:ThrottledRefresh()
     end
 end
 
-function CouncilTableMixin:OnCandidateUpdated(item, candidate)
+function CouncilTableMixin:OnCandidateUpdated(item, _candidate)
     if self.currentItem and self.currentItem.guid == item.guid then
         self:ThrottledRefresh()
         self:UpdateVoterProgress()

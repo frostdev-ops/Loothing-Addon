@@ -8,7 +8,6 @@
 ----------------------------------------------------------------------]]
 
 local _, ns = ...
-local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 
 --[[--------------------------------------------------------------------
@@ -125,7 +124,7 @@ function EncounterData:GetEncountersForInstance(instanceID)
 
     local index = 1
     while true do
-        local name, description, journalEncounterID, rootSectionID, link = EJ_GetEncounterInfoByIndex(index, instanceID)
+        local name, description, journalEncounterID, _rootSectionID, link = EJ_GetEncounterInfoByIndex(index, instanceID)
         if not name then break end
 
         encounters[#encounters + 1] = {
@@ -170,7 +169,7 @@ function EncounterData:GetEncounterInfo(encounterID)
     end
 
     -- Try to get info directly
-    local name, description, journalEncounterID, rootSectionID, link = EJ_GetEncounterInfo(encounterID)
+    local name, _description, _journalEncounterID, _rootSectionID, link = EJ_GetEncounterInfo(encounterID)
     if name then
         encounterCache[encounterID] = encounterCache[encounterID] or {}
         encounterCache[encounterID].name = name
@@ -229,20 +228,20 @@ function EncounterData:GetEncounterLoot(encounterID, difficultyID)
     -- Get loot count for this encounter
     local numLoot = EJ_GetNumLoot()
     for i = 1, numLoot do
-        local info = C_EncounterJournal.GetLootInfoByIndex(i)
-        if info and info.itemID then
+        local lootInfo = C_EncounterJournal.GetLootInfoByIndex(i)
+        if lootInfo and lootInfo.itemID then
             items[#items + 1] = {
-                itemID = info.itemID,
-                link = info.link,
-                name = info.name,
-                icon = info.icon,
-                slot = info.slot,
-                armorType = info.armorType,
+                itemID = lootInfo.itemID,
+                link = lootInfo.link,
+                name = lootInfo.name,
+                icon = lootInfo.icon,
+                slot = lootInfo.slot,
+                armorType = lootInfo.armorType,
                 encounterID = encounterID,
             }
 
             -- Cache item -> encounter mapping
-            itemToEncounter[info.itemID] = encounterID
+            itemToEncounter[lootInfo.itemID] = encounterID
         end
     end
 
@@ -376,7 +375,7 @@ function EncounterData:PreloadCurrentRaid()
         currentRaidCache.encounters[#currentRaidCache.encounters + 1] = encounter
 
         -- Preload loot for all difficulties
-        for diffName, diffID in pairs(DIFFICULTY_IDS) do
+        for _diffName, diffID in pairs(DIFFICULTY_IDS) do
             self:GetEncounterLoot(encounter.encounterID, diffID)
         end
     end

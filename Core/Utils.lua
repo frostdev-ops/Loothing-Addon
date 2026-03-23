@@ -3,10 +3,10 @@
     Utils - Helper functions
 ----------------------------------------------------------------------]]
 
-local ADDON_NAME, ns = ...
+local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
-local date, ipairs, pairs, select, time, tonumber = date, ipairs, pairs, select, time, tonumber
+local date, ipairs, time, tonumber = date, ipairs, time, tonumber
 
 local Utils = ns.Utils or {}
 ns.Utils = Utils
@@ -132,7 +132,7 @@ function Utils.GetItemInfo(itemLink)
     if not itemID then return nil end
 
     local name, link, quality, itemLevel, reqLevel, class, subclass,
-          maxStack, equipSlot, texture, vendorPrice = C_Item.GetItemInfo(itemLink)
+          _maxStack, equipSlot, texture, _vendorPrice = C_Item.GetItemInfo(itemLink)
 
     if not name then
         -- Item not cached, return basic info
@@ -392,7 +392,7 @@ end
 -- @return string difficultyName - e.g. "Normal", "Heroic", "Mythic"
 -- @return number difficultyID
 function Utils.GetInstanceInfo()
-    local name, instanceType, difficultyID, difficultyName = GetInstanceInfo()
+    local instanceType, difficultyID, difficultyName = select(2, GetInstanceInfo())
     return instanceType or "none", difficultyName or "", difficultyID or 0
 end
 
@@ -488,8 +488,8 @@ function Utils.GetRaidRoster()
     if IsInRaid() then
         local numMembers = GetNumGroupMembers()
         for i = 1, numMembers do
-            local name, rank, subgroup, level, class, fileName, zone,
-                  online, isDead, role, isML, assignedRole = Loolib.SecretUtil.SafeGetRaidRosterInfo(i)
+            local name, rank, subgroup, level, class, fileName, _, online, isDead, role, isML, assignedRole =
+                Loolib.SecretUtil.SafeGetRaidRosterInfo(i)
 
             if name then
                 roster[#roster + 1] = {

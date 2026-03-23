@@ -3,7 +3,7 @@
     Aggregates all option groups into the main config table
 ----------------------------------------------------------------------]]
 
-local ADDON_NAME, ns = ...
+local _, ns = ...
 local Loothing = ns.Addon
 local Options = ns.Options or {}
 ns.Options = Options

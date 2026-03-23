@@ -62,7 +62,6 @@ ns.SkinningMixin = SkinningMixin
 --- Managed frames (for combat minimize/maximize)
 local managedFrames = {}
 local combatFrame = nil
-local isInCombat = false
 
 --[[--------------------------------------------------------------------
     Skin Application
@@ -280,8 +279,6 @@ function SkinningMixin:OnCombatStart()
     local minimizeInCombat = Loothing.Settings:Get("frame.minimizeInCombat", false)
     if not minimizeInCombat then return end
 
-    isInCombat = true
-
     for _, entry in ipairs(managedFrames) do
         if entry.frame:IsShown() then
             entry.wasShown = true
@@ -294,8 +291,6 @@ end
 
 --- Handle combat end - restore minimized frames
 function SkinningMixin:OnCombatEnd()
-    isInCombat = false
-
     for _, entry in ipairs(managedFrames) do
         if entry.wasShown then
             entry.maximize(entry.frame)

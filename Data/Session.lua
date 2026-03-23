@@ -1544,14 +1544,14 @@ function SessionMixin:OnBossKill()
 end
 
 --- Handle loot received
-function SessionMixin:OnLootReceived(_encounterID, _itemID, itemLink, _quantity, playerName)
+function SessionMixin:OnLootReceived(encounterID, _itemID, itemLink, _quantity, playerName)
     local timing = Loothing.Settings:GetSessionTriggerTiming()
     local action = Loothing.Settings:GetSessionTriggerAction()
 
     -- afterLoot timing: track when ML receives loot, then apply the configured action
     if timing == "afterLoot" and action ~= "manual" and Loothing.handleLoot then
         -- Use IsSamePlayer if available for robust cross-realm comparison
-        local isMyLoot = false
+        local isMyLoot
         if Utils.IsSamePlayer then
             local myName = Utils.GetPlayerFullName()
             isMyLoot = Utils.IsSamePlayer(playerName, myName)
@@ -1606,10 +1606,10 @@ function SessionMixin:OnLootReceived(_encounterID, _itemID, itemLink, _quantity,
                 table.insert(self.lootBuffer, {
                     itemLink = itemLink,
                     playerName = playerName,
-                    encounterID = _encounterID,
+                    encounterID = encounterID,
                     timestamp = time(),
                 })
-                Loothing:Debug("Buffered loot item:", itemLink, "from", playerName, "encounter", _encounterID)
+                Loothing:Debug("Buffered loot item:", itemLink, "from", playerName, "encounter", encounterID)
                 if Utils.IsSamePlayer(playerName, Utils.GetPlayerFullName()) and Loothing.TradeQueue then
                     Loothing.TradeQueue:UpdateAndSendRecentTradableItem(itemLink)
                 end
@@ -1732,9 +1732,7 @@ function SessionMixin:HandleRemoteVoteRequest(data)
     local timeout = data.timeout
     if type(timeout) ~= "number" then
         timeout = Loothing.Timing.DEFAULT_VOTE_TIMEOUT
-    elseif timeout == Loothing.Timing.NO_TIMEOUT then
-        -- 0 is the no-timeout sentinel — allow it through
-    else
+    elseif timeout ~= Loothing.Timing.NO_TIMEOUT then
         timeout = math.max(Loothing.Timing.MIN_VOTE_TIMEOUT,
                           math.min(Loothing.Timing.MAX_VOTE_TIMEOUT, timeout))
     end

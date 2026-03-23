@@ -32,8 +32,8 @@ local ALL_CLASSES_FLAG = bit.lshift(1, 13) - 1  -- 13 classes, matches AutoPass.
 local function GetItemInfoWithRetry(itemLink, callback, retryCount)
     retryCount = retryCount or 0
 
-    local name, link, quality, itemLevel, reqLevel, classStr, subclass,
-          maxStack, equipSlot, texture, vendorPrice, typeID, subTypeID,
+    local name, link, quality, itemLevel, reqLevel, _classStr, subclass,
+          _maxStack, equipSlot, texture, vendorPrice, typeID, subTypeID,
           bindType = C_Item.GetItemInfo(itemLink)
 
     if name then
@@ -212,7 +212,7 @@ end
 -- @return table - Instance data snapshot
 local function CaptureInstanceData()
     local name, instanceType, difficultyID, difficultyName, maxPlayers,
-          dynamicDifficulty, isDynamic, instanceID, instanceGroupSize = GetInstanceInfo()
+          _dynamicDifficulty, _isDynamic, instanceID, _instanceGroupSize = GetInstanceInfo()
 
     return {
         name = name,

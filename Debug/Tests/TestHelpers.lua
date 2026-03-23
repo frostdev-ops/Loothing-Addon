@@ -952,10 +952,10 @@ function TestHelpers:WaitFrames(count, callback)
     local frame = CreateFrame("Frame")
     local frameCount = 0
 
-    frame:SetScript("OnUpdate", function(self)
+    frame:SetScript("OnUpdate", function(f)
         frameCount = frameCount + 1
         if frameCount >= count then
-            self:SetScript("OnUpdate", nil)
+            f:SetScript("OnUpdate", nil)
             if callback then
                 callback()
             end
@@ -1081,7 +1081,9 @@ function TestHelpers:RestoreAll()
     end
 
     originalFunctions = {}
-    spyData = {}
+    for k in pairs(spyData) do
+        spyData[k] = nil
+    end
 end
 
 --[[--------------------------------------------------------------------

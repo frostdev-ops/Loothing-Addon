@@ -22,7 +22,6 @@ local _, ns = ...
 ----------------------------------------------------------------------]]
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
-local Utils = ns.Utils
 
 --[[--------------------------------------------------------------------
     PlayerCacheMixin
@@ -197,7 +196,6 @@ end
 -- @return number - Number of entries removed
 function PlayerCacheMixin:CleanExpired()
     local removed = 0
-    local currentTime = time()
     local expiredGUIDs = {}
 
     for guid, player in pairs(self.byGUID) do

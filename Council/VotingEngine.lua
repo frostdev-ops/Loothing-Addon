@@ -81,17 +81,8 @@ end
 -- @param votes table - DataProvider or array of votes
 -- @param candidates table - Array of candidate names (optional, for filtering)
 -- @return table - { winner, response, counts, isTie, tiedCandidates }
-function VotingEngine:TallySimple(votes, candidates)
+function VotingEngine:TallySimple(votes, _candidates)
     local counts = {}
-    local candidateSet = nil
-
-    -- Build candidate set if provided
-    if candidates then
-        candidateSet = {}
-        for _, name in ipairs(candidates) do
-            candidateSet[Utils.NormalizeName(name)] = true
-        end
-    end
 
     -- Initialize response counts
     for _, response in pairs(Loothing.Response) do
@@ -507,7 +498,7 @@ end
 -- @param votes table - DataProvider or array
 -- @param mode string - Tiebreaker mode ("random", "alphabetical", "manual")
 -- @return string|nil - Winner, or nil if manual resolution needed
-function VotingEngine:BreakTie(tiedCandidates, votes, mode)
+function VotingEngine:BreakTie(tiedCandidates, _votes, mode)
     mode = mode or "manual"
 
     if #tiedCandidates == 0 then

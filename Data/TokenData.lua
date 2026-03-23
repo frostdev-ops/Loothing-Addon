@@ -5,7 +5,6 @@
 --- @author James Kueller
 
 local _, ns = ...
-local Loothing = ns.Addon
 
 --- Token data module
 --- @class TokenData

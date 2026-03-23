@@ -3,7 +3,7 @@
     Centralized test mode state, gating, and persistence safeguards.
 ----------------------------------------------------------------------]]
 
-local ADDON_NAME, ns = ...
+local _, ns = ...
 local Loothing = ns.Addon
 local GetTime, IsInGroup, IsInRaid = GetTime, IsInGroup, IsInRaid
 local UnitIsGroupAssistant, UnitIsGroupLeader = UnitIsGroupAssistant, UnitIsGroupLeader

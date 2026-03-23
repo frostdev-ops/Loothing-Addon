@@ -58,8 +58,6 @@ end
 
 --- Create UI elements
 function HistoryPanelMixin:CreateElements()
-    local L = Loothing.Locale
-
     -- Three-pane container (starts below filter bar)
     local container = CreateFrame("Frame", nil, self.frame)
     container:SetPoint("TOPLEFT", 8, -40)
@@ -119,29 +117,29 @@ function HistoryPanelMixin:CreateFilterBar()
     searchBox:SetAutoFocus(false)
     searchBox:SetText(placeholder)
     searchBox:SetTextColor(0.5, 0.5, 0.5)
-    searchBox:SetScript("OnEditFocusGained", function(self)
-        local fb = self:GetParent()
+    searchBox:SetScript("OnEditFocusGained", function(editBox)
+        local fb = editBox:GetParent()
         if fb._placeholderActive then
             fb._placeholderActive = false
-            self:SetText("")
-            self:SetTextColor(1, 1, 1)
+            editBox:SetText("")
+            editBox:SetTextColor(1, 1, 1)
         end
     end)
-    searchBox:SetScript("OnEditFocusLost", function(self)
-        if self:GetText() == "" then
-            local fb = self:GetParent()
+    searchBox:SetScript("OnEditFocusLost", function(editBox)
+        if editBox:GetText() == "" then
+            local fb = editBox:GetParent()
             fb._placeholderActive = true
-            self:SetText(fb._placeholder)
-            self:SetTextColor(0.5, 0.5, 0.5)
+            editBox:SetText(fb._placeholder)
+            editBox:SetTextColor(0.5, 0.5, 0.5)
         end
     end)
-    searchBox:SetScript("OnTextChanged", function(self)
-        local fb = self:GetParent()
+    searchBox:SetScript("OnTextChanged", function(editBox)
+        local fb = editBox:GetParent()
         if fb._placeholderActive then return end
-        fb.mixin:OnSearchChanged(self:GetText())
+        fb.mixin:OnSearchChanged(editBox:GetText())
     end)
-    searchBox:SetScript("OnEscapePressed", function(self)
-        self:ClearFocus()
+    searchBox:SetScript("OnEscapePressed", function(editBox)
+        editBox:ClearFocus()
     end)
 
     self.searchBox = searchBox
@@ -196,7 +194,7 @@ end
 
 --- Show response filter dropdown
 function HistoryPanelMixin:ShowResponseFilterDropdown()
-    MenuUtil.CreateContextMenu(self.responseFilterButton, function(ownerRegion, rootDescription)
+    MenuUtil.CreateContextMenu(self.responseFilterButton, function(_ownerRegion, rootDescription)
         rootDescription:CreateButton("All Responses", function()
             self:SetResponseFilter(nil)
         end)
@@ -232,7 +230,7 @@ function HistoryPanelMixin:ShowClassFilterDropdown()
     local classes = { "WARRIOR", "PALADIN", "HUNTER", "ROGUE", "PRIEST", "DEATHKNIGHT",
                       "SHAMAN", "MAGE", "WARLOCK", "MONK", "DRUID", "DEMONHUNTER", "EVOKER" }
 
-    MenuUtil.CreateContextMenu(self.classFilterButton, function(ownerRegion, rootDescription)
+    MenuUtil.CreateContextMenu(self.classFilterButton, function(_ownerRegion, rootDescription)
         rootDescription:CreateButton("All Classes", function()
             self:SetClassFilter(nil)
         end)
@@ -312,7 +310,7 @@ function HistoryPanelMixin:CreateHistoryList()
     content:SetSize(1, 800)
     scrollFrame:SetScrollChild(content)
 
-    scrollFrame:SetScript("OnSizeChanged", function(sf, w, h)
+    scrollFrame:SetScript("OnSizeChanged", function(_sf, w, _h)
         content:SetWidth(w)
     end)
 
@@ -321,7 +319,7 @@ function HistoryPanelMixin:CreateHistoryList()
     self.scrollFrame = scrollFrame
 
     -- Frame pool for history rows
-    self.rowPool = CreateFramePool("Button", self.listContent, nil, function(pool, row)
+    self.rowPool = CreateFramePool("Button", self.listContent, nil, function(_pool, row)
         row:Hide()
         row:ClearAllPoints()
         row:SetScript("OnEnter", nil)
@@ -385,7 +383,7 @@ function HistoryPanelMixin:CreateDateList()
     content:SetWidth(scroll:GetWidth())
     scroll:SetScrollChild(content)
 
-    scroll:SetScript("OnSizeChanged", function(sf, w)
+    scroll:SetScript("OnSizeChanged", function(_sf, w)
         content:SetWidth(w)
     end)
 
@@ -422,7 +420,7 @@ function HistoryPanelMixin:CreatePlayerList()
     content:SetWidth(scroll:GetWidth())
     scroll:SetScrollChild(content)
 
-    scroll:SetScript("OnSizeChanged", function(sf, w)
+    scroll:SetScript("OnSizeChanged", function(_sf, w)
         content:SetWidth(w)
     end)
 
@@ -825,7 +823,7 @@ end
 function HistoryPanelMixin:ShowHistoryRowContextMenu(row, entry)
     local L = Loothing.Locale or {}
 
-    MenuUtil.CreateContextMenu(row, function(ownerRegion, rootDescription)
+    MenuUtil.CreateContextMenu(row, function(_ownerRegion, rootDescription)
         rootDescription:CreateTitle(entry.itemName or "Unknown")
 
         -- Link in chat
@@ -909,7 +907,7 @@ function HistoryPanelMixin:ShowWinnerDropdown()
     local L = Loothing.Locale
     local winners = Loothing.History:GetUniqueWinners()
 
-    MenuUtil.CreateContextMenu(self.winnerButton, function(ownerRegion, rootDescription)
+    MenuUtil.CreateContextMenu(self.winnerButton, function(_ownerRegion, rootDescription)
         rootDescription:CreateButton(L["ALL_WINNERS"], function()
             self:SetWinnerFilter(nil)
         end)
@@ -1093,7 +1091,7 @@ function HistoryPanelMixin:ShowExportDialog()
         editBox:SetSize(1, 300)
         scrollFrame:SetScrollChild(editBox)
 
-        scrollFrame:SetScript("OnSizeChanged", function(sf, w, h)
+        scrollFrame:SetScript("OnSizeChanged", function(_sf, w, _h)
             editBox:SetWidth(w)
         end)
 

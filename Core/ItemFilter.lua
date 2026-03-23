@@ -3,7 +3,7 @@
     ItemFilter - Item filtering logic for ignore list
 ----------------------------------------------------------------------]]
 
-local ADDON_NAME, ns = ...
+local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local L = ns.Locale
@@ -22,11 +22,6 @@ local ITEM_CLASS_GEM = 3
 local TRADE_GOODS_ENCHANTING = 12  -- Enchanting materials
 local TRADE_GOODS_OPTIONAL_REAGENT = 1  -- Optional crafting reagents
 local TRADE_GOODS_REAGENT = 8  -- Crafting reagents
-
--- Gem subclass IDs
-local GEM_SIMPLE = 0  -- Simple gems
-local GEM_COGWHEEL = 6  -- Cogwheel gems
-local GEM_META = 7  -- Meta gems
 
 --[[--------------------------------------------------------------------
     ItemFilterMixin
@@ -65,9 +60,9 @@ function ItemFilterMixin:ShouldIgnoreItem(itemLink)
     end
 
     -- Get item info (single call - C_Item.GetItemInfo returns nil for uncached items)
-    local itemName, itemLinkFull, itemQuality, itemLevel, itemMinLevel,
-          itemType, itemSubType, itemStackCount, itemEquipLoc, iconFileDataID,
-          sellPrice, classID, subclassID = C_Item.GetItemInfo(itemLink)
+    local _itemName, _itemLinkFull, _itemQuality, _itemLevel, _itemMinLevel,
+          _itemType, _itemSubType, _itemStackCount, _itemEquipLoc, _iconFileDataID,
+          _sellPrice, classID, subclassID = C_Item.GetItemInfo(itemLink)
 
     if not classID then
         -- Item not cached yet, can't filter by category

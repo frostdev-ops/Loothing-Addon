@@ -6,7 +6,7 @@
     Uses Loolib's Dialog system for modal/non-modal dialogs with callbacks.
 ----------------------------------------------------------------------]]
 
-local ADDON_NAME, ns = ...
+local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local Utils = ns.Utils
@@ -215,7 +215,7 @@ Popups:Register("LOOTHING_ML_USAGE_PROMPT", {
     modal = true,
     hide_on_escape = true,
     show_while_dead = true,
-    on_show = function(dialog, data)
+    on_show = function(_dialog, data)
         if data and data.instance and data.instance ~= "" then
             return string.format(
                 L["ML_USAGE_PROMPT_TEXT_INSTANCE"],
@@ -226,11 +226,11 @@ Popups:Register("LOOTHING_ML_USAGE_PROMPT", {
     buttons = {
         {
             text = L["YES"],
-            on_click = function(dialog, data) end,
+            on_click = function(_dialog, _data) end,
         },
         {
             text = L["NO"],
-            on_click = function(dialog, data) end,
+            on_click = function(_dialog, _data) end,
         },
     },
 })
@@ -245,7 +245,7 @@ Popups:Register("LOOTHING_CONFIRM_USAGE", {
     buttons = {
         {
             text = L["YES"],
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onAccept then
                     data.onAccept()
                 end
@@ -253,7 +253,7 @@ Popups:Register("LOOTHING_CONFIRM_USAGE", {
         },
         {
             text = L["NO"],
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onCancel then
                     data.onCancel()
                 end
@@ -273,7 +273,7 @@ Popups:Register("LOOTHING_CONFIRM_ABORT", {
         {
             text = L["YES"],
             danger = true,
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onAccept then
                     data.onAccept()
                 end
@@ -281,7 +281,7 @@ Popups:Register("LOOTHING_CONFIRM_ABORT", {
         },
         {
             text = L["NO"],
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onCancel then
                     data.onCancel()
                 end
@@ -300,7 +300,7 @@ Popups:Register("LOOTHING_CONFIRM_AWARD", {
     icon = function(data)
         return GetItemIcon(data and data.item)
     end,
-    on_show = function(dialog, data)
+    on_show = function(_dialog, data)
         if data and data.item and data.player then
             local message = string.format(L["CONFIRM_AWARD"], data.item, data.player)
             if data.reason then
@@ -313,7 +313,7 @@ Popups:Register("LOOTHING_CONFIRM_AWARD", {
     buttons = {
         {
             text = L["YES"],
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onAccept then
                     data.onAccept()
                 end
@@ -321,7 +321,7 @@ Popups:Register("LOOTHING_CONFIRM_AWARD", {
         },
         {
             text = L["NO"],
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onCancel then
                     data.onCancel()
                 end
@@ -343,7 +343,7 @@ Popups:Register("LOOTHING_CONFIRM_AWARD_LATER", {
     buttons = {
         {
             text = L["YES"],
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onAccept then
                     data.onAccept()
                 end
@@ -351,7 +351,7 @@ Popups:Register("LOOTHING_CONFIRM_AWARD_LATER", {
         },
         {
             text = L["NO"],
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onCancel then
                     data.onCancel()
                 end
@@ -367,7 +367,7 @@ Popups:Register("LOOTHING_TRADE_ADD_ITEM", {
     modal = true,
     hide_on_escape = true,
     show_while_dead = true,
-    on_show = function(dialog, data)
+    on_show = function(_dialog, data)
         if data and data.count and data.player then
             if data.count == 1 then
                 return string.format(L["POPUP_TRADE_ADD_SINGLE"], data.player)
@@ -380,7 +380,7 @@ Popups:Register("LOOTHING_TRADE_ADD_ITEM", {
     buttons = {
         {
             text = L["YES"],
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onAccept then
                     data.onAccept()
                 end
@@ -388,7 +388,7 @@ Popups:Register("LOOTHING_TRADE_ADD_ITEM", {
         },
         {
             text = L["NO"],
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onCancel then
                     data.onCancel()
                 end
@@ -408,7 +408,7 @@ Popups:Register("LOOTHING_KEEP_ITEM", {
     icon = function(data)
         return GetItemIcon(data and data.item)
     end,
-    on_show = function(dialog, data)
+    on_show = function(_dialog, data)
         if data and data.item then
             return string.format(L["POPUP_KEEP_OR_TRADE_FMT"], data.item)
         end
@@ -417,7 +417,7 @@ Popups:Register("LOOTHING_KEEP_ITEM", {
     buttons = {
         {
             text = L["KEEP"],
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onKeep then
                     data.onKeep()
                 end
@@ -425,7 +425,7 @@ Popups:Register("LOOTHING_KEEP_ITEM", {
         },
         {
             text = L["TRADE_QUEUE"],
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onTrade then
                     data.onTrade()
                 end
@@ -441,7 +441,7 @@ Popups:Register("LOOTHING_SYNC_REQUEST", {
     modal = true,
     hide_on_escape = true,
     show_while_dead = true,
-    on_show = function(dialog, data)
+    on_show = function(_dialog, data)
         if data then
             local syncType = data.type or "data"
             local player = data.player or L["UNKNOWN"]
@@ -460,7 +460,7 @@ Popups:Register("LOOTHING_SYNC_REQUEST", {
     buttons = {
         {
             text = L["ACCEPT"],
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onAccept then
                     data.onAccept()
                 end
@@ -468,7 +468,7 @@ Popups:Register("LOOTHING_SYNC_REQUEST", {
         },
         {
             text = L["DECLINE"],
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onCancel then
                     data.onCancel()
                 end
@@ -484,7 +484,7 @@ Popups:Register("LOOTHING_IMPORT_OVERWRITE", {
     modal = true,
     hide_on_escape = true,
     show_while_dead = true,
-    on_show = function(dialog, data)
+    on_show = function(_dialog, data)
         if data and data.count then
             if data.count == 1 then
                 return L["POPUP_IMPORT_OVERWRITE_SINGLE"]
@@ -498,7 +498,7 @@ Popups:Register("LOOTHING_IMPORT_OVERWRITE", {
         {
             text = L["YES"],
             danger = true,
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onAccept then
                     data.onAccept()
                 end
@@ -506,7 +506,7 @@ Popups:Register("LOOTHING_IMPORT_OVERWRITE", {
         },
         {
             text = L["NO"],
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onCancel then
                     data.onCancel()
                 end
@@ -522,7 +522,7 @@ Popups:Register("LOOTHING_CONFIRM_DELETE_HISTORY", {
     modal = true,
     hide_on_escape = true,
     show_while_dead = true,
-    on_show = function(dialog, data)
+    on_show = function(_dialog, data)
         if data and data.count then
             if data.count == 1 then
                 return L["POPUP_DELETE_HISTORY_SINGLE"]
@@ -538,7 +538,7 @@ Popups:Register("LOOTHING_CONFIRM_DELETE_HISTORY", {
         {
             text = L["YES"],
             danger = true,
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onAccept then
                     data.onAccept()
                 end
@@ -546,7 +546,7 @@ Popups:Register("LOOTHING_CONFIRM_DELETE_HISTORY", {
         },
         {
             text = L["NO"],
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onCancel then
                     data.onCancel()
                 end
@@ -562,7 +562,7 @@ Popups:Register("LOOTHING_CONFIRM_CLEAR_COUNCIL", {
     modal = true,
     hide_on_escape = true,
     show_while_dead = true,
-    on_show = function(dialog, data)
+    on_show = function(_dialog, data)
         if data and data.count then
             return string.format(L["POPUP_CLEAR_COUNCIL_COUNT"], data.count)
         end
@@ -572,7 +572,7 @@ Popups:Register("LOOTHING_CONFIRM_CLEAR_COUNCIL", {
         {
             text = L["YES"],
             danger = true,
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onAccept then
                     data.onAccept()
                 end
@@ -580,7 +580,7 @@ Popups:Register("LOOTHING_CONFIRM_CLEAR_COUNCIL", {
         },
         {
             text = L["NO"],
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onCancel then
                     data.onCancel()
                 end
@@ -599,7 +599,7 @@ Popups:Register("LOOTHING_CONFIRM_SKIP", {
     icon = function(data)
         return GetItemIcon(data and data.item)
     end,
-    on_show = function(dialog, data)
+    on_show = function(_dialog, data)
         if data and data.item then
             return string.format(L["POPUP_SKIP_ITEM_FMT"], data.item)
         end
@@ -608,7 +608,7 @@ Popups:Register("LOOTHING_CONFIRM_SKIP", {
     buttons = {
         {
             text = L["YES"],
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onAccept then
                     data.onAccept()
                 end
@@ -616,7 +616,7 @@ Popups:Register("LOOTHING_CONFIRM_SKIP", {
         },
         {
             text = L["NO"],
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onCancel then
                     data.onCancel()
                 end
@@ -635,7 +635,7 @@ Popups:Register("LOOTHING_CONFIRM_REVOTE", {
     icon = function(data)
         return GetItemIcon(data and data.item)
     end,
-    on_show = function(dialog, data)
+    on_show = function(_dialog, data)
         if data and data.item then
             return string.format(L["POPUP_CONFIRM_REVOTE_FMT"], data.item)
         end
@@ -644,7 +644,7 @@ Popups:Register("LOOTHING_CONFIRM_REVOTE", {
     buttons = {
         {
             text = L["YES"],
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onAccept then
                     data.onAccept()
                 end
@@ -652,7 +652,7 @@ Popups:Register("LOOTHING_CONFIRM_REVOTE", {
         },
         {
             text = L["NO"],
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onCancel then
                     data.onCancel()
                 end
@@ -668,7 +668,7 @@ Popups:Register("LOOTHING_CONFIRM_CLEAR_IGNORED", {
     modal = true,
     hide_on_escape = true,
     show_while_dead = true,
-    on_show = function(dialog, data)
+    on_show = function(_dialog, data)
         if data and data.count then
             return string.format(L["POPUP_CLEAR_IGNORED_COUNT"], data.count)
         end
@@ -678,7 +678,7 @@ Popups:Register("LOOTHING_CONFIRM_CLEAR_IGNORED", {
         {
             text = L["YES"],
             danger = true,
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onAccept then
                     data.onAccept()
                 end
@@ -686,7 +686,7 @@ Popups:Register("LOOTHING_CONFIRM_CLEAR_IGNORED", {
         },
         {
             text = L["NO"],
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onCancel then
                     data.onCancel()
                 end
@@ -706,7 +706,7 @@ Popups:Register("LOOTHING_CONFIRM_RESET_REASONS", {
         {
             text = L["YES"],
             danger = true,
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onAccept then
                     data.onAccept()
                 end
@@ -714,7 +714,7 @@ Popups:Register("LOOTHING_CONFIRM_RESET_REASONS", {
         },
         {
             text = L["NO"],
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onCancel then
                     data.onCancel()
                 end
@@ -730,7 +730,7 @@ Popups:Register("LOOTHING_CONFIRM_DELETE_SET", {
     modal = true,
     hide_on_escape = true,
     show_while_dead = true,
-    on_show = function(dialog, data)
+    on_show = function(_dialog, data)
         if data and data.name then
             return string.format(L["CONFIRM_DELETE_SET"], data.name)
         end
@@ -740,7 +740,7 @@ Popups:Register("LOOTHING_CONFIRM_DELETE_SET", {
         {
             text = L["YES"],
             danger = true,
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onAccept then
                     data.onAccept()
                 end
@@ -748,7 +748,7 @@ Popups:Register("LOOTHING_CONFIRM_DELETE_SET", {
         },
         {
             text = L["NO"],
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onCancel then
                     data.onCancel()
                 end
@@ -767,7 +767,7 @@ Popups:Register("LOOTHING_CONFIRM_REANNOUNCE", {
     buttons = {
         {
             text = L["YES"],
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onAccept then
                     data.onAccept()
                 end
@@ -786,7 +786,7 @@ Popups:Register("LOOTHING_CONFIRM_START_SESSION", {
     modal = true,
     hide_on_escape = true,
     show_while_dead = true,
-    on_show = function(dialog, data)
+    on_show = function(_dialog, data)
         if data and data.boss then
             return string.format(L["POPUP_START_SESSION_FMT"], data.boss)
         end
@@ -795,7 +795,7 @@ Popups:Register("LOOTHING_CONFIRM_START_SESSION", {
     buttons = {
         {
             text = L["YES"],
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onAccept then
                     data.onAccept()
                 end
@@ -803,7 +803,7 @@ Popups:Register("LOOTHING_CONFIRM_START_SESSION", {
         },
         {
             text = L["NO"],
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onCancel then
                     data.onCancel()
                 end
@@ -823,7 +823,7 @@ Popups:Register("LOOTHING_CONFIRM_PROFILE_OVERWRITE", {
         {
             text = L["OVERWRITE"],
             danger = true,
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onAccept then
                     data.onAccept()
                 end
@@ -845,7 +845,7 @@ Popups:Register("LOOTHING_SETTINGS_IMPORT_CONFIRM", {
     buttons = {
         {
             text = L["CREATE_NEW_PROFILE"],
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onNewProfile then
                     data.onNewProfile()
                 end
@@ -854,7 +854,7 @@ Popups:Register("LOOTHING_SETTINGS_IMPORT_CONFIRM", {
         {
             text = L["APPLY_TO_CURRENT"],
             danger = true,
-            on_click = function(dialog, data)
+            on_click = function(_dialog, data)
                 if data and data.onApplyCurrent then
                     data.onApplyCurrent()
                 end
@@ -882,7 +882,7 @@ function Popups:Confirm(title, message, onYes, onNo)
     dialog:SetButtons({
         {
             text = L["YES"],
-            onClick = function(dlg)
+            onClick = function(_dlg)
                 if onYes then
                     onYes()
                 end
@@ -890,7 +890,7 @@ function Popups:Confirm(title, message, onYes, onNo)
         },
         {
             text = L["NO"],
-            onClick = function(dlg)
+            onClick = function(_dlg)
                 if onNo then
                     onNo()
                 end
@@ -916,7 +916,7 @@ function Popups:Alert(title, message, onOK)
     dialog:SetButtons({
         {
             text = L["OK"],
-            onClick = function(dlg)
+            onClick = function(_dlg)
                 if onOK then
                     onOK()
                 end

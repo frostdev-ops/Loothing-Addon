@@ -185,7 +185,7 @@ function SessionPanelMixin:CreateItemList()
     scrollFrame:SetScrollChild(content)
 
     -- Keep scroll child width in sync with scroll frame
-    scrollFrame:SetScript("OnSizeChanged", function(sf, w, h)
+    scrollFrame:SetScript("OnSizeChanged", function(_sf, w, _h)
         content:SetWidth(w)
     end)
 
@@ -671,7 +671,7 @@ function SessionPanelMixin:ShowBulkContextMenu(row)
     local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
     local count = self:GetSelectedCount()
 
-    MenuUtil.CreateContextMenu(row:GetFrame(), function(ownerRegion, rootDescription)
+    MenuUtil.CreateContextMenu(row:GetFrame(), function(_ownerRegion, rootDescription)
         rootDescription:CreateTitle(string.format(L["N_SELECTED"], count))
 
         if isML then
@@ -817,7 +817,7 @@ function SessionPanelMixin:RegisterEvents()
         self:Refresh()
     end, self)
 
-    Loothing.Session:RegisterCallback("OnItemAdded", function(_, item)
+    Loothing.Session:RegisterCallback("OnItemAdded", function(_, _item)
         self:Refresh()
     end, self)
 
@@ -1105,31 +1105,31 @@ function SessionPanelMixin:RefreshItems()
             self:OnItemSelect(r, i)
         end)
 
-        row:SetCallback("onStartVote", function(r, i)
+        row:SetCallback("onStartVote", function(_r, i)
             self:OnStartVote(i)
         end)
 
-        row:SetCallback("onEndVote", function(r, i)
+        row:SetCallback("onEndVote", function(_r, i)
             self:OnEndVote(i)
         end)
 
-        row:SetCallback("onVote", function(r, i)
+        row:SetCallback("onVote", function(_r, i)
             self:OnVote(i)
         end)
 
-        row:SetCallback("onAward", function(r, i)
+        row:SetCallback("onAward", function(_r, i)
             self:OnAward(i)
         end)
 
-        row:SetCallback("onViewResults", function(r, i)
+        row:SetCallback("onViewResults", function(_r, i)
             self:OnViewResults(i)
         end)
 
-        row:SetCallback("onSkip", function(r, i)
+        row:SetCallback("onSkip", function(_r, i)
             self:OnSkip(i)
         end)
 
-        row:SetCallback("onRevote", function(r, i)
+        row:SetCallback("onRevote", function(_r, i)
             self:OnRevote(i)
         end)
 
@@ -1269,7 +1269,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Handle item selection (supports Ctrl+click multi-select and Shift+click range)
-function SessionPanelMixin:OnItemSelect(row, item)
+function SessionPanelMixin:OnItemSelect(_, item)
     local isCtrl = IsControlKeyDown()
     local isShift = IsShiftKeyDown()
 

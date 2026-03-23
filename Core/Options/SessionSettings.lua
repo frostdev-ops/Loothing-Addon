@@ -4,7 +4,7 @@
     Master Looter. They control the session for everyone.
 ----------------------------------------------------------------------]]
 
-local ADDON_NAME, ns = ...
+local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local Options = ns.Options or {}
@@ -12,15 +12,6 @@ ns.Options = Options
 
 local L = ns.Locale
 local Utils = ns.Utils
-
-local function RefreshSettingsDialog()
-    if Loolib.Config and type(Loolib.Config.NotifyChange) == "function" then
-        Loolib.Config:NotifyChange("Loothing")
-    elseif Loolib.Config and Loolib.Config.Dialog then
-        Loolib.Config.Dialog:RefreshContent("Loothing")
-    end
-end
-
 
 local function CanManageCouncilRoster()
     return Utils and Utils.CanManageCouncilRoster and Utils.CanManageCouncilRoster() or false

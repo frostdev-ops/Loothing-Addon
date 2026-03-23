@@ -427,7 +427,7 @@ end
 -- @param parent Frame
 -- @param index number - Rank position
 -- @return Frame
-function VotePanelMixin:CreateRankRow(parent, index)
+function VotePanelMixin:CreateRankRow(parent, _index)
     local row = CreateFrame("Frame", nil, parent)
     row:SetSize(280, 22)
 

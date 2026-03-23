@@ -4,7 +4,6 @@
 ----------------------------------------------------------------------]]
 
 local _, ns = ...
-local Loolib = LibStub("Loolib")
 
 local Loothing = ns.Addon
 

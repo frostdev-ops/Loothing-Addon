@@ -164,7 +164,7 @@ function CommMixin:HandleSessionStart(data, sender)
     self:TriggerEvent("OnSessionStart", data)
 end
 
-function CommMixin:HandleStopHandleLoot(data, sender)
+function CommMixin:HandleStopHandleLoot(_data, sender)
     -- Only the current ML can broadcast stop
     if not isMasterLooter(sender) then
         Loothing:Debug("Rejected STOP_HANDLE_LOOT from non-ML:", sender)
@@ -173,7 +173,7 @@ function CommMixin:HandleStopHandleLoot(data, sender)
     self:TriggerEvent("OnStopHandleLoot", { masterLooter = sender })
 end
 
-function CommMixin:HandleSessionEnd(data, sender)
+function CommMixin:HandleSessionEnd(_data, sender)
     -- Only the ML who started the session can end it
     if not isMasterLooter(sender) then
         Loothing:Debug("Rejected SESSION_END from non-ML:", sender)
@@ -363,7 +363,7 @@ end
     Version Handlers
 ----------------------------------------------------------------------]]
 
-function CommMixin:HandleVersionRequest(data, sender)
+function CommMixin:HandleVersionRequest(_data, sender)
     self:TriggerEvent("OnVersionRequest", {
         requester = sender,
     })
@@ -505,7 +505,7 @@ end
 --- Handle HEARTBEAT message — delegate to AckTracker for state comparison
 -- @param data table - Heartbeat digest { sessionID, state, itemCount, itemStates, councilHash, mldbHash }
 -- @param sender string
-function CommMixin:HandleHeartbeat(data, sender, distribution)
+function CommMixin:HandleHeartbeat(data, sender, _distribution)
     if not validateHandler("HandleHeartbeat", data) then return end
     -- AckTracker handles the comparison and potential auto-sync trigger
     if Loothing.AckTracker then
@@ -517,7 +517,7 @@ end
 --- Handle ACK message — reserved for point-to-point acknowledgment tracking
 -- @param data table - { command, msgID, success }
 -- @param sender string
-function CommMixin:HandleAck(data, sender, distribution)
+function CommMixin:HandleAck(data, sender, _distribution)
     if not validateHandler("HandleAck", data) then return end
     -- Forward to AckTracker if available
     if Loothing.AckTracker and Loothing.AckTracker.HandleAck then
@@ -530,7 +530,7 @@ end
     Settings/History Sync Handlers (delegated to Sync module)
 ----------------------------------------------------------------------]]
 
-function CommMixin:HandleSettingsSyncRequest(data, sender)
+function CommMixin:HandleSettingsSyncRequest(_data, sender)
     if not isGroupMember(sender) then
         Loothing:Debug("Rejected SETTINGS_SYNC_REQUEST from non-group member:", sender)
         return
@@ -540,7 +540,7 @@ function CommMixin:HandleSettingsSyncRequest(data, sender)
     end
 end
 
-function CommMixin:HandleSettingsSyncAck(data, sender)
+function CommMixin:HandleSettingsSyncAck(_data, sender)
     if not isGroupMember(sender) then
         Loothing:Debug("Rejected SETTINGS_SYNC_ACK from non-group member:", sender)
         return
@@ -571,7 +571,7 @@ function CommMixin:HandleHistorySyncRequest(data, sender)
     end
 end
 
-function CommMixin:HandleHistorySyncAck(data, sender)
+function CommMixin:HandleHistorySyncAck(_data, sender)
     if not isGroupMember(sender) then
         Loothing:Debug("Rejected HISTORY_SYNC_ACK from non-group member:", sender)
         return

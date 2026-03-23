@@ -325,8 +325,6 @@ end
 ----------------------------------------------------------------------]]
 
 function RosterPanelMixin:CreateFooter()
-    local L = Loothing.Locale
-
     local footer = CreateFrame("Frame", nil, self.frame)
     footer:SetPoint("BOTTOMLEFT", 8, 8)
     footer:SetPoint("BOTTOMRIGHT", -8, 8)
@@ -359,8 +357,6 @@ end
 ----------------------------------------------------------------------]]
 
 function RosterPanelMixin:CreateEmptyState()
-    local L = Loothing.Locale
-
     self.emptyText = self.listContainer:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     self.emptyText:SetPoint("CENTER")
     self.emptyText:SetText(L["ROSTER_NO_GROUP"])
@@ -915,7 +911,6 @@ end
 ----------------------------------------------------------------------]]
 
 function RosterPanelMixin:ShowRowContextMenu(row, entry)
-    local L = Loothing.Locale
     local playerName = Utils.GetPlayerFullName()
     local isPlayerLeader = UnitIsGroupLeader("player")
     local isPlayerAssistant = IsInRaid() and UnitIsGroupAssistant("player")
@@ -1055,8 +1050,6 @@ end
 ----------------------------------------------------------------------]]
 
 function RosterPanelMixin:UpdateSummary()
-    local L = Loothing.Locale
-
     if #self.rosterData == 0 then
         self.summaryText:SetText("")
         return

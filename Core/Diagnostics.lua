@@ -3,7 +3,7 @@
     Diagnostics - Lightweight taint and global namespace audit helpers
 ----------------------------------------------------------------------]]
 
-local ADDON_NAME, ns = ...
+local _, ns = ...
 local Loolib = LibStub("Loolib")
 local CreateFrame = CreateFrame
 local CreateFromMixins = Loolib.CreateFromMixins

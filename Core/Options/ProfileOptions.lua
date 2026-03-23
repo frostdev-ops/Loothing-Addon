@@ -80,8 +80,9 @@ local function GetResolvedShareTarget()
         return shareTarget
     end
 
-    for name in pairs(targets) do
-        shareTarget = name
+    local first = next(targets)
+    if first then
+        shareTarget = first
         return shareTarget
     end
 

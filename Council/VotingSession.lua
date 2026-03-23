@@ -514,8 +514,6 @@ end
 --- Get a summary for display
 -- @return table
 function VotingSessionMixin:GetSummary()
-    local L = Loothing.Locale
-
     return {
         state = self.state,
         stateName = self:GetStateName(),

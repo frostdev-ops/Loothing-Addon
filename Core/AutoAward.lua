@@ -3,7 +3,7 @@
     AutoAward - Automatically award items below quality threshold
 ----------------------------------------------------------------------]]
 
-local ADDON_NAME, ns = ...
+local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local L = ns.Locale

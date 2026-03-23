@@ -72,14 +72,14 @@ function RollFrameMixin:RegisterSessionEvents()
         end
     end, self)
 
-    Loothing.Session:RegisterCallback("OnItemAwarded", function(_, item, winner)
+    Loothing.Session:RegisterCallback("OnItemAwarded", function(_, item, _winner)
         self:UpdateSessionButtons()
         if self.item and self.item.guid == item.guid then
             self:SwitchToNextPendingItem()
         end
     end, self)
 
-    Loothing.Session:RegisterCallback("OnVotingEnded", function(_, item, results)
+    Loothing.Session:RegisterCallback("OnVotingEnded", function(_, _item, _results)
         self:UpdateSessionButtons()
     end, self)
 
@@ -148,9 +148,12 @@ function RollFrameMixin:AutoPassItem(item)
     -- Notify player unless silent
     if not (Loothing.Settings and Loothing.Settings:Get("autoPass.silent", false)) then
         local AutoPass = ns.AutoPass
-        local _, reason = AutoPass and AutoPass:ShouldAutoPass(item.itemLink)
+        local autoPassReason
+        if AutoPass then
+            _, autoPassReason = AutoPass:ShouldAutoPass(item.itemLink)
+        end
         Loothing:Print(string.format("Auto-passed: %s (%s)",
-            item.itemLink or item.name or "?", reason or "unusable"))
+            item.itemLink or item.name or "?", autoPassReason or "unusable"))
     end
     -- Remove from display and advance to next item
     for i, existingItem in ipairs(self.items) do

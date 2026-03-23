@@ -212,7 +212,7 @@ function CouncilTableMixin:ComputeColumnWidths(availableWidth)
     end
 
     if extra > 0 then
-        extra = math.max(0, extra - DistributeRemainingWidth(widths, visible, extra, "flex"))
+        DistributeRemainingWidth(widths, visible, extra, "flex")
     end
 
     local result = {}

@@ -1,4 +1,4 @@
-local ADDON_NAME, ns = ...
+local _, ns = ...
 
 --[[--------------------------------------------------------------------
     Loothing - Loot Council Addon for WoW 12.0+
@@ -75,7 +75,7 @@ end
 -- Each migration is registered with a version, description, and handler
 function Migration:RegisterMigrations()
     -- Migration 1.0.0: Initial schema validation
-    self:Register("1.0.0", "Initial schema setup", function(profileDB, globalDB)
+    self:Register("1.0.0", "Initial schema setup", function(_profileDB, globalDB)
         -- Ensure migration tracking exists in global scope
         if not globalDB.migrations then
             globalDB.migrations = {
@@ -103,7 +103,7 @@ function Migration:RegisterMigrations()
     end)
 
     -- Migration 1.0.1: Add new settings fields
-    self:Register("1.0.1", "Add new settings fields", function(profileDB, globalDB)
+    self:Register("1.0.1", "Add new settings fields", function(profileDB, _globalDB)
         -- Ensure new voting fields exist
         if profileDB.voting then
             if profileDB.voting.mlSeesVotes == nil then
@@ -209,7 +209,7 @@ function Migration:RegisterMigrations()
     end)
 
     -- Migration 1.3.0: Merge responses + buttonSets -> responseSets
-    self:Register("1.3.0", "Merge responses + buttonSets into responseSets", function(profileDB, globalDB)
+    self:Register("1.3.0", "Merge responses + buttonSets into responseSets", function(profileDB, _globalDB)
         -- Skip if already migrated
         if profileDB.responseSets and profileDB.responseSets.sets then
             Loothing:Debug("Migration 1.3.0: responseSets already present, skipping merge")
@@ -286,7 +286,7 @@ function Migration:RegisterMigrations()
     end)
 
     -- Migration 1.3.2: Settings audit cleanup + autoAward structured reasons
-    self:Register("1.3.2", "Settings audit cleanup and structured auto-award reasons", function(profileDB, globalDB)
+    self:Register("1.3.2", "Settings audit cleanup and structured auto-award reasons", function(profileDB, _globalDB)
         -- Remove dead settings
         if profileDB.settings then
             profileDB.settings.appendRealmNames = nil

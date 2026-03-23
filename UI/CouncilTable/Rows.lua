@@ -7,7 +7,6 @@ local _, ns = ...
 local Loothing = ns.Addon
 local Utils = ns.Utils
 local TestMode = ns.TestMode
-local L = Loothing.Locale
 
 local CouncilTableMixin = ns.CouncilTableMixin or {}
 ns.CouncilTableMixin = CouncilTableMixin

@@ -336,7 +336,7 @@ end
 -- @param header string - Header line
 -- @param delimiter string - Delimiter character
 -- @return boolean - True if valid
-function HistoryImportMixin:ValidateHeader(header, delimiter)
+function HistoryImportMixin:ValidateHeader(header, _delimiter)
     -- Accept any header that contains a date column and a winner or player column
     local lower = header:lower()
     return lower:find("date") ~= nil and (lower:find("winner") ~= nil or lower:find("player") ~= nil)

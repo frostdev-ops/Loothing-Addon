@@ -53,8 +53,6 @@ end
 
 --- Create UI elements
 function TradePanelMixin:CreateElements()
-    local L = Loothing.Locale
-
     -- Header
     self:CreateHeader()
 
@@ -148,7 +146,7 @@ function TradePanelMixin:CreateList()
     content:SetSize(1, 800)
     scrollFrame:SetScrollChild(content)
 
-    scrollFrame:SetScript("OnSizeChanged", function(sf, w, h)
+    scrollFrame:SetScript("OnSizeChanged", function(_sf, w, _h)
         content:SetWidth(w)
     end)
 
@@ -470,48 +468,48 @@ function TradePanelMixin:CreateRow()
     row.removeButton:SetPushedTexture("Interface\\Buttons\\UI-GROUPLOOT-PASS-DOWN")
 
     -- Hover effect
-    row:SetScript("OnEnter", function(self)
-        self.bg:Show()
+    row:SetScript("OnEnter", function(rowFrame)
+        rowFrame.bg:Show()
     end)
 
-    row:SetScript("OnLeave", function(self)
-        self.bg:Hide()
+    row:SetScript("OnLeave", function(rowFrame)
+        rowFrame.bg:Hide()
     end)
 
     -- Store entry
     row.entry = nil
 
     -- Set entry method
-    row.SetEntry = function(self, entry)
-        self.entry = entry
+    row.SetEntry = function(rowRef, entry)
+        rowRef.entry = entry
 
         -- Icon
         local texture = select(10, C_Item.GetItemInfo(entry.itemLink)) or "Interface\\Icons\\INV_Misc_QuestionMark"
-        self.icon:SetNormalTexture(texture)
+        rowRef.icon:SetNormalTexture(texture)
 
         -- Item text
         local quality = Utils.GetItemQuality(entry.itemLink)
         local r, g, b = C_Item.GetItemQualityColor(quality or 0)
         local name = Utils.GetItemName(entry.itemLink) or "Unknown"
-        self.itemText:SetText(name)
-        self.itemText:SetTextColor(r, g, b)
+        rowRef.itemText:SetText(name)
+        rowRef.itemText:SetTextColor(r, g, b)
 
         -- Winner
-        local shortName = Utils.GetShortName(entry.winner)
-        self.winnerButton:SetText(shortName)
+        local winnerShort = Utils.GetShortName(entry.winner)
+        rowRef.winnerButton:SetText(winnerShort)
 
         -- Icon tooltip
-        self.icon:SetScript("OnEnter", function()
-            GameTooltip:SetOwner(self.icon, "ANCHOR_RIGHT")
+        rowRef.icon:SetScript("OnEnter", function()
+            GameTooltip:SetOwner(rowRef.icon, "ANCHOR_RIGHT")
             GameTooltip:SetHyperlink(entry.itemLink)
             GameTooltip:Show()
         end)
 
-        self.icon:SetScript("OnLeave", function()
+        rowRef.icon:SetScript("OnLeave", function()
             GameTooltip:Hide()
         end)
 
-        self.icon:SetScript("OnClick", function(_, button)
+        rowRef.icon:SetScript("OnClick", function(_, _button)
             if IsModifiedClick() then
                 HandleModifiedItemClick(entry.itemLink)
             end
@@ -519,72 +517,72 @@ function TradePanelMixin:CreateRow()
 
         -- Helper: find UnitId for a player name
         local function FindUnitIdForPlayer(playerName)
-            local shortName = Ambiguate(playerName, "short")
+            local ambigShort = Ambiguate(playerName, "short")
             for i = 1, GetNumGroupMembers() do
                 local unit = IsInRaid() and ("raid" .. i) or ("party" .. i)
                 local uName = Loolib.SecretUtil.SafeUnitName(unit)
-                if UnitExists(unit) and uName and uName == shortName then
+                if UnitExists(unit) and uName and uName == ambigShort then
                     return unit
                 end
             end
             local tName = Loolib.SecretUtil.SafeUnitName("target")
-            if UnitExists("target") and tName and tName == shortName then
+            if UnitExists("target") and tName and tName == ambigShort then
                 return "target"
             end
             return nil
         end
 
         -- Winner button click
-        self.winnerButton:SetScript("OnClick", function()
+        rowRef.winnerButton:SetScript("OnClick", function()
             if Loothing.TradeQueue then
                 local unitId = FindUnitIdForPlayer(entry.winner)
                 if unitId and CheckInteractDistance(unitId, 2) then
                     InitiateTrade(unitId)
                 else
-                    local shortName = Utils.GetShortName(entry.winner)
-                    Loothing:Print(string.format("%s is not in range to trade", shortName))
+                    local errName = Utils.GetShortName(entry.winner)
+                    Loothing:Print(string.format("%s is not in range to trade", errName))
                 end
             end
         end)
 
         -- Trade button click
-        self.tradeButton:SetScript("OnClick", function()
+        rowRef.tradeButton:SetScript("OnClick", function()
             local unitId = FindUnitIdForPlayer(entry.winner)
             if unitId and CheckInteractDistance(unitId, 2) then
                 InitiateTrade(unitId)
             else
-                local shortName = Utils.GetShortName(entry.winner)
-                Loothing:Print(string.format("%s is not in range to trade", shortName))
+                local errName = Utils.GetShortName(entry.winner)
+                Loothing:Print(string.format("%s is not in range to trade", errName))
             end
         end)
 
         -- Remove button
-        self.removeButton:SetScript("OnEnter", function()
-            GameTooltip:SetOwner(self.removeButton, "ANCHOR_RIGHT")
+        rowRef.removeButton:SetScript("OnEnter", function()
+            GameTooltip:SetOwner(rowRef.removeButton, "ANCHOR_RIGHT")
             GameTooltip:SetText(L["REMOVE_FROM_QUEUE"], nil, nil, nil, nil, true)
             GameTooltip:Show()
         end)
 
-        self.removeButton:SetScript("OnLeave", function()
+        rowRef.removeButton:SetScript("OnLeave", function()
             GameTooltip:Hide()
         end)
 
-        self.removeButton:SetScript("OnClick", function()
+        rowRef.removeButton:SetScript("OnClick", function()
             if Loothing.TradeQueue then
                 Loothing.TradeQueue:RemoveFromQueue(entry.itemGUID)
             end
         end)
 
         -- Update time
-        self:UpdateTimeRemaining()
+        rowRef:UpdateTimeRemaining()
     end
 
     -- Update time remaining method
-    row.UpdateTimeRemaining = function(self)
-        if not self.entry then return end
+    row.UpdateTimeRemaining = function(rowFrame)
+        if not rowFrame.entry then return end
 
         if Loothing.TradeQueue then
-            local remaining = Loothing.TradeQueue:GetTimeRemaining(self.entry)
+            local remaining = Loothing.TradeQueue:GetTimeRemaining(rowFrame.entry)
             local hours = math.floor(remaining / 3600)
             local minutes = math.floor((remaining % 3600) / 60)
             local seconds = remaining % 60
@@ -599,9 +597,9 @@ function TradePanelMixin:CreateRow()
             end
 
             if hours > 0 then
-                self.timeText:SetText(string.format("%s%dh %dm|r", color, hours, minutes))
+                rowFrame.timeText:SetText(string.format("%s%dh %dm|r", color, hours, minutes))
             else
-                self.timeText:SetText(string.format("%s%dm %ds|r", color, minutes, seconds))
+                rowFrame.timeText:SetText(string.format("%s%dm %ds|r", color, minutes, seconds))
             end
         end
     end

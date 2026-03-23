@@ -482,7 +482,7 @@ function RollFrameMixin:ReanchorSections(showGear, showTimer, showRolls, numButt
         self.rollContainer:SetPoint("TOPLEFT", lastSection, "BOTTOMLEFT", 0, -SECTION_PADDING)
         self.rollContainer:SetPoint("TOPRIGHT", lastSection, "BOTTOMRIGHT", 0, -SECTION_PADDING)
         self.rollContainer:SetHeight(ROLL_SECTION_HEIGHT)
-        lastSection = self.rollContainer
+        lastSection = self.rollContainer -- luacheck: ignore 311 (chain anchor for future sections)
     end
 
     if showTimer then

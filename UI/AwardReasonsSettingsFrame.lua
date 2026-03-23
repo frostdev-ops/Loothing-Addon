@@ -610,16 +610,16 @@ function AwardReasonsSettingsMixin:PopulateRow(row, reasonData, idx, total, isEx
 
         -- Log to History
         row.logCB:SetChecked(reasonData.log or false)
-        row.logCB:SetScript("OnClick", function(cb)
-            Loothing.Settings:UpdateAwardReason(reasonData.id, { log = cb:GetChecked() })
+        row.logCB:SetScript("OnClick", function(checkbox)
+            Loothing.Settings:UpdateAwardReason(reasonData.id, { log = checkbox:GetChecked() })
             Utils.NotifySettingsDialogRefresh()
             Utils.BroadcastMLDBIfML()
         end)
 
         -- Disenchant
         row.deCB:SetChecked(reasonData.disenchant or false)
-        row.deCB:SetScript("OnClick", function(cb)
-            Loothing.Settings:UpdateAwardReason(reasonData.id, { disenchant = cb:GetChecked() })
+        row.deCB:SetScript("OnClick", function(checkbox)
+            Loothing.Settings:UpdateAwardReason(reasonData.id, { disenchant = checkbox:GetChecked() })
             Utils.NotifySettingsDialogRefresh()
             Utils.BroadcastMLDBIfML()
         end)

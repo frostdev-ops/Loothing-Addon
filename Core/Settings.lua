@@ -1496,7 +1496,7 @@ end
 -- @param enabled boolean - Whether to log awards with this reason
 function SettingsMixin:SetAwardReasonLog(id, enabled)
     local reasons = self:GetAwardReasons()
-    for i, reason in ipairs(reasons) do
+    for _, reason in ipairs(reasons) do
         if reason.id == id then
             reason.log = enabled
             self:Set("awardReasons.reasons", reasons)
@@ -1521,7 +1521,7 @@ end
 -- @param enabled boolean - Whether to treat awards with this reason as disenchant
 function SettingsMixin:SetAwardReasonDisenchant(id, enabled)
     local reasons = self:GetAwardReasons()
-    for i, reason in ipairs(reasons) do
+    for _, reason in ipairs(reasons) do
         if reason.id == id then
             reason.disenchant = enabled
             self:Set("awardReasons.reasons", reasons)
@@ -1776,7 +1776,7 @@ function SettingsMixin:UpdateButton(setId, buttonId, data)
 
     local buttons = set.buttons or {}
 
-    for i, button in ipairs(buttons) do
+    for _, button in ipairs(buttons) do
         if button.id == buttonId then
             for key, value in pairs(data) do
                 button[key] = value

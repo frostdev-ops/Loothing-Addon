@@ -162,7 +162,7 @@ end
 function SyncPanelMixin:ShowTargetMenu()
     local members = self:GetOnlineMembers()
 
-    MenuUtil.CreateContextMenu(self.targetBtn, function(ownerRegion, rootDescription)
+    MenuUtil.CreateContextMenu(self.targetBtn, function(_ownerRegion, rootDescription)
         rootDescription:CreateTitle(L["SELECT_TARGET"])
 
         -- Guild option
@@ -210,7 +210,7 @@ function SyncPanelMixin:ShowDateRangeMenu()
         { value = "all", label = L["ALL_TIME"] },
     }
 
-    MenuUtil.CreateContextMenu(self.dateBtn, function(ownerRegion, rootDescription)
+    MenuUtil.CreateContextMenu(self.dateBtn, function(_ownerRegion, rootDescription)
         for _, range in ipairs(ranges) do
             rootDescription:CreateButton(range.label, function()
                 self.dateRange = range.value

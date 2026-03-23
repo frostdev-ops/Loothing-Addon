@@ -3,7 +3,7 @@
     Announcer - Multi-channel announcement system
 ----------------------------------------------------------------------]]
 
-local ADDON_NAME, ns = ...
+local _, ns = ...
 local Loolib = LibStub("Loolib")
 local CreateFromMixins = Loolib.CreateFromMixins
 local Events = Loolib.Events

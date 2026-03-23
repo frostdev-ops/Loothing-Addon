@@ -15,7 +15,6 @@ local SettingsExportMixin = ns.SettingsExportMixin
 
 local EXPORT_VERSION = 1
 local SHARE_SCOPE_DIRECT = "direct"
-local SHARE_SCOPE_GROUP = "group"
 local RECENT_SHARE_TTL = 180
 local BROADCAST_COOLDOWN = 30
 local BROADCAST_QUEUE_PRESSURE_LIMIT = 0.75

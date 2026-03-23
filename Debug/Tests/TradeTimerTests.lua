@@ -136,14 +136,14 @@ local function RunTradeTimerTests()
     -- Test threshold crossing detection
     local warningsSent = {}
 
-    local function checkWarnings(guid, remaining)
+    local function checkWarnings(guid, secsLeft)
         warningsSent[guid] = warningsSent[guid] or {}
 
-        if remaining <= TRADE_WARNING_5MIN and not warningsSent[guid].warned5 then
+        if secsLeft <= TRADE_WARNING_5MIN and not warningsSent[guid].warned5 then
             warningsSent[guid].warned5 = true
             return "5min"
         end
-        if remaining <= TRADE_WARNING_20MIN and not warningsSent[guid].warned20 then
+        if secsLeft <= TRADE_WARNING_20MIN and not warningsSent[guid].warned20 then
             warningsSent[guid].warned20 = true
             return "20min"
         end
