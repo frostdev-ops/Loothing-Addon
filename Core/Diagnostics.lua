@@ -38,7 +38,6 @@ local TRACKED_GLOBALS = {
 
 local EXPECTED_GLOBALS = {
     ["LibStub"] = true,
-    ["Loolib"] = true,
     ["LoolibDB"] = true,
     ["SLASH_LOOTHING1"] = true,
     ["SLASH_LOOTHING2"] = true,
