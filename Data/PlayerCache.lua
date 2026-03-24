@@ -1,5 +1,3 @@
-local _, ns = ...
-
 --[[--------------------------------------------------------------------
     Loothing - Loot Council Addon for WoW 12.0+
     PlayerCache - GUID-based player data cache
@@ -20,6 +18,8 @@ local _, ns = ...
         local player = cache:GetOrCreate("PlayerName-RealmName")
         cache:Update("Player-1234-ABCDEF", { role = "TANK", ilvl = 600 })
 ----------------------------------------------------------------------]]
+local _, ns = ...
+
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 

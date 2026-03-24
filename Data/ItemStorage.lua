@@ -563,7 +563,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Get the item storage array from SavedVariables (global scope)
--- FIX(Area4-3): Added owner key to prevent cross-character bleed
+-- Owner key prevents cross-character bleed
 -- @return table - The storage array
 function ItemStorageMixin:GetStorageTable()
     local currentOwner = Utils and Utils.GetPlayerFullName and Utils.GetPlayerFullName()

@@ -757,7 +757,7 @@ function TradeQueueMixin:LoadFromDatabase()
         return
     end
 
-    -- FIX(Area4-2): Discard entries owned by a different character
+    -- Discard entries owned by a different character
     local currentOwner = Utils and Utils.GetPlayerFullName and Utils.GetPlayerFullName()
     if stored._owner and currentOwner and stored._owner ~= currentOwner then
         Loothing:Debug("TradeQueue: discarding stale entries from", tostring(stored._owner))
@@ -794,7 +794,7 @@ function TradeQueueMixin:SaveToDatabase()
         end
     end
 
-    -- FIX(Area4-2): Persist owner key so other characters discard stale entries
+    -- Persist owner key so other characters discard stale entries
     local currentOwner = Utils and Utils.GetPlayerFullName and Utils.GetPlayerFullName()
     if currentOwner then
         entries._owner = currentOwner

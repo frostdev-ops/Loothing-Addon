@@ -1,5 +1,3 @@
-local _, ns = ...
-
 --[[--------------------------------------------------------------------
     Loothing - Loot Council Addon for WoW 12.0+
     HistoryImport_Example - Usage examples for HistoryImport module
@@ -7,6 +5,7 @@ local _, ns = ...
     This file demonstrates how to use the HistoryImport module.
     It is not loaded by the addon - it's for documentation purposes.
 ----------------------------------------------------------------------]]
+local _, ns = ...
 
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon

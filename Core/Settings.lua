@@ -9,6 +9,30 @@
 
     All existing getter/setter methods remain unchanged. Callers do not
     need to know about profiles - self.db routes to the active profile.
+
+    Table of Contents:
+      Default Values ............... ~21
+      SettingsMixin ................ ~80
+      Profile Management ........... ~149
+      General Settings ............. ~201
+      UI Settings .................. ~349
+      Council Settings ............. ~392
+      Announcement Settings ........ ~455
+      Multi-Line Announcements ..... ~579
+      History Access ............... ~726
+      Auto-Pass Settings ........... ~840
+      Auto-Trade Settings .......... ~892
+      Group Loot Settings .......... ~908
+      Auto-Award Settings .......... ~949
+      Ignore Items Settings ........ ~1017
+      Voting Options Settings ...... ~1125
+      Award Reasons Settings ....... ~1265
+      Button Sets Settings ......... ~1585
+      Response Sets Settings ....... ~1815
+      Filter Settings .............. ~2225
+      Council Table Settings ....... ~2372
+      Roll Frame Settings .......... ~2455
+      Winner Determination ......... ~2572
 ----------------------------------------------------------------------]]
 
 local _, ns = ...

@@ -1,3 +1,7 @@
+--[[--------------------------------------------------------------------
+    Loothing - Loot Council Addon for WoW 12.0+
+    CouncilSettings - Council Settings & Roster Helpers
+----------------------------------------------------------------------]]
 local _, ns = ...
 local Loothing = ns.Addon
 local Utils = ns.Utils
@@ -6,10 +10,6 @@ local TestMode = ns.TestMode
 ns.CouncilMixin = ns.CouncilMixin or {}
 
 local CouncilMixin = ns.CouncilMixin
-
---[[--------------------------------------------------------------------
-    Loothing - Council Settings & Roster Helpers
-----------------------------------------------------------------------]]
 
 -- Settings toggles
 function CouncilMixin:SetAutoIncludeOfficers(enabled)

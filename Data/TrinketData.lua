@@ -1,5 +1,3 @@
-local _, ns = ...
-
 --[[--------------------------------------------------------------------
     Loothing - Loot Council Addon for WoW 12.0+
     TrinketData - Trinket spec restrictions for auto-pass
@@ -21,6 +19,8 @@ local _, ns = ...
 
     Data sourced from RCLootCouncil2/Utils/EncounterJournalData.lua
 ----------------------------------------------------------------------]]
+local _, ns = ...
+
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 
@@ -180,7 +180,7 @@ end
 -- @param itemID number - Item ID
 -- @return boolean - True if player can use the trinket
 function TrinketData:CanPlayerUse(itemID)
-    -- FIX(Area4-4): Use SafeUnitClass to avoid secret value tainting
+    -- Use SafeUnitClass to avoid secret value tainting
     local _, _, classID = Loolib.SecretUtil.SafeUnitClass("player")
     local specIndex = GetSpecialization()
 

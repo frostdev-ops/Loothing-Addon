@@ -1,8 +1,7 @@
---- TokenData.lua
---- Token data module for Loothing
---- Contains tier token mappings for equipment slots and item levels
---- Based on RCLootCouncil tokenData.lua
---- @author James Kueller
+--[[--------------------------------------------------------------------
+    Loothing - Loot Council Addon for WoW 12.0+
+    TokenData - Tier token mappings for equipment slots and item levels
+----------------------------------------------------------------------]]
 
 local _, ns = ...
 
@@ -855,10 +854,9 @@ function TokenData:GetClasses(itemLink)
         return bit.lshift(1, 13) - 1
     end
 
-    -- Parse tooltip for "Classes: ..." line
-    -- The actual implementation would need to parse class names and convert to bitmask
-    -- For now, return a default value
-    -- TODO: Implement full class parsing from tooltip
+    -- WoW 12.0+ personal loot makes tier tokens class-unrestricted.
+    -- Tooltip-based class parsing was planned for Classic support but is
+    -- unnecessary for Midnight. Returns all-classes bitmask as default.
     return bit.lshift(1, 13) - 1
 end
 

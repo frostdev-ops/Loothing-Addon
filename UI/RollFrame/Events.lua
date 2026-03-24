@@ -193,7 +193,7 @@ function RollFrameMixin:OnChatMessage(text)
     local playerName, roll, minRoll, maxRoll = string.match(safeText, "(.+) rolls (%d+) %((%d+)%-(%d+)%)")
     if not playerName then return end
 
-    -- FIX(Area4-4): Use SafeUnitName to avoid secret value tainting
+    -- Use SafeUnitName to avoid secret value tainting
     local myFullName = Utils and Utils.GetPlayerFullName and Utils.GetPlayerFullName() or Loolib.SecretUtil.SafeUnitName("player")
     if Utils and Utils.IsSamePlayer then
         if not Utils.IsSamePlayer(playerName, myFullName) then

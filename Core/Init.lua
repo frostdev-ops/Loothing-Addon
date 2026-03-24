@@ -1,6 +1,19 @@
 --[[--------------------------------------------------------------------
     Loothing - Loot Council Addon for WoW 12.0+
     Init - Addon initialization and namespace
+
+    Table of Contents:
+      Addon Namespace .............. ~34
+      Event Frame .................. ~99
+      Initialization ............... ~109
+      ML Detection ................. ~396
+      Loot Handling ................ ~660
+      Event Registration ........... ~730
+      Slash Commands ............... ~960
+      Event Handlers ............... ~1610
+      Debug Utilities .............. ~1773
+      Public API ................... ~1796
+      Reconnect Cache/Restore ...... ~1835
 ----------------------------------------------------------------------]]
 
 local ADDON_NAME, ns = ...
@@ -237,7 +250,7 @@ local function InitializeModules()
         Loothing.Restrictions = ns.CreateRestrictions()
     end
 
-    -- FIX(Area2-2): Initialize announcer AFTER Restrictions so it can register the callback
+    -- Initialize announcer AFTER Restrictions so it can register the callback
     if ns.CreateAnnouncer then
         Loothing.Announcer = ns.CreateAnnouncer()
     end
@@ -640,6 +653,10 @@ OnRaidEnter = function()
     end
 end
 
+--[[--------------------------------------------------------------------
+    Loot Handling
+----------------------------------------------------------------------]]
+
 --- Start handling loot (broadcast to group)
 -- Called when we become ML and usage mode permits
 function Addon:StartHandleLoot()
@@ -703,6 +720,10 @@ function Addon:StopHandleLoot()
         self.MLDB:Clear()
     end
 end
+
+--[[--------------------------------------------------------------------
+    Event Registration
+----------------------------------------------------------------------]]
 
 local function RegisterEvents()
     if not Events or not Events.Registry then return end
@@ -933,6 +954,10 @@ local function RegisterEvents()
     -- NOTE: Trade window events (TRADE_SHOW, TRADE_CLOSED, TRADE_ACCEPT_UPDATE, UI_INFO_MESSAGE)
     -- are registered internally by TradeQueue:RegisterEvents()
 end
+
+--[[--------------------------------------------------------------------
+    Slash Commands
+----------------------------------------------------------------------]]
 
 local function RegisterSlashCommands()
     local function isDebugEnabled()
@@ -1257,7 +1282,7 @@ local function RegisterSlashCommands()
                         retries = retries or 0
                         local resolvedLink = select(2, C_Item.GetItemInfo(link or input))
                         if resolvedLink then
-                            -- FIX(Area4-4): Use SafeUnitName to avoid secret value tainting
+                            -- Use SafeUnitName to avoid secret value tainting
                             local item = Loothing.Session:AddItem(resolvedLink, Loolib.SecretUtil.SafeUnitName("player"), nil, true)
                             if item then
                                 printLine(string.format("%s added to session.", resolvedLink))
@@ -1893,7 +1918,7 @@ function Addon:CacheStateForReconnect()
         cache.session.items = items
     end
 
-    -- FIX(critical-02): Tag cache with owner to prevent alt character restore
+    -- Tag cache with owner to prevent alt character restore
     cache.owner = Utils.GetPlayerFullName()
 
     -- Store in global scope (persists across profiles)
@@ -1911,7 +1936,7 @@ function Addon:RestoreFromCache()
         return
     end
 
-    -- FIX(critical-02): Reject cache if it belongs to a different character
+    -- Reject cache if it belongs to a different character
     local currentOwner = Utils.GetPlayerFullName()
     if cache.owner and currentOwner and cache.owner ~= currentOwner then
         self:Debug("Reconnect cache owner mismatch; clearing stale cache from", tostring(cache.owner))

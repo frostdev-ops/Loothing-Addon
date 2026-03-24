@@ -775,7 +775,7 @@ function HistoryMixin:GetExportMetadata()
         version = Loothing.VERSION,
         exportDate = date("%Y-%m-%d"),
         exportTime = date("%H:%M:%S"),
-        -- FIX(Area4-4): Use SafeUnitName to avoid secret value tainting
+        -- Use SafeUnitName to avoid secret value tainting
         playerName = Loolib.SecretUtil.SafeUnitName("player") or "Unknown",
         realmName = GetNormalizedRealmName(),
         guildName = guildName or "",

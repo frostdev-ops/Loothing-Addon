@@ -1,13 +1,12 @@
+--[[--------------------------------------------------------------------
+    Loothing - Loot Council Addon for WoW 12.0+
+    VotingEngine - Vote tallying algorithms
+----------------------------------------------------------------------]]
 local _, ns = ...
 local Loothing = ns.Addon
 local Utils = ns.Utils
 
 ns.VotingEngine = ns.VotingEngine or {}
-
---[[--------------------------------------------------------------------
-    Loothing - Loot Council Addon for WoW 12.0+
-    VotingEngine - Vote tallying algorithms
-----------------------------------------------------------------------]]
 
 --[[--------------------------------------------------------------------
     VotingEngine (Singleton)

@@ -1,5 +1,3 @@
-local _, ns = ...
-
 --[[--------------------------------------------------------------------
     Loothing - Loot Council Addon for WoW 12.0+
     HistoryImport_Tests - Test suite for history import functionality
@@ -7,6 +5,7 @@ local _, ns = ...
     This file is for development/testing only and should not be loaded
     in production. To run tests, load this file manually in-game.
 ----------------------------------------------------------------------]]
+local _, ns = ...
 
 local function RunHistoryImportTests()
     if not Loothing or not Loothing.HistoryImport then

@@ -779,7 +779,7 @@ function AddItemFrameMixin:OnAddClick()
 
     local added = 0
     for _, entry in ipairs(self.itemQueue) do
-        -- FIX(Area4-4): Use SafeUnitName to avoid secret value tainting
+        -- Use SafeUnitName to avoid secret value tainting
         local item = Loothing.Session:AddItem(entry.link, Loolib.SecretUtil.SafeUnitName("player"), nil, true)
         if item then
             added = added + 1

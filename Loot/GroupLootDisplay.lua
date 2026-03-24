@@ -1,3 +1,7 @@
+--[[--------------------------------------------------------------------
+    Loothing - Group Loot Display & Logging
+    UI cleanup and debug logging for auto-rolls.
+----------------------------------------------------------------------]]
 local _, ns = ...
 local Loothing = ns.Addon
 
@@ -5,11 +9,6 @@ ns.GroupLootMixin = ns.GroupLootMixin or {}
 
 local GroupLootMixin = ns.GroupLootMixin
 local GroupLootRollNames = ns.GroupLootRollNames or {}
-
---[[--------------------------------------------------------------------
-    Loothing - Group Loot Display & Logging
-    UI cleanup and debug logging for auto-rolls.
-----------------------------------------------------------------------]]
 
 --- Hide the GroupLootFrame for a specific rollID.
 -- @param rollID number - The roll ID

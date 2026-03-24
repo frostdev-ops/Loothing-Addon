@@ -1,6 +1,22 @@
 --[[--------------------------------------------------------------------
     Loothing - Loot Council Addon for WoW 12.0+
     Session - Loot session management
+
+    Table of Contents:
+      SessionMixin ................. ~27
+      Session Lifecycle ............ ~311
+      State Management ............. ~482
+      Item Management .............. ~551
+      Voting Management ............ ~692
+      Vote Casting ................. ~1030
+      Award/Skip ................... ~1210
+      Event Handlers ............... ~1416
+      Encounter Scope .............. ~1432
+      OnEncounterEnd ............... ~1478
+      Remote Message Handlers ...... ~1659
+      Gear Info Management ......... ~1975
+      Player Results & Updates ..... ~2280
+      Sync Support ................. ~2440
 ----------------------------------------------------------------------]]
 
 local _, ns = ...
@@ -1014,6 +1030,10 @@ function SessionMixin:UpdateCandidateVoters(item, candidateName)
     return candidate
 end
 
+--[[--------------------------------------------------------------------
+    Vote Casting
+----------------------------------------------------------------------]]
+
 --- Cast a vote for a specific candidate on an item (per-candidate toggle)
 -- @param itemGUID string - Item GUID
 -- @param candidateName string - Candidate to add to voter's responses
@@ -1149,7 +1169,7 @@ function SessionMixin:SubmitVote(itemGUID, responses)
     end
 
     local voter = Utils.GetPlayerFullName()
-    -- FIX(Area4-4): Use SafeUnitClass to avoid secret value tainting
+    -- Use SafeUnitClass to avoid secret value tainting
     local _, class = Loolib.SecretUtil.SafeUnitClass("player")
 
     -- Only council members should vote (bypass in test mode)
@@ -2257,6 +2277,10 @@ function SessionMixin:HandlePlayerResponseAck(data)
 
     self:TriggerEvent("OnPlayerResponseAck", data.itemGUID, data.success, data.masterLooter, data.sessionID)
 end
+
+--[[--------------------------------------------------------------------
+    Player Results & Remote Updates
+----------------------------------------------------------------------]]
 
 --- Get the number of items a player has won in this session
 -- @param playerName string

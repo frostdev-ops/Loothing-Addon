@@ -31,7 +31,7 @@ function CouncilMixin:AddMember(name)
     self.members[name] = {
         name = name,
         addedTime = time(),
-        -- FIX(Area4-4): Use SafeUnitName to avoid secret value tainting
+        -- Use SafeUnitName to avoid secret value tainting
         addedBy = Loolib.SecretUtil.SafeUnitName("player") or "Unknown",
     }
 
@@ -247,7 +247,7 @@ function CouncilMixin:GetCurrentGroupMembers()
         end
 
         local playerName = Utils.GetPlayerFullName()
-        -- FIX(Area4-4): Use SafeUnitClass to avoid secret value tainting
+        -- Use SafeUnitClass to avoid secret value tainting
         local _, playerClass = Loolib.SecretUtil.SafeUnitClass("player")
         local playerRole = UnitGroupRolesAssigned("player")
 

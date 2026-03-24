@@ -384,7 +384,7 @@ function AutoPass:ShouldAutoPass(itemLink, playerClass, classesFlag)
 
     -- Default to player's class
     if not playerClass then
-        -- FIX(Area4-4): Use SafeUnitClass to avoid secret value tainting
+        -- Use SafeUnitClass to avoid secret value tainting
         local _, class = Loolib.SecretUtil.SafeUnitClass("player")
         playerClass = class
     end

@@ -101,7 +101,7 @@ function AnnouncerMixin:BuildReplacements(params)
     replacements.oldItem = params.oldItem or ""
 
     -- Master Looter
-    -- FIX(Area4-4): Use SafeUnitName to avoid secret value tainting
+    -- Use SafeUnitName to avoid secret value tainting
     replacements.ml = params.ml or Loolib.SecretUtil.SafeUnitName("player") or ""
     replacements.ml = Utils.GetShortName(replacements.ml) or replacements.ml
 
