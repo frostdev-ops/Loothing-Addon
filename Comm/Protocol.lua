@@ -81,19 +81,44 @@ function ProtocolMixin:Encode(command, data)
     local currentMsgID = msgSeq
 
     -- Step 1: Serialize (version + command + data + msgID → string)
-    local serialized = self.Serializer:Serialize(self.version, command, data, currentMsgID)
-    if not serialized then return nil, nil end
+    local ok, serialized = pcall(self.Serializer.Serialize, self.Serializer,
+        self.version, command, data, currentMsgID)
+    if not ok then
+        Loothing:Error("Protocol:Encode — Serialize failed for", command, ":", serialized)
+        return nil, nil
+    end
+    if not serialized then
+        Loothing:Error("Protocol:Encode — Serialize returned nil for", command)
+        return nil, nil
+    end
 
     -- Step 2: Compress
-    local compressed = self.Compressor:Compress(serialized, 3)
-    if not compressed then return nil, nil end
+    local cOk, compressed = pcall(self.Compressor.Compress, self.Compressor, serialized, 3)
+    if not cOk then
+        Loothing:Error("Protocol:Encode — Compress failed for", command, ":", compressed)
+        return nil, nil
+    end
+    if not compressed then
+        Loothing:Error("Protocol:Encode — Compress returned nil for", command)
+        return nil, nil
+    end
 
     -- Step 3: Compute Adler-32 checksum on the serialized payload and append
     local checksum      = self.Compressor:Adler32(serialized)
     local withChecksum  = compressed .. Pack32(checksum)
 
     -- Step 4: Encode for WoW addon channel (escapes null bytes, etc.)
-    return self.Compressor:EncodeForAddonChannel(withChecksum), currentMsgID
+    local eOk, encoded = pcall(self.Compressor.EncodeForAddonChannel, self.Compressor, withChecksum)
+    if not eOk then
+        Loothing:Error("Protocol:Encode — EncodeForAddonChannel failed for", command, ":", encoded)
+        return nil, nil
+    end
+    if not encoded then
+        Loothing:Error("Protocol:Encode — EncodeForAddonChannel returned nil for", command)
+        return nil, nil
+    end
+
+    return encoded, currentMsgID
 end
 
 --- Decode a received message

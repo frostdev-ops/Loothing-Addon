@@ -1724,6 +1724,10 @@ function SessionMixin:HandleRemoteSessionStart(data)
     self.startTime = time()
     self.masterLooter = data.masterLooter
 
+    -- Propagate ML identity globally so handler security checks pass for this ML
+    Loothing.masterLooter = data.masterLooter
+    Loothing.isMasterLooter = false  -- we're not the ML; the sender is
+
     self:SetState(Loothing.SessionState.ACTIVE)
 
     self:TriggerEvent("OnSessionStarted", self.sessionID, data.encounterID, data.encounterName)

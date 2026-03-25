@@ -27,6 +27,7 @@ local CommMixin = ns.CommMixin
 ----------------------------------------------------------------------]]
 
 --- Check if sender is the current master looter
+-- Checks Session ML first, then Settings ML, then the global Loothing.masterLooter.
 -- @param sender string
 -- @return boolean
 local function isMasterLooter(sender)
@@ -37,6 +38,10 @@ local function isMasterLooter(sender)
     end
     if not ml and Loothing.Settings then
         ml = Loothing.Settings:GetMasterLooter()
+    end
+    -- Fallback: check the global ML identity set by DetermineML() / /lt ml
+    if not ml then
+        ml = Loothing.masterLooter
     end
     if not ml then return false end
     return Utils.IsSamePlayer(ml, sender)
@@ -108,7 +113,7 @@ end
 ----------------------------------------------------------------------]]
 
 local SCHEMAS = {
-    ITEM_ADD        = { { "itemLink",  "string", true }, { "guid",      "string", true } },
+    ITEM_ADD        = { { "itemLink",  "string", true }, { "guid",      "string", true }, { "sessionID", "string", true } },
     VOTE_AWARD      = { { "itemGUID",  "string", true }, { "winner",    "string", true } },
     PLAYER_RESPONSE = { { "itemGUID",  "string", true }, { "response",  nil,      true } },
     VOTE_COMMIT     = { { "itemGUID",  "string", true }, { "responses", "table",  true } },
@@ -150,23 +155,21 @@ end
 
 function CommMixin:HandleSessionStart(data, sender)
     if not validateHandler("HandleSessionStart", data) then return end
-    -- Accept from: known ML, group leader/assistant, or any group member if ML is unknown
-    -- (the ML may not be the leader — e.g. designated via /lt ml)
+    -- SESSION_START is the authoritative ML declaration.  Accept from:
+    --   1. Known ML (Session or Settings)
+    --   2. Group leader or assistant
+    --   3. Any group member — covers explicit ML (/lt ml) who may not be leader.
+    -- Reject only non-group senders.
     local senderIsML = isMasterLooter(sender)
     local senderIsLeader = isGroupLeaderOrAssistant(sender)
-    local mlUnknown = not Loothing.masterLooter or Loothing.masterLooter == ""
-    if not senderIsML and not senderIsLeader then
-        if not mlUnknown or not isGroupMember(sender) then
-            Loothing:Debug("Rejected SESSION_START from non-ML/non-leader:", sender)
-            return
-        end
-        Loothing:Debug("Accepting SESSION_START from group member (ML unknown):", sender)
-    end
-    -- If we already have a known ML from local detection, validate sender matches
-    if not mlUnknown and not senderIsML and not senderIsLeader then
-        Loothing:Debug("Rejected SESSION_START from %s - local ML is %s", sender, Loothing.masterLooter)
+    local senderInGroup = isGroupMember(sender)
+
+    if not senderIsML and not senderIsLeader and not senderInGroup then
+        Loothing:Debug("Rejected SESSION_START from non-group sender:", sender)
         return
     end
+
+    -- Accept and propagate the sender as authoritative ML
     data.masterLooter = sender
     self:TriggerEvent("OnSessionStart", data)
 end

@@ -1466,6 +1466,56 @@ local function RegisterSlashCommands()
             end,
         },
         {
+            key = "diag",
+            aliases = { "diagnose" },
+            description = "Communication pipeline diagnostics",
+            usage = { "/lt diag" },
+            handler = function()
+                printLine("=== Loothing Comm Diagnostics ===")
+                local localName = Utils.GetPlayerFullName() or "<nil>"
+                printLine("Local player: " .. localName)
+                printLine("Addon prefix: " .. tostring(Loothing.ADDON_PREFIX))
+                printLine("Protocol version: " .. tostring(Loothing.PROTOCOL_VERSION))
+                printLine("---")
+                printLine("handleLoot: " .. tostring(Loothing.handleLoot))
+                printLine("isMasterLooter: " .. tostring(Loothing.isMasterLooter))
+                printLine("masterLooter (global): " .. tostring(Loothing.masterLooter))
+                local sessionML = Loothing.Session and Loothing.Session:GetMasterLooter() or "<nil>"
+                printLine("masterLooter (session): " .. tostring(sessionML))
+                local settingsML = Loothing.Settings and Loothing.Settings:GetMasterLooter() or "<nil>"
+                printLine("masterLooter (settings): " .. tostring(settingsML))
+                printLine("---")
+                local sessionState = Loothing.Session and Loothing.Session:GetState() or "<nil>"
+                printLine("Session state: " .. tostring(sessionState))
+                local sessionID = Loothing.Session and Loothing.Session:GetSessionID() or "<nil>"
+                printLine("Session ID: " .. tostring(sessionID))
+                printLine("---")
+                local Comm = Loolib.Comm
+                local queued = Comm.GetQueuedMessageCount and Comm:GetQueuedMessageCount() or "?"
+                printLine("Comm queue: " .. tostring(queued) .. " messages")
+                local pressure = Comm.GetQueuePressure and Comm:GetQueuePressure() or "?"
+                printLine("Queue pressure: " .. tostring(pressure))
+                local isRegistered = Comm.IsCommRegistered and Comm:IsCommRegistered(Loothing.ADDON_PREFIX) or "?"
+                printLine("Prefix registered: " .. tostring(isRegistered))
+                printLine("---")
+                local restricted = Loothing.Restrictions and Loothing.Restrictions:IsRestricted() or false
+                printLine("Encounter restricted: " .. tostring(restricted))
+                printLine("In group: " .. tostring(IsInGroup()))
+                printLine("In raid: " .. tostring(IsInRaid()))
+                -- Test encode/decode round-trip
+                local testOK = false
+                if ns.Protocol then
+                    local encoded = ns.Protocol:Encode("HEARTBEAT", { test = true })
+                    if encoded then
+                        local v, cmd = ns.Protocol:Decode(encoded)
+                        testOK = (v == Loothing.PROTOCOL_VERSION and cmd == "HEARTBEAT")
+                    end
+                end
+                printLine("Encode/decode round-trip: " .. (testOK and "OK" or "FAILED"))
+                printLine("=== End Diagnostics ===")
+            end,
+        },
+        {
             key = "taint",
             devOnly = true,
             description = "Run Loothing taint/global audit",

@@ -91,10 +91,14 @@ end
 local CRITICAL_COMMANDS = {
     [Loothing.MsgType.SESSION_START]       = true,
     [Loothing.MsgType.SESSION_END]         = true,
+    [Loothing.MsgType.ITEM_ADD]            = true,
+    [Loothing.MsgType.ITEM_REMOVE]         = true,
+    [Loothing.MsgType.VOTE_REQUEST]        = true,
     [Loothing.MsgType.VOTE_AWARD]          = true,
     [Loothing.MsgType.VOTE_RESULTS]        = true,
     [Loothing.MsgType.PLAYER_RESPONSE]     = true,
     [Loothing.MsgType.PLAYER_RESPONSE_ACK] = true,
+    [Loothing.MsgType.BATCH]              = true,
 }
 
 --- Command → handler method name dispatch table
@@ -164,7 +168,24 @@ end
 ---@param priority string|nil "ALERT", "NORMAL" (default), or "BULK"
 function CommMixin.Send(self, command, data, target, priority)
     local encoded = ns.Protocol:Encode(command, data)
-    if not encoded then return end
+    if not encoded then
+        Loothing:Error("Comm:Send — Encode returned nil for", command, "(message dropped)")
+        return
+    end
+
+    -- Self-send shortcut: if target is the local player, deliver locally instead of
+    -- going through the WoW addon message network. This avoids edge cases with
+    -- WHISPER-to-self delivery and addon restrictions.
+    if target then
+        local localName = Utils.GetPlayerFullName()
+        if localName and Utils.IsSamePlayer(target, localName) then
+            Loothing:Debug("Comm:Send — self-send shortcut for", command)
+            C_Timer.After(0, function()
+                self:OnMessage(encoded, "WHISPER", localName)
+            end)
+            return
+        end
+    end
 
     -- Test mode intercept
     if TestMode and TestMode.OnOutgoingComm then
@@ -614,19 +635,24 @@ end
 -- @param masterLooter string
 -- @param sessionID string|nil
 function CommMixin:SendPlayerResponse(itemGUID, response, note, roll, rollMin, rollMax, masterLooter, sessionID)
-    -- In test mode, short-circuit network and invoke locally.
+    local payload = {
+        itemGUID = itemGUID,
+        response = response,
+        note = note ~= "" and note or nil,
+        roll = roll,
+        rollMin = rollMin or 1,
+        rollMax = rollMax or 100,
+        playerName = Utils.GetPlayerFullName(),
+        sessionID = sessionID,
+    }
+
+    -- Self-loopback: when the ML is responding to their own session,
+    -- bypass the network entirely. WHISPER-to-self through the throttled
+    -- comm queue is unreliable (backpressure, self-delivery quirks).
     -- Deferred one frame so RollFrame:StartAckTimeout() runs before the ACK arrives.
-    if TestMode and TestMode:IsEnabled() then
-        local payload = {
-            itemGUID = itemGUID,
-            response = response,
-            note = note ~= "" and note or nil,
-            roll = roll,
-            rollMin = rollMin or 1,
-            rollMax = rollMax or 100,
-            playerName = Utils.GetPlayerFullName(),
-            sessionID = sessionID,
-        }
+    local isTestMode = TestMode and TestMode:IsEnabled()
+    local isSelfSend = masterLooter and Utils.IsSamePlayer(masterLooter, Utils.GetPlayerFullName())
+    if isTestMode or isSelfSend then
         C_Timer.After(0, function()
             if Loothing.Session then
                 Loothing.Session:HandlePlayerResponse(payload)
@@ -652,8 +678,11 @@ end
 -- @param target string
 -- @param sessionID string|nil
 function CommMixin:SendPlayerResponseAck(itemGUID, success, target, sessionID)
-    -- In test mode, short-circuit network and invoke locally
-    if TestMode and TestMode:IsEnabled() then
+    -- Self-loopback: when ML sends ACK to themselves, bypass network.
+    -- Also used in test mode.
+    local isTestMode = TestMode and TestMode:IsEnabled()
+    local isSelfSend = target and Utils.IsSamePlayer(target, Utils.GetPlayerFullName())
+    if isTestMode or isSelfSend then
         local payload = {
             itemGUID = itemGUID,
             success = success,
