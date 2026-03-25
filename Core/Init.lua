@@ -899,6 +899,17 @@ local function RegisterEvents()
         end, Loothing)
     end
 
+    -- Wire incoming history entries from group/guild broadcasts
+    if Loothing.History and Loothing.Comm then
+        Loothing.Comm:RegisterCallback("OnHistoryEntry", function(_, data)
+            -- Don't re-add our own entries (ML already added locally)
+            if data.sender and Utils.IsSamePlayer(data.sender, Utils.GetPlayerFullName()) then
+                return
+            end
+            Loothing.History:AddEntry(data)
+        end, Loothing)
+    end
+
     -- Wire Session award → TradeQueue (only for items the local player looted)
     if Loothing.Session and Loothing.TradeQueue then
         Loothing.Session:RegisterCallback("OnItemAwarded", function(_, item, winner)

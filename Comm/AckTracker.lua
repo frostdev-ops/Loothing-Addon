@@ -79,7 +79,7 @@ function AckTrackerMixin:BroadcastHeartbeat()
     if not digest then return end
 
     -- BULK priority — 30s interval means ~3.3 B/s against our 800 B/s budget
-    Loothing.Comm.Send(Loothing.Comm, Loothing.MsgType.HEARTBEAT, digest, nil, "BULK")
+    Loothing.Comm:Send(Loothing.MsgType.HEARTBEAT, digest, nil, "BULK")
     Loothing:Debug("AckTracker: heartbeat broadcast")
 end
 

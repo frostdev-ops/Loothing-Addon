@@ -57,6 +57,7 @@ local COMM_EVENTS = {
     "OnNonTradable",
     "OnHeartbeat",
     "OnAck",
+    "OnHistoryEntry",
 }
 
 --[[--------------------------------------------------------------------
@@ -136,6 +137,7 @@ local HANDLERS = {
     [Loothing.MsgType.BATCH]                   = "HandleBatch",
     [Loothing.MsgType.HEARTBEAT]               = "HandleHeartbeat",
     [Loothing.MsgType.ACK]                     = "HandleAck",
+    [Loothing.MsgType.HISTORY_ENTRY]           = "HandleHistoryEntry",
 }
 
 --- Initialize communication handler
@@ -450,19 +452,22 @@ end
 -- @param itemLink string
 -- @param guid string
 -- @param looter string
-function CommMixin:BroadcastItemAdd(itemLink, guid, looter)
+function CommMixin:BroadcastItemAdd(itemLink, guid, looter, sessionID)
     self:Send(Loothing.MsgType.ITEM_ADD, {
         itemLink = itemLink,
         guid = guid,
         looter = looter,
+        sessionID = sessionID,
     })
 end
 
 --- Broadcast item removed
 -- @param guid string
-function CommMixin:BroadcastItemRemove(guid)
+-- @param sessionID string
+function CommMixin:BroadcastItemRemove(guid, sessionID)
     self:Send(Loothing.MsgType.ITEM_REMOVE, {
         guid = guid,
+        sessionID = sessionID,
     })
 end
 

@@ -191,6 +191,10 @@ function SessionMixin:RegisterCommEvents()
         self:HandleRemoteItemAdd(data)
     end, self)
 
+    Loothing.Comm:RegisterCallback("OnItemRemove", function(_, data)
+        self:HandleRemoteItemRemove(data)
+    end, self)
+
     Loothing.Comm:RegisterCallback("OnVoteRequest", function(_, data)
         self:HandleRemoteVoteRequest(data)
     end, self)
@@ -630,7 +634,7 @@ function SessionMixin:AddItem(itemLink, looter, guid, force)
 
     -- Broadcast to raid if we're ML
     if self:IsMasterLooter() then
-        Loothing.Comm:BroadcastItemAdd(itemLink, item.guid, looter)
+        Loothing.Comm:BroadcastItemAdd(itemLink, item.guid, looter, self.sessionID)
     end
 
     self:TriggerEvent("OnItemAdded", item)
@@ -652,7 +656,7 @@ end
 --- Remove an item from the session
 -- @param guid string
 -- @return boolean
-function SessionMixin:RemoveItem(guid)
+function SessionMixin:RemoveItem(guid, skipBroadcast)
     local item = self:GetItemByGUID(guid)
     if not item then
         return false
@@ -660,6 +664,12 @@ function SessionMixin:RemoveItem(guid)
 
     self.items:Remove(item)
     self:TriggerEvent("OnItemRemoved", item)
+
+    -- Broadcast to raid if we're ML (unless this was triggered by a remote message)
+    if not skipBroadcast and self:IsMasterLooter() and Loothing.Comm then
+        Loothing.Comm:BroadcastItemRemove(guid, self.sessionID)
+    end
+
     return true
 end
 
@@ -1736,6 +1746,20 @@ function SessionMixin:HandleRemoteItemAdd(data)
 
     -- Use AddItem with forced flag to bypass checks and register callbacks properly
     self:AddItem(data.itemLink, data.looter, data.guid, true)
+end
+
+function SessionMixin:HandleRemoteItemRemove(data)
+    if data.masterLooter == Utils.GetPlayerFullName() then
+        return
+    end
+
+    if not self:IsCurrentSession(data.sessionID) then
+        Loothing:Debug("Ignoring item remove for mismatched session", data.sessionID)
+        return
+    end
+
+    -- skipBroadcast=true to prevent re-broadcasting
+    self:RemoveItem(data.guid, true)
 end
 
 function SessionMixin:HandleRemoteVoteRequest(data)

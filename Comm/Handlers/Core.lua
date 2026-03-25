@@ -275,6 +275,20 @@ function CommMixin:HandleVoteSkip(data, sender)
 end
 
 --[[--------------------------------------------------------------------
+    History Entry Handler
+----------------------------------------------------------------------]]
+
+function CommMixin:HandleHistoryEntry(data, sender)
+    if not validateHandler("HandleHistoryEntry", data) then return end
+    if not isMasterLooter(sender) and not isGroupLeaderOrAssistant(sender) then
+        Loothing:Debug("Rejected HISTORY_ENTRY from non-ML/leader:", sender)
+        return
+    end
+    data.sender = sender
+    self:TriggerEvent("OnHistoryEntry", data)
+end
+
+--[[--------------------------------------------------------------------
     Sync Handlers
 ----------------------------------------------------------------------]]
 
