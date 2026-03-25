@@ -777,6 +777,14 @@ function AddItemFrameMixin:OnAddClick()
         return
     end
 
+    -- Auto-start a session if one isn't active (items need a session context)
+    if Loothing.Session:GetState() == Loothing.SessionState.INACTIVE then
+        if not Loothing.handleLoot then
+            Loothing:StartHandleLoot()
+        end
+        Loothing.Session:StartSession(nil, "Manual Session")
+    end
+
     local added = 0
     for _, entry in ipairs(self.itemQueue) do
         -- Use SafeUnitName to avoid secret value tainting

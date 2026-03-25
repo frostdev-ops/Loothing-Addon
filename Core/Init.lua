@@ -1292,6 +1292,13 @@ local function RegisterSlashCommands()
                     printError(L["ERROR_NO_SESSION"])
                     return
                 end
+                -- Auto-start a session if one isn't active
+                if Loothing.Session:GetState() == Loothing.SessionState.INACTIVE then
+                    if not Loothing.handleLoot then
+                        Loothing:StartHandleLoot()
+                    end
+                    Loothing.Session:StartSession(nil, "Manual Session")
+                end
                 local input = args and args ~= "" and args or nil
                 if input then
                     -- Direct add: resolve and add without opening the frame
