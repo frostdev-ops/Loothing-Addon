@@ -8,7 +8,7 @@ local _, ns = ...
 local Loothing = ns.Addon
 
 -- Addon info
-Loothing.VERSION = "1.4.1"
+Loothing.VERSION = "1.4.2"
 Loothing.PROTOCOL_VERSION = 4
 Loothing.ADDON_PREFIX = "LOOTHING"
 

@@ -1241,8 +1241,8 @@ local function RegisterSlashCommands()
                     printLine("Already handling loot.")
                     return
                 end
-                if not UnitIsGroupLeader("player") then
-                    printError("Only the group/raid leader can activate loot handling.")
+                if not UnitIsGroupLeader("player") and not Loothing.isMasterLooter and not UnitIsGroupAssistant("player") then
+                    printError("Only the group/raid leader, assistant, or Master Looter can activate loot handling.")
                     return
                 end
                 Loothing.isMasterLooter = true
