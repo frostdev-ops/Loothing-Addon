@@ -150,13 +150,20 @@ end
 
 function CommMixin:HandleSessionStart(data, sender)
     if not validateHandler("HandleSessionStart", data) then return end
-    -- Validate sender is at least a raid leader/assistant
-    if not isGroupLeaderOrAssistant(sender) then
-        Loothing:Debug("Rejected SESSION_START from non-leader/assistant:", sender)
-        return
+    -- Accept from: known ML, group leader/assistant, or any group member if ML is unknown
+    -- (the ML may not be the leader — e.g. designated via /lt ml)
+    local senderIsML = isMasterLooter(sender)
+    local senderIsLeader = isGroupLeaderOrAssistant(sender)
+    local mlUnknown = not Loothing.masterLooter or Loothing.masterLooter == ""
+    if not senderIsML and not senderIsLeader then
+        if not mlUnknown or not isGroupMember(sender) then
+            Loothing:Debug("Rejected SESSION_START from non-ML/non-leader:", sender)
+            return
+        end
+        Loothing:Debug("Accepting SESSION_START from group member (ML unknown):", sender)
     end
     -- If we already have a known ML from local detection, validate sender matches
-    if Loothing.masterLooter and Loothing.masterLooter ~= "" and sender ~= Loothing.masterLooter then
+    if not mlUnknown and not senderIsML and not senderIsLeader then
         Loothing:Debug("Rejected SESSION_START from %s - local ML is %s", sender, Loothing.masterLooter)
         return
     end
@@ -433,9 +440,14 @@ end
 
 function CommMixin:HandleMLDBBroadcast(data, sender)
     if not validateHandler("HandleMLDBBroadcast", data, SCHEMAS.MLDB_BROADCAST) then return end
+    -- Accept from: known ML, leader/assistant (bootstraps ML), or group member when ML unknown
     if not isMasterLooter(sender) then
-        Loothing:Debug("Rejected MLDB_BROADCAST from non-ML:", sender)
-        return
+        local mlUnknown = not Loothing.masterLooter or Loothing.masterLooter == ""
+        if not mlUnknown or not isGroupMember(sender) then
+            Loothing:Debug("Rejected MLDB_BROADCAST from non-ML:", sender)
+            return
+        end
+        Loothing:Debug("Accepting MLDB from group member (ML unknown):", sender)
     end
     data.sender = sender
     self:TriggerEvent("OnMLDBBroadcast", data)

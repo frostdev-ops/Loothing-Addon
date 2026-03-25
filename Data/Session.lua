@@ -645,8 +645,10 @@ function SessionMixin:AddItem(itemLink, looter, guid, force)
             self.autoStartTimer:Cancel()
         end
         self.autoStartTimer = C_Timer.NewTimer(2, function()
-            self:StartVotingOnAllItems()
             self.autoStartTimer = nil
+            if self.state == Loothing.SessionState.ACTIVE then
+                self:StartVotingOnAllItems()
+            end
         end)
     end
 
@@ -660,6 +662,12 @@ function SessionMixin:RemoveItem(guid, skipBroadcast)
     local item = self:GetItemByGUID(guid)
     if not item then
         return false
+    end
+
+    -- Cancel vote timer if item is currently being voted on
+    if item.voteTimer then
+        item.voteTimer:Cancel()
+        item.voteTimer = nil
     end
 
     self.items:Remove(item)
@@ -1876,6 +1884,12 @@ function SessionMixin:HandleRemoteVoteCommit(data)
         data.responses = filtered
     end
 
+    -- Guard against missing voter identity
+    if not data.voter then
+        Loothing:Debug("Rejected vote commit with missing voter")
+        return
+    end
+
     -- Get voter's class from raid roster
     local roster = Utils.GetRaidRoster()
     local voterClass = "UNKNOWN"
@@ -1886,7 +1900,11 @@ function SessionMixin:HandleRemoteVoteCommit(data)
         end
     end
 
-    item:AddVote(data.voter, voterClass, data.responses)
+    -- AddVote returns false if item is no longer in VOTING state
+    if not item:AddVote(data.voter, voterClass, data.responses) then
+        Loothing:Debug("Vote not added (item no longer voting):", item.guid)
+        return
+    end
 
     -- Broadcast vote update to Council — batch all candidates into 1-2 messages
     if Loothing.Comm and item.candidateManager then
@@ -1915,6 +1933,12 @@ function SessionMixin:HandleRemoteVoteAward(data)
 
     local item = self:GetItemByGUID(data.itemGUID)
     if not item then
+        return
+    end
+
+    -- Guard against duplicate/late awards on already-completed items
+    if item:IsComplete() then
+        Loothing:Debug("Ignoring duplicate award for completed item:", data.itemGUID)
         return
     end
 
@@ -2483,6 +2507,12 @@ end
 --- Sync session from remote data
 -- @param data table
 function SessionMixin:SyncFromData(data)
+    -- Don't clobber an active session with stale sync data
+    if self.state ~= Loothing.SessionState.INACTIVE and self.sessionID ~= data.sessionID then
+        Loothing:Debug("Ignoring sync for different session while active")
+        return false
+    end
+
     self.sessionID = data.sessionID
     self.encounterID = data.encounterID
     self.encounterName = data.encounterName

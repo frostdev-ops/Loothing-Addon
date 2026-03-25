@@ -416,21 +416,16 @@ function MLDBMixin:OnMLDBBroadcast(data)
         return
     end
 
-    -- Verify sender is the ML (or a group leader if ML is unknown yet)
+    -- Verify sender is the ML (or accept to bootstrap ML identity)
     local currentML = self:GetML()
     if currentML then
         if not Utils.IsSamePlayer(sender, currentML) then
             Loothing:Debug("Ignoring MLDB from non-ML:", sender)
             return
         end
-    else
-        -- ML unknown locally — only accept from group leader/assistant so the
-        -- first MLDB can bootstrap explicitMasterLooter on fresh login/reconnect
-        if not Utils.IsPlayerLeaderOrAssistant(sender) then
-            Loothing:Debug("Ignoring MLDB from non-leader/assistant:", sender)
-            return
-        end
     end
+    -- If ML is unknown, the Core handler already validated the sender as a
+    -- group member. Accept the MLDB so it can bootstrap the ML identity.
 
     -- Decompress
     local settings = self:DecompressFromTransmit(compressed)
