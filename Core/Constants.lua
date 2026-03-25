@@ -8,7 +8,7 @@ local _, ns = ...
 local Loothing = ns.Addon
 
 -- Addon info
-Loothing.VERSION = "1.3.3"
+Loothing.VERSION = "1.4.1"
 Loothing.PROTOCOL_VERSION = 4
 Loothing.ADDON_PREFIX = "LOOTHING"
 
@@ -549,6 +549,7 @@ Loothing.DefaultSettings = {
             gear2 = true,
             itemsWon = true,
             councilVotes = true,
+            wishlist = true,
         },
         sortColumn = "response",
         sortAscending = true,

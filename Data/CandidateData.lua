@@ -39,6 +39,8 @@ function CandidateMixin:Init(playerName, playerClass)
     self.itemsWonInstance = 0
     self.itemsWonWeekly = 0
     self.councilVotes = 0
+    self.wishlistEntry = nil       -- Set by CandidateManager from Wishlist module
+    self.wishlistPriority = 99     -- Default: no wishlist = lowest sort priority
 end
 
 --- Set candidate's response

@@ -25,6 +25,7 @@ CouncilTableMixin.COLUMNS = {
     { id = "wonSession",   name = L["COLUMN_WON"],                  width = 32,  maxWidth = 40,  flex = 0, sortable = true,  settingsKey = "wonSession" },
     { id = "wonInstance",  name = L["COLUMN_INST"],                 width = 32,  maxWidth = 40,  flex = 0, sortable = true,  settingsKey = "wonInstance" },
     { id = "wonWeekly",    name = L["COLUMN_WK"],                   width = 32,  maxWidth = 40,  flex = 0, sortable = true,  settingsKey = "wonWeekly" },
+    { id = "wishlist",     name = "Wish",                           width = 40,  maxWidth = 55,  flex = 0, sortable = true,  settingsKey = "wishlist" },
     { id = "gear1",        name = L["COUNCIL_COLUMN_GEAR1"],        width = 28,  maxWidth = 28,  flex = 0, sortable = false, settingsKey = "gear1" },
     { id = "gear2",        name = L["COUNCIL_COLUMN_GEAR2"],        width = 28,  maxWidth = 28,  flex = 0, sortable = false, settingsKey = "gear2" },
     { id = "roll",         name = L["COUNCIL_COLUMN_ROLL"],         width = 40,  maxWidth = 55,  flex = 1, sortable = true,  settingsKey = "roll" },
@@ -45,12 +46,14 @@ CouncilTableMixin.COLUMN_SORT_MAP = {
     wonSession = "itemsWonThisSession",
     wonInstance = "itemsWonInstance",
     wonWeekly = "itemsWonWeekly",
+    wishlist = "wishlistPriority",
 }
 
 CouncilTableMixin.COLUMN_TOOLTIPS = {
     wonSession = L["COLUMN_TOOLTIP_WON_SESSION"],
     wonInstance = L["COLUMN_TOOLTIP_WON_INSTANCE"],
     wonWeekly = L["COLUMN_TOOLTIP_WON_WEEKLY"],
+    wishlist = L["COLUMN_TOOLTIP_WISHLIST"] or "Wishlist priority from loothing.xyz",
 }
 
 -- Role icon textures
@@ -521,6 +524,52 @@ CouncilTableMixin.CellUpdaters.wonWeekly = function(_, cell, candidate)
     else
         cell.text:SetTextColor(0.4, 0.4, 0.4)
     end
+end
+
+-- Wishlist priority (color-coded by need level)
+CouncilTableMixin.CellUpdaters.wishlist = function(_, cell, candidate)
+    local wishEntry = candidate.wishlistEntry
+    if not wishEntry then
+        cell.text:SetText("-")
+        cell.text:SetTextColor(0.4, 0.4, 0.4)
+        return
+    end
+    local colors = {
+        bis      = { 1.0, 0.5, 0.0 },   -- Orange
+        major    = { 0.0, 1.0, 0.0 },   -- Green
+        minor    = { 1.0, 1.0, 0.0 },   -- Yellow
+        optional = { 0.6, 0.6, 0.6 },   -- Gray
+        transmog = { 1.0, 0.0, 1.0 },   -- Magenta
+    }
+    local c = colors[wishEntry.needLevel] or { 1, 1, 1 }
+    cell.text:SetText(tostring(wishEntry.priority))
+    cell.text:SetTextColor(c[1], c[2], c[3])
+
+    -- Tooltip on hover
+    if not cell._wishlistHooked then
+        cell:SetScript("OnEnter", function(f)
+            local entry = f.candidate and f.candidate.wishlistEntry
+            if not entry then return end
+            GameTooltip:SetOwner(f, "ANCHOR_RIGHT")
+            GameTooltip:AddLine("Wishlist: Priority " .. entry.priority, 1, 1, 1)
+            GameTooltip:AddLine("Need: " .. (entry.needLevel or "unknown"), 0.8, 0.8, 0.8)
+            if entry.isBiS then
+                GameTooltip:AddLine("Best in Slot", 1, 0.5, 0)
+            end
+            if entry.isOffspec then
+                GameTooltip:AddLine("Off-spec", 1, 0.5, 0)
+            end
+            if entry.notes and entry.notes ~= "" then
+                GameTooltip:AddLine("Notes: " .. entry.notes, 0.8, 0.8, 0.8, true)
+            end
+            GameTooltip:Show()
+        end)
+        cell:SetScript("OnLeave", function()
+            GameTooltip:Hide()
+        end)
+        cell._wishlistHooked = true
+    end
+    cell.candidate = candidate
 end
 
 -- Gear slot 1 icon

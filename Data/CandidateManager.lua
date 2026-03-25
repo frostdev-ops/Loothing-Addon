@@ -229,6 +229,27 @@ function CandidateManagerMixin:RemoveVoteFromCandidate(playerName)
 end
 
 --[[--------------------------------------------------------------------
+    Wishlist Enrichment
+----------------------------------------------------------------------]]
+
+--- Attach wishlist data from the desktop app to all current candidates
+-- @param itemID number - Item ID to look up wishlists for
+function CandidateManagerMixin:EnrichWithWishlistData(itemID)
+    if not Loothing.Wishlist or not Loothing.Wishlist:HasData() or not itemID then return end
+
+    for _, candidate in pairs(self.candidates) do
+        local entry = Loothing.Wishlist:GetPlayerEntryForItem(itemID, candidate.playerName)
+        if entry then
+            candidate.wishlistEntry = entry
+            candidate.wishlistPriority = entry.priority
+        else
+            candidate.wishlistEntry = nil
+            candidate.wishlistPriority = 99
+        end
+    end
+end
+
+--[[--------------------------------------------------------------------
     Filtering and Sorting
 ----------------------------------------------------------------------]]
 

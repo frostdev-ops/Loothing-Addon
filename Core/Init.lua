@@ -212,6 +212,12 @@ local function InitializeModules()
         Loothing.HistoryImport:Init()
     end
 
+    -- Initialize wishlist data (desktop exchange)
+    if ns.WishlistMixin then
+        Loothing.Wishlist = CreateFromMixins(ns.WishlistMixin)
+        Loothing.Wishlist:Init()
+    end
+
     -- Initialize player cache (GUID-based player data)
     if ns.CreatePlayerCache then
         Loothing.PlayerCache = ns.CreatePlayerCache()
@@ -1763,6 +1769,9 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             Loothing.ErrorHandler:SaveToDatabase()
         end
 
+        -- Write desktop exchange export metadata
+        Loothing:WriteDesktopExport()
+
         -- Save any pending data
         if Loothing.Settings then
             Loothing.Settings:Save()
@@ -1924,6 +1933,27 @@ function Addon:CacheStateForReconnect()
     -- Store in global scope (persists across profiles)
     self.Settings:SetGlobalValue("reconnectCache", cache)
     self:Debug("Cached state for reconnect (handleLoot:", tostring(self.handleLoot), ")")
+end
+
+--- Write desktop exchange export metadata to SavedVariables for the Tauri companion app.
+--- Called at PLAYER_LOGOUT so the desktop app can identify which character last logged out.
+function Addon:WriteDesktopExport()
+    if not self.Settings then return end
+    local name = UnitName("player")
+    local realm = GetRealmName()
+    local fullName = name and realm and (name .. "-" .. realm)
+    local _, class = UnitClass("player")
+    local guid = UnitGUID("player")
+
+    local export = {
+        version = 2,
+        exportedAt = time(),
+        characterName = fullName,
+        characterGUID = guid,
+        characterClass = class,
+        addonVersion = self.VERSION,
+    }
+    self.Settings:SetGlobalValue("desktopExchange.export", export)
 end
 
 --- Restore state from cache after UI reload

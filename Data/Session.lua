@@ -742,6 +742,11 @@ function SessionMixin:StartVoting(guid, timeout, skipBroadcast)
         return false
     end
 
+    -- Enrich candidates with wishlist data from desktop exchange
+    if item.candidateManager and item.itemID then
+        item.candidateManager:EnrichWithWishlistData(item.itemID)
+    end
+
     -- Broadcast vote request for this item (skipped when batching via StartVotingOnAllItems)
     if not skipBroadcast then
         Loothing.Comm:BroadcastVoteRequest(guid, timeout, self.sessionID)

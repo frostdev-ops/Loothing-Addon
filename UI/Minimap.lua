@@ -97,7 +97,7 @@ end
 
 --- Create the minimap button frame
 function MinimapButtonMixin:CreateButton()
-    local button = CreateFrame("Button", nil, Minimap)
+    local button = CreateFrame("Button", "LoothingMinimapButton", Minimap)
     button:SetSize(BUTTON_SIZE, BUTTON_SIZE)
     button:SetFrameStrata("MEDIUM")
     button:SetFrameLevel(8)
