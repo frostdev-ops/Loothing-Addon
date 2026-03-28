@@ -1343,8 +1343,22 @@ end
 function SessionPanelMixin:OnRevote(item)
     if not Loothing.Session then return end
 
-    Loothing.Session:RevoteItem(item.guid)
+    -- Completed items (awarded/skipped) require ML confirmation before revoting
+    if item:IsComplete() then
+        local status = item:GetState() == Loothing.ItemState.AWARDED and "awarded" or "skipped"
+        local itemName = item.itemLink or item.name or "item"
+        Popups:Confirm(
+            L["RE_VOTE"],
+            string.format(L["POPUP_CONFIRM_REVOTE_COMPLETED_FMT"], status, itemName),
+            function()
+                Loothing.Session:RevoteItem(item.guid, true)
+                self:RefreshItems()
+            end
+        )
+        return
+    end
 
+    Loothing.Session:RevoteItem(item.guid)
     self:RefreshItems()
 end
 

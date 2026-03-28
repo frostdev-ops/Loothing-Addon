@@ -84,15 +84,31 @@ function RollFrameMixin:RegisterSessionEvents()
     end, self)
 
     Loothing.Session:RegisterCallback("OnSessionEnded", function()
-        self.items = {}
-        self.itemRolls = {}
-        self.itemResponses = {}
+        -- ResponseTracker clears its own state via its own OnSessionEnded listener.
+        -- We only need to close the frame display.
         self:Close(false)
     end, self)
 
     Loothing.Session:RegisterCallback("OnPlayerResponseAck", function(_, itemGUID, success, _, sessionID)
         self:OnPlayerResponseAck(itemGUID, success, sessionID)
     end, self)
+
+    -- Response recovery: ResponseTracker handles resend logic directly.
+    -- RollFrame only handles the "show frame" case when we haven't responded.
+    if Loothing.Comm then
+        Loothing.Comm:RegisterCallback("OnResponsePoll", function(_, data)
+            self:OnResponsePoll(data)
+        end, self)
+    end
+
+    -- Combat state: lock/unlock submit button during combat
+    if Loothing.CommState then
+        Loothing.CommState:RegisterCallback("OnStateChanged", function(_, newState)
+            local inCombat = (newState == Loothing.CommState.STATE_COMBAT
+                           or newState == Loothing.CommState.STATE_RESTRICTED)
+            self:SetCombatLocked(inCombat)
+        end, self)
+    end
 end
 
 function RollFrameMixin:RegisterRollCapture()
@@ -120,6 +136,41 @@ function RollFrameMixin:UnregisterSessionEvents()
     Loothing.Session:UnregisterCallback("OnVotingEnded", self)
     Loothing.Session:UnregisterCallback("OnSessionEnded", self)
     Loothing.Session:UnregisterCallback("OnPlayerResponseAck", self)
+    if Loothing.Comm then
+        Loothing.Comm:UnregisterCallback("OnResponsePoll", self)
+    end
+    if Loothing.CommState then
+        Loothing.CommState:UnregisterCallback("OnStateChanged", self)
+    end
+end
+
+--- Handle RESPONSE_POLL from ML: resend our response if we're in the missing list
+-- @param data table - { itemGUID, sessionID, missing = { "Player1", ... } }
+--- Handle RESPONSE_POLL from ML (RollFrame side).
+-- ResponseTracker handles the actual resend logic. RollFrame only ensures
+-- the frame is visible if the player hasn't responded yet.
+-- @param data table - { itemGUID, sessionID, missing = { "Player1", ... } }
+function RollFrameMixin:OnResponsePoll(data)
+    if not data or not data.itemGUID or not data.missing then return end
+
+    local playerName = Utils.GetPlayerFullName()
+    local isInMissing = false
+    for _, name in ipairs(data.missing) do
+        if Utils.IsSamePlayer(name, playerName) then
+            isInMissing = true
+            break
+        end
+    end
+    if not isInMissing then return end
+
+    -- If we haven't interacted with this item at all, make sure the frame is visible.
+    -- HasLocalResponse covers submitted, pending, AND queued (player clicked a button).
+    local tracker = Loothing.ResponseTracker
+    if tracker and not tracker:HasLocalResponse(data.itemGUID) then
+        if self.frame and not self.frame:IsShown() then
+            tracker:CheckAndReshowFrame()
+        end
+    end
 end
 
 --- Send an AUTOPASS response for an item and remove it from display

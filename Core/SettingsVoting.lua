@@ -236,6 +236,11 @@ function SettingsMixin:GetMasterLooter()
     return nil
 end
 
+--- Check if local player is ML based on Settings-level resolution only
+-- (explicitMasterLooter → raid leader). Does NOT check Session.masterLooter.
+-- For full canonical ML resolution, use Loothing:IsCanonicalML() instead.
+-- Kept for backward compat and for permission checks in /lt ml commands
+-- where Settings-level authority is the correct scope.
 function SettingsMixin:IsMasterLooter()
     local ml = self:GetMasterLooter()
     if not ml then

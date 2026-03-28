@@ -23,6 +23,15 @@ local function BroadcastMLDBIfNeeded()
     end
 end
 
+--- Returns true when a non-ML player should be locked out of session settings.
+-- Active session + not the ML = settings are controlled by the ML's MLDB broadcast.
+local function IsSessionLocked()
+    if not Loothing.Session or not Loothing.MLDB then
+        return false
+    end
+    return Loothing.Session:IsActive() and not Loothing.MLDB:IsML()
+end
+
 local function GetSessionSettingsOptions()
     local opts = {
         type = "group",
@@ -33,7 +42,14 @@ local function GetSessionSettingsOptions()
         args = {
             sessionSettingsDesc = {
                 type = "description",
-                name = "|cffffcc00" .. L["CONFIG_SESSION_BROADCAST_NOTE"] .. "|r",
+                name = function()
+                    local base = "|cffffcc00" .. L["CONFIG_SESSION_BROADCAST_NOTE"] .. "|r"
+                    if IsSessionLocked() then
+                        local ml = Loothing.MLDB:GetML() or "Master Looter"
+                        return base .. "\n\n|cffff4444" .. string.format(L["SESSION_SETTINGS_LOCKED"] or "Settings are locked while a session is active. The Master Looter (%s) controls these settings.", ml) .. "|r"
+                    end
+                    return base
+                end,
                 order = 0,
                 fontSize = "medium",
                 width = "full",
@@ -46,6 +62,7 @@ local function GetSessionSettingsOptions()
                 name = L["VOTING"],
                 order = 1,
                 columns = 3,
+                disabled = IsSessionLocked,
                 args = {
                     votingMode = {
                         type = "select",
@@ -317,6 +334,7 @@ local function GetSessionSettingsOptions()
                 type = "group",
                 name = L["CONFIG_BUTTON_SETS"],
                 order = 2,
+                disabled = IsSessionLocked,
                 args = {
                     desc = {
                         type = "description",
@@ -344,6 +362,7 @@ local function GetSessionSettingsOptions()
                 name = L["WINNER_DETERMINATION"],
                 desc = L["WINNER_DETERMINATION_DESC"],
                 order = 3,
+                disabled = IsSessionLocked,
                 args = {
                     mode = {
                         type = "select",
@@ -407,6 +426,7 @@ local function GetSessionSettingsOptions()
                 type = "group",
                 name = L["COUNCIL"],
                 order = 4,
+                disabled = IsSessionLocked,
                 args = {
                     autoIncludeOfficers = {
                         type = "toggle",
@@ -564,6 +584,7 @@ local function GetSessionSettingsOptions()
                 type = "group",
                 name = L["CONFIG_AWARD_REASONS"],
                 order = 5,
+                disabled = IsSessionLocked,
                 args = {
                     desc = {
                         type = "description",
@@ -590,6 +611,7 @@ local function GetSessionSettingsOptions()
                 type = "group",
                 name = L["OBSERVER_PERMISSIONS"],
                 order = 6,
+                disabled = IsSessionLocked,
                 args = {
                     desc = {
                         type = "description",

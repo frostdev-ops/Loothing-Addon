@@ -235,6 +235,10 @@ function SessionMixin:RegisterCommEvents()
         self:HandlePlayerResponseAck(data)
     end, self)
 
+    Loothing.Comm:RegisterCallback("OnClientReady", function(_, data)
+        self:HandleClientReady(data)
+    end, self)
+
     Loothing.Comm:RegisterCallback("OnCandidateUpdate", function(_, data)
         self:HandleRemoteCandidateUpdate(data)
     end, self)
@@ -445,6 +449,10 @@ function SessionMixin:EndSession()
             item.voteTimer:Cancel()
             item.voteTimer = nil
         end
+        if item.responsePollTimer then
+            item.responsePollTimer:Cancel()
+            item.responsePollTimer = nil
+        end
     end
 
     -- Clear session data
@@ -455,6 +463,14 @@ function SessionMixin:EndSession()
     self.masterLooter = nil
     self.currentVotingItem = nil
     self.items:Flush()
+
+    -- Clear global ML identity so stale references don't poison new sessions.
+    -- Guard with handleLoot: the ML itself keeps its identity when ending a
+    -- session it intends to restart (e.g., between encounters).
+    if Loothing.masterLooter and not Loothing.handleLoot then
+        Loothing.masterLooter = nil
+        Loothing.isMasterLooter = false
+    end
 
     self:SetState(Loothing.SessionState.INACTIVE)
 
@@ -470,7 +486,7 @@ function SessionMixin:EndSession()
 
     -- Broadcast to raid (only ML should broadcast end)
     if wasML then
-        Loothing.Comm:BroadcastSessionEnd()
+        Loothing.Comm:BroadcastSessionEnd(sessionID)
     end
 
     self:TriggerEvent("OnSessionEnded", sessionID)
@@ -553,13 +569,15 @@ function SessionMixin:GetMasterLooter()
     return self.masterLooter
 end
 
---- Check if local player is the master looter
+--- Check if local player is the master looter.
+-- Checks session ML first; falls back to canonical resolution for transient states
+-- where session ML hasn't been set yet (e.g. between MLDB apply and SESSION_START).
 -- @return boolean
 function SessionMixin:IsMasterLooter()
     if self.masterLooter then
         return Utils.IsSamePlayer(self.masterLooter, Utils.GetPlayerFullName())
     end
-    return Loothing.handleLoot == true
+    return Loothing:IsCanonicalML()
 end
 
 --[[--------------------------------------------------------------------
@@ -669,6 +687,10 @@ function SessionMixin:RemoveItem(guid, skipBroadcast)
         item.voteTimer:Cancel()
         item.voteTimer = nil
     end
+    if item.responsePollTimer then
+        item.responsePollTimer:Cancel()
+        item.responsePollTimer = nil
+    end
 
     self.items:Remove(item)
     self:TriggerEvent("OnItemRemoved", item)
@@ -715,6 +737,32 @@ end
 -- @return number
 function SessionMixin:GetItemCount()
     return self.items:GetSize()
+end
+
+--- Check if all items in the session are complete (awarded or skipped).
+-- @return boolean
+function SessionMixin:AreAllItemsComplete()
+    if self.items:GetSize() == 0 then return false end
+    for _, item in self.items:Enumerate() do
+        if not item:IsComplete() then
+            return false
+        end
+    end
+    return true
+end
+
+--- Auto-end the session if all items have been awarded or skipped.
+-- Called after AwardItem/SkipItem. Only the ML triggers this.
+function SessionMixin:CheckAutoEndSession()
+    if not self:IsMasterLooter() then return end
+    if self.state ~= Loothing.SessionState.ACTIVE
+        and self.state ~= Loothing.SessionState.CLOSED then
+        return
+    end
+    if not self:AreAllItemsComplete() then return end
+
+    Loothing:Debug("All items complete — auto-ending session")
+    self:EndSession()
 end
 
 --[[--------------------------------------------------------------------
@@ -778,6 +826,15 @@ function SessionMixin:StartVoting(guid, timeout, skipBroadcast)
         end
     end
 
+    -- Track expected responders for response progress display
+    item.expectedResponders = {}
+    local roster = Utils.GetRaidRoster()
+    for _, member in ipairs(roster) do
+        item.expectedResponders[member.name] = true
+    end
+    item.expectedResponderCount = #roster
+    item.responseCount = 0
+
     -- Start timeout timer per-item (timeout == 0 means no timeout)
     if item.voteTimer then
         item.voteTimer:Cancel()
@@ -791,7 +848,100 @@ function SessionMixin:StartVoting(guid, timeout, skipBroadcast)
 
     self:TriggerEvent("OnVotingStarted", item, timeout)
 
+    -- Schedule a poll for missing responses after RESPONSE_POLL_DELAY seconds.
+    -- Cancelled if item leaves voting state (award, skip, cancel).
+    local pollDelay = Loothing.Timing.RESPONSE_POLL_DELAY or 15
+    if not item.responsePollTimer then
+        item.responsePollTimer = C_Timer.NewTimer(pollDelay, function()
+            item.responsePollTimer = nil
+            self:PollMissingResponses(guid)
+        end)
+    end
+
     return true
+end
+
+--- Poll raid for missing responses on a voting item (ML-only).
+-- Builds a compact list of players who haven't responded and broadcasts it.
+-- @param itemGUID string
+function SessionMixin:PollMissingResponses(itemGUID)
+    if not self:IsMasterLooter() then return end
+
+    local item = self:GetItemByGUID(itemGUID)
+    if not item or not item:IsVoting() then return end
+
+    -- Build set of players who have responded
+    local responded = {}
+    local cm = item:GetCandidateManager()
+    if cm then
+        for _, candidate in ipairs(cm:GetAllCandidates()) do
+            if candidate.response then
+                responded[candidate.playerName] = true
+            end
+        end
+    end
+
+    -- Build missing list from current raid roster
+    local missing = {}
+    local roster = ns.Utils.GetRaidRoster()
+    for _, member in ipairs(roster) do
+        if not responded[member.name] then
+            missing[#missing + 1] = member.name
+        end
+    end
+
+    if #missing == 0 then return end
+
+    Loothing:Debug("Session: polling", #missing, "missing responses for", itemGUID)
+    if Loothing.Comm then
+        Loothing.Comm:Send(Loothing.MsgType.RESPONSE_POLL, {
+            itemGUID = itemGUID,
+            sessionID = self.sessionID,
+            missing = missing,
+        }, nil, "NORMAL")
+    end
+end
+
+--- Handle CLIENT_READY from a player who just left combat.
+-- Checks if they're missing responses for any voting items and sends targeted polls.
+-- @param data table - { sender, sessionID, responded = { "guid1", "guid2" } }
+function SessionMixin:HandleClientReady(data)
+    if not self:IsMasterLooter() then return end
+    if not data or not data.sender then return end
+    if not self:IsCurrentSession(data.sessionID) then return end
+
+    local sender = data.sender
+    local respondedSet = {}
+    if data.responded then
+        for _, guid in ipairs(data.responded) do
+            respondedSet[guid] = true
+        end
+    end
+
+    -- Check each voting item for missing response from this player
+    if not self.items then return end
+    for _, item in self.items:Enumerate() do
+        if item:IsVoting() then
+            local cm = item:GetCandidateManager()
+            local hasResponse = false
+            if cm then
+                local candidate = cm:GetCandidate(sender)
+                hasResponse = candidate and candidate.response ~= nil
+            end
+
+            if not hasResponse and not respondedSet[item.guid] then
+                -- Player hasn't responded to this item — send targeted poll
+                Loothing:Debug("Session: CLIENT_READY from", sender, "- polling for", item.guid)
+                if Loothing.Comm then
+                    Loothing.Comm:Send(Loothing.MsgType.RESPONSE_POLL, {
+                        itemGUID = item.guid,
+                        sessionID = self.sessionID,
+                        missing = { sender },
+                    }, sender, "NORMAL")
+                end
+            end
+        end
+    end
 end
 
 --- Start voting on all pending items at once
@@ -881,6 +1031,10 @@ function SessionMixin:CancelVoting(guid)
             item.voteTimer:Cancel()
             item.voteTimer = nil
         end
+        if item.responsePollTimer then
+            item.responsePollTimer:Cancel()
+            item.responsePollTimer = nil
+        end
 
         item:SetState(Loothing.ItemState.PENDING)
         if self:IsMasterLooter() and Loothing.Comm then
@@ -903,6 +1057,10 @@ function SessionMixin:CancelVoting(guid)
                 item.voteTimer:Cancel()
                 item.voteTimer = nil
             end
+            if item.responsePollTimer then
+                item.responsePollTimer:Cancel()
+                item.responsePollTimer = nil
+            end
             item:SetState(Loothing.ItemState.PENDING)
 
             if self:IsMasterLooter() and Loothing.Comm then
@@ -923,10 +1081,14 @@ function SessionMixin:EndVotingForItem(guid)
         return nil
     end
 
-    -- Clear item's timer
+    -- Clear item timers
     if item.voteTimer then
         item.voteTimer:Cancel()
         item.voteTimer = nil
+    end
+    if item.responsePollTimer then
+        item.responsePollTimer:Cancel()
+        item.responsePollTimer = nil
     end
 
     item:EndVoting()
@@ -1388,6 +1550,9 @@ function SessionMixin:AwardItem(guid, winner, response, awardReasonId, awardReas
         })
     end
 
+    -- Auto-end session when all items are awarded/skipped
+    self:CheckAutoEndSession()
+
     return true
 end
 
@@ -1415,13 +1580,18 @@ function SessionMixin:SkipItem(guid)
     Loothing.Comm:BroadcastVoteSkip(guid, self.sessionID)
 
     self:TriggerEvent("OnItemSkipped", item)
+
+    -- Auto-end session when all items are awarded/skipped
+    self:CheckAutoEndSession()
+
     return true
 end
 
 --- Revote on a previously voted item (resets votes and restarts voting)
 -- @param guid string - Item GUID
+-- @param force boolean? - If true, allow revoting completed (awarded/skipped) items
 -- @return boolean
-function SessionMixin:RevoteItem(guid)
+function SessionMixin:RevoteItem(guid, force)
     if not self:IsMasterLooter() then
         Loothing:Debug("Not master looter, cannot revote")
         return false
@@ -1431,6 +1601,20 @@ function SessionMixin:RevoteItem(guid)
     if not item then
         Loothing:Debug("Item not found for revote")
         return false
+    end
+
+    -- Completed items require explicit force (UI shows confirmation popup)
+    if item:IsComplete() and not force then
+        Loothing:Debug("Revote on completed item requires force:", guid)
+        return false
+    end
+
+    -- Clear winner/skip state when forcing revote on a completed item
+    if item:IsComplete() then
+        item.winner = nil
+        item.winnerResponse = nil
+        item.awardedTime = nil
+        item.awarded = false
     end
 
     -- Flush votes and reset to pending
@@ -1677,13 +1861,35 @@ function SessionMixin:OnRosterUpdate()
     end
 
     if not mlFound then
-        Loothing:Debug("ML left the group:", self.masterLooter)
+        local departedML = self.masterLooter
+        Loothing:Debug("ML left the group:", departedML)
+        -- Clear explicit ML if it pointed to the departed ML
+        if Loothing.explicitMasterLooter
+                and Utils.IsSamePlayer(departedML, Loothing.explicitMasterLooter) then
+            Loothing.explicitMasterLooter = nil
+        end
         -- Clear global ML reference
-        if Utils.IsSamePlayer(self.masterLooter, Loothing.masterLooter or "") then
+        if Utils.IsSamePlayer(departedML, Loothing.masterLooter or "") then
             Loothing.masterLooter = nil
         end
         -- End the orphaned session on this client
         self:EndSession()
+        -- Notify the user that ML left
+        local L = Loothing.Locale
+        if L and L["ML_LEFT_GROUP"] then
+            Loothing:Print(string.format(L["ML_LEFT_GROUP"], departedML))
+        end
+
+        -- Trigger ML re-detection so a new leader can take over.
+        -- This re-runs the normal ML detection flow, which will identify the
+        -- new raid leader and prompt them based on their usageMode setting.
+        if Loothing.ScheduleMLCheck then
+            C_Timer.After(2, function()
+                if IsInGroup() then
+                    Loothing.ScheduleMLCheck()
+                end
+            end)
+        end
     end
 end
 
@@ -1697,10 +1903,18 @@ function SessionMixin:HandleRemoteSessionStart(data)
         return
     end
 
-    -- Ignore if we already have an active session (prevents clobbering)
+    -- If we already have an active session, decide whether to accept or reject.
+    -- Same session duplicate → ignore.  Different session → force-end the old
+    -- one (covers missed SESSION_END, ML change, rapid session restart).
     if self.state ~= Loothing.SessionState.INACTIVE then
-        Loothing:Debug("Received remote session start while active, ignoring")
-        return
+        if data.sessionID and data.sessionID == self.sessionID then
+            Loothing:Debug("Received duplicate SESSION_START for current session, ignoring")
+            return
+        end
+        Loothing:Debug("Force-ending stale session for new SESSION_START from", data.masterLooter,
+            "(old:", tostring(self.sessionID), "new:", tostring(data.sessionID), ")")
+        self:EndSession()
+        -- Fall through to process the new session start
     end
 
     -- Clean up any local pending session state (another ML started first)
@@ -1740,6 +1954,12 @@ end
 
 function SessionMixin:HandleRemoteSessionEnd(data)
     if data.masterLooter == Utils.GetPlayerFullName() then
+        return
+    end
+
+    -- Validate sessionID when present (older protocol may omit it)
+    if data.sessionID and not self:IsCurrentSession(data.sessionID) then
+        Loothing:Debug("Ignoring session end for mismatched session", data.sessionID)
         return
     end
 
@@ -1946,6 +2166,15 @@ function SessionMixin:HandleRemoteVoteAward(data)
         return
     end
 
+    if item.voteTimer then
+        item.voteTimer:Cancel()
+        item.voteTimer = nil
+    end
+    if item.responsePollTimer then
+        item.responsePollTimer:Cancel()
+        item.responsePollTimer = nil
+    end
+
     item:SetWinner(data.winner)
     self:TriggerEvent("OnItemAwarded", item, data.winner)
 end
@@ -1962,6 +2191,15 @@ function SessionMixin:HandleRemoteVoteSkip(data)
     local item = self:GetItemByGUID(data.itemGUID)
     if not item then
         return
+    end
+
+    if item.voteTimer then
+        item.voteTimer:Cancel()
+        item.voteTimer = nil
+    end
+    if item.responsePollTimer then
+        item.responsePollTimer:Cancel()
+        item.responsePollTimer = nil
     end
 
     item:Skip()
@@ -1985,6 +2223,10 @@ function SessionMixin:HandleRemoteVoteCancel(data)
                     item.voteTimer:Cancel()
                     item.voteTimer = nil
                 end
+                if item.responsePollTimer then
+                    item.responsePollTimer:Cancel()
+                    item.responsePollTimer = nil
+                end
                 item:SetState(Loothing.ItemState.PENDING)
                 self:TriggerEvent("OnVotingEnded", item)
             end
@@ -2000,6 +2242,10 @@ function SessionMixin:HandleRemoteVoteCancel(data)
     if item.voteTimer then
         item.voteTimer:Cancel()
         item.voteTimer = nil
+    end
+    if item.responsePollTimer then
+        item.responsePollTimer:Cancel()
+        item.responsePollTimer = nil
     end
 
     item:SetState(Loothing.ItemState.PENDING)
@@ -2020,10 +2266,14 @@ function SessionMixin:HandleRemoteVoteResults(data)
         return
     end
 
-    -- Clear timer and set state to tallied
+    -- Clear timers and set state to tallied
     if item.voteTimer then
         item.voteTimer:Cancel()
         item.voteTimer = nil
+    end
+    if item.responsePollTimer then
+        item.responsePollTimer:Cancel()
+        item.responsePollTimer = nil
     end
 
     if item:IsVoting() then
@@ -2296,6 +2546,9 @@ function SessionMixin:HandlePlayerResponse(data)
     -- Request the responder's gear so council can see upgrade context
     self:RequestPlayerGearInfo(itemGUID, sender)
 
+    -- Track response progress
+    item.responseCount = (item.responseCount or 0) + 1
+
     -- Send acknowledgment
     sendAck(true)
 
@@ -2511,10 +2764,12 @@ end
 --- Sync session from remote data
 -- @param data table
 function SessionMixin:SyncFromData(data)
-    -- Don't clobber an active session with stale sync data
+    -- If we have an active session with a different ID, the ML has moved on.
+    -- Force-end the stale session so the sync can restore the current one.
     if self.state ~= Loothing.SessionState.INACTIVE and self.sessionID ~= data.sessionID then
-        Loothing:Debug("Ignoring sync for different session while active")
-        return false
+        Loothing:Debug("Force-ending stale session for sync data (old:", tostring(self.sessionID),
+            "new:", tostring(data.sessionID), ")")
+        self:EndSession()
     end
 
     self.sessionID = data.sessionID
@@ -2523,6 +2778,11 @@ function SessionMixin:SyncFromData(data)
     self.startTime = time()
     self.masterLooter = data.masterLooter
     self:SetState(data.state)
+
+    -- Propagate ML identity globally so handler security checks, combat-end
+    -- sync, and CheckNeedSync all resolve the correct ML for late joiners.
+    Loothing.masterLooter = data.masterLooter
+    Loothing.isMasterLooter = false
 
     -- Sync items if provided
     if data.items then
@@ -2570,6 +2830,18 @@ function SessionMixin:SyncFromData(data)
     end
 
     self:TriggerEvent("OnSessionStarted", self.sessionID, data.encounterID, data.encounterName)
+
+    -- Fire OnVotingStarted for items already in VOTING state so the RollFrame
+    -- displays them. Without this, players who missed the original VOTE_REQUEST
+    -- (e.g., were in combat) would see an active session but no items to vote on.
+    if self.items then
+        local votingTimeout = Loothing.Timing and Loothing.Timing.DEFAULT_VOTE_TIMEOUT or 30
+        for _, item in self.items:Enumerate() do
+            if item:IsVoting() then
+                self:TriggerEvent("OnVotingStarted", item, votingTimeout)
+            end
+        end
+    end
 
     if Loothing.Settings:Get("frame.autoOpen") and Loothing.MainFrame then
         Loothing.MainFrame:Show()

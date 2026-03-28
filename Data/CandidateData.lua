@@ -541,6 +541,14 @@ function CandidateSorting.ByResponsePriority(a, b)
     local aPriority = a.response or 999
     local bPriority = b.response or 999
 
+    -- System responses (strings like "AUTOPASS", "TIMEOUT") sort after
+    -- numeric player responses (1=NEED .. 5=PASS). Coerce to comparable types.
+    local aIsNum = type(aPriority) == "number"
+    local bIsNum = type(bPriority) == "number"
+    if aIsNum ~= bIsNum then
+        return aIsNum  -- numeric (player response) sorts before string (system response)
+    end
+
     if aPriority ~= bPriority then
         return aPriority < bPriority
     end
@@ -558,8 +566,12 @@ function CandidateSorting.ByCouncilVotes(a, b)
         return a.councilVotes > b.councilVotes
     end
 
-    -- Tie-breaker: response priority
-    return (a.response or 999) < (b.response or 999)
+    -- Tie-breaker: response priority (numeric before string system responses)
+    local ar, br = a.response or 999, b.response or 999
+    if type(ar) ~= type(br) then
+        return type(ar) == "number"
+    end
+    return ar < br
 end
 
 --- Sort candidates by roll value (descending)
@@ -574,8 +586,12 @@ function CandidateSorting.ByRoll(a, b)
         return aRoll > bRoll
     end
 
-    -- Tie-breaker: response priority
-    return (a.response or 999) < (b.response or 999)
+    -- Tie-breaker: response priority (numeric before string system responses)
+    local ar, br = a.response or 999, b.response or 999
+    if type(ar) ~= type(br) then
+        return type(ar) == "number"
+    end
+    return ar < br
 end
 
 --- Sort candidates by item level difference (descending - biggest upgrade first)

@@ -3,7 +3,7 @@
 ## Title: Loothing (Dev)
 ## Notes: Development build with test harness and debug tooling
 ## Author: James Kueller
-## Version: 1.4.6
+## Version: 1.5.4
 ## SavedVariables: LoolibDB
 ## Dependencies: Loolib
 ## IconTexture: Interface\AddOns\Loothing\Media\logo
@@ -66,6 +66,7 @@ Data\HistoryImport.lua
 Data\TradeQueue.lua
 Data\ItemStorage.lua
 Data\RollTracker.lua
+Data\ResponseTracker.lua
 Data\CandidateData.lua
 Data\CandidateManager.lua
 Data\TokenData.lua
@@ -93,6 +94,7 @@ Comm\Protocol.lua
 Comm\MessageHandler.lua
 Comm\Handlers\Core.lua
 Comm\Restrictions.lua
+Comm\CommState.lua
 Comm\Sync.lua
 Comm\AckTracker.lua
 Comm\WhisperHandler.lua
@@ -152,3 +154,4 @@ Debug\Tests\SecretValueTests.lua
 Debug\Tests\DiagnosticsTests.lua
 Debug\Tests\HistoryExportTests.lua
 Debug\Tests\SettingsExportTests.lua
+Debug\Tests\FullSessionTests.lua

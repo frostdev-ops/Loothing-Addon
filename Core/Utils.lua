@@ -372,15 +372,7 @@ function Utils.CanManageCouncilRoster()
         return true
     end
 
-    if Loothing.Session and Loothing.Session.GetMasterLooter and Loothing.Session:GetMasterLooter() then
-        return Loothing.Session:IsMasterLooter()
-    end
-
-    if Loothing.Settings and Loothing.Settings.IsMasterLooter then
-        return Loothing.Settings:IsMasterLooter()
-    end
-
-    return false
+    return Loothing:IsCanonicalML()
 end
 
 --[[--------------------------------------------------------------------
@@ -537,6 +529,21 @@ function Utils.GetRaidRoster()
     end
 
     return roster
+end
+
+--- Check if a player is in the current group (raid or party)
+-- @param playerName string - Player name (with or without realm suffix)
+-- @return boolean
+function Utils.IsGroupMember(playerName)
+    if IsTestModeEnabled() then return true end
+    if not playerName or playerName == "" then return false end
+    local roster = Utils.GetRaidRoster()
+    for _, member in ipairs(roster) do
+        if Utils.IsSamePlayer(member.name, playerName) then
+            return true
+        end
+    end
+    return false
 end
 
 --- Get officers from raid (rank >= 1)

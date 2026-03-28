@@ -32,17 +32,7 @@ local CommMixin = ns.CommMixin
 -- @return boolean
 local function isMasterLooter(sender)
     if not sender then return false end
-    local ml
-    if Loothing.Session then
-        ml = Loothing.Session:GetMasterLooter()
-    end
-    if not ml and Loothing.Settings then
-        ml = Loothing.Settings:GetMasterLooter()
-    end
-    -- Fallback: check the global ML identity set by DetermineML() / /lt ml
-    if not ml then
-        ml = Loothing.masterLooter
-    end
+    local ml = Loothing:GetCanonicalML()
     if not ml then return false end
     return Utils.IsSamePlayer(ml, sender)
 end
@@ -91,19 +81,7 @@ end
 -- @param sender string
 -- @return boolean
 local function isGroupMember(sender)
-    -- Allow in test mode
-    if TestMode and TestMode:IsEnabled() then
-        return true
-    end
-    -- If we can't check, fail closed (reject)
-    if not Utils or not Utils.GetRaidRoster then return false end
-    local roster = Utils.GetRaidRoster()
-    for _, member in ipairs(roster) do
-        if Utils.IsSamePlayer(member.name, sender) then
-            return true
-        end
-    end
-    return false
+    return Utils.IsGroupMember(sender)
 end
 
 --[[--------------------------------------------------------------------
@@ -113,10 +91,30 @@ end
 ----------------------------------------------------------------------]]
 
 local SCHEMAS = {
-    ITEM_ADD        = { { "itemLink",  "string", true }, { "guid",      "string", true }, { "sessionID", "string", true } },
-    VOTE_AWARD      = { { "itemGUID",  "string", true }, { "winner",    "string", true } },
-    PLAYER_RESPONSE = { { "itemGUID",  "string", true }, { "response",  nil,      true } },
-    VOTE_COMMIT     = { { "itemGUID",  "string", true }, { "responses", "table",  true } },
+    ITEM_ADD = {
+        { "itemLink",  "string", true },
+        { "guid",      "string", true },
+        { "sessionID", "string", true },
+        { "looter",    "string", false },
+    },
+    VOTE_AWARD = {
+        { "itemGUID",  "string", true },
+        { "winner",    "string", true },
+        { "sessionID", "string", false },
+    },
+    PLAYER_RESPONSE = {
+        { "itemGUID",  "string", true },
+        { "response",  nil,      true },
+        { "sessionID", "string", false },
+        { "roll",      nil,      false },
+        { "rollMin",   nil,      false },
+        { "rollMax",   nil,      false },
+    },
+    VOTE_COMMIT = {
+        { "itemGUID",  "string", true },
+        { "responses", "table",  true },
+        { "sessionID", "string", false },
+    },
     BATCH           = { { "messages",  "table",  true } },
     MLDB_BROADCAST  = { { "data",      "table",  true } },
     COUNCIL_ROSTER  = { { "members",   "table",  true } },
@@ -175,22 +173,27 @@ function CommMixin:HandleSessionStart(data, sender)
 end
 
 function CommMixin:HandleStopHandleLoot(_data, sender)
-    -- Only the current ML can broadcast stop
-    if not isMasterLooter(sender) then
+    -- Accept from current ML or from the previous ML who just transferred the role.
+    -- When ML is transferred via MLDB, the old ML's STOP_HANDLE_LOOT arrives after
+    -- the MLDB that already changed the ML identity, so the old ML must be accepted.
+    if not isMasterLooter(sender)
+        and not (Loothing.MLDB and Loothing.MLDB:WasPreviousMLSender(sender)) then
         Loothing:Debug("Rejected STOP_HANDLE_LOOT from non-ML:", sender)
         return
     end
     self:TriggerEvent("OnStopHandleLoot", { masterLooter = sender })
 end
 
-function CommMixin:HandleSessionEnd(_data, sender)
-    -- Only the ML who started the session can end it
-    if not isMasterLooter(sender) then
+function CommMixin:HandleSessionEnd(data, sender)
+    -- Accept from current ML or from the previous ML (same ML transfer race as above)
+    if not isMasterLooter(sender)
+        and not (Loothing.MLDB and Loothing.MLDB:WasPreviousMLSender(sender)) then
         Loothing:Debug("Rejected SESSION_END from non-ML:", sender)
         return
     end
     self:TriggerEvent("OnSessionEnd", {
         masterLooter = sender,
+        sessionID = data and data.sessionID or nil,
     })
 end
 
@@ -328,6 +331,26 @@ function CommMixin:HandleSyncData(data, sender)
     self:TriggerEvent("OnSyncData", data)
 end
 
+function CommMixin:HandleIncrementalSyncRequest(data, sender)
+    if not validateHandler("HandleIncrementalSyncRequest", data) then return end
+    if not isGroupMember(sender) then
+        Loothing:Debug("Rejected SYNC_INCREMENTAL from non-group:", sender)
+        return
+    end
+    data.requester = sender
+    self:TriggerEvent("OnIncrementalSyncRequest", data)
+end
+
+function CommMixin:HandleIncrementalSyncData(data, sender)
+    if not validateHandler("HandleIncrementalSyncData", data) then return end
+    if not isMasterLooter(sender) and not isGroupLeaderOrAssistant(sender) then
+        Loothing:Debug("Rejected SYNC_INCREMENTAL_DATA from non-ML:", sender)
+        return
+    end
+    data.masterLooter = sender
+    self:TriggerEvent("OnIncrementalSyncData", data)
+end
+
 --[[--------------------------------------------------------------------
     Council Roster Handler
 ----------------------------------------------------------------------]]
@@ -435,6 +458,25 @@ function CommMixin:HandlePlayerResponseAck(data, sender)
     end
     data.masterLooter = sender
     self:TriggerEvent("OnPlayerResponseAck", data)
+end
+
+function CommMixin:HandleResponsePoll(data, sender)
+    if not validateHandler("HandleResponsePoll", data) then return end
+    if not isMasterLooter(sender) then
+        Loothing:Debug("Rejected RESPONSE_POLL from non-ML:", sender)
+        return
+    end
+    self:TriggerEvent("OnResponsePoll", data)
+end
+
+function CommMixin:HandleClientReady(data, sender)
+    if not validateHandler("HandleClientReady", data) then return end
+    if not isGroupMember(sender) then
+        Loothing:Debug("Rejected CLIENT_READY from non-group:", sender)
+        return
+    end
+    data.sender = sender
+    self:TriggerEvent("OnClientReady", data)
 end
 
 --[[--------------------------------------------------------------------

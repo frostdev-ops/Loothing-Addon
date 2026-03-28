@@ -326,6 +326,9 @@ function VotePanelMixin:RefreshResponseButtons()
     table.sort(sorted, function(a, b)
         local rA = a.response or 999
         local rB = b.response or 999
+        if type(rA) ~= type(rB) then
+            return type(rA) == "number"  -- numeric responses sort before string system responses
+        end
         if rA ~= rB then return rA < rB end
         return (a.playerName or a.name or "") < (b.playerName or b.name or "")
     end)

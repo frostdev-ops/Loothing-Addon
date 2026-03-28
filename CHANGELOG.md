@@ -1,756 +1,552 @@
 # Changelog
 
-All notable changes to Loothing will be documented in this file.
+User-facing release notes for Loothing.
+
+## [1.5.5] - 2026-03-28
+
+### Fixed
+- **Fixed group members not auto-passing items for the Master Looter between sessions.** When the ML was handling loot but no session was active (e.g., between boss encounters, during trash), group members did not auto-pass items in the group loot roll — the ML had to manually collect everything. Auto-pass now activates as soon as the ML starts handling loot, not just during active sessions.
+- **Fixed false "Response may not have reached the Master Looter" error during combat.** When you submitted a loot response during combat, the addon incorrectly timed out and showed an error telling you to resubmit — even though the response was safely queued and would be sent automatically when combat ended. The timeout now pauses during combat instead of firing prematurely.
+- **Fixed Roll Frame reappearing after combat with "Already submitted" status.** After submitting a response during combat, the Roll Frame would close correctly when combat ended (response delivered), then reappear a few seconds later showing your already-submitted response with disabled buttons. The frame no longer re-shows for items you've already responded to.
+- **Fixed new group members not receiving Master Looter settings when joining mid-raid.** Players who joined a group after the ML started handling loot never received the ML's settings broadcast, so they wouldn't auto-pass items or see the correct session configuration. The ML now re-broadcasts settings when the group roster changes.
+
+### Added
+- **Sessions now auto-end when all items are awarded or skipped.** The ML no longer needs to manually end the session after the last item is resolved.
+
+### Improved
+- **Desktop sync status in the main frame title bar now shows a "Desktop:" prefix** (e.g., "Desktop: Synced", "Desktop: Stale") so it's clearly about the companion app sync, not the loot session status.
+
+## [1.5.4] - 2026-03-27
+
+### Fixed
+- **Fixed sessions becoming permanently stuck when group members join mid-session.** If anyone joined the group after a loot session started, the addon would stop working for everyone — even ending and starting new sessions didn't fix it, requiring all members to `/reload`. The root cause was stale session state that survived across sessions: ending a session didn't clear the global Master Looter identity, new session broadcasts were silently rejected if a previous session was still active, and sync data for a new session was rejected if the old session hadn't been cleaned up. Sessions now properly self-heal in all these scenarios.
+- **Fixed sync storms crashing the addon channel under raid load.** When 25 players detected state divergence from the same heartbeat, they all fired sync requests simultaneously — overwhelming the 800 bytes/sec addon channel with 125+ KB of sync responses, causing cascading timeouts and retries. Sync requests are now spread across an 8-second jitter window, the Master Looter batches sync responses, and a circuit breaker stops retry loops after repeated failures.
+- **Fixed loot responses being permanently lost if the acknowledgment was missed.** If a player's loot response was dropped during network congestion, they could never resubmit — the button stayed disabled forever. Now: the first timeout auto-retries the response, the second timeout re-enables the Submit button (preserving the player's original selection), and the Master Looter automatically polls for missing responses 15 seconds after voting starts.
+- **Fixed players in combat missing the entire loot session.** If a player was in combat when the Master Looter started a session and began voting, they would never see the Roll Frame — even after leaving combat. Recovery now happens within 2-6 seconds of leaving combat instead of waiting up to 30 seconds, and restored voting items correctly appear in the Roll Frame.
+- **Fixed Master Looter handoff (`/lt ml`) leaving both players active simultaneously.** When transferring ML to another player, the old ML continued handling loot for up to 2 seconds (until the periodic ML check ran). Now the old ML stops immediately on handoff.
+- **Fixed Master Looter identity going out of sync across addon systems.** The addon tracked ML identity in three separate places (session, settings, and global state) that could disagree after a handoff or MLDB broadcast. All three are now synchronized whenever MLDB is applied.
+- **Fixed cleanup messages from previous Master Looter being rejected after double handoff.** If ML was transferred twice (A→B→C), player A's stop/session-end messages were silently rejected because only the most recent sender was tracked. The addon now tracks all recent MLDB broadcasters.
+- **Fixed session becoming permanently orphaned when Master Looter leaves the group.** If the ML disconnected or left during an active session, the session died with no recovery. The new raid leader now automatically enters ML detection and is prompted to take over. Players now see a chat message explaining what happened and what to do next, and any manual ML override (`/lt ml`) pointing to the departed player is automatically cleared.
+- **Fixed Master Looter detection stalling during mass group invites.** When many players joined a group in quick succession, each roster update restarted a 2-second detection timer — delaying ML detection by 4+ seconds (or indefinitely in extreme cases). Detection now fires within 3.5 seconds regardless of how many roster changes occur.
+- **Fixed old Master Looter continuing to handle loot after passive ML change detection.** If the ML changed through any means other than an explicit `/lt ml` handoff (e.g., raid leader promotion change), the old ML could continue handling loot until the next roster update. The addon now immediately stops loot handling on any ML change.
+- **Faster Master Looter handoff.** After using `/lt ml` to transfer or clear the Master Looter, the new ML is detected within 0.5 seconds instead of 2 seconds. Reduces the window where clients may reject messages from the new ML.
+
+### Added
+- **Session State Engine.** Your loot response state now persists independently of the Roll Frame. Closing the frame, entering combat, or syncing no longer loses your response data. Previously, closing the Roll Frame wiped all response tracking — you couldn't reopen it or see what you'd already responded to.
+- **`/lt roll` command** (also `/lt respond`) — reopens the Roll Frame with all voting items you haven't responded to yet.
+- **`/lt resend` command** — manually resends your loot response for all items currently in voting. Use this if you suspect your response was lost.
+- **Combat-aware Submit button.** During combat, the Submit button shows "Submit (Queued)" and queues your response for automatic delivery when combat ends. After submitting, it shows "Queued (Combat)" until the acknowledgment arrives.
+- **Automatic frame reappearance.** If you close the Roll Frame with unresponded items, it gently re-shows after 30 seconds (configurable — disable with "Auto-reshow" in Frame settings). A chat message also reminds you: "Type /lt roll to reopen."
+- **Incremental sync** — when only a subset of session data has diverged (e.g., council roster or ML settings), the addon now requests just that piece instead of a full state dump, dramatically reducing bandwidth usage.
+- **ML addon validation** — `/lt ml PlayerName` now warns if the target player doesn't appear to have Loothing installed. Use `/lt ml PlayerName force` to override.
+- **Out-of-raid ML warning** — `/lt ml` now warns when assigning a Master Looter outside a raid instance while the "only use in raids" setting is active.
+
+### Improved
+- **Post-combat recovery is now 2-6 seconds** instead of up to 30 seconds. Players who were in combat when voting started now see the Roll Frame almost immediately after leaving combat, instead of waiting for the next heartbeat cycle.
+- **Combat message queue increased from 50 to 100 messages.** Reduces the chance of messages being silently dropped during long combat encounters.
+- **Better diagnostics for communication issues.** The addon now tracks message drops, checksum failures, and decode errors. View stats with `/lt diag`.
+
+## [1.5.3] - 2026-03-26
+
+### Fixed
+- **Fixed Master Looter handoff not working outside raid instances.** When passing ML to another player via the roster panel or `/lt ml`, neither the old nor new ML detected the change — both saw stale state and neither could start sessions for each other. The "only use in raids" setting now correctly allows ML transitions and handoffs even when testing outside a raid instance.
+- **Fixed loot handling state persisting into PvP battlegrounds and arenas.** If you were handling loot in a raid and then entered a PvP instance, the addon's ML state was never cleaned up. Active loot handling is now automatically stopped when entering PvP or scenario instances.
+- **Fixed session end messages from a previous Master Looter being able to end a different session.** Session end messages now include the session ID so they can only end the matching session.
+
+### Improved
+- **Master Looter can now revote on already-awarded or skipped items.** Previously, completed items could not be revoted. The ML can now force a revote with a confirmation popup asking to clear the existing result and restart voting.
+
+## [1.5.2] - 2026-03-25
+
+### Fixed
+- **Fixed session settings permanently overwriting your personal preferences.** When the Master Looter broadcast their settings to the raid, your local voting, autopass, auto-award, announcement, and response button settings were overwritten and never restored. Your personal settings are now automatically saved before the ML's settings are applied and restored when the session ends.
+- **Fixed transferring Master Looter to another player (`/lt ml set`) not working.** The new ML's client never detected the role change — their roster tab stayed unchanged and they couldn't start sessions. The old ML's cleanup messages (stop handling, session end) were also silently rejected. ML transfers now correctly trigger detection on the receiving player, and cleanup messages from the outgoing ML are properly accepted.
+- **Fixed results panel crash when sorting candidates with mixed response types.** When a candidate had a system response (like Auto Pass) and another had a normal response (like Need), the sort comparator crashed with "attempt to compare string with number." All candidate sort functions now handle mixed response types correctly.
+- **Fixed leaving a group during an active session not cleaning up session state.** Non-ML players who left a group (or were disconnected) while a loot session was active would retain stale session data until the next login. Session state is now properly ended on group leave.
+
+### Improved
+- **Session settings are now locked for non-ML players during active sessions.** When a loot session is in progress, all ML-controlled settings (voting, response buttons, winner determination, council, award reasons, observer permissions, autopass, auto-award, announcements, and ignore items) are greyed out in the settings panel for non-ML players. A message indicates which Master Looter controls the settings. The Response Button Editor and Award Reasons Editor are also locked during sessions.
+
+## [1.5.1] - 2026-03-25
+
+### Fixed
+- **Fixed batched messages (multiple votes, candidate updates) losing data when queued during combat.** When a batch of messages was sent during combat, the internal message buffer was released before the queued copy could be replayed, causing the replayed batch to contain empty or corrupted data. Messages are now safely copied before the buffer is released.
+- **Fixed guild channel messages (version checks, settings sync) ignoring combat state.** Guild messages bypassed the combat awareness system entirely, causing WoW to silently drop them. Now properly detected and dropped with a debug log — retry after combat ends.
+- **Fixed message replay continuing after leaving a group.** If you left a group while queued messages were being replayed (e.g., kicked during post-combat replay), the replay ticker would continue running and waste resources sending messages to nobody. Now properly cancelled on group leave.
+- Fixed incomplete schema validation on PLAYER_RESPONSE, VOTE_AWARD, and VOTE_COMMIT messages allowing malformed data to pass handler validation.
+- Fixed ML self-response ACK race condition — acknowledgment could arrive before the RollFrame's timeout timer was created, causing a missed clear. Self-loopback ACK is now deferred one frame.
+- Fixed double-click on RollFrame submit sending duplicate responses with different roll values. Added pending-state guard.
+- Fixed `SendGuild` silently dropping messages on encode failure with no error logging.
+
+## [1.5.0] - 2026-03-25
+
+### Improved
+- **Dramatically improved communication handling during combat, encounter restrictions, and reconnects.** WoW 12.0 blocks all addon messages during combat (not just during boss encounters). New centralized communication state machine properly handles this:
+  - **Full combat message queuing**: All messages are now queued during combat since WoW drops them silently. Session-critical messages (votes, awards, session start/end) are placed in a guaranteed delivery queue and replayed first when combat ends. Non-critical messages (heartbeats, version checks, sync requests) are held in a separate lower-priority queue.
+  - **Paced queue replay after combat**: Previously, all queued messages were sent in a single burst when an encounter ended, causing a traffic spike and frame hitch. Messages are now replayed at a controlled rate (up to 3 per 100ms), sorted by priority (votes and awards before sync data), and adaptive to current network congestion. Replay automatically pauses if you re-enter combat mid-drain.
+  - **Correct encounter-to-combat transitions**: When a boss encounter ends but trash mobs keep you in combat, the addon now correctly waits until combat fully ends before replaying queued messages. Previously, the replay would fire as soon as the encounter restriction lifted, and WoW would silently drop every message.
+  - **Reconnect thundering herd prevention**: When multiple raid members reconnect simultaneously (e.g., after a mass disconnect), sync requests are now staggered with random jitter instead of all firing at the same instant. A 5-second grace period after reconnect suppresses redundant sync attempts from heartbeat mismatches and roster change detection.
+  - **Automatic catch-up after combat**: WoW also blocks incoming messages while you are in combat. If the Master Looter awards an item or adds loot while you are fighting, your addon now automatically syncs with the ML a few seconds after you leave combat to recover any messages you missed. Previously, you would have to wait up to 30 seconds for the periodic heartbeat to detect the gap.
+  - **ML heartbeat skip during combat**: The Master Looter's 30-second heartbeat broadcast is now skipped during combat where WoW drops addon messages anyway, saving transport queue budget for real messages after combat ends.
+
+- **Progressive backpressure under network congestion.** Instead of a single on/off threshold, message handling now has four levels of congestion response: at light load, non-critical messages are deprioritized; at moderate load, low-priority messages are dropped; at heavy load, most non-critical messages are shed to protect session-critical traffic like votes and awards.
+
+### Fixed
+- **Fixed Master Looter unable to respond to their own loot items ("No response from master looter").** All WHISPER-to-self messages now bypass the WoW addon message network entirely via a local loopback in the comm send path. Previously, PLAYER_RESPONSE and PLAYER_RESPONSE_ACK whispers to self went through the full throttled queue and were unreliable.
+- **Fixed RollFrame not appearing for other raid members during loot sessions.** Multiple root causes addressed:
+  - SESSION_START from non-leader MLs (designated via `/lt ml`) was rejected by clients because `DetermineML()` had already tagged the raid leader as ML. Clients now accept SESSION_START from any group member and adopt the sender as the authoritative ML.
+  - The received ML identity was not propagated to the global `Loothing.masterLooter`, causing subsequent ITEM_ADD and VOTE_REQUEST handler checks to fail. Now set on SESSION_START acceptance.
+  - `isMasterLooter()` security check did not consult the global ML identity as a fallback, only Session and Settings sources. Added fallback.
+- **Fixed silent message drops throughout the communication pipeline.** `Protocol:Encode` could return nil (from Serializer, Compressor, or channel encoder failures) with zero error logging — `Send()` silently discarded the message. All encoding steps are now pcall-wrapped with error-level logging on failure.
+- **Fixed Loolib `ProcessSendQueue` silently discarding messages on non-throttle WoW API errors.** `C_ChatInfo.SendAddonMessage` returns result codes like `InvalidPrefix`, `NotInGroup`, and `EncounteredAddonRestriction`, but only `AddonMessageThrottle` was checked — all other errors were treated as successful sends. Now checks for explicit `Success` result, retries on throttle/restriction, and logs non-recoverable errors.
+- **Fixed double-click on RollFrame submit causing duplicate responses.** Added pending-state guard to prevent resubmission while waiting for ML acknowledgment.
+
+### Added
+- `/lt diag` command — prints communication pipeline state: ML identity (global/session/settings), session state, comm queue depth, prefix registration, encounter restriction status, and an encode/decode round-trip test.
+
+## [1.4.5] - 2026-03-24
+
+### Fixed
+- **Fixed items added via AddItemFrame or `/lt add` never reaching other raid members.** Both paths called `Session:AddItem` with `force=true` without checking whether a session was active. With no active session, the sessionID was nil (so clients rejected ITEM_ADD), the session state was INACTIVE (so the auto-start voting timer silently skipped), and no VOTE_REQUEST was ever broadcast. The RollFrame never appeared on any client. Now auto-starts a session when items are added outside of one.
+- Fixed 99% CPU usage for all raid members caused by the Loolib LUA_WARNING handler running expensive `debugstack` and string processing on every WoW taint warning. During active loot council sessions in combat, WoW can fire hundreds of taint warnings per frame, and each one triggered full stack capture and pattern matching. Added a rate limiter (5 warnings/second) to prevent the handler from exceeding WoW's per-frame execution budget.
+
+## [1.4.4] - 2026-03-24
+
+### Fixed
+- **Fixed the entire addon being non-functional when the Master Looter is not the raid leader.** All session broadcasts (SESSION_START, MLDB, ITEM_ADD, etc.) were rejected by raid members because the comm handler required the sender to be a raid leader or assistant. Clients had no way to learn the ML identity from a non-leader, creating a circular authentication failure. Now accepts session and MLDB messages from any group member when the ML identity is unknown, then validates subsequent messages against the established ML.
+- Fixed removing a voting item from a session leaving its vote timer running, which could fire on an orphaned item and cause state corruption.
+- Fixed the auto-start voting timer firing after a session had already ended, potentially starting votes on an inactive session.
+- Fixed council votes arriving after voting ended still triggering phantom vote-update broadcasts to all council members, causing vote count desync between ML and council.
+- Fixed non-ML clients accepting duplicate award messages for already-completed items, which could overwrite the awarded state.
+- Fixed a missing null guard on voter identity in vote commit handling that could cause silent data corruption from malformed messages.
+- Fixed session sync data overwriting an active session with data from a different session, which could clobber in-progress voting state on reconnect.
+
+## [1.4.3] - 2026-03-24
+
+### Fixed
+- Fixed items not appearing on session members' screens when the ML adds items to a loot council session. The ITEM_ADD broadcast was missing the `sessionID` field, so every receiving client silently rejected the item as belonging to an unknown session. The RollFrame (loot response popup) never appeared because voting could never start on an item that was never accepted.
+- Fixed `/lt start` rejecting the Master Looter when they are not also the raid leader. Now allows group leaders, raid assistants, and the designated ML.
+- Fixed loot history entries broadcast to group/guild members being silently dropped. The HISTORY_ENTRY message type had no handler registered, so all incoming history broadcasts were discarded.
+- Fixed the ML removing an item from the session not propagating to other raid members. ITEM_REMOVE was broadcast but Session never listened for it, so clients kept stale items in their UI.
+- Fixed the heartbeat broadcast using incorrect method call syntax, which could prevent session state digests from reaching raid members.
+
+## [1.4.2] - 2026-03-24
+
+### Fixed
+- Fixed `/lt start` rejecting the Master Looter with "Only the group/raid leader can activate loot handling" when the ML was not also the raid leader. Now allows group leaders, raid assistants, and the designated ML.
+- Hardened the entire Loolib DEFLATE decompressor against truncated or corrupted network messages. Every `ReadBits` call in the decompression path now checks for end-of-data and returns a clean error instead of crashing. Previously, truncated messages could cause "attempt to perform arithmetic on nil" or "invalid value (nil) in table for concat" errors.
+
+## [1.4.1] - 2026-03-24
+
+### Added
+#### Desktop Companion App
+- New Tauri v2 desktop app that bridges your WoW addon data with the Loothing web platform — no more manual imports or exports.
+- **Discord login**: Sign in with your Discord account using the same credentials as loothing.xyz. Works via browser redirect with a token-paste fallback for Linux desktop environments.
+- **WoW directory detection**: Automatically finds your WoW installation and account SavedVariables. Supports manual selection if auto-detect misses your setup.
+- **Loot history sync**: Uploads new loot history entries from your addon SavedVariables to your guild on loothing.xyz. Only uploads entries since the last sync.
+- **Wishlist download**: Fetches guild and public wishlists from loothing.xyz and writes them into your SavedVariables so the addon can display them during loot council sessions.
+- **Multi-guild support**: Switch between guilds from the navigation bar — all syncs target the selected guild.
+- **Background monitoring**: Detects when WoW closes and can trigger automatic syncs. File watcher notices SavedVariables changes in real time.
+- **System tray**: Minimizes to tray on close with quick-access Sync Now and Quit options.
+- **History viewer**: Browse and filter your full loot history with item quality colors, sortable columns, and CSV export.
+- **Session management**: View and manage your active desktop sessions from Settings.
+
+#### Wishlist Column (Council Table)
+- Council members now see a "Wish" column during loot voting that shows each candidate's wishlist priority for the current item.
+- Priorities are color-coded by need level: orange (BiS), green (Major Upgrade), yellow (Minor Upgrade), gray (Optional), magenta (Transmog).
+- Hover the column to see the full wishlist entry with need level, notes, and BiS indicator.
+- The column is sortable and can be toggled on/off in Council Table settings.
+
+#### Desktop Sync Status (Main Frame)
+- The addon's main frame now shows a sync freshness indicator: green "Synced" (under 1 hour), yellow age (1–24 hours), or red "Stale" (over 24 hours).
+
+#### Auto-Export on Logout
+- The addon now writes session metadata (character name, class, GUID, addon version) to SavedVariables on every logout, enabling the desktop app to identify which character last played.
+
+### Fixed
+- Fixed the minimap button not being collected by Minimap Button Bag (MBB) and similar minimap organizer addons. The button was created without a global name, so organizers couldn't detect it.
+- Fixed wishlist data write path targeting the wrong SavedVariables location — data now correctly writes to `LoolibDB.addons.Loothing.global.desktopExchange`.
+- Fixed history extraction reading from wrong SavedVariables path — now correctly reads from `LoolibDB.addons.Loothing.global.history`.
+- Fixed WoW configuration not persisting between app restarts (missing store save after config write).
+- Fixed JSON-to-Lua conversion failing silently when writing wishlist data to SavedVariables — replaced serde deserialization with a proper recursive converter that handles arbitrary JSON objects and arrays.
+- Fixed desktop app sync failing with "Authentication required" (401) — the server's unified permission middleware only recognized session-based auth, not Bearer JWT tokens from the desktop app. Added a global auth bridge that translates desktop JWTs into session-compatible format.
+- Fixed a crash in the Loolib DEFLATE decompressor when a corrupted network message produced an out-of-range distance code. Now returns a clean decompression error instead of a hard Lua error.
+
+## [1.3.3] - 2026-03-23
+
+### Fixed
+- Fixed the Roll Frame layout breaking when both the roll section and vote timer were visible at the same time.
+- Fixed auto-pass reason text not displaying correctly when the AutoPass module hadn't loaded yet.
+
+### Improved
+- Cleaned up unused code and shadowed variables across the addon and Loolib library for better maintainability and smaller memory footprint.
+- Tightened luacheck and architecture lint configuration so all shipped code passes with zero warnings.
+- Standardized file headers across all source files so every file opens with a clear description of its purpose.
+- Added table-of-contents navigation to large files (Init, Session, Settings, ConfigDialog) for easier code review.
+- Added inline documentation explaining complex patterns like closure optimization, DEFLATE compression, and event dispatch safety.
+- Cleaned up internal development comments throughout both Loothing and Loolib so the source reads cleanly for community contributors.
+
+## [1.3.2] - 2026-03-22
+
+### Added
+#### Ranked Choice Voting (Council)
+- Council members can now rank candidates in order of preference when Ranked Choice Voting mode is enabled. Click the Vote button on any candidate in the Council Table to open the ranking panel.
+- Interactive ranking display with drag-to-reorder arrows and configurable min/max rank limits.
+- Previous votes are restored when reopening the panel for an item you already voted on.
+- Observe mode correctly disables the ranking panel for observers.
+
+### Fixed
+#### Communication
+- Fixed tradable/non-tradable item notifications never reaching the raid. Messages were silently dropped instead of broadcasting to the group.
+- Fixed loot history entries not syncing to other group members after an item was awarded.
+- Fixed the "Stop Handle Loot" broadcast not reaching the raid when the ML disables loot handling.
+
+#### Council Voting
+- Fixed ranked-choice Vote clicks in the Council Table so they always route through the active council voting UI instead of silently failing when the vote modal is unavailable.
+- Unified council voting entrypoints so Session, SessionPanel, and CouncilTable all use the same runtime path for ranked-choice voting.
+
+#### Award History And Announcements
+- Fixed awarded items with award reasons so the resolved reason text is reused consistently for loot history and announcement tokens.
+- Fixed the announcer path in `AwardItem` referencing an out-of-scope award-reason value.
+
+#### Secret Value Safety
+- Hardened shipped runtime scope-key generation so SavedVariables no longer call raw secret-prone unit APIs directly when deriving player, class, and realm scope keys.
+- Fixed remaining shipped debug/testmode helpers to use secret-safe class wrappers for player identity data.
+
+#### Library
+- Fixed a minor timing drift in Loolib’s message send queue that could cause micro-delays under heavy load.
+
+### Changed
+#### Require Note
+- "Require Note" is now a session-level MLDB setting only. Removed the per-button require-notes option from the response button editor and the personal "Require Note" toggle from Local Preferences. When the ML enables Require Notes in Session Settings, all raid members must add a note to both loot responses and council votes.
+
+#### Loolib Runtime Surface
+- Consolidated slash-command and static-popup global writes behind `Loolib.Compat.GlobalBridge`, removing duplicate registry mutation paths from shipped helpers.
+- Moved non-TOC Loolib runtime-style modules out of the active source tree into `_archive/` so the repository’s shipped surface matches the actual production load order.
+
+### Documentation
+- Added a shipping-surface audit script to catch raw secret-value API usage, unexpected global registry writes, and non-TOC Lua drift before release builds.
+
+## [1.3.1] - 2026-03-19
+
+### Fixed
+#### Group Loot
+- Fixed auto-pass on loot rolls firing all the time, not just during active loot council sessions. Non-ML raid members now see normal roll frames when no session is running.
+
+#### Session State Guards
+- Fixed tradability updates (HandleTradable/HandleNonTradable) processing outside an active session, which could modify stale item data from a previous session.
+- Fixed remote item-add messages accepted without verifying the session ID, allowing a delayed network message from a previous session to inject items into a new one.
+- Fixed vote timeout timers that fired after a session ended still broadcasting stale vote results to the raid.
+- Fixed auto-award attempting to award items on an ended session if the call raced with session cleanup.
+
+## [1.3.0] - 2026-03-18
+
+### Added
+#### Auto-Pass is now fully functional
+- All auto-pass settings (enabled, weapons, BoE, transmog, trinkets) now take effect during loot sessions. Previously these settings existed in the UI but had no runtime impact.
+- When a voting item arrives that you can't use, the addon automatically sends an Auto Pass response to the Master Looter and skips the Roll Frame popup.
+- If item data hasn't loaded yet when voting starts, the addon retries the auto-pass check once item info becomes available.
+- A chat notification tells you when an item is auto-passed and why (e.g., "Cannot wear Plate armor", "Wrong primary stats for class"). The ML can suppress these notifications for everyone via Session Settings.
+
+### Fixed
+#### Auto-Pass
+- Rogues now correctly auto-pass on Bows, Crossbows, and Guns — only Hunters can equip ranged weapons in modern WoW.
+- Fixed the class restriction fast-path never activating because the item data sentinel value didn't match the auto-pass constant. Class-restricted items are now detected without a tooltip scan fallback.
+
+#### Security
+- MLDB (Master Looter settings sync) no longer accepts broadcasts from any group member when the ML is unknown. Only group leaders and raid assistants can bootstrap the initial MLDB on login or reconnect.
+
+#### Passive Mode
+- Fixed a race condition where the first loot roll after joining or reconnecting could auto-roll before the ML's passive mode setting arrived. The addon now defaults to passive when a session is active but MLDB hasn't been received yet.
+
+#### Settings Sync
+- Fixed ML settings sync overwriting newer client-only settings keys. Clients running a newer addon version no longer lose local settings when the ML runs an older version.
+- Fixed the "Silent Auto-Pass" setting being overwritten by the ML's preference even though it appeared under personal settings. It is now an ML-controlled session setting as intended.
+
+#### Council Table
+- Fixed a crash when sorting the Council Table response column while both numeric responses (Need, Greed, Pass) and system responses (Auto Pass) are present.
+
+#### History Export
+- Fixed a crash when exporting loot history (Lua or JSON) for items that were auto-passed or awarded with a system response.
+- Auto Pass responses now display correctly in the Council Table "More Info" panel and candidate tooltips instead of showing raw response codes.
+
+#### Award Reasons
+- Fixed award reasons always showing blank in loot history. Selecting "Main Spec", "Off Spec", etc. when awarding an item now correctly records the reason.
+- Fixed the `{reason}` token in award announcements always showing the vote response (e.g. "NEED") instead of the selected award reason (e.g. "Main Spec").
+- Fixed auto-awarded items writing the reason into the wrong field, which caused the winner's response to display as the reason text and the actual reason to be lost.
+
+### Changed
+- Debug messages now appear when passive mode blocks an auto-roll and when the addon auto-passes a group loot roll for ML collection. Visible with `/lt debug` enabled.
+- "Silent Auto-Pass" has moved from the personal Local Preferences panel to Session Settings where the ML can control it for the entire raid.
+
+## [1.2.10] - 2026-03-17
+
+### Fixed
+#### Master Looter assignment persistence (`Core/Init.lua`, `Core/SettingsVoting.lua`)
+- Fixed explicit Master Looter assignments persisting in SavedVariables across sessions, relogs, and entirely different raids.
+- Master Looter overrides are now runtime-only, per-session state synced to the raid via MLDB instead of a local saved setting.
+
+#### Stale Master Looter detection (`Core/Init.lua`, `Core/Utils.lua`)
+- Fixed the addon continuing to treat a previously assigned ML as authoritative even when that player was no longer in the group.
+- Added group membership validation so explicit ML assignments fall through to raid leader detection when the assigned player is absent.
+
+#### Passive loot mode not applying to raid members (`Data/MLDB.lua`)
+- Fixed MLDB broadcasts being silently dropped on clients that hadn't completed ML detection yet, preventing passive loot mode (and all other session settings) from reaching raid members on login or reconnect.
+
+#### Passive loot mode enforcement (`Loot/GroupLootEvents.lua`, `Utils/AutoPass.lua`)
+- Fixed passive loot mode so group-loot handling now resolves the authoritative session loot mode from MLDB before falling back to local settings.
+- Fixed passive loot mode still allowing Loothing AutoPass logic to fire on unusable items after native group-loot auto-rolling had been disabled.
+
+#### Shield AutoPass classification (`Utils/AutoPass.lua`)
+- Fixed shield handling so shield-capable classes are never auto-passed by the generic shield armor heuristic.
+- Paladins, shamans, and warriors now correctly remain eligible for shields instead of being filtered out as unusable armor.
+
+### Changed
+#### ML assignment sync model (`Data/MLDB.lua`, `UI/RosterPanel.lua`)
+- ML reassignments via `/lt ml` or the Roster panel now broadcast immediately to the raid and trigger an ML re-evaluation on all clients.
+- The `masterLooter` field is now included in MLDB so late joiners and reconnecting players receive the correct ML override.
+
+## [1.2.9] - 2026-03-17
+
+### Added
+#### Passive loot handling mode (`Loot/GroupLootEvents.lua`)
+- Added a session-level passive mode that leaves Blizzard's native group loot rolls in control during an active Loothing session.
+- Master Looters can now switch loot roll handling between active Loothing auto-rolls and passive WoW rolls from Session Settings.
+
+### Fixed
+#### Session loot mode sync (`Data/MLDB.lua`)
+- Fixed raid members being forced into Loothing's native auto-roll behavior when the session should defer to default WoW rolls.
+- Fixed the session loot handling mode so it now broadcasts correctly to the raid and applies to all clients consistently.
+
+## [1.2.8] - 2026-03-15
+
+### Fixed
+#### Council roster permissions (`UI/RosterPanel.lua`)
+- Fixed non-lead, non-ML raid members seeing council-member and observer management actions they could not safely use.
+- Fixed grouped non-ML clients so mirrored council and observer roster changes fail closed instead of relying on UI visibility alone.
+
+#### Roll response rerolls (`UI/RollFrame.lua`)
+- Fixed roll-type responses so players cannot keep pressing submit to generate fresh rolls on the same item.
+- Fixed submitted and pending roll responses so the Roll/Pass controls lock immediately and stay locked after acknowledgement.
+
+#### Council frame width usage (`UI/CouncilTable/Columns.lua`)
+- Fixed expanded council table layouts leaving unused space on the right side of the frame.
+- Wider council windows now stretch the player, response, and vote columns to use the available width more effectively.
 
 ## [1.2.7] - 2026-03-15
 
 ### Added
-
-#### Comm-Based Profile Sharing (`Core/SettingsExport.lua`, `Comm/MessageHandler.lua`, `Comm/Handlers/Core.lua`, `Core/Options/ProfileOptions.lua`)
-
-- Added direct profile sharing over addon comm using the same printable settings export string as manual export/import
-- Shared imports now land in the existing confirmation modal, so receivers choose `Create New Profile` or `Apply to Current` before anything is written
-- Added an online group-member target selector and `Share` action to the Profiles options panel
-
-#### Shared Export Codec (`../Loolib/Comm/ExportCodec.lua`)
-
-- Added a reusable export codec to Loolib so printable table exports use one serializer/compressor path instead of duplicating the pipeline in addon code
-
-#### Export Decoder Utility (`tools/decode_export.py`)
-
-- Added a Python CLI that decodes both settings exports and compact loot exports outside the game client
+- Added direct profile sharing so you can send your settings profile to another player in your group.
+- Added a small decoder utility for unpacking Loothing settings exports and compact loot exports outside the game.
+- Added Brainrot Mode as a dedicated toggle in Personal Preferences, replacing the old language override dropdown.
 
 ### Fixed
-
-#### Decoder Table Semantics (`tools/decode_export.py`)
-
-- Empty Lua tables now decode to JSON objects by default instead of empty arrays, which better matches map-like settings payloads
-
-### Documentation
-
-- Updated visible version references to `1.2.7` in `README.md`, `Loothing.toc`, `Loothing-Dev.toc`, and export metadata fixtures
-
-## [1.2.5] - 2026-03-12
+- Fixed decoder output so empty settings tables are shown as objects instead of empty arrays.
+- Fixed Brainrot Mode not activating due to SavedVariables not being available at early load time.
 
 ### Changed
+- Existing brainrot language override users are automatically migrated to the new toggle on first load.
+- Updated release-facing version references to `1.2.7`.
 
-#### Session Trigger Policy Refactor (`Core/Constants.lua`, `Core/SettingsVoting.lua`, `Data/Session.lua`)
+## [1.2.6] - 2026-03-15
 
-- Replaced the single `sessionTriggerMode` setting with a split policy model:
-  - **`sessionTriggerAction`**: `manual` | `prompt` | `auto` — what happens on an eligible boss kill
-  - **`sessionTriggerTiming`**: `encounterEnd` | `afterLoot` — when the action fires relative to the kill
-  - **Encounter scope toggles**: `sessionTriggerRaid` (default on), `sessionTriggerDungeon` (default off), `sessionTriggerOpenWorld` (default off)
-- `OnEncounterEnd` now gates on instance type: PvP, arena, and scenario encounters are always rejected; raid/dungeon/open-world are controlled by the scope toggles (test mode bypasses the scope gate)
-- Extracted `ClassifyEncounterScope()`, `IsScopeEnabled()`, and `ApplyTriggerAction()` as focused helpers on `SessionMixin`
-- afterLoot timing now uses `ApplyTriggerAction()` (respects action=auto for direct start after debounce, not just prompt)
-- Default behavior is unchanged: prompt + encounterEnd + raid-only
-
-#### Settings UI (`Core/Options/SessionSettings.lua`)
-
-- Replaced the single "Session Trigger Mode" dropdown with two dropdowns (Action, Timing) and three scope toggles (Raid, Dungeon, Open World) under a "Session Trigger" header
-- Added help text noting PvP/arena/scenario exclusion and raid-only default
-
-#### MLDB Sync (`Data/MLDB.lua`)
-
-- Session trigger policy fields are now broadcast to raid members via MLDB (5 new compression keys: `sta`, `stt`, `str`, `std`, `stow`)
-- `GatherSettings()` includes the split trigger fields; `ApplyFromML()` applies them through the validated setters
-
-#### Locale (`Locale/enUS.lua`)
-
-- Added 11 new locale strings for the split trigger controls (header, action, timing, scope labels and descriptions)
+### Added
+- Added profile export and import for settings, including create-new-profile and apply-to-current options.
+- Added full profile management in the settings UI: create, switch, copy, delete, reset, export, and import.
+- Added ignore-list management in settings so items can be added or removed more easily.
+- Enabled session announcement flows that were configured but not previously firing.
 
 ### Fixed
+- Fixed a long list of raid-critical issues affecting vote resolution, sync stability, ML detection retries, auto-award deduping, rate-limited whisper handling, and RollFrame timer cleanup.
+- Fixed multiline config inputs so large pasted exports no longer overflow or behave badly in the config UI.
+- Fixed several profile UI edge cases around deletion, import handling, and settings persistence.
 
-#### Migration and Profile Switch Safety (`Core/SettingsVoting.lua`)
+### Changed
+- Added the settings API needed to support profile export and import cleanly.
 
-- Lazy migration from legacy `sessionTriggerMode` to split fields on first access; legacy `GetSessionTriggerMode`/`SetSessionTriggerMode` remain as compatibility shims
-- Removed instance-level migration flag that prevented migration from running after profile switches
+## [1.2.5] - 2026-03-13
 
-#### Stale afterLoot Debounce on New Encounter (`Data/Session.lua`)
+### Added
+- Added more flexible session trigger settings with separate action, timing, and scope controls.
+- Added matching settings UI for raid, dungeon, and open-world trigger behavior.
 
-- `OnEncounterStart` now cancels any pending afterLoot debounce timer and resets the loot count, preventing stale state from a previous encounter from firing mid-combat
+### Fixed
+- Fixed legacy trigger migration so switching profiles no longer leaves old trigger settings behind.
+- Fixed after-loot debounce state so stale encounter state does not trigger later in the wrong fight.
+- Fixed settings navigation and layout issues in the options UI.
+- Fixed award-reason settings so edits now persist correctly.
 
-#### Cleanup Path State Reset (`Data/Session.lua`)
-
-- `EndSession` and `OnSessionStartReceived` now correctly clear `lastEligibleEncounter` and legacy aliases
-
-### Tests (`Debug/Tests/RollFrameSessionSettingsTests.lua`)
-
-- Replaced all placeholder trigger-mode tests with behavioral tests covering scope classification, default policy, scope enable/disable, wipe rejection, active-session suppression, afterLoot ML-only filtering, afterLoot+auto direct start, manual caching, legacy migration round-trips, and MLDB compression round-trips
-- Added constants validation for new `SessionTriggerAction`, `SessionTriggerTiming`, and `SessionTriggerScope` enums
-- Updated integration tests to verify new split accessor methods and helper method existence
+### Changed
+- Session start behavior is now easier to configure without changing the default raid-only prompt flow.
 
 ## [1.2.4] - 2026-03-12
 
 ### Added
-
-#### Manifest-Driven Builder And Analyzer (`../builder.py`, `../package.sh`, `../Loolib/manifest.lua`)
-
-- Replaced the old shell-heavy packager with a Python builder that now supports build, lint, analyze, and manifest inspection workflows
-- Restored a dedicated `loothing` preset and aligned release packaging with Loothing’s real embedded Loolib runtime requirements
+- Added a manifest-driven build and packaging workflow.
+- Expanded Loolib documentation and public metadata for shipped library families.
 
 ### Fixed
+- Fixed and hardened large parts of the embedded Loolib runtime, especially around UI, drag/drop, notes, canvas sync, and lifecycle cleanup.
+- Fixed release packaging so Loothing ships with the Loolib pieces it actually needs.
 
-#### Embedded Loolib Runtime Hardening (`../Loolib/`)
-
-- Pulled in the full Loolib hardening wave that stabilized all shipped families, including core lifecycle/data/event layers and the hardened UI families
-- Resolved the reviewed `ui-appearance` frame-validation regression and the late-discovered `ui-canvas` sync/history edge cases before finalizing the release
-
-#### Versioning And Release Metadata (`README.md`, `Loothing.toc`, `Loothing-Dev.toc`, `Debug/Tests/HistoryExportTests.lua`)
-
-- Updated live version references to 1.2.4 across release docs, dev TOC metadata, and export test fixtures
-- README installation notes now reflect packaged reality: the release zip embeds the required Loolib runtime subset, while standalone `Loolib/` is only needed for source-linked development
+### Changed
+- Updated release docs and metadata to match the real packaged addon contents.
 
 ## [1.2.3] - 2026-03-11
 
 ### Fixed
+- Fixed roster version replies so remote item level and spec information show up correctly.
+- Fixed history exports so JSON and compact exports preserve item links and nested vote data.
+- Fixed export dialogs so copy-heavy workflows are easier and more reliable.
 
-#### Roster iLvl Sync And Display (`Comm/MessageHandler.lua`, `Modules/VersionCheck.lua`, `UI/RosterPanel.lua`, `Core/Init.lua`)
-
-- Version replies now include the responder's equipped iLvl, active spec ID, and optional test-version tag so roster consumers can rebuild shared player metadata instead of only knowing the remote addon version
-- `VersionCheck` now writes responder iLvl/spec data into `PlayerCache` using the live group unit GUID when available, restoring remote roster iLvl visibility for everyone viewing the roster tab
-- The roster tab now falls back to version-query metadata if cache hydration has not completed yet, avoiding `?` rows while responses are still being processed
-- Opening the roster tab now triggers the existing throttled group version refresh path, so remote iLvl data is requested when the panel is viewed instead of waiting for a separate roster-change event
-- Manual raid/guild version queries now preserve previously known iLvl/spec metadata for online members until fresh responses arrive, preventing temporary roster iLvl flicker or accidental metadata loss during mixed-response queries
-- Group roster updates now always rescope the live version snapshot back to the actual party/raid roster, so a prior solo guild query can no longer leave raid members outside the stale guild snapshot
-- Guild queries no longer wipe persisted version-cache entries for offline or non-responding members before the query completes, preserving the intended cross-session version cache behavior
-- Version responses now ignore malformed or secret sender names instead of risking a nil-index write into the version cache
-
-#### History Export Reliability (`Data/History.lua`, `UI/HistoryPanel.lua`)
-
-- JSON history export now escapes raw WoW pipe codes (`|c...|Hitem...`) as `\u007C`, so large exports render and copy correctly in WoW's export edit box instead of collapsing into formatted garbage
-- JSON and compact/Web exports now include the original `itemLink` field alongside `itemID`/`itemName`, preserving full item-link fidelity for downstream imports
-- Compact/Web export now preserves nested array data inside snapshot tables, including `councilVotes.responses`, instead of silently dropping non-scalar nested fields
-- Large export dialogs now focus the export edit box automatically when shown, so the advertised `Ctrl+A`, `Ctrl+C` workflow works immediately without an extra click
-
-### Tests
-
-- Added `Debug/Tests/HistoryExportTests.lua` with regression coverage for pipe-safe JSON export, nested compact export serialization, and `itemLink` preservation
-
-### Documentation
-
-- Updated the addon data import guide to reflect the current 8 export formats, the JSON `{ metadata, entries }` envelope, and the restored `itemLink` field in exported entries
+### Added
+- Added regression coverage for history export formatting and compact export integrity.
 
 ## [1.2.2] - 2026-03-10
 
 ### Added
-
-#### Runtime Taint Audit And Diagnostics
-
-- Added `Core/Diagnostics.lua` with a lightweight runtime audit that tracks:
-  - `ADDON_ACTION_BLOCKED` / `ADDON_ACTION_FORBIDDEN` events
-  - secure-state checks for `UnitGUID`, `NotifyInspect`, `UnitName`, `GetRaidRosterInfo`, `GetPlayerInfoByGUID`, `SlashCmdList`, and `StaticPopupDialogs`
-  - unexpected `Loothing*` / `Loolib*` globals outside the explicit allowlist
-- Added dev-only `/lt taint`, `/lt taint scan`, and `/lt taint clear` commands
-- Diagnostics reuse the existing structured log buffer through the `TaintAudit` module name; no new SavedVariables were added
-
-#### Winner Determination Settings (`Core/Options/SessionSettings.lua`)
-
-New **Winner Determination** settings group in Session Settings:
-- **Winner Mode** — `HIGHEST_VOTES` (auto-award top candidate), `ML_CONFIRM` (ML confirms from shortlist), `AUTO_HIGHEST_CONFIRM` (auto-select highest then show confirmation)
-- **Tie Breaker** — `ROLL` (simulated random roll), `ML_CHOICE` (ML decides), `REVOTE` (force another vote round)
-- **Auto-award on Unanimous** — automatically award when every council member votes for the same candidate
-- **Require Confirmation** — show a confirmation dialog before the award is applied
-- **Maximum Re-votes** slider (0–10); `VotingSession` now reads this at init instead of using a hardcoded value of 2
-
-#### IRV Rounds Visualization (`UI/ResultsPanel.lua`)
-
-When IRV (Instant-Runoff Voting) results include round data, the Results Panel shows a collapsible round-by-round breakdown:
-- Toggle button below the response summary shows "Show IRV Rounds (N rounds)"
-- Expanding the container shows per-round vote tallies and eliminations
-- Candidate rows reflow correctly when the rounds container is toggled
-
-#### Interactive Ranked Choice Display (`UI/VotePanel.lua`)
-
-`CreateRankedDisplay` rewritten from a static text field to an interactive reorderable panel:
-- Candidate rows can be dragged to reorder rankings
-- Helper text enforces min/max rank constraints inline ("Rank at least 2 choices", "Maximum 5 ranks reached")
-- Clear button resets all rankings instantly
-- Locale lookups use safe fallbacks throughout
-
-#### RCV-Aware Vote Button Labels (`UI/CouncilTable`)
-
-Council table vote buttons and row click handler are now aware of voting mode:
-- Button text shows **Rank** / **Ranked** (green) in `RANKED_CHOICE` mode, **Vote** / **Voted** in `SIMPLE` mode
-- Clicking the Vote button in RCV mode opens the `VotePanel` for ranking instead of toggling a simple vote
+- Added runtime taint diagnostics and audit tooling for development builds.
+- Added winner-determination settings such as tie-breaker mode, confirmation behavior, and unanimous auto-award.
+- Added IRV round-by-round display in the Results panel.
+- Added a more interactive ranked-choice voting panel.
 
 ### Fixed
-
-#### Secret-Value And Unsafe Runtime Callers
-
-- `Loolib/Data/SavedVariables.lua` now guards scope-key generation against secret or missing unit API returns, falling back to stable placeholder values instead of crashing on tainted paths
-- `Loolib/Data/SavedVariables.lua` now waits for its actual saved-variable table before initializing on `ADDON_LOADED`, avoiding session-long attachment to a fresh empty table during unrelated addon loads
-- `Core/Migration.lua` no longer rebuilds profile keys from raw `UnitName("player")`; it now uses `SafeUnitName("player")` while preserving the SavedVariables character-key format (`"Name - Realm"`)
-- `Data/TradeQueue.lua` no longer makes the invalid `UnitName("NPC")` call when the trade recipient label is empty
-- Production-loaded `Debug/TestMode.lua` now uses safe player-name accessors instead of raw `UnitName("player")`
-- `Debug/TestMode.lua` once again routes `/lt test on|off|toggle` through the real simulator lifecycle while still honoring `TestModeState` prerequisite checks
-
-#### Namespace And Global-Surface Cleanup
-
-- Added the expected-global allowlist to diagnostics without tripping the architecture audit
-- Removed the remaining repo-owned bare global factory exports from optional Loolib popup/canvas modules by keeping those factory functions local to their modules
-- `Loolib/UI/Widgets/PopupMenu.lua` now preserves explicit `false` item values and propagates parent `OnSelect` callbacks into nested submenus
-- Optional popup examples and the popup test harness now use `Loolib.UI` module exports instead of the removed bare globals
-
-#### `CHAT_MSG_SYSTEM` Secret-String Crash (`Data/RollTracker.lua`, `UI/RollFrame/Events.lua`)
-
-**Symptom**: `[Loolib Error] Callback error for event CHAT_MSG_SYSTEM : attempt to perform string conversion on a secret string value (tainted by 'Loothing')` — fired twice per death/system message in a raid.
-
-**Root cause**: In WoW 12.0, hardware-protected system messages (player deaths, `[You died.]`) arrive as secret-valued strings. `tostring()` itself is a string-conversion operation that throws on secret strings in untrusted addon code. Two separate `Events.Registry` registrations (one in `RollTracker:Init()`, one in `Core/Init.lua`) both invoked `OnChatMessage`, doubling every error.
-
-**Fix**:
-- Added `if SecretUtil.IsSecretValue(text) then return end` guard before `tostring()` in both `RollTrackerMixin:OnChatMessage` and `RollFrameMixin:OnChatMessage`. Roll messages are never secret-valued, so legitimate rolls are unaffected.
-- Removed the redundant `CHAT_MSG_SYSTEM` registration from `Core/Init.lua`; `RollTracker:Init()` self-registers and is the sole listener.
-- Cached `local SecretUtil = Loolib.SecretUtil` at module level in both files to avoid repeated table traversal on a hot event path.
-
-#### Loolib Note Modules: `SecretUtil` Wrappers (`Loolib/UI/Note/`)
-
-`NoteRenderer.lua` and `NoteMarkup.lua` called `GetRaidRosterInfo()`, `UnitName()`, and `UnitClass()` without secret-value protection, creating taint risk on any tainted code path in combat.
-
-- **`NoteRenderer.lua`** — `UpdateRaidRoster()`: replaced 7 raw API calls with `SecretUtil.SafeGetRaidRosterInfo()`, `SecretUtil.SafeUnitName()`, and `SecretUtil.SafeUnitClass()`
-- **`NoteMarkup.lua`** — `UpdatePlayerContext()`: replaced 4 raw API calls with safe wrappers; consolidated the two `SafeUnitClass("player")` calls into one (`local _, classToken, classID = SecretUtil.SafeUnitClass("player")`); added `if not fullName then return end` guard to prevent `nil:match()` when the player name is secret
-
-#### `GroupLootDisplay`: Taint-Safe Frame Removal (`Loot/GroupLootDisplay.lua`)
-
-`GroupLootContainer_RemoveFrame(GroupLootContainer, frame)` is now wrapped in `pcall` so that if Blizzard secures or removes `GroupLootContainer` in a future patch, the error is silently swallowed rather than propagating up the call stack. The loot frame may remain visible in that edge case, which is preferable to an unhandled Lua error.
-
-### Tests
-
-- Added `Debug/Tests/VotingTests.lua` with coverage for winner-determination modes (highest-votes, ML-confirm, auto-confirm), tie-breaker selection, and unanimous auto-award logic
-- Added `Debug/Tests/DiagnosticsTests.lua` to cover unexpected-global detection, allowlist handling, blocked-action capture, tracked-global secure-state/baseline reporting, missing-expected-global detection, and audit reset behavior
-- Extended `Debug/Tests/SecretValueTests.lua` with regression coverage for SavedVariables scope-key fallbacks and migration profile-key lookup
-
-### Validation
-
-- `luac -p` passes on all edited Lua files
-- `./lint.sh --audit` passes with 0 errors and 0 warnings
+- Fixed multiple secret-value and taint-related crash paths across SavedVariables, migration, trade handling, UI, note rendering, and chat-event processing.
+- Fixed several namespace and runtime-surface issues in both Loothing and Loolib.
+- Fixed a group-loot display edge case so frame-removal failures no longer bubble into a hard Lua error.
 
 ## [1.2.1] - 2026-03-10
 
-### Performance
+### Added
+- Added stronger ranked-choice voting controls, including rank limits, revote limits, and winner-determination settings in the UI.
+- Added IRV round visualizations in the Results panel.
+- Added a better ranking workflow for council voting.
+- Added automatic web-export opening at session end as an optional history setting.
 
-#### Web Export: Eliminated UI Freeze for Large History Sets
-
-The "Web" export button previously caused a 10–60+ second UI freeze when exporting large history datasets (500+ entries). Three compounding bottlenecks were identified and resolved.
-
-##### Compressor: Hash-Chain LZ77 (`Loolib/Comm/Compressor.lua`)
-
-Replaced the naive `FindLongestMatch` (O(N × 32768) backward scan) with `FindLongestMatchHC`, a hash-chain implementation:
-- 3-byte rolling hash maps each position into a 65536-bucket chain; walk capped at 64 steps
-- Worst-case comparisons drop from `N × 32,768` to `N × 64` — **estimated 100–500× speedup** on typical JSON input
-- Pre-computed reversed Huffman codes (`FIXED_LIT_REV/LEN`, `FIXED_DIST_REV/LEN`) eliminate a per-symbol bit-reversal loop — **~2–4× throughput** in the compression hot loop
-- Pre-computed length/distance lookup tables (`LENGTH_CODE_LOOKUP_C/E`, `DIST_CODE_LOOKUP_C/E`) replace linear search through 30 base entries — **~5–15× improvement** per match-code lookup
-- Pre-computed Base64 lookup table (`BASE64_LOOKUP[0..63]`) eliminates four `string:sub()` allocations per 3-byte group in `EncodeForPrint`
-
-##### Compact JSON Serialiser (`Data/History.lua`)
-
-New `ExportCompactJSON()` replaces the recursive `toJSON()` used by `ExportCompact()`:
-- Fixed `string.format` template covers all 36 fields per entry — no recursion, no intermediate table allocation, no key sorting, no indentation
-- **Estimated 3–10× faster** JSON serialisation; combined with compressor gains, Web export for 2000 entries is projected to drop from 10–60 s to under 1 s
-- `ExportCompact()` updated to use compression level 6 (level 9 was previously a no-op)
-
-##### Large-Export EditBox Routing (`UI/HistoryPanel.lua`)
-
-WoW's `MultiLineEditBox` layout pass freezes the frame for inputs larger than ~40 KB:
-- Added `GetOrCreateHugeExportFrame()` — lazy singleton 700×80 frame with a single-line `EditBox` that skips the full layout pass, rendering any-size string instantly
-- `SetExportText(text)` routes by size: ≥40 KB → single-line frame; <40 KB → existing scrollable editBox
-- All 8 format buttons and the default CSV load route through `SetExportText`
+### Fixed
+- Fixed multiple ranked-choice voting correctness issues, including candidate extraction and tie-breaking behavior.
+- Fixed web export performance so very large history exports no longer freeze the UI as badly.
+- Fixed compact web exports so response definitions are included for downstream importers.
+- Fixed namespace cleanup and several performance hot spots in history, version checking, trade watching, and addon comm processing.
 
 ## [1.2.0] - 2026-03-09
 
 ### Changed
+- Completed the move away from addon-owned runtime globals to the shared namespace and Loolib interface model.
+- Cleaned up core, data, communication, council, UI, and test exports to use consistent namespaced access.
 
-#### Complete Namespace Migration to Loolib Interface Model
-Loothing no longer creates any `Loothing*`, `CreateLoothing*`, or `Loothing_*` runtime globals. All addon code now resolves shared state through the `ns` (addon namespace) table, with Loolib owning all Blizzard-facing integration points.
-
-##### Bootstrap Shim Removed
-- **`Core/Bootstrap.lua`**: Removed the 77-line `_G` metatable proxy that intercepted reads/writes to `Loothing*` globals. Bootstrap now contains only the 9-line namespace setup: `ns.Locale`, `ns.Addon`, and `Addon.Locale`/`Addon.ns`.
-- **`ns.GlobalSymbols`** table eliminated — no code references it.
-
-##### Core Namespace Conversions (16 files)
-- `LoothingUtils` → `ns.Utils` (local alias `Utils`) — 49 consumer files migrated
-- `LoothingSettingsMixin` → `ns.SettingsMixin` (~250 refs in Settings.lua)
-- `LoothingSessionMixin` → `ns.SessionMixin` (~71 refs in Session.lua)
-- `LoothingMLDBMixin` → `ns.MLDBMixin`, `CreateLoothingMLDB` → `ns.CreateMLDB`
-- `LoothingClassColors` → `ns.ClassColors`
-- `LoothingResponseManager` → `ns.ResponseManager`
-- `LoothingItemFilter` → `ns.ItemFilter`
-- `LoothingAutoAward` → `ns.AutoAward`
-- `LoothingAnnouncer` → `ns.Announcer`
-- `LoothingOptionsTable` → `ns.OptionsTable`
-
-##### Data Layer Conversions (17 files)
-- `LoothingItemDataMixin` → `ns.ItemDataMixin` (~64 refs)
-- `LoothingCandidateDataMixin` → `ns.CandidateDataMixin` (~73 refs)
-- `LoothingVoteDataMixin` → `ns.VoteDataMixin` (~61 refs)
-- `LoothingCandidateMixin` → `ns.CandidateMixin`
-- `LoothingCandidateCollectionMixin` → `ns.CandidateCollectionMixin`
-- `LoothingVoteMixin` → `ns.VoteMixin`
-- `LoothingHistoryMixin` → `ns.HistoryMixin`
-- `LoothingTradeQueueMixin` → `ns.TradeQueueMixin`
-- `LoothingItemStorageMixin` → `ns.ItemStorageMixin`
-- `LoothingPlayerCacheMixin` → `ns.PlayerCacheMixin`
-- `LoothingRollTrackerMixin` → `ns.RollTrackerMixin`
-- `LoothingEncounterData` → `ns.EncounterData`
-- `LoothingTrinketData` → `ns.TrinketData`
-- `_G.LoothingTokenTable` → `ns.TokenTable`, `_G.LoothingTokenIlvls` → `ns.TokenIlvls`
-
-##### Communication Layer Conversions (7 files)
-- `LoothingCommMixin` → `ns.CommMixin`
-- `LoothingProtocolMixin` → `ns.Protocol`
-- `LoothingWhisperHandlerMixin` → `ns.WhisperHandlerMixin`
-- `LoothingAckTrackerMixin` → `ns.AckTrackerMixin`
-- `LoothingSyncMixin` → `ns.SyncMixin`
-- `LoothingRestrictionsMixin` → `ns.RestrictionsMixin`
-
-##### Council & Loot Conversions (6 files)
-- `LoothingVotingEngine` → `ns.VotingEngine`
-- `LoothingVotingSessionMixin` → `ns.VotingSessionMixin`
-- `LoothingAutoPass` → `ns.AutoPass`
-
-##### UI Layer Conversions (28 files)
-- All UI mixin/factory exports moved to `ns.*` (SessionPanel, RollFrame, CouncilTable, TradePanel, RosterPanel, HistoryPanel, MainFrame, VotePanel, Skinning, Filters, etc.)
-- All `CreateLoothing*` factory functions renamed to `Create*` on `ns`
-- `LoothingUI_*` helper functions renamed (e.g., `CreateCandidateResultRow`, `CreateResponseRow`)
-
-##### Debug & Test Conversions (15 files)
-- `LoothingTestMode` → `ns.TestMode` (dev-only export; production uses `ns.TestModeState`)
-- `LoothingTestRunner` → `TestRunner` (global, no `Loothing` prefix)
-- `LoothingTestHelpers` → `TestHelpers` (global)
-- `LoothingAssert` → `Assert` (global)
-- Updated user-facing print messages to reference new API names
-
-##### Compat.lua Cleanup
-- `function Loothing.GetLootMethod()` → `function Addon.GetLootMethod()` (uses `local Addon = ns.Addon`)
-- `function Loothing.GetLootRollItemData()` → `function Addon.GetLootRollItemData()`
-
-##### Validation
-- All 104 Lua files pass `luac -p` syntax validation
-- `lint.sh` passes with 0 new errors, 0 new warnings
-- Static grep confirms zero `Loothing[A-Z]` identifiers in executable code (only in comments and string literals for stable WoW/UI identifiers)
-
-### Migration Notes
-- **SavedVariables**: Uses `LoolibDB` as the sole SavedVariables root.
-- **WoW frame names**: String literals like `"LoothingMainFrame"`, `"LoothingRollFrame"`, `"LoothingCouncilTable"`, `"LoothingAutoAwardTooltip"`, `"LoothingAutoPassTooltip"` are intentionally preserved — these are WoW UI frame names that must remain stable.
+### Fixed
+- Improved compatibility and stability after the namespace migration by removing legacy global access patterns.
 
 ## [1.1.8] - 2026-03-09
 
 ### Added
-
-#### `LoolibSecretUtil` — Library-level secret value handling
-WoW 12.0 introduced "secret values" — opaque Lua values returned by unit APIs (`UnitName`, `UnitClass`, `GetRaidRosterInfo`, `GetPlayerInfoByGUID`) on tainted execution paths during combat. Any operation (`==`, `string.find()`, `#`, table key) on a secret value errors. The `issecretvalue(value)` global detects them.
-
-v1.1.8 initially added `LoothingUtils.IsSecretValue()` and `LoothingUtils.SecretsForPrint()` at the addon level. This release **elevates** that functionality into Loolib as `LoolibSecretUtil` — a proper reusable module any Loolib consumer can use — then migrates all 14+ Loothing files to the library version.
-
-##### Core Detection Functions
-- **`LoolibSecretUtil.IsAvailable()`**: Returns `true` if `issecretvalue` global exists (WoW 12.0+)
-- **`LoolibSecretUtil.IsSecretValue(...)`**: Variadic check — returns `true` if any argument is a WoW secret value. No-op when `issecretvalue` is unavailable
-- **`LoolibSecretUtil.SecretsForPrint(...)`**: Replaces secret values with `"<secret>"` for safe output. Passthrough when `issecretvalue` is unavailable
-- **`LoolibSecretUtil.Guard(value, fallback?)`**: Returns `fallback` (default `nil`) if value is secret
-- **`LoolibSecretUtil.GuardToString(value, placeholder?)`**: Returns `tostring(value)` or `placeholder` (default `"<secret>"`) if secret
-
-##### Safe Unit API Wrappers
-- **`LoolibSecretUtil.SafeUnitName(unit, showServerName?)`**: Wraps `UnitName`/`GetUnitName` — returns `nil, nil` when name is secret
-- **`LoolibSecretUtil.SafeUnitClass(unit)`**: Wraps `UnitClass` — replaces secret returns with `nil`
-- **`LoolibSecretUtil.SafeGetRaidRosterInfo(index)`**: Wraps `GetRaidRosterInfo` — returns `nil` when name is secret, guards class/fileName/zone
-- **`LoolibSecretUtil.SafeGetPlayerInfoByGUID(guid)`**: Wraps `GetPlayerInfoByGUID` — returns `nil` when name is secret, guards class/race/realm
-
-##### Module Registration
-- **`Loolib/Utils/SecretUtil.lua`** (NEW): ~182 lines, registered via `Loolib:RegisterModule("SecretUtil", LoolibSecretUtil)`
-- **`Loolib/loolib.toc`**: Added `Utils\SecretUtil.lua` before `Utils\Transmog.lua` in the Utils section
-- All functions are pre-12.0 compatible (early-return raw API results when `issecretvalue` is nil)
-
-##### Backward Compatibility
-- **`LoothingUtils.IsSecretValue`** and **`LoothingUtils.SecretsForPrint`** retained as thin delegates to `LoolibSecretUtil` equivalents
-- **`Debug/Tests/SecretValueTests.lua`**: Added `LoolibSecretUtil` test suite (IsAvailable, IsSecretValue, SecretsForPrint, Guard, GuardToString) alongside existing delegation verification tests
-
-### Changed
-
-#### Migration from manual guards to `LoolibSecretUtil` safe wrappers (14 files)
-All raw `UnitName`/`UnitClass`/`GetRaidRosterInfo`/`GetPlayerInfoByGUID` calls with manual `IsSecretValue` guards replaced with single `LoolibSecretUtil.Safe*` wrapper calls across the codebase:
-
-- **`Core/Utils.lua`**: `GetPlayerFullName`, `NormalizeName`, `GetShortName`, `IsSamePlayer`, `GetRaidRoster`, `IsGuildGroup` — all migrated to `LoolibSecretUtil` calls
-- **`Core/Init.lua`**: `DetermineML` raid/party branches, `Debug`/`Error`/`Print` varargs
-- **`Core/SettingsVoting.lua`**: `GetMasterLooter` raid/party branches
-- **`Core/AutoAward.lua`**: `FindDisenchanter`, `IsPlayerInRaid` (solo + loop)
-- **`Comm/Handlers/Core.lua`**: `isGroupLeaderOrAssistant` raid/party branches
-- **`Council/CouncilMembers.lua`**: `GetCurrentGroupMembers` party branch
-- **`Modules/VersionCheck.lua`**: `GroupHasVersion`, `GetOutdatedMembers`, `GetCurrentRosterNames`, `Query`
-- **`Data/Session.lua`**: `OnLootReceived` ownership check
-- **`Data/PlayerCache.lua`**: `Get`, `GetOrCreate`, `FetchFromGUID`, `Invalidate`, `SplitNameRealm`
-- **`Debug/ErrorHandler.lua`**: `CaptureError` defensive guard
-- **`UI/RosterPanel.lua`**: `BuildUnitMap` all 3 branches
-- **`UI/TradePanel.lua`**: `FindUnitIdForPlayer` group loop + target
-- **`UI/VersionCheckPanel.lua`**: `QueryVersions` solo branch
-- **`UI/SyncPanel.lua`**: `GetOnlineMembers` player name
+- Added `LoolibSecretUtil`, a reusable library for safely handling WoW 12.0 secret values.
 
 ### Fixed
+- Fixed crashes caused by secret values in name handling, ML detection, roster iteration, comm authorization, UI panels, player cache, and debug/error output.
 
-#### Name-handling functions crash on secret values
-- **`GetPlayerFullName()`**: `UnitName("player")` can return a secret value during combat on tainted paths. Now uses `SafeUnitName` and returns `nil` instead of crashing
-- **`NormalizeName(name)`**: Secret name input caused `name:find("-")` to error. Now returns `nil` for secret inputs
-- **`GetShortName(fullName)`**: Secret input caused `fullName:match()` to error. Now returns `nil` for secret inputs
-- **`IsSamePlayer(name1, name2)`**: Either name being secret caused comparison crash. Now returns `false` for secret inputs
-- **`GetRaidRoster()` raid branch**: Uses `SafeGetRaidRosterInfo` — secret names skip the roster entry
-- **`GetRaidRoster()` party branch**: Uses `SafeUnitName`/`SafeUnitClass` — secret names skip the entry, secret class sets class fields to nil
-- **`IsGuildGroup()`**: Raw `GetRaidRosterInfo` call migrated to `SafeGetRaidRosterInfo` with nil guard on name
-
-#### ML detection crash on secret values during combat
-- **`DetermineML()` in `Init.lua`**: Uses `SafeGetRaidRosterInfo`/`SafeUnitName` — nil name triggers ML retry
-- **`GetMasterLooter()` in `SettingsVoting.lua`**: Uses `SafeGetRaidRosterInfo`/`SafeUnitName` — skips secret names
-
-#### Comm handler crash on secret values
-- **`isGroupLeaderOrAssistant()` in `Comm/Handlers/Core.lua`**: Uses `SafeGetRaidRosterInfo`/`SafeUnitName` — prevents combat-time message rejection crashes
-
-#### AutoAward crash on secret values
-- **`FindDisenchanter()`**: Uses `SafeUnitName(unit, true)` and `SafeGetRaidRosterInfo` — nil name safely handled by `note = publicNote or ""`
-- **`IsPlayerInRaid()`**: Uses `SafeUnitName` for both solo check and group loop
-
-#### UI panel crashes on secret values during combat
-- **`BuildUnitMap()` in `RosterPanel.lua`**: All 3 `UnitName` calls replaced with `SafeUnitName`
-- **`FindUnitIdForPlayer()` in `TradePanel.lua`**: Uses `SafeUnitName` with nil checks
-- **`QueryVersions()` solo branch in `VersionCheckPanel.lua`**: Uses `SafeUnitName`/`SafeUnitClass`
-- **`GetOnlineMembers()` in `SyncPanel.lua`**: Uses `SafeUnitName` — single call replaces raw API + guard
-
-#### Council/module crashes on secret values
-- **`GetCurrentGroupMembers()` in `CouncilMembers.lua`**: Uses `SafeUnitName`/`SafeUnitClass`
-- **`GroupHasVersion()`/`GetOutdatedMembers()`/`GetCurrentRosterNames()`/`Query()` in `VersionCheck.lua`**: All migrated to `SafeGetRaidRosterInfo`/`SafeUnitName`
-- **`OnLootReceived()` in `Session.lua`**: Uses `SafeUnitName` for ownership check
-
-#### PlayerCache crashes on secret value inputs
-- **`Get(nameOrGUID)`**: Early return `nil` via `LoolibSecretUtil.IsSecretValue`
-- **`GetOrCreate(nameOrGUID)`**: Early return `nil` before creating entries with secret keys
-- **`FetchFromGUID(guid)`**: Uses `SafeGetPlayerInfoByGUID` — replaces raw call + 3 manual guards
-- **`Invalidate(nameOrGUID)`**: Early return `false` if input is secret
-- **`SplitNameRealm(fullName)`**: Early return `nil, nil` if input is secret
-
-#### Error handler crash on secret error messages
-- **`CaptureError(msg)` in `ErrorHandler.lua`**: Uses `LoolibSecretUtil.IsSecretValue` for defensive guard
-
-#### Debug/Print output safety
-- **`Loothing:Debug()`**, **`Loothing:Error()`**, **`Loothing:Print()`** in `Init.lua`: Pass varargs through `LoolibSecretUtil.SecretsForPrint()`
+### Changed
+- Migrated Loothing to use the new Loolib secret-value wrappers instead of manual guards.
 
 ## [1.1.7] - 2026-03-08
 
 ### Fixed
-
-#### Taint-unsafe string method calls on event payloads
-- **`CHAT_MSG_SYSTEM` roll parsing crashed during combat**: `RollFrame/Events.lua` called `text:match()` on the tainted event payload string, triggering "attempt to index local 'text' (a secret string value tainted by 'Loothing')" errors when another player `/roll`ed during combat. Fixed with `tostring()` detaint + `string.match()` global function call (same pattern as RollTracker fix in v1.1.6)
-- **`CHAT_MSG_WHISPER` handler crashed during combat**: `WhisperHandler.lua` called `strtrim(message)`, `message:sub()`, `text:gmatch()`, and `parts[1]:lower()` on tainted event payload strings. Both `message` and `sender` are now detainted with `tostring()` at the handler entry point, making all downstream string operations safe
-- **Defensive `string.sub()` in Announcer**: `Announcer.lua` used `text:sub(1, 40)` in a debug log inside `SendToChannel()`. While `text` is internally constructed (not from an event), changed to `string.sub(text, 1, 40)` for consistency with the project's taint-safe pattern
+- Fixed taint-unsafe string handling in combat event payloads for roll parsing, whisper commands, and related debug output.
 
 ## [1.1.6] - 2026-03-08
 
 ### Fixed
-
-#### Nil-realm crash on early addon load
-- **`GetPlayerFullName()` crashed before PLAYER_LOGIN completed**: `GetNormalizedRealmName()` returns `nil` during early initialization (before PLAYER_LOGIN fires or on first load). The function naively concatenated `name .. "-" .. nil`, producing a Lua error that propagated up through `Session:IsMasterLooter()` → `SessionPanel:UpdateHeader()` → `MainFrame:Init()`, preventing the addon from loading at all
-- **`NormalizeName()` had the identical crash**: Any call path that normalized a name without an existing realm suffix (roster building, ML detection, `IsSamePlayer()`) would also crash with a nil concatenation when both realm APIs returned nil
-- **`PlayerCache` could store nil realm and crash on index key**: When `GetPlayerInfoByGUID` returned an empty realm and `GetNormalizedRealmName()` was also nil, the fallback assigned nil to `realmName`. A subsequent `byName[name .. "-" .. realmName]` index write then crashed identically
-- **Fix (all three sites)**: Replaced bare `GetNormalizedRealmName()` with the nil-safe fallback chain `GetNormalizedRealmName() or GetRealmName() or ""`. An empty-string guard avoids a trailing `-` when both APIs return nil/empty. `PlayerCache:GetShortName()` same-realm comparison updated to use the same fallback so same-realm players aren't shown with a redundant realm suffix after first load
-
-#### Removed stale temp file
-- **`Core/Constants.lua.tmp`** (empty 1-line leftover) deleted from the repository
+- Fixed early-load crashes caused by missing realm names before player/login state was fully available.
+- Removed a stale temporary file from the repo.
 
 ## [1.1.5] - 2026-03-08
 
 ### Added
-
-#### Bulk Actions for SessionPanel Items
-- **Multi-select support**: Ctrl+click to toggle individual items, Shift+click for range selection, plain click for single-select (backward compatible)
-- **Bulk action bar**: Gold-tinted toolbar appears when 2+ items are selected, showing state-aware action buttons with counts: Start Vote (N), End Vote (N), Skip (N), Remove (N), Re-Vote (N), plus Select All / Deselect buttons and a right-aligned selection count label
-- **Bulk action handlers**: Each button filters selected items by applicable state and calls existing Session methods. Destructive actions (Skip, Remove, Re-Vote) show `LoothingPopups:Confirm()` dialogs before executing
-- **Bulk context menu**: Right-clicking a multi-selected row shows a context menu with state-filtered bulk actions via `MenuUtil.CreateContextMenu()`. Right-clicking an unselected row falls through to the normal single-item context menu
-- **Selection pruning**: When items are removed/awarded during a session, stale GUIDs are automatically pruned from the selection set on the next `RefreshItems()` call
-- **ItemRow `onContextMenu` callback**: New callback hook in `LoothingItemRowMixin:OnClick()` allows parent panels to intercept right-click before the default context menu fires (returns `true` to suppress default)
-- **12 new locale strings** in `enUS.lua`: `BULK_START_VOTE`, `BULK_END_VOTE`, `BULK_SKIP`, `BULK_REMOVE`, `BULK_REVOTE`, `BULK_AWARD_LATER`, `DESELECT_ALL`, `N_SELECTED`, `REMOVE_ITEMS`, `CONFIRM_BULK_SKIP`, `CONFIRM_BULK_REMOVE`, `CONFIRM_BULK_REVOTE`
-
-### Changed
-- **SessionPanel selection model**: Replaced single `selectedItem` tracking with `selectedItems` (guid -> item map) plus `lastClickedGuid` for range selection. `selectedItem` is still set for backward compatibility when exactly 1 item is selected
-- **Bulk bar visibility**: ML-only action buttons are hidden (not just disabled) for non-ML users. Select All / Deselect buttons remain visible for all users
-- **Scroll frame anchor adjustment**: Scroll frame top anchor shifts down by 28px when the bulk bar is visible, matching the existing `ToggleFilterBar()` pattern
+- Added bulk actions for session items, including multi-select, bulk vote controls, bulk remove/skip/revote, and a bulk action bar.
 
 ### Fixed
+- Fixed council vote submission from the VotePanel.
+- Fixed `SESSION_END` authorization after heartbeat timeout edge cases.
+- Fixed MLDB key collisions that could corrupt synced button colors.
+- Fixed vote retraction behavior for non-ML council members.
+- Fixed noisy Loolib warning capture from unrelated addons and Blizzard UI.
 
-#### VotePanel Call Signature Mismatch (vote commit rejection)
-- **Council votes were rejected by ML with "Rejected vote commit with invalid responses"**: `VotePanel:SubmitVote()` was calling `Session:SubmitVote(guid, playerName, playerClass, responses, note)` but `Session:SubmitVote` only accepts `(itemGUID, responses)`. The `responses` parameter in Session was receiving `playerName` (a string), causing `type(data.responses) ~= "table"` to reject every vote
-- **Fix**: Removed unused `playerName` and `playerClass` locals from `VotePanel:SubmitVote()`; call is now `Session:SubmitVote(self.item.guid, responses)`
-
-#### SESSION_END Rejected from ML After Heartbeat Timeout
-- **Clients rejected SESSION_END from the ML with "Rejected SESSION_END from non-ML"**: `isMasterLooter()` in `Comm/Handlers/Core.lua` relied solely on `Session:GetMasterLooter()`, which returns `nil` after `EndSession()` clears `self.masterLooter`. When a heartbeat timeout ended the session before the SESSION_END message arrived, the ML check failed for all 18+ handler call sites
-- **Fix**: `isMasterLooter()` now falls back to `Settings:GetMasterLooter()` when the session ML is nil, preserving authorization through the end-of-session window
-- **Also fixed**: `Session:IsMasterLooter()` now uses `LoothingUtils.IsSamePlayer()` instead of `==` for cross-realm name comparison safety
-
-#### MLDB Key Collision Corrupts Button Colors After Sync
-- **Synced RollFrame/VotePanel buttons appeared white after MLDB broadcast**: `MLDB:ReplaceKeys()` recursed into ALL nested tables using the full compression/decompression map. Color tables `{r=0, g=1, b=0}` were corrupted during decompression because `DECOMPRESSION_KEYS["r"] = "reason"`, producing `{reason=0, g=1, b=0}` — the red channel was lost and all buttons rendered white
-- **Fix**: Added `LEAF_KEYS` set marking `color`/`c` and `whisperKeys`/`wk` as leaf tables. `ReplaceKeys()` skips key replacement when entering a leaf subtable and propagates the `isLeaf` flag to all nested levels, preventing collision for the full leaf subtree
-
-#### Vote Retraction from Non-ML Council Silently Failed
-- **Non-ML council members could not retract votes**: `RetractAllVotes()` sends `{}` (empty responses) via `SendVoteCommit` to signal retraction, but `HandleRemoteVoteCommit` rejected any payload with `#data.responses == 0`
-- **Fix**: Split the validation — non-table payloads are still rejected, but an empty table is now treated as a retraction: calls `item:RemoveVote(data.voter)` and broadcasts updated voter lists to the council (mirroring the ML-local retraction path). Added nil guard on `data.voter` to prevent spurious broadcasts when voter is absent
-
-#### Loolib: Global LUA_WARNING Noise
-- **Blizzard and third-party addon warnings appeared as "[Loolib ERROR]"**: `LoolibErrorHandlerMixin:OnLuaWarning()` captured all `LUA_WARNING` events globally (e.g., Blizzard's `EditModeManager.lua` trying to anchor `ChatFrame1` to the missing `LeftChatPanel` region in WoW 12.0), unlike `ADDON_ACTION_BLOCKED/FORBIDDEN` which filter by addon name
-- **Fix**: `OnLuaWarning` now captures the call stack at warning time and only records the warning if any frame references `AddOns/Loolib/` or a registered Loolib-based addon path. Blizzard and unrelated third-party warnings are silently ignored
+### Changed
+- Expanded MLDB sync so more session-relevant settings are shared across the group.
 
 ## [1.1.4-r2] - 2026-03-08
 
 ### Added
-
-#### Bulk Add Items to Session
-- **AddItemFrame now supports queuing multiple items before adding**: Previously, each item required opening the frame, adding one item, and the frame closing. Now items accumulate in a queue before being submitted all at once
-- **Tab 1 (Enter Item)**: Paste/drag items one after another — each resolved item appends to a scrollable queue list with per-item remove buttons. Duplicate links are rejected. EditBox auto-clears after each successful queue
-- **Tabs 2 & 3 (Recent Drops / From Bags)**: Rows now toggle multi-select on click instead of exclusive single-select. Selected rows highlight (`0.12, 0.12, 0.28`), deselected rows reset. Queue tracks all selected items across the list
-- **Add button shows count**: Button text updates to "Add (N)" reflecting current queue size; disabled when queue is empty
-- **Bulk add on submit**: `OnAddClick` loops over the queue, calling `Session:AddItem()` for each entry, then reports the total added count
-- **Queue cleared on tab switch and frame open/close**: Prevents stale state from carrying across tabs or sessions
-- **Stale resolve guard**: Added generation counter (`_resolveGen`) to `OnItemInputChanged` — only the most recent resolve callback is honored, preventing partial typing of item IDs from queuing intermediate items
+- Added bulk item queueing to the Add Item frame so multiple items can be added in one pass.
 
 ### Fixed
-
-#### Multi-Vote Bypass with `multiVote` Disabled
-- **Wrong default fallback allowed multi-voting**: `Rows.lua` used `Settings:Get("voting.multiVote", true)` — the `true` fallback meant multi-vote was always allowed when the setting was absent. Replaced with the typed getter `Settings:GetMultiVote()` which defaults to `false`, matching `Constants.lua`
-
-#### Self-Vote Never Enforced
-- **`selfVote` setting had no effect**: The setting was defined, synced via MLDB, and configurable in the options UI, but never checked when casting votes. Added client-side guard in `OnVoteClick` that blocks self-votes with a user message, and visual feedback in `Columns.lua` that dims/disables the vote button for the player's own candidate row when `selfVote` is disabled
-
-#### No Server-Side Vote Validation
-- **ML accepted any vote payload**: `HandleRemoteVoteCommit` in `Session.lua` accepted multi-candidate responses even when `multiVote` was disabled, and never checked `selfVote`. Added ML-side enforcement: multi-vote payloads are truncated to the last vote when `multiVote` is off, and self-vote candidates are filtered from responses when `selfVote` is off
-
-#### "Hide Vote Counts" Session Setting Not Working
-- **Vote counts displayed regardless of `hideVotes` setting**: The `GetHideVotes()` check was only applied in `CouncilTable/Columns.lua`. Three other UI locations displayed vote counts unconditionally:
-  - **ItemRow.lua** (VOTING state): Showed `"X Votes"` when timer expired, ignoring hideVotes
-  - **ItemRow.lua** (TALLIED state): Always showed vote count text
-  - **ResultsPanel.lua** (`SetItem`): Total votes summary always displayed in item header
-  - **ResultsPanel.lua** (`UpdateWinnerSection`): Winner recommendation showed `"(X votes)"` suffix
-- **Fix**: All four locations now check `Loothing.Settings:GetHideVotes()` with ML bypass (ML always sees counts). Non-ML council members see empty text when hideVotes is enabled
-
-#### AddItemFrame Queue Desync on Filter Toggle
-- **Tab 3 "Equipment Only" checkbox caused stale queue**: Toggling the checkbox called `RefreshBagList()` directly (not via `SelectTab`), which rebuilt all rows but left `itemQueue` populated with entries from destroyed rows. New rows started unselected while queue still held old data
-- **Fix**: Both `RefreshBagList()` and `RefreshRecentDrops()` now wipe `itemQueue` and update the Add button when rebuilding rows
+- Fixed multi-vote behavior when multi-voting is disabled.
+- Fixed self-vote enforcement in both the UI and ML-side validation.
+- Fixed hidden-vote-count settings so non-ML users no longer see vote counts where they should not.
+- Fixed Add Item queue desync when changing filters.
 
 ### Changed
-
-#### MLDB Now Propagates All Session-Relevant Settings
-- **Previously only voting + observer settings were synced**: MLDB broadcast only covered 8 voting flags, timeout, sort order, observer config, and responseSets. Council members used their own local values for everything else, causing inconsistent behavior across raid members
-- **Now propagates**: `votingMode`, `autoPass` (full table), `autoAward` (full table), `awardReasons` (full table with reason definitions), `winnerDetermination` (mode, tieBreaker, autoAwardOnUnanimous, requireConfirmation), `announcements` (full table), `ignoreItems` (full table)
-- **Key compression extended**: Added ~40 new compression codes to keep bandwidth impact minimal
-- **Full table overrides on apply**: New settings categories use full table replacement in `ApplyFromML()` rather than per-field nil checks, ensuring no stale local values persist
+- Expanded MLDB sync to include more session settings such as auto-pass, auto-award, announcements, and ignore lists.
 
 ## [1.1.4-r1] - 2026-03-08
 
 ### Fixed
-
-#### ML Cannot See Session Controls (Production Bug)
-- **`IsMasterLooter()` chicken-and-egg deadlock**: `Session:IsMasterLooter()` compared `self.masterLooter == playerName`, but `self.masterLooter` is only set inside `StartSession()`. Before any session starts it was always `nil`, so the method returned `false` even for the actual ML — the SessionPanel never showed the "Start Session" button, creating a deadlock where the ML couldn't start sessions
-- **Fix**: Falls back to `Loothing.handleLoot == true` when `self.masterLooter` is `nil` (pre-session). During active sessions, behavior is unchanged since `self.masterLooter` is set. Verified safe across all 30+ callers
-
-#### Taint Errors + TestMode Leak from Test Mocks
-- **`IsInGroup` mock tainting Blizzard secure globals**: `MockSessionPermissions()` in SessionTests.lua replaced `IsInGroup` — a Blizzard secure global — with an addon function. Since tests execute at TOC load time and `It()` wraps in `pcall`, any test error before `RestoreSessionPermissions()` left the mock in place permanently, tainting all Blizzard unit frame code (health bars, nameplates, heal prediction showing "secret number value tainted by 'Loothing'" errors)
-- **`LoothingTestMode` leak causing "not in a group" on Roster + phantom test mode on `/lt start`**: Mocking `LoothingTestMode.enabled = true` to bypass `IsInGroup()` had global side effects — `IsTestModeEnabled()` is checked by `GetRaidRoster()`, which then returned fake roster data instead of the real raid. If any test errored before restore, TestMode stayed on permanently
-- **Fix**: Removed both `IsInGroup` and `LoothingTestMode` mocks entirely. Tests now only mock `Loothing.handleLoot` (addon-owned field with no side effects). Tests pass when in a group, fail gracefully via `pcall` when solo — no Blizzard globals tainted, no TestMode leaked
+- Fixed a pre-session ML detection deadlock that could prevent the actual master looter from seeing session controls.
+- Fixed taint and test-mode leakage caused by unsafe test mocks.
 
 ## [1.1.4] - 2026-03-08
 
 ### Fixed
-
-#### Council Members Seeing ML Controls
-- **Raid assistants incorrectly identified as Master Looter**: Council members who were raid assistants saw the full ML view — "You are Master Looter" text, End Vote/End Session/Add Item/Award buttons, per-item ML controls, and ML-only context menu options. Root cause: UI checked `LoothingUtils.IsRaidLeaderOrAssistant()` (returns `true` for any assistant) instead of `Loothing.Session:IsMasterLooter()`
-- **Affected files**: SessionPanel (`UpdateHeader`, `UpdateFooter`, `RefreshItems`), ItemRow (`UpdateActionButton`, `OnActionClick` ×2, `ShowContextMenu`), ResultsPanel (`UpdateActionButtons`)
-- **Sync guard hardened**: `BroadcastCouncilRoster`, `HandleObserverRoster`, and `HandleCouncilRoster` in Sync.lua now use `Session:IsMasterLooter()` instead of the assistant check, preventing non-ML assistants from broadcasting rosters or bypassing roster mirroring
-
-#### Award Popup Z-Order
-- **Award confirmation popup hidden behind ResultsPanel**: Both ResultsPanel and the Loolib Dialog used `SetFrameStrata("DIALOG")`. Modal dialogs (award confirmation) now elevate to `FULLSCREEN_DIALOG` strata in `LoolibDialogMixin:Show()`, guaranteeing they render above all `DIALOG`-strata frames
-- **Modal overlay strata mismatch**: The darkened overlay behind modal dialogs stayed at `DIALOG` strata while the dialog itself was elevated. `UpdateModalOverlay()` now sets the overlay to `FULLSCREEN_DIALOG` when active and resets to `DIALOG` when hidden
-
-#### History Panel UI
-- **Filter bar overflow at default width**: Filter bar relocated from inside `historyPane` to top of the panel frame (`TOPLEFT (8,-8)` / `TOPRIGHT (-8,-8)` of main frame, height 28). Three-pane container now starts at `-40` offset, giving the filter bar ~580px instead of ~288px — eliminates button overflow at all supported frame sizes
-- **Floating "Search..." label**: Removed the `FontString` label anchored above the search box (which extended outside the pane container boundary). Replaced with an inline placeholder pattern: EditBox shows grayed-out placeholder text when empty/unfocused, clears on `OnEditFocusGained`, restores on `OnEditFocusLost`
-- **Visual disconnection between panes**: `listContainer` now anchors `TOPLEFT (0,0)` instead of `(0,-38)`, filling the entire right pane. All three panes now have consistent full-height visual treatment
-- **Date/player pane button overflow**: `allDatesBtn` and date pool buttons reduced from 110px → 72px (fits 100px pane with 4px inset + 22px scrollbar). `allPlayersBtn` and player pool buttons reduced from 130px → 92px (fits 120px pane with 4px inset + 22px scrollbar). Prevents horizontal overflow clipping in both panes
-- **Pane content width stale on resize**: Added `OnSizeChanged` handlers to `dateScroll` and `playerScroll` so `dateContent` and `playerContent` frame widths update correctly when the user resizes the MainFrame (matching the existing handler on `listContent`)
-- **Placeholder suppression edge case**: Replaced string-equality guard (`if text == L["SEARCH"] then return end`) with a `_placeholderActive` boolean flag on the filter bar frame, eliminating the edge case where typing the exact placeholder string would silently prevent the search filter from firing
-- **Nil-safe placeholder**: `L["SEARCH"]` now stored as `filterBar._placeholder` with `or "Search..."` fallback; all placeholder references in scripts and `ClearFilters` use this stored value, preventing a Lua error if a locale file is missing the key
-- **`GetItemIcon` deprecated API**: Replaced `GetItemIcon(itemID)` with `C_Item.GetItemIconByID(itemID)` in `SetupHistoryRow`
+- Fixed council assistants incorrectly seeing ML-only controls and actions.
+- Fixed award confirmation popups appearing behind other frames.
+- Fixed several History panel layout and resizing issues.
 
 ## [1.1.3] - 2026-03-08
 
-### Fixed
-
-#### Loolib - Duplicate XML Template Registration
-- **"Deferred XML Node already exists" errors when embedded Loolib loaded alongside standalone**: Replaced `Templates.xml` with `Templates.lua` containing 14 Lua init functions guarded by `_G.LOOLIB_TEMPLATES_VERSION`. LibStub guards Lua from double-loading; XML had no such guard mechanism, causing WoW's XML parser to unconditionally re-register named virtual templates
-- **Affected templates**: LoolibPanelTemplate, LoolibCloseButtonTemplate, LoolibButtonTemplate, LoolibListItemTemplate, LoolibScrollableListTemplate, LoolibTabButtonTemplate, LoolibTabbedPanelTemplate, LoolibTooltipTemplate, LoolibDialogTemplate, LoolibModalOverlayTemplate, LoolibDropdownTemplate, LoolibDropdownMenuTemplate, LoolibDropdownMenuItemTemplate, LoolibInputDialogTemplate
-- **Updated consumers**: Dialog.lua, Dropdown.lua, ScrollableList.lua, TabbedPanel.lua, Tooltip.lua factory functions now create frames with `BackdropTemplate` (or plain frame) + call `LoolibTemplates.Init*()` instead of referencing XML template names
-- **Frame pools converted**: ScrollableList item pool and TabbedPanel tab button pool switched from `CreateLoolibFramePool` (XML template) to `CreateLoolibObjectPool` (Lua creator function) for default templates; consumer-provided XML templates still work via `SetItemTemplate()`
-- **Redundant strata calls removed**: Cleaned up duplicate `SetFrameStrata` calls that were already set by init functions (Dialog modal overlay, Dropdown menu, Dropdown submenu)
-
 ### Added
-
-#### History Export
-- **Export metadata headers**: All 7 export formats now include addon name, version, date/time, character, realm, guild, and entry count
-  - CSV/TSV: `# ` comment-prefixed header lines (parsers skip `#` lines)
-  - Lua: `-- ` comment-prefixed header lines
-  - BBCode: `[b]Loothing Data Export[/b]` block
-  - Discord: Markdown-formatted header with `#` heading and `**bold**` fields
-  - JSON: `"metadata"` object wrapping the `"entries"` array (`{ "metadata": {...}, "entries": [...] }`)
-  - EQdkp: `<exportinfo>` XML section with guild, rank, date, time, and entry count
-- **Shared metadata helpers**: `GetExportMetadata()` and `FormatCommentHeader()` eliminate duplicated guild/character/date logic across exporters
-- **"Copy for Web Import" compact export** (`ExportCompact()`): One-click export producing a single opaque string for pasting into the web app
-  - Format: `LOOTHING:1:<base64(zlib(json))>` — version-tagged, compressed, base64-encoded JSON
-  - Uses Loolib's existing `CompressZlib` (level 9) and `EncodeForPrint` (standard base64) — no new dependencies
-  - Inner JSON is the same `{ metadata, entries }` structure from `ExportJSON()`
-  - Web-side decompression: `zlib.inflateSync(Buffer.from(payload, 'base64'))`
-- **"Web" export button** in HistoryPanel export dialog — sits after EQdkp, before Select All
-  - Export dialog widened from 500px to 580px to accommodate the 8th format button
+- Added metadata-rich history exports across supported formats.
+- Added compact web export strings for quick external import.
 
 ### Fixed
-
-#### History Import
-- **Metadata headers broke CSV/TSV import**: `DetectFormat()` now skips `#`-prefixed comment lines when detecting format from the first line
-- **Comment lines parsed as data rows**: `ParseDelimited()` filters out `#`-comment lines before processing, preventing metadata headers from appearing as malformed entries
+- Fixed duplicate Loolib XML template registration problems when embedded and standalone copies were both loaded.
+- Fixed history import so metadata headers no longer break CSV and TSV imports.
 
 ### Changed
-- **Loolib version bump**: TOC `1.0.0` → `1.1.3`, LibStub minor `1` → `2`, README updated
-- **Loolib TOC**: `UI\Templates\Templates.xml` → `UI\Templates\Templates.lua`
-- **Templates.xml deleted**: No longer needed — all templates defined in Lua
+- Moved Loolib template initialization from XML to Lua for safer loading.
 
 ## [1.1.2] - 2026-03-07
 
 ### Changed
-- **ResultsPanel ML candidate selection**: The ML can now click any candidate row to select them as the award recipient, replacing the old flow where Award always targeted the most-voted candidate (or forced a tie-breaker context menu for ties)
-  - Winner is auto-selected (gold border) when the panel opens; clicking any other row transfers selection
-  - Award button text updates dynamically to "Award to {name}" with auto-sizing width
-  - Ties are now informational only (header shows "Tie: A, B") — no longer block the award flow
-  - `ShowTieDialog()` removed; `ShowAwardReasonDropdown()` routes directly to the confirm dialog for the selected candidate
-- **CandidateResultRow interactivity**: Rows are now `Button` frames with hover highlight (lightened backdrop), hand cursor on hover, and gold border when selected
+- Changed ResultsPanel awarding so the master looter can directly select a candidate instead of being forced through the old tie-only flow.
 
 ### Fixed
-
-#### UI
-- **CouncilTable right-click hit area**: Right-clicking a candidate row only triggered the context menu in the narrow gap after the last cell. Cell frames now use `SetMouseClickEnabled(false)` + `SetMouseMotionEnabled(true)`, letting click events pass through to the row while preserving tooltip hover scripts. Row registers `RightButtonUp` via `RegisterForClicks` and handles both buttons in a single `OnClick` handler
+- Fixed CouncilTable right-click behavior so the row context menu is easier to trigger.
 
 ## [1.1.1] - 2026-03-07
 
-### Fixed
-
-#### UI
-- **ResultsPanel showed no meaningful information**: Replaced the response-type view (NEED: 3, GREED: 1) with a candidate-centric display showing each candidate's class-colored name, response, roll, council votes with percentage bar, and winner highlight. ML can now see WHO to award at a glance
-- **ResultsPanel tie detection broken**: `ShowTieDialog()` checked `self.results.tiedCandidates` but `TallySimple` returned `tiedResponses`. Tie detection now reads directly from candidateManager — finds all candidates sharing the max vote count
-- **Award popup appeared behind all frames**: `LoolibDialogMixin:Show()` never called `Raise()`, so dialogs rendered under sibling DIALOG-strata frames (CouncilTable, ResultsPanel, RollFrame). Added `self:Raise()` after `Show()`
-- **ItemRow awarded layout overlap**: `winnerText` and `statusText` were both anchored to `actionButton`'s left, causing text overlap on awarded items. Awarded layout now chains: `nameText` → `winnerText` → `statusText` → `actionButton`(hidden)
-- **Stale ML controls on pooled rows**: `ResetMLControls` now hides delete/Later controls when rows are recycled from the pool, preventing ghost controls from appearing on non-PENDING items
-- **Hardcoded winnerText width**: Replaced `SetWidth(120)` with auto-size so longer character names are no longer truncated
-
-#### Test Mode
-- **`CreateFakeResults` key mismatch**: Stored vote tallies under `results.tallies` but `DisplayResults` checked `results.counts` — fixed key to `counts`
-- **`CreateFakeResults` voter format**: Stored voters as `{name, class}` tables but `ResponseRow` called `GetShortName(voter)` expecting strings — voters now stored as plain name strings
-- **`TallyActualVotes` same bugs**: Had identical `tallies`/voter-format issues as `CreateFakeResults` — fixed to use `counts` key and plain string voters
-- **`ShowResultsPanel` empty display**: `/lt test results` created a bare item without candidates. Now calls `AddFakeCandidatesToItem()` and adds random council votes before display
-- **Quick-test flow empty ResultsPanel**: `OnResponseSubmitted` (RollFrame → auto-tally → ResultsPanel) didn't populate candidateManager. Added `PopulateCandidateManagerFromVotes()` to bridge legacy vote data into the candidate system
-- **StressTests ResultsPanel test**: `Test_ResultsPanelFortyVoters` now populates candidateManager with fake candidates and council votes before measuring refresh performance
-
-#### Trade
-- **Awarded items not queued for trade**: `Session.OnItemAwarded` was never wired to `TradeQueue`. Added bridge callback in `Init.lua` that calls `TradeQueue:AddToQueue()` when the local player is the looter, using `item.timestamp` for accurate 2-hour trade window tracking
-
-#### Performance
-- **Redundant layout work per row**: Reordered `RefreshItems` to call `ResetMLControls` before `SetItem`, eliminating a redundant `UpdateLayout` pass per row
-- **UpdateLayout full-reset on every Refresh**: Added `_layoutAwarded` guard so anchor recalculation only runs when the awarded state actually changes
-
-#### Cleanup
-- **Duplicate anchor setup in CreateElements**: Removed initial anchor points overwritten by `ApplyDefaultLayout()` — canonical anchors now live solely in `ApplyDefaultLayout()`
-- **Mixed line endings in ItemRow.lua**: Normalized to consistent `\n`
-
 ### Added
-- **CandidateResultRow component** (`UI/Components/CandidateResultRow.lua`): New per-candidate row for the ResultsPanel. Shows class-colored name, response badge (checks both `LOOTHING_RESPONSE_INFO` and `LOOTHING_SYSTEM_RESPONSE_INFO`), roll value, council vote count with percentage bar, and gold winner glow. Follows the same `BackdropTemplate` structure as `ResponseRow`
-- **ResultsPanel winner header**: Shows "Recommended: {name} ({votes} votes)", "Tie: {name1}, {name2}", or "No council votes cast" above the candidate rows
-- **ResultsPanel response summary**: Compact colored line showing response distribution (e.g., "NEED: 3 | GREED: 1 | PASS: 2")
-- **`LoothingTestMode:PopulateCandidateManagerFromVotes()`**: Bridges legacy vote data into candidateManager for the quick-test flow
-- **Loot Count Columns**: Three new sortable columns in the CouncilTable showing how many items each candidate has already received:
-  - **Won** (gold) — items won this session (`itemsWonThisSession`)
-  - **Inst** (orange) — items won in this instance + difficulty, queried from History
-  - **Wk** (light blue) — items won this week (since last weekly reset), queried from History
-  - Columns appear after the +/- (ilvlDiff) column, before gear slots
-  - Header tooltips explain each abbreviation on hover
-  - All three columns are sortable and can be hidden via column visibility settings
-  - History queries use a single O(H) cache pass per refresh, not per candidate
-- `LoothingHistoryMixin:GetLastWeeklyResetTime()` — computes last weekly reset timestamp via `C_DateAndTime.GetSecondsUntilWeeklyReset()`
-- `LoothingHistoryMixin:BuildPlayerCountCache()` — single-pass history scan returning per-player instance and weekly loot counts
-- `LoothingCandidateMixin` now initializes `itemsWonInstance` and `itemsWonWeekly` fields (ephemeral, not serialized)
-- Test mode generates random values for all three loot count columns
-- **Roster Tab** (`UI/RosterPanel.lua`): New 4th tab in the MainFrame showing all group/raid members at a glance
-  - Columns: online status dot, class icon + class-colored name, role icon, item level, Loothing version (color-coded green/orange/gray), council membership checkmark, loot history count, raid rank
-  - All columns are sortable (click header to sort, click again to toggle asc/desc); offline players always sort to bottom
-  - Summary header shows member/online/installed/council counts
-  - Rich tooltip on hover shows spec, item level, subgroup, version details, council status, and loot history breakdown by response type
-  - "Query Versions" button triggers VersionCheck with lazy callback registration (only subscribes on first use)
-  - Empty state shown when not in a group
-  - History counts use a single O(H) pass (not per-player) for efficient data gathering
-  - Pooled row frames with proper `ClearAllPoints()` on child elements to prevent anchor accumulation on reuse
-  - Column header buttons created once and repositioned on resize (no frame leaks)
-  - Right-click context menu on roster rows with:
-    - Toggle council membership (Add/Remove from Council)
-    - Toggle observer status (Add/Remove as Observer)
-    - Set/Clear Master Looter designation
-    - Whisper player
-    - Promote to Leader / Promote to Assistant / Demote (raid leader/assistant only)
-    - Uninvite from group (raid leader/assistant only)
-  - Master Looter indicator: gold `[ML]` tag displayed next to the current ML's name
-  - Observer status shown in tooltip (light blue "Observer" line)
-  - Council column uses `GetMembersInRaid()` for correct test mode + auto-include support
-  - Item level sourced from `GetAverageItemLevel()` for local player (PlayerCache fallback for others)
-  - Localized `TAB_ROSTER` + 13 roster keys in all 11 locale files
-  - 8 new locale keys for context menu actions
-- **Observer System Overhaul**: Complete replacement of the single `voting.observe` boolean with a full observer management system
-  - **ML Observer Mode**: Master Looter can optionally observe (sees everything, manages sessions/awards, but cannot vote). Toggle in Session Settings
-  - **Observer List**: ML-managed list of specific players who can observe voting sessions. Add/remove via roster right-click menu
-  - **Open Observation**: Replaces old "Observe Mode" — when enabled, all raid members can observe (subject to permissions)
-  - **Configurable Permissions**: Granular control over what observers can see: vote counts, voter identities, candidate responses, candidate notes. Council and ML always see everything
-  - **Observer Sync**: Observer roster and permissions broadcast via OBSERVER_ROSTER comm message and included in late-join sync packets
-  - New module: `Council/ObserverManager.lua` — observer list management, permission queries, remote roster support
-  - New comm message: `OBSERVER_ROSTER` (ML → Raid) for observer list and permission sync
-  - New settings: `observers.list`, `observers.openObservation`, `observers.mlIsObserver`, `observers.permissions.*`
-  - MLDB compression keys for observer settings sync
-  - 22 new locale strings across all 11 locale files
-  - CouncilTable vote button uses `CanPlayerVote()` (council AND not ML-observer)
-  - CouncilTable voter progress excludes ML when in observer mode
-  - Response, notes, vote count, and voter identity columns permission-gated for observers
-  - Backward compatible: old `voting.observe` kept in sync with `observers.openObservation`
+- Added the candidate-centric Results panel layout.
+- Added loot-history columns to the CouncilTable.
+- Added the Roster tab with version, role, council, and loot-history visibility.
+- Added the observer system overhaul with configurable observer visibility and syncing.
+
+### Fixed
+- Fixed multiple ResultsPanel, ItemRow, trade queue, and test-mode issues that made awarding and testing unreliable.
 
 ## [1.1.0] - 2026-03-07
 
 ### Added
-- **Silent Roll**: Every candidate response now includes a roll number. When a player submits a response without doing an explicit `/roll`, a random roll is generated silently (no chat broadcast) so the council frame roll column is always populated instead of showing "-".
-  - RollFrame `SendResponse()` generates a fallback `math.random()` when `GetItemRoll()` returns nil
-  - WhisperHandler `SubmitWhisperResponse()` generates a roll for whisper-based responses
-  - Session `HandlePlayerResponse()` generates a ML-side defensive fallback for responses arriving without a roll (e.g., from older client versions)
-  - Roll range respects the existing `rollFrame.rollRange` setting (default 1-100)
-  - No new settings, toggles, or visual distinctions — silent rolls are indistinguishable from real rolls on the council frame
+- Added silent rolls so every response always has a roll value, even if the player does not type `/roll`.
 
 ### Fixed
-
-#### Security
-- **ML spoofing via sync handlers (H2, H6)**: Added `isGroupMember(sender)` authorization guards to all 6 settings/history sync handlers and `HandlePlayerInfoResponse` — prevents non-group-members from injecting fake data
-- **Award dialog targeting wrong player (H3)**: `ShowAwardDialog` was reading council voter names from `voters[1]` instead of the winning candidate — now uses `candidateManager:GetMostVoted()` with `.playerName`
-- **Stale session on inactive sync (H4)**: `ApplySyncData` now calls `EndSession()` when the ML reports INACTIVE but the local client still has an active session, clearing stale items and UI
-- **Tradability matching by link instead of GUID (H7)**: `HandleTradable`/`HandleNonTradable` now use 3-tier matching (GUID → itemID+looter → link+looter) to correctly handle duplicate drops
-
-#### UI
-- **CouncilTable Results button dead (H8)**: Fixed `Loothing.ResultsPanel` → `Loothing.UI.ResultsPanel` in click handler and visibility check
-- **SessionPanel OnVote no-op (H9)**: Redirected from disabled `VotePanel` to `RollFrame`
-
-#### Robustness
-- **Remote council roster never cleared (M1)**: `EndSession()` now calls `ClearRemoteRoster()` so council membership doesn't persist across sessions
-- **Cross-realm relay loop (M6)**: `HandleXRealm` rejects inner messages with command XREALM or BATCH to prevent recursive processing
-- **History sync schema validation (M8)**: `HandleHistoryData` validates `itemLink` and `winner` fields before importing entries
-- **CLOSED session state guards (M5)**: `AddItem()` and `StartVoting()` now reject mutations when session is CLOSED
+- Fixed several security and sync issues around ML spoofing, stale sessions, tradability matching, and remote roster cleanup.
+- Fixed CouncilTable and SessionPanel UI paths that were pointing at dead or incorrect panels.
 
 ### Changed
-- **History auto-pruning (M4)**: Entries older than 180 days are automatically pruned on addon load via existing `DeleteByAge()`
-- **Dynamic class bitmask (M7)**: `ALL_CLASSES_FLAG` computed from `CLASS_ID_TO_NAME` table length instead of hardcoded `0x1FFF`
-- **VotingEngine iteration helper (L1)**: Extracted `EnumerateVotes()` helper, replacing 4 inline dual-mode iteration patterns
-- **CountVotes fix (L4)**: Fallback path uses `#votes` instead of `ipairs` to handle tables with holes
-- **StressTests API alignment (M3)**: Fixed `SetResults()` → `SetItem(item, results)` to match current `ResultsPanel` API
-- **TOC updates (M2, M3)**: Added `RollFrameSessionSettingsTests.lua` to TOC; documented test file section for production toggling
-- **Code style (L2, L3)**: Standardized `table.insert` → `t[#t+1]`; marked `ShowVotePanelForItem` and `EndVoting` as deprecated
+- Added automatic pruning for very old history entries.
 
 ## [1.0.1] - Initial tracked release
+
+### Added
+- Initial tracked release of Loothing.

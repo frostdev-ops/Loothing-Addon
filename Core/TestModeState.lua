@@ -173,6 +173,16 @@ function TestModeState:OnSimulatorToggled(enabled)
     end
 end
 
+--- Delegate to ns.TestMode:GetFakeRaidRoster() (loaded later via Debug/TestMode.lua).
+--- Called by Utils.GetRaidRoster() when test mode is active.
+function TestModeState:GetFakeRaidRoster()
+    local tm = ns.TestMode
+    if tm and tm.GetFakeRaidRoster then
+        return tm:GetFakeRaidRoster()
+    end
+    return {}
+end
+
 function TestModeState:HandleSlash(args)
     local cmd, rest = args:match("^(%S*)%s*(.*)$")
     cmd = (cmd or ""):lower()

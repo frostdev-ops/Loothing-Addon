@@ -282,10 +282,14 @@ function CandidateManagerMixin:GetCandidatesSortedBy(column, ascending)
     -- Define sort comparators
     local comparators = {
         response = function(a, b)
-            if a.response == b.response then
+            local ar, br = a.response or 999, b.response or 999
+            if type(ar) ~= type(br) then
+                return type(ar) == "number"
+            end
+            if ar == br then
                 return a.playerName < b.playerName
             end
-            return (a.response or 999) < (b.response or 999)
+            return ar < br
         end,
 
         roll = function(a, b)

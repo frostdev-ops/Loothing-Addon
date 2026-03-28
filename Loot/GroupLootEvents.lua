@@ -59,8 +59,13 @@ function GroupLootMixin:OnStartLootRoll(_, rollID)
         return
     end
 
-    -- Only auto-roll when a loot council session is active
-    if not Loothing.Session or not Loothing.Session:IsActive() then
+    -- Auto-roll when ML is handling loot (session active or MLDB present).
+    -- MLDB presence on a non-ML client means the ML called StartHandleLoot and
+    -- broadcast settings — items should be funnelled to the ML even between sessions.
+    local sessionActive = Loothing.Session and Loothing.Session:IsActive()
+    local mlHandling = Loothing.handleLoot
+        or (Loothing.MLDB and Loothing.MLDB:Get() ~= nil)
+    if not sessionActive and not mlHandling then
         return
     end
 
@@ -89,7 +94,7 @@ function GroupLootMixin:OnStartLootRoll(_, rollID)
         return
     end
 
-    local isMasterLooter = Loothing.Settings:IsMasterLooter()
+    local isMasterLooter = Loothing:IsCanonicalML()
     local rollType
 
     if isMasterLooter then

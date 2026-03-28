@@ -11,6 +11,14 @@ ns.Options = Options
 
 local L = ns.Locale
 
+--- Returns true when a non-ML player should be locked out of ML-broadcast settings.
+local function IsSessionLocked()
+    if not Loothing.Session or not Loothing.MLDB then
+        return false
+    end
+    return Loothing.Session:IsActive() and not Loothing.MLDB:IsML()
+end
+
 local function GetQualityValues()
     return { [0]=L["QUALITY_POOR"], [1]=L["QUALITY_COMMON"], [2]=L["QUALITY_UNCOMMON"], [3]=L["QUALITY_RARE"], [4]=L["QUALITY_EPIC"], [5]=L["QUALITY_LEGENDARY"] }
 end
@@ -236,6 +244,7 @@ local function GetLocalPreferencesOptions()
                 name = L["AUTOPASS_SETTINGS"],
                 order = 2,
                 columns = 3,
+                disabled = IsSessionLocked,
                 args = {
                     enabled = {
                         type = "toggle",
@@ -301,6 +310,7 @@ local function GetLocalPreferencesOptions()
                 type = "group",
                 name = L["AUTO_AWARD_SETTINGS"],
                 order = 3,
+                disabled = IsSessionLocked,
                 args = {
                     enabled = {
                         type = "toggle",
@@ -371,6 +381,7 @@ local function GetLocalPreferencesOptions()
                 type = "group",
                 name = L["IGNORE_ITEMS_SETTINGS"],
                 order = 4,
+                disabled = IsSessionLocked,
                 args = {
                     enabled = {
                         type = "toggle",
@@ -794,6 +805,7 @@ local function GetLocalPreferencesOptions()
                 name = L["ANNOUNCEMENT_SETTINGS"],
                 order = 8,
                 childGroups = "tree",
+                disabled = IsSessionLocked,
                 args = {
                     general = {
                         type = "group",

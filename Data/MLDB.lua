@@ -11,6 +11,7 @@ local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local Utils = ns.Utils
+local GetTime = GetTime
 
 --[[--------------------------------------------------------------------
     MLDBMixin
@@ -171,6 +172,8 @@ function MLDBMixin:Init()
 
     self.mldb = nil  -- Current MLDB (nil until received or built)
     self.isML = false
+    self.preSessionSnapshot = nil  -- Settings snapshot for non-ML restore
+    self.recentMLDBSenders = {}   -- Recent MLDB broadcasters for farewell message auth
 
     -- Register for communication events
     if Loothing.Comm then
@@ -200,6 +203,20 @@ function MLDBMixin:GetML()
         return Loothing.Settings:GetMasterLooter()
     end
     return nil
+end
+
+--- Check if a sender was a recent MLDB broadcaster.
+-- Used to authenticate farewell messages (STOP_HANDLE_LOOT, SESSION_END)
+-- from an old ML whose MLDB transferred the role. Tracks multiple recent
+-- senders so double handoffs (A→B→C) still allow A's cleanup messages.
+-- @param sender string
+-- @return boolean
+function MLDBMixin:WasPreviousMLSender(sender)
+    if not sender or not self.recentMLDBSenders then
+        return false
+    end
+    local key = Utils.NormalizeName(sender)
+    return self.recentMLDBSenders[key] ~= nil
 end
 
 --[[--------------------------------------------------------------------
@@ -434,6 +451,20 @@ function MLDBMixin:OnMLDBBroadcast(data)
         return
     end
 
+    -- Track recent MLDB senders for farewell message authentication.
+    -- When an old ML transfers ML via MLDB and then sends cleanup messages,
+    -- the comm handler needs to accept them even though the ML identity changed.
+    -- We track multiple senders so double handoffs (A→B→C) still allow A's cleanup.
+    if not self.recentMLDBSenders then self.recentMLDBSenders = {} end
+    self.recentMLDBSenders[Utils.NormalizeName(sender)] = GetTime()
+    -- Prune entries older than 5 minutes
+    local now = GetTime()
+    for name, t in pairs(self.recentMLDBSenders) do
+        if now - t > 300 then
+            self.recentMLDBSenders[name] = nil
+        end
+    end
+
     -- Trigger received event
     self:TriggerEvent("OnMLDBReceived", {
         sender = sender,
@@ -458,13 +489,19 @@ function MLDBMixin:ApplyFromML(settings, sender)
         return
     end
 
-    -- Store MLDB
-    self.mldb = settings
-
-    -- Don't apply if we're the ML (we set our own settings)
+    -- Don't apply if we're the ML (we set our own settings).
+    -- The ML's own MLDB is stored in BroadcastToRaid(); don't overwrite it here.
     if self:IsML() then
         Loothing:Debug("Skipping MLDB apply - we are ML")
         return
+    end
+
+    -- Store MLDB (after ML guard so only non-ML clients hold the received copy)
+    self.mldb = settings
+
+    -- Snapshot local settings before first MLDB overwrite so we can restore on session end
+    if not self.preSessionSnapshot then
+        self:SnapshotSettings()
     end
 
     Loothing:Debug("Applying MLDB from", sender)
@@ -540,6 +577,16 @@ function MLDBMixin:ApplyFromML(settings, sender)
         -- Apply explicit ML override (runtime-only, not persisted)
         -- nil means "use raid leader"; a name means that player is ML
         Loothing.explicitMasterLooter = settings.masterLooter
+
+        -- Synchronize global ML identity so all three sources agree.
+        -- Without this, isMasterLooter() in Handlers/Core.lua can give
+        -- inconsistent answers depending on which source it checks first.
+        -- When settings.masterLooter is nil (cleared → use raid leader),
+        -- we must also clear the global so it doesn't hold a stale name.
+        Loothing.masterLooter = settings.masterLooter
+        if Loothing.Session and Loothing.Session:IsActive() then
+            Loothing.Session.masterLooter = settings.masterLooter or sender
+        end
 
         -- Apply sort order
         if settings.sortOrder then
@@ -621,9 +668,167 @@ function MLDBMixin:Get()
     return self.mldb
 end
 
---- Clear MLDB (called on session end)
+--- Clear MLDB (called on session end or StopHandleLoot)
+-- Restores non-ML client settings from the pre-session snapshot.
 function MLDBMixin:Clear()
     self.mldb = nil
+    self.recentMLDBSenders = {}
+    self:RestoreSettings()
+end
+
+--[[--------------------------------------------------------------------
+    Settings Snapshot / Restore (non-ML clients)
+----------------------------------------------------------------------]]
+
+--- Snapshot current local settings before ML overwrite.
+-- Only call once per session (guarded in ApplyFromML).
+function MLDBMixin:SnapshotSettings()
+    if not Loothing.Settings then
+        return
+    end
+
+    local snap = {}
+
+    -- Voting settings (full table copy)
+    snap.voting = Utils.DeepCopy(Loothing.Settings:Get("voting", {}))
+
+    -- Session settings
+    snap.votingTimeout = Loothing.Settings:Get("settings.votingTimeout")
+    snap.votingMode    = Loothing.Settings:Get("settings.votingMode")
+
+    -- Session trigger policy
+    snap.sessionTriggerAction   = Loothing.Settings:GetSessionTriggerAction()
+    snap.sessionTriggerTiming   = Loothing.Settings:GetSessionTriggerTiming()
+    snap.sessionTriggerRaid     = Loothing.Settings:GetSessionTriggerRaid()
+    snap.sessionTriggerDungeon  = Loothing.Settings:GetSessionTriggerDungeon()
+    snap.sessionTriggerOpenWorld = Loothing.Settings:GetSessionTriggerOpenWorld()
+    snap.groupLootMode          = Loothing.Settings:GetGroupLootMode()
+
+    -- Sort order
+    snap.sortOrder = Loothing.Settings:Get("councilTable.sortColumn")
+
+    -- Observer settings
+    snap.mlIsObserver        = Loothing.Settings:Get("observers.mlIsObserver")
+    snap.openObservation     = Loothing.Settings:Get("observers.openObservation")
+    snap.observerPermissions = Utils.DeepCopy(Loothing.Settings:GetObserverPermissions())
+
+    -- AutoPass / AutoAward / AwardReasons / WinnerDetermination / Announcements / IgnoreItems
+    snap.autoPass            = Utils.DeepCopy(Loothing.Settings:Get("autoPass", {}))
+    snap.autoAward           = Utils.DeepCopy(Loothing.Settings:Get("autoAward", {}))
+    snap.awardReasons        = Utils.DeepCopy(Loothing.Settings:Get("awardReasons", {}))
+    snap.winnerDetermination = Utils.DeepCopy(Loothing.Settings:Get("winnerDetermination", {}))
+    snap.announcements       = Utils.DeepCopy(Loothing.Settings:Get("announcements", {}))
+    snap.ignoreItems         = Utils.DeepCopy(Loothing.Settings:Get("ignoreItems", {}))
+
+    -- Response sets
+    if Loothing.ResponseManager then
+        snap.responseSets = Loothing.ResponseManager:Serialize()
+    end
+
+    -- Runtime ML override (may be nil — that's the pre-session state)
+    snap.explicitMasterLooter = Loothing.explicitMasterLooter
+
+    self.preSessionSnapshot = snap
+    Loothing:Debug("Snapshot local settings before MLDB apply")
+end
+
+--- Restore local settings from snapshot after session ends.
+-- No-op if no snapshot exists (ML client, or no MLDB was received).
+function MLDBMixin:RestoreSettings()
+    local snap = self.preSessionSnapshot
+    if not snap then
+        return
+    end
+
+    -- Clear snapshot first so a re-entrant call is harmless
+    self.preSessionSnapshot = nil
+
+    if not Loothing.Settings then
+        return
+    end
+
+    Loothing:Debug("Restoring local settings from pre-session snapshot")
+
+    -- Voting settings
+    if snap.voting then
+        Loothing.Settings:Set("voting", snap.voting)
+    end
+
+    -- Session settings
+    if snap.votingTimeout ~= nil then
+        Loothing.Settings:Set("settings.votingTimeout", snap.votingTimeout)
+    end
+    if snap.votingMode ~= nil then
+        Loothing.Settings:Set("settings.votingMode", snap.votingMode)
+    end
+
+    -- Session trigger policy (use ~= nil consistently for all fields)
+    if snap.sessionTriggerAction ~= nil then
+        Loothing.Settings:SetSessionTriggerAction(snap.sessionTriggerAction)
+    end
+    if snap.sessionTriggerTiming ~= nil then
+        Loothing.Settings:SetSessionTriggerTiming(snap.sessionTriggerTiming)
+    end
+    if snap.sessionTriggerRaid ~= nil then
+        Loothing.Settings:SetSessionTriggerRaid(snap.sessionTriggerRaid)
+    end
+    if snap.sessionTriggerDungeon ~= nil then
+        Loothing.Settings:SetSessionTriggerDungeon(snap.sessionTriggerDungeon)
+    end
+    if snap.sessionTriggerOpenWorld ~= nil then
+        Loothing.Settings:SetSessionTriggerOpenWorld(snap.sessionTriggerOpenWorld)
+    end
+    if snap.groupLootMode ~= nil then
+        Loothing.Settings:SetGroupLootMode(snap.groupLootMode)
+    end
+
+    -- Sort order
+    if snap.sortOrder ~= nil then
+        Loothing.Settings:Set("councilTable.sortColumn", snap.sortOrder)
+    end
+
+    -- Observer settings
+    if snap.mlIsObserver ~= nil then
+        Loothing.Settings:Set("observers.mlIsObserver", snap.mlIsObserver)
+    end
+    if snap.openObservation ~= nil then
+        Loothing.Settings:Set("observers.openObservation", snap.openObservation)
+        Loothing.Settings:Set("voting.observe", snap.openObservation)
+    end
+    if snap.observerPermissions then
+        Loothing.Settings:Set("observers.permissions", snap.observerPermissions)
+    end
+
+    -- Full table replacement (not per-key merge) so that any keys
+    -- the MLDB added but weren't in the original are removed.
+    if snap.autoPass then
+        Loothing.Settings:Set("autoPass", snap.autoPass)
+    end
+    if snap.autoAward then
+        Loothing.Settings:Set("autoAward", snap.autoAward)
+    end
+    if snap.awardReasons then
+        Loothing.Settings:Set("awardReasons", snap.awardReasons)
+    end
+    if snap.winnerDetermination then
+        Loothing.Settings:Set("winnerDetermination", snap.winnerDetermination)
+    end
+    if snap.announcements then
+        Loothing.Settings:Set("announcements", snap.announcements)
+    end
+    if snap.ignoreItems then
+        Loothing.Settings:Set("ignoreItems", snap.ignoreItems)
+    end
+
+    -- Response sets
+    if snap.responseSets and Loothing.ResponseManager then
+        Loothing.ResponseManager:Deserialize(snap.responseSets)
+    end
+
+    -- Restore runtime ML override to pre-session value (often nil)
+    Loothing.explicitMasterLooter = snap.explicitMasterLooter
+
+    Loothing:Debug("Restored local settings from pre-session snapshot")
 end
 
 --[[--------------------------------------------------------------------

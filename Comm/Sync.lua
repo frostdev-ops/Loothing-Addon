@@ -61,6 +61,14 @@ function SyncMixin:RegisterCommEvents()
     Loothing.Comm:RegisterCallback("OnObserverRoster", function(_, data)
         self:HandleObserverRoster(data)
     end, self)
+
+    Loothing.Comm:RegisterCallback("OnIncrementalSyncRequest", function(_, data)
+        self:HandleIncrementalSyncRequest(data)
+    end, self)
+
+    Loothing.Comm:RegisterCallback("OnIncrementalSyncData", function(_, data)
+        self:HandleIncrementalSyncData(data)
+    end, self)
 end
 
 --[[--------------------------------------------------------------------
@@ -218,7 +226,10 @@ end
     Sync Responding (ML Side)
 ----------------------------------------------------------------------]]
 
---- Handle sync request from another player
+--- Handle sync request from another player.
+-- Requests arriving within SYNC_COALESCE_WINDOW seconds are batched: the ML
+-- gathers state once and sends the same payload to all requesters. This
+-- converts 25 simultaneous GatherSyncData() calls into 1 gather + 25 sends.
 -- @param data table - Request data
 function SyncMixin:HandleSyncRequest(data)
     -- Only ML should respond to sync requests
@@ -228,13 +239,50 @@ function SyncMixin:HandleSyncRequest(data)
 
     local requester = data.requester
 
+    -- Requester may have left between sending the request and us processing it
+    if not Utils.IsGroupMember(requester) then
+        Loothing:Debug("Sync request from departed player, ignoring:", requester)
+        return
+    end
+
     Loothing:Debug("Received sync request from", requester)
 
-    -- Gather current state
+    -- Add to coalesce batch
+    if not self.pendingSyncRequesters then
+        self.pendingSyncRequesters = {}
+    end
+    self.pendingSyncRequesters[requester] = true
+
+    -- Schedule a flush if not already pending
+    if not self.syncCoalesceTimer then
+        local window = Loothing.Timing.SYNC_COALESCE_WINDOW or 2
+        self.syncCoalesceTimer = C_Timer.NewTimer(window, function()
+            self:FlushSyncRequests()
+        end)
+    end
+end
+
+--- Flush all coalesced sync requests: gather state once, send to each requester
+function SyncMixin:FlushSyncRequests()
+    self.syncCoalesceTimer = nil
+
+    if not self.pendingSyncRequesters then return end
+
+    local requesters = self.pendingSyncRequesters
+    self.pendingSyncRequesters = nil
+
+    -- Gather state once for all requesters
     local syncData = self:GatherSyncData()
 
-    -- Send response (items/candidates/votes are already embedded in syncData.items)
-    Loothing.Comm:SendSyncData(syncData, requester)
+    local count = 0
+    for requester in pairs(requesters) do
+        -- Re-validate: requester may have left during the coalesce window
+        if Utils.IsGroupMember(requester) then
+            Loothing.Comm:SendSyncData(syncData, requester)
+            count = count + 1
+        end
+    end
+    Loothing:Debug("Sync: flushed coalesced sync to", count, "requesters")
 end
 
 --- Gather current session state for sync (full reconnect packet)
@@ -344,15 +392,29 @@ end
 ----------------------------------------------------------------------]]
 
 --- Check if we need to sync (called on roster update)
+-- Jittered delay to prevent thundering herd when multiple clients
+-- detect roster changes simultaneously. Suppressed during grace period.
 function SyncMixin:CheckNeedSync()
     if not IsInGroup() then return end
 
     -- Don't sync if we're the ML (we own the session)
     if Loothing.handleLoot then return end
 
-    -- Don't sync if already have a session
-    if Loothing.Session and Loothing.Session:GetState() ~= Loothing.SessionState.INACTIVE then
+    -- Don't sync during reconnect grace period (CommState will coordinate)
+    local CommState = Loothing.CommState
+    if CommState and CommState:IsInGracePeriod() then
+        Loothing:Debug("Sync: suppressed CheckNeedSync (grace period)")
         return
+    end
+
+    -- Don't sync if we have a live session (confirmed by recent heartbeat).
+    -- Allow sync if session appears stale (no heartbeat for 90s = 3 missed intervals).
+    if Loothing.Session and Loothing.Session:GetState() ~= Loothing.SessionState.INACTIVE then
+        local lastHB = Loothing.AckTracker and Loothing.AckTracker.lastHeartbeatTime or 0
+        if (GetTime() - lastHB) < 90 then
+            return
+        end
+        Loothing:Debug("Sync: session appears stale (no heartbeat for 90s), allowing sync")
     end
 
     -- Prefer known ML, fall back to raid leader
@@ -362,10 +424,16 @@ function SyncMixin:CheckNeedSync()
         if self.pendingSyncCheckTimer then
             self.pendingSyncCheckTimer:Cancel()
         end
-        -- Delay sync slightly to allow other addons to initialize
-        self.pendingSyncCheckTimer = C_Timer.NewTimer(2, function()
+        -- Jittered delay: 1.5-4.5s (prevents all clients syncing at the same instant)
+        local delay = CommState and CommState:Jitter(3, 1.5) or 2
+        self.pendingSyncCheckTimer = C_Timer.NewTimer(delay, function()
             self.pendingSyncCheckTimer = nil
-            self:RequestSync(syncTarget)
+            -- Route through CommState dedup if available
+            if CommState then
+                CommState:RequestSyncIfNeeded("roster", syncTarget)
+            else
+                self:RequestSync(syncTarget)
+            end
         end)
     end
 end
@@ -719,6 +787,115 @@ function SyncMixin:HandleHistoryData(data, sender)
     end
 
     Loothing:Print(string.format(L["HISTORY_SYNCED"], imported, sender))
+end
+
+--[[--------------------------------------------------------------------
+    Incremental Sync
+    Lighter than full SYNC_DATA — only transfers the specific subset that
+    diverged according to the heartbeat digest (council, MLDB, items, etc.)
+----------------------------------------------------------------------]]
+
+--- Request an incremental sync from the ML for a specific mismatch type.
+-- Called by AckTracker when it can identify exactly what diverged.
+-- @param mlName string
+-- @param mismatchType string - "council", "mldb", "items", "itemStates"
+function SyncMixin:RequestIncrementalSync(mlName, mismatchType)
+    if not Loothing.Comm then return end
+    Loothing:Debug("Sync: requesting incremental sync for", mismatchType, "from", mlName)
+    Loothing.Comm:Send(Loothing.MsgType.SYNC_INCREMENTAL, {
+        type = mismatchType,
+        sessionID = Loothing.Session and Loothing.Session:GetSessionID() or "",
+    }, mlName, "NORMAL")
+end
+
+--- ML-side: handle incremental sync request and return only the requested subset
+-- @param data table - { requester, type, sessionID }
+function SyncMixin:HandleIncrementalSyncRequest(data)
+    if not Loothing.Session or not Loothing.Session:IsMasterLooter() then return end
+
+    local requester = data.requester
+    if not requester or not Utils.IsGroupMember(requester) then return end
+
+    local mismatchType = data.type
+    local responseData = { type = mismatchType }
+
+    if mismatchType == "council" then
+        if Loothing.Council then
+            responseData.councilRoster = Loothing.Council:GetAllMembers()
+        end
+    elseif mismatchType == "mldb" then
+        if Loothing.MLDB and Loothing.MLDB:Get() then
+            responseData.mldb = Loothing.MLDB:Get()
+        end
+    elseif mismatchType == "items" or mismatchType == "itemStates" then
+        -- Send compact item list (guid + state + link, no candidate data)
+        local session = Loothing.Session
+        responseData.items = {}
+        if session.items then
+            for _, item in session.items:Enumerate() do
+                responseData.items[#responseData.items + 1] = {
+                    guid = item.guid,
+                    itemLink = item.itemLink,
+                    looter = item.looter,
+                    state = item:GetState(),
+                }
+            end
+        end
+        responseData.sessionID = session:GetSessionID()
+        responseData.sessionState = session:GetState()
+    else
+        -- Unknown type — fall back to full sync
+        Loothing:Debug("Sync: unknown incremental type", mismatchType, "— falling back to full")
+        self:HandleSyncRequest(data)
+        return
+    end
+
+    Loothing:Debug("Sync: sending incremental data (type:", mismatchType, ") to", requester)
+    Loothing.Comm:Send(Loothing.MsgType.SYNC_INCREMENTAL_DATA, responseData, requester, "NORMAL")
+end
+
+--- Client-side: apply incremental sync data from ML
+-- @param data table - { type, councilRoster?, mldb?, items?, sessionID? }
+function SyncMixin:HandleIncrementalSyncData(data)
+    if not data or not data.type then return end
+
+    local mismatchType = data.type
+    Loothing:Debug("Sync: applying incremental data (type:", mismatchType, ")")
+
+    if mismatchType == "council" and data.councilRoster then
+        if Loothing.Council then
+            Loothing.Council:SetRemoteRoster(data.councilRoster)
+        end
+    elseif mismatchType == "mldb" and data.mldb then
+        if Loothing.MLDB then
+            Loothing.MLDB:ApplyFromML(data.mldb, data.masterLooter)
+        end
+    elseif (mismatchType == "items" or mismatchType == "itemStates") and data.items then
+        local session = Loothing.Session
+        if not session then return end
+
+        -- Check if we have item count/state mismatches and add missing items
+        local localItems = {}
+        if session.items then
+            for _, item in session.items:Enumerate() do
+                localItems[item.guid] = item
+            end
+        end
+
+        for _, remoteItem in ipairs(data.items) do
+            local localItem = localItems[remoteItem.guid]
+            if not localItem then
+                -- Missing item — add it
+                session:AddItem(remoteItem.itemLink, remoteItem.looter, remoteItem.guid, true)
+                localItem = session:GetItemByGUID(remoteItem.guid)
+            end
+            if localItem and remoteItem.state then
+                localItem:SetState(remoteItem.state)
+            end
+        end
+    end
+
+    self:TriggerEvent("OnSyncComplete", data)
 end
 
 --[[--------------------------------------------------------------------

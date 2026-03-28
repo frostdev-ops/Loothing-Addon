@@ -115,7 +115,7 @@ function MainFrameMixin:CreateFrame()
 
     -- Desktop sync status (near title bar, right side)
     local syncText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    syncText:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -48, -18)
+    syncText:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -80, -18)
     syncText:SetTextColor(0.5, 0.5, 0.5)
     self.desktopSyncText = syncText
     self:UpdateDesktopSyncStatus()
@@ -499,7 +499,7 @@ function MainFrameMixin:OpenSettings()
 end
 
 --- Update the desktop sync status text in the title bar area.
---- Shows: "Synced" (green, <1h), "Xh ago" (yellow, 1-24h), "Stale" (red, >24h), or empty if no data.
+--- Shows: "Desktop: Synced" (green, <1h), "Desktop: Xh ago" (yellow, 1-24h), "Desktop: Stale" (red, >24h), or empty if no data.
 function MainFrameMixin:UpdateDesktopSyncStatus()
     if not self.desktopSyncText then return end
     if not Loothing.Wishlist or not Loothing.Wishlist:HasData() then
@@ -508,13 +508,13 @@ function MainFrameMixin:UpdateDesktopSyncStatus()
     end
     local age = Loothing.Wishlist:GetTimeSinceSync()
     if not age then
-        self.desktopSyncText:SetText("|cff666666Not synced|r")
+        self.desktopSyncText:SetText("|cff666666Desktop: Not synced|r")
     elseif age < 3600 then
-        self.desktopSyncText:SetText("|cff00ff00Synced|r")
+        self.desktopSyncText:SetText("|cff00ff00Desktop: Synced|r")
     elseif age < 86400 then
-        self.desktopSyncText:SetText("|cffffff00" .. math.floor(age / 3600) .. "h ago|r")
+        self.desktopSyncText:SetText("|cffffff00Desktop: " .. math.floor(age / 3600) .. "h ago|r")
     else
-        self.desktopSyncText:SetText("|cffff0000Stale|r")
+        self.desktopSyncText:SetText("|cffff0000Desktop: Stale|r")
     end
 end
 

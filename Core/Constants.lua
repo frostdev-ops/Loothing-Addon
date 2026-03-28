@@ -8,7 +8,7 @@ local _, ns = ...
 local Loothing = ns.Addon
 
 -- Addon info
-Loothing.VERSION = "1.4.6"
+Loothing.VERSION = "1.5.5"
 Loothing.PROTOCOL_VERSION = 4
 Loothing.ADDON_PREFIX = "LOOTHING"
 
@@ -238,6 +238,16 @@ Loothing.MsgType = {
     HEARTBEAT = "HB",            -- ML -> Raid: periodic state digest for auto-recovery
     ACK       = "AK",            -- Universal point-to-point acknowledgment
 
+    -- Response recovery
+    RESPONSE_POLL = "RP",           -- ML -> Raid: Poll for missing responses
+
+    -- Client combat-ready signal
+    CLIENT_READY = "CRD",          -- Client -> ML: Combat ended, ready with response state
+
+    -- Incremental sync (lighter than full SYNC_DATA)
+    SYNC_INCREMENTAL = "SIR",      -- Client -> ML: Request specific subset
+    SYNC_INCREMENTAL_DATA = "SID", -- ML -> Client: Subset response
+
     -- Observer roster
     OBSERVER_ROSTER = "OR",         -- ML -> Raid: Observer list + permissions
 
@@ -422,6 +432,7 @@ Loothing.DefaultSettings = {
         timeoutFlash = false,       -- Flash on voting timeout
         blockTradesDuringVoting = false, -- Block trades while voting
         chatFrameName = "ChatFrame1",    -- Output chat frame
+        autoReshow = true,          -- Gently re-show frame after 30s if unresponded items exist
     },
 
     ml = {
@@ -632,6 +643,40 @@ Loothing.Timing = {
     LOOT_DEBOUNCE_DELAY = 2.5,  -- Wait for all boss loot to distribute before prompting
     SESSION_PROMPT_TIMEOUT = 30, -- How long ML has to respond to session prompt
     LOOT_BUFFER_TTL = 60,       -- Max seconds to keep buffered loot (no session started)
+
+    -- CommState: reconnect grace period
+    RECONNECT_GRACE_PERIOD = 5, -- Suppress sync triggers for N seconds after reconnect
+    RECONNECT_JITTER_SPREAD = 1.5, -- +/- seconds for reconnect timer jitter
+
+    -- CommState: combat defer queue
+    COMBAT_DEFER_STALE_TIME = 120, -- Max age of combat-deferred messages (2 min)
+    COMBAT_DEFER_MAX = 100,        -- Cap to prevent memory growth during long combat
+
+    -- CommState: paced queue replay
+    REPLAY_INTERVAL = 0.1,         -- 100ms between replay ticks
+    REPLAY_PAUSE_PRESSURE = 0.6,   -- Pause replay above this queue pressure
+    REPLAY_HARD_PRESSURE = 0.8,    -- ALERT-only above this queue pressure
+
+    -- CommState: sync deduplication
+    SYNC_DEDUP_WINDOW = 10,        -- Suppress duplicate sync requests within N seconds
+
+    -- AckTracker: jitter
+    HEARTBEAT_JITTER = 5,          -- +/- seconds on heartbeat interval (25-35s)
+
+    -- Sync storm prevention
+    SYNC_JITTER_WINDOW = 8,         -- Spread client sync requests across N seconds after heartbeat mismatch
+    SYNC_COALESCE_WINDOW = 2,       -- ML waits N seconds to collect sync requests before responding
+    SYNC_CIRCUIT_THRESHOLD = 3,     -- Consecutive sync failures before opening circuit breaker
+    SYNC_CIRCUIT_RESET = 120,       -- Seconds before retrying sync after circuit opens
+
+    -- Response recovery
+    RESPONSE_POLL_DELAY = 15,       -- Seconds after VOTE_REQUEST before ML polls missing responses
+    ACK_AUTO_RETRY_TIMEOUT = 5,     -- Shorter timeout for automatic ACK retry (after initial 10s)
+
+    -- ResponseTracker / combat-ready
+    CLIENT_READY_DEBOUNCE = 5,      -- Min seconds between CLIENT_READY sends
+    COMBAT_END_RECHECK_DELAY = 2,   -- Delay after combat before re-showing RollFrame
+    FRAME_REOPEN_DELAY = 30,        -- Seconds before gentle re-show of pending items
 }
 
 --[[--------------------------------------------------------------------

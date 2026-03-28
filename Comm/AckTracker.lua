@@ -39,8 +39,9 @@ local AUTO_SYNC_COOLDOWN    = 60    -- Minimum seconds between auto-sync trigger
 
 --- Initialize the AckTracker
 function AckTrackerMixin:Init()
-    self.heartbeatTimer   = nil
-    self.lastAutoSyncTime = 0
+    self.heartbeatTimer     = nil
+    self.lastAutoSyncTime   = 0
+    self.lastHeartbeatTime  = 0
 end
 
 --[[--------------------------------------------------------------------
@@ -48,12 +49,32 @@ end
 ----------------------------------------------------------------------]]
 
 --- Start the periodic heartbeat timer (call when ML session becomes active)
+-- Deferred during reconnect grace period; jittered interval to prevent sync storms.
 function AckTrackerMixin:StartHeartbeat()
     self:StopHeartbeat()
-    self.heartbeatTimer = C_Timer.NewTicker(HEARTBEAT_INTERVAL, function()
+
+    -- During grace period, defer start until grace ends
+    local CommState = Loothing.CommState
+    if CommState and CommState:IsInGracePeriod() then
+        Loothing:Debug("AckTracker: deferring heartbeat start (grace period)")
+        CommState:RegisterCallback("OnGracePeriodEnded", function()
+            CommState:UnregisterCallback("OnGracePeriodEnded", self)
+            self:StartHeartbeat()
+        end, self)
+        return
+    end
+
+    -- Jittered interval: HEARTBEAT_INTERVAL +/- HEARTBEAT_JITTER
+    local jitter = Loothing.Timing.HEARTBEAT_JITTER or 5
+    local interval = HEARTBEAT_INTERVAL
+    if CommState then
+        interval = CommState:Jitter(HEARTBEAT_INTERVAL, jitter)
+    end
+
+    self.heartbeatTimer = C_Timer.NewTicker(interval, function()
         self:BroadcastHeartbeat()
     end)
-    Loothing:Debug("AckTracker: heartbeat started (interval=" .. HEARTBEAT_INTERVAL .. "s)")
+    Loothing:Debug("AckTracker: heartbeat started (interval=" .. string.format("%.1f", interval) .. "s)")
 end
 
 --- Stop the heartbeat timer (call when session ends or ML role lost)
@@ -63,9 +84,16 @@ function AckTrackerMixin:StopHeartbeat()
         self.heartbeatTimer = nil
         Loothing:Debug("AckTracker: heartbeat stopped")
     end
+
+    -- Cancel any pending grace-period deferred start
+    local CommState = Loothing.CommState
+    if CommState then
+        CommState:UnregisterCallback("OnGracePeriodEnded", self)
+    end
 end
 
 --- Broadcast one heartbeat digest to the group
+-- Skipped during encounter restrictions (WoW drops them anyway, wastes queue budget).
 function AckTrackerMixin:BroadcastHeartbeat()
     if not Loothing.Session or not Loothing.Session:IsMasterLooter() then
         self:StopHeartbeat()
@@ -73,6 +101,18 @@ function AckTrackerMixin:BroadcastHeartbeat()
     end
     if Loothing.Session:GetState() == Loothing.SessionState.INACTIVE then
         return
+    end
+
+    -- Skip during any combat — WoW 12.0 blocks all addon messages in combat.
+    -- Heartbeats are BULK and would just be deferred by Send() anyway, but
+    -- skipping here avoids the wasted CPU of BuildHeartbeatDigest() (item
+    -- iteration, Adler-32 hash computation).
+    local CommState = Loothing.CommState
+    if CommState then
+        local state = CommState:GetState()
+        if state == CommState.STATE_COMBAT or state == CommState.STATE_RESTRICTED then
+            return
+        end
     end
 
     local digest = self:BuildHeartbeatDigest()
@@ -123,55 +163,71 @@ end
 -- @param digest table - Heartbeat payload
 -- @param sender string - Sender (the ML)
 function AckTrackerMixin:HandleHeartbeat(digest, sender)
+    -- Record receipt time so stale-session detection can check heartbeat age
+    self.lastHeartbeatTime = GetTime()
+
     -- Only non-ML clients should act on heartbeats
     if Loothing.Session and Loothing.Session:IsMasterLooter() then return end
 
     local session    = Loothing.Session
     local needsSync  = false
+    local mismatchType = nil  -- nil = full sync, string = incremental
 
     if not session then return end
 
     local localState = session:GetState()
 
     if localState == Loothing.SessionState.INACTIVE then
-        -- We have no session but ML reports one active → sync
+        -- We have no session but ML reports one active → full sync
         if digest.state ~= Loothing.SessionState.INACTIVE then
-            Loothing:Debug("AckTracker: no local session, ML has active session — sync needed")
+            Loothing:Debug("AckTracker: no local session, ML has active session — full sync needed")
             needsSync = true
         end
     else
         -- Compare session identity and state
         local localID = session:GetSessionID() or ""
         if digest.sessionID ~= localID then
-            Loothing:Debug("AckTracker: session ID mismatch — sync needed")
+            Loothing:Debug("AckTracker: session ID mismatch — full sync needed")
             needsSync = true
         elseif digest.state ~= localState then
-            Loothing:Debug("AckTracker: session state mismatch — sync needed")
+            Loothing:Debug("AckTracker: session state mismatch — full sync needed")
             needsSync = true
         elseif digest.itemCount ~= self:GetLocalItemCount() then
-            Loothing:Debug("AckTracker: item count mismatch — sync needed")
+            Loothing:Debug("AckTracker: item count mismatch — incremental sync (items)")
             needsSync = true
+            mismatchType = "items"
         else
             -- Deep-check council hash
             local localCouncilHash = self:ComputeCouncilHash()
             if localCouncilHash ~= digest.councilHash then
-                Loothing:Debug("AckTracker: council hash mismatch — sync needed")
+                Loothing:Debug("AckTracker: council hash mismatch — incremental sync (council)")
                 needsSync = true
+                mismatchType = "council"
             end
 
             -- Deep-check MLDB hash
             if not needsSync then
                 local localMLDBHash = self:ComputeMLDBHash()
                 if localMLDBHash ~= digest.mldbHash then
-                    Loothing:Debug("AckTracker: MLDB hash mismatch — sync needed")
+                    Loothing:Debug("AckTracker: MLDB hash mismatch — incremental sync (mldb)")
                     needsSync = true
+                    mismatchType = "mldb"
                 end
             end
         end
     end
 
     if needsSync then
-        self:TriggerAutoSync(sender)
+        if mismatchType and Loothing.Sync then
+            -- Use incremental sync for targeted mismatches (much lighter)
+            self:TriggerIncrementalSync(sender, mismatchType)
+        else
+            -- Full sync for fundamental divergence (session ID, state, no session)
+            self:TriggerAutoSync(sender)
+        end
+    else
+        -- State matches — cancel any pending jittered sync from a prior heartbeat
+        self:CancelPendingSync()
     end
 end
 
@@ -187,7 +243,11 @@ function AckTrackerMixin:HandleAck(data, sender)
         "msgID=" .. tostring(data and data.msgID))
 end
 
---- Trigger an auto-sync with the ML, subject to cooldown
+--- Trigger an auto-sync with the ML, subject to cooldown.
+-- Jittered: instead of all 25 clients firing at once on the same heartbeat,
+-- each client delays by a random amount within SYNC_JITTER_WINDOW seconds.
+-- If the next heartbeat arrives and state has converged, the pending timer
+-- is cancelled (avoiding unnecessary syncs).
 -- @param mlName string - The ML to sync from
 function AckTrackerMixin:TriggerAutoSync(mlName)
     local now = GetTime()
@@ -197,11 +257,66 @@ function AckTrackerMixin:TriggerAutoSync(mlName)
     end
 
     self.lastAutoSyncTime = now
-    Loothing:Debug("AckTracker: requesting auto-sync from", mlName)
 
-    if Loothing.Sync then
-        Loothing.Sync:RequestSync(mlName)
+    -- Cancel any previously scheduled jittered sync
+    if self.pendingSyncTimer then
+        self.pendingSyncTimer:Cancel()
+        self.pendingSyncTimer = nil
     end
+
+    -- Schedule sync with random jitter to spread 25 clients across the window
+    local jitterWindow = Loothing.Timing.SYNC_JITTER_WINDOW or 8
+    local delay = math.random() * jitterWindow
+    Loothing:Debug("AckTracker: scheduling auto-sync in", string.format("%.1fs", delay))
+
+    self.pendingSyncTimer = C_Timer.NewTimer(delay, function()
+        self.pendingSyncTimer = nil
+        if Loothing.CommState then
+            Loothing.CommState:RequestSyncIfNeeded("heartbeat", mlName)
+        elseif Loothing.Sync then
+            Loothing:Debug("AckTracker: requesting auto-sync from", mlName)
+            Loothing.Sync:RequestSync(mlName)
+        end
+    end)
+end
+
+--- Cancel any pending jittered sync (e.g., if heartbeat shows convergence)
+function AckTrackerMixin:CancelPendingSync()
+    if self.pendingSyncTimer then
+        self.pendingSyncTimer:Cancel()
+        self.pendingSyncTimer = nil
+        Loothing:Debug("AckTracker: cancelled pending sync (state converged)")
+    end
+end
+
+--- Trigger an incremental sync for a specific mismatch type, with jitter.
+-- Much lighter than full sync — only requests the divergent subset.
+-- @param mlName string
+-- @param mismatchType string - "council", "mldb", "items", "itemStates"
+function AckTrackerMixin:TriggerIncrementalSync(mlName, mismatchType)
+    local now = GetTime()
+    if now - self.lastAutoSyncTime < AUTO_SYNC_COOLDOWN then
+        return
+    end
+    self.lastAutoSyncTime = now
+
+    -- Cancel any pending full sync
+    if self.pendingSyncTimer then
+        self.pendingSyncTimer:Cancel()
+        self.pendingSyncTimer = nil
+    end
+
+    local jitterWindow = Loothing.Timing.SYNC_JITTER_WINDOW or 8
+    local delay = math.random() * jitterWindow
+
+    Loothing:Debug("AckTracker: scheduling incremental sync (", mismatchType, ") in", string.format("%.1fs", delay))
+
+    self.pendingSyncTimer = C_Timer.NewTimer(delay, function()
+        self.pendingSyncTimer = nil
+        if Loothing.Sync then
+            Loothing.Sync:RequestIncrementalSync(mlName, mismatchType)
+        end
+    end)
 end
 
 --[[--------------------------------------------------------------------

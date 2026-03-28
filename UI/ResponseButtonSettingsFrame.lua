@@ -30,6 +30,13 @@ ns.ResponseButtonSettingsMixin = ResponseButtonSettingsMixin
 ----------------------------------------------------------------------]]
 
 function ResponseButtonSettingsMixin:Show()
+    -- Block non-ML players from editing during an active session
+    if Loothing.Session and Loothing.Session:IsActive()
+        and Loothing.MLDB and not Loothing.MLDB:IsML() then
+        Loothing:Print(L["SESSION_SETTINGS_LOCKED_SHORT"] or "Settings are locked during an active session.")
+        return
+    end
+
     self:BringToFront()
     self.frame:Show()
     self:UpdateLayout()
@@ -56,6 +63,16 @@ function ResponseButtonSettingsMixin:Init()
     self.expandedRow = nil   -- btnId of currently expanded row (or nil)
     self.rowFrames   = {}    -- pool of row frames
     self:BuildFrame()
+
+    -- Auto-hide for non-ML when a session starts (settings become locked)
+    if Loothing.Session then
+        Loothing.Session:RegisterCallback("OnSessionStarted", function()
+            if self:IsShown() and Loothing.MLDB and not Loothing.MLDB:IsML() then
+                self:Hide()
+                Loothing:Print(L["SESSION_SETTINGS_LOCKED_SHORT"] or "Settings are locked during an active session.")
+            end
+        end, self)
+    end
 end
 
 function ResponseButtonSettingsMixin:BringToFront()

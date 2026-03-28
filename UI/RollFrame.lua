@@ -35,14 +35,12 @@ function RollFrameMixin:Init()
     self.selectedResponse = nil
     self.note = ""
 
-    -- Per-item roll storage (keyed by item GUID)
-    self.itemRolls = {}           -- { [guid] = { roll=N, min=1, max=100 } }
+    -- Roll capture state (UI-specific, tied to /roll chat message listener)
     self.pendingRollGUID = nil    -- GUID of item we're currently rolling for
     self.pendingRollStarted = {}  -- { [guid] = startTime }
 
-    -- Per-item response tracking (keyed by item GUID)
-    self.itemResponses = {}       -- { [guid] = { response=id, note=str, submitted=bool } }
-    self.responseAckTimers = {}   -- { [guid] = timer }
+    -- Combat lock state
+    self.combatLocked = false
 
     -- Multi-item session support
     self.items = {}               -- Array of session items
@@ -92,21 +90,24 @@ end
     Roll Tracking Methods
 ----------------------------------------------------------------------]]
 
---- Store a roll result for an item
+--- Store a roll result for an item (delegates to ResponseTracker)
 -- @param itemGUID string
 -- @param roll number
 -- @param minRoll number
 -- @param maxRoll number
 function RollFrameMixin:SetItemRoll(itemGUID, roll, minRoll, maxRoll)
-    self.itemRolls[itemGUID] = { roll = roll, min = minRoll or 1, max = maxRoll or 100 }
+    if Loothing.ResponseTracker then
+        Loothing.ResponseTracker:SetRoll(itemGUID, roll, minRoll, maxRoll)
+    end
 end
 
---- Get stored roll for an item
+--- Get stored roll for an item (delegates to ResponseTracker)
 -- @param itemGUID string
 -- @return number|nil, number|nil, number|nil - roll, min, max
 function RollFrameMixin:GetItemRoll(itemGUID)
-    local data = self.itemRolls[itemGUID]
-    if data then return data.roll, data.min, data.max end
+    if Loothing.ResponseTracker then
+        return Loothing.ResponseTracker:GetRoll(itemGUID)
+    end
     return nil, nil, nil
 end
 
@@ -154,9 +155,6 @@ function RollFrameMixin:SetItems(items)
     self.items = items or {}
     self.currentItemIndex = 1
 
-    -- Clear response tracking for new session
-    self.itemResponses = {}
-    self.itemRolls = {}
     self.sessionButtonWarningShown = nil
 
     if #self.items == 0 then
@@ -739,6 +737,13 @@ end
     Submit Button State
 ----------------------------------------------------------------------]]
 
+--- Set combat lock state (visible but interaction-limited during combat)
+-- @param locked boolean
+function RollFrameMixin:SetCombatLocked(locked)
+    self.combatLocked = locked
+    self:UpdateSubmitButton()
+end
+
 --- Update submit button enabled state
 function RollFrameMixin:UpdateSubmitButton()
     local canSubmit = self.selectedResponse ~= nil
@@ -761,7 +766,26 @@ function RollFrameMixin:UpdateSubmitButton()
 
         -- Determine button label
         local btnText
-        if noteMissing and self.selectedResponse then
+
+        -- Combat-aware labels (takes priority over other states)
+        if self.combatLocked then
+            if current and current.pending then
+                btnText = "Queued (Combat)"
+                canSubmit = false
+            elseif current and current.submitted then
+                btnText = "Already Submitted"
+                canSubmit = false
+            elseif noteMissing and self.selectedResponse then
+                btnText = "Note Required"
+            elseif self.selectedResponse then
+                btnText = "Submit (Queued)"
+                -- Allow submit during combat — guaranteed queue handles delivery
+            else
+                local L = Loothing.Locale
+                btnText = L["SUBMIT_RESPONSE"]
+            end
+            self.submitButton:SetEnabled(canSubmit)
+        elseif noteMissing and self.selectedResponse then
             btnText = "Note Required"
         elseif current and current.submitted then
             btnText = "Already Submitted"
@@ -841,6 +865,10 @@ function RollFrameMixin:SendResponse(note)
     local itemGUID = self.item.guid
     local response = self.selectedResponse
 
+    -- Guard against double-click: if we already have a pending response, ignore
+    local existing = self:GetItemResponse(itemGUID)
+    if existing and existing.pending then return end
+
     -- Get roll for this specific item
     local roll, rollMin, rollMax = self:GetItemRoll(itemGUID)
 
@@ -917,75 +945,39 @@ function RollFrameMixin:PrintResponseToChat(item, response, note)
     Loothing:Print(msg)
 end
 
---- Check if an item has been responded to
+--- Check if an item has been responded to (delegates to ResponseTracker)
 -- @param itemGUID string
 -- @return boolean
 function RollFrameMixin:HasRespondedToItem(itemGUID)
-    return self.itemResponses[itemGUID] and self.itemResponses[itemGUID].submitted
+    if Loothing.ResponseTracker then
+        return Loothing.ResponseTracker:HasResponded(itemGUID)
+    end
+    return false
 end
 
---- Get the response for an item
+--- Get the response for an item (delegates to ResponseTracker)
 -- @param itemGUID string
--- @return table|nil - { response, note, submitted }
+-- @return table|nil - { response, note, submitted, pending, retryCount }
 function RollFrameMixin:GetItemResponse(itemGUID)
-    return self.itemResponses[itemGUID]
+    if Loothing.ResponseTracker then
+        return Loothing.ResponseTracker:GetResponse(itemGUID)
+    end
+    return nil
 end
 
---- Set the response for an item
+--- Set the response for an item (delegates to ResponseTracker)
 -- @param itemGUID string
 -- @param response any - Response ID
 -- @param note string
-function RollFrameMixin:SetItemResponse(itemGUID, response, note, submitted, pending)
-    self.itemResponses[itemGUID] = {
-        response = response,
-        note = note or "",
-        submitted = submitted == true,
-        pending = pending == true,
-    }
-
-    if pending then
-        self:StartAckTimeout(itemGUID)
-    else
-        self:ClearAckTimeout(itemGUID)
+function RollFrameMixin:SetItemResponse(itemGUID, response, note, submitted, pending, retryCount)
+    if Loothing.ResponseTracker then
+        Loothing.ResponseTracker:SetResponse(itemGUID, response, note, submitted, pending, retryCount)
     end
 end
 
---- Start an ack timeout to prevent stuck pending states
--- @param itemGUID string
-function RollFrameMixin:StartAckTimeout(itemGUID)
-    if not itemGUID then return end
-
-    self:ClearAckTimeout(itemGUID)
-
-    local timeout = (Loothing.Timing and Loothing.Timing.DEFAULT_VOTE_TIMEOUT) or 30
-    timeout = math.min(timeout, 10) -- keep UI responsive even if vote timeout is long
-
-    self.responseAckTimers[itemGUID] = C_Timer.NewTimer(timeout, function()
-        self.responseAckTimers[itemGUID] = nil
-
-        local responseData = self.itemResponses[itemGUID]
-        if responseData and responseData.pending then
-            -- Clear pending state and allow resubmission
-            self.itemResponses[itemGUID] = nil
-            Loothing:Error("No response from master looter. Please resubmit.")
-
-            if self.item and self.item.guid == itemGUID then
-                self:ResetUIState(nil)
-                self:UpdateSessionButtons()
-            end
-        end
-    end)
-end
-
---- Clear pending ack timer
--- @param itemGUID string
-function RollFrameMixin:ClearAckTimeout(itemGUID)
-    local timer = itemGUID and self.responseAckTimers[itemGUID]
-    if timer then
-        timer:Cancel()
-        self.responseAckTimers[itemGUID] = nil
-    end
-end
+-- NOTE: StartAckTimeout, ClearAckTimeout, AutoRetryResponse have been moved
+-- to ResponseTracker. The tracker manages all ack timeout logic directly
+-- when SetResponse is called with pending=true.
 
 --- Handle ack from master looter for a submitted response
 -- @param itemGUID string
@@ -1005,11 +997,15 @@ function RollFrameMixin:OnPlayerResponseAck(itemGUID, success, sessionID)
         return
     end
 
-    self:ClearAckTimeout(itemGUID)
+    if Loothing.ResponseTracker then
+        Loothing.ResponseTracker:ClearAckTimeout(itemGUID)
+    end
 
     if not success then
         -- Clear pending state and allow resubmission
-        self.itemResponses[itemGUID] = nil
+        if Loothing.ResponseTracker then
+            Loothing.ResponseTracker:SetResponse(itemGUID, nil, nil, false, false, 0)
+        end
         Loothing:Error("Response not accepted. Please try again.")
 
         if self.item and self.item.guid == itemGUID then
@@ -1143,22 +1139,21 @@ function RollFrameMixin:Close(submitted)
         self:TriggerEvent("OnFrameClosed", self.item)
     end
 
-    -- Clear all state
+    -- Clear display state only — ResponseTracker owns response/roll/ack state
     self.item = nil
     self.selectedResponse = nil
     self.roll = nil
-
-    -- Clear multi-item session state
     self.items = {}
     self.currentItemIndex = 1
-    self.itemRolls = {}
-    self.itemResponses = {}
-    for guid, timer in pairs(self.responseAckTimers or {}) do
-        timer:Cancel()
-        self.responseAckTimers[guid] = nil
-    end
     self.pendingRollStarted = {}
     self.sessionButtonWarningShown = nil
+
+    -- If unresponded items exist, notify player and schedule gentle re-show
+    local tracker = Loothing.ResponseTracker
+    if tracker and tracker:GetUnrespondedCount() > 0 then
+        Loothing:Print("You have " .. tracker:GetUnrespondedCount() .. " items awaiting response. Type /lt roll to reopen.")
+        tracker:ScheduleReshow()
+    end
 end
 
 --[[--------------------------------------------------------------------

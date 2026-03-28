@@ -62,8 +62,21 @@ function ProtocolMixin:Init()
     self.Serializer = Serializer
     self.Compressor = Compressor
 
+    -- Diagnostic counters
+    self.checksumFailures = 0
+    self.decodeErrors = 0
+
     assert(self.Serializer, "Loolib Serializer not available")
     assert(self.Compressor, "Loolib Compressor not available")
+end
+
+--- Return diagnostic counters for /lt diag
+-- @return table
+function ProtocolMixin:GetDiagnostics()
+    return {
+        checksumFailures = self.checksumFailures or 0,
+        decodeErrors = self.decodeErrors or 0,
+    }
 end
 
 --[[--------------------------------------------------------------------
@@ -145,12 +158,14 @@ function ProtocolMixin:Decode(encoded)
     -- Step 3: Decompress
     local decompressed, success = self.Compressor:Decompress(compressedPart)
     if not success or not decompressed then
+        self.decodeErrors = (self.decodeErrors or 0) + 1
         return nil, nil, nil, nil
     end
 
     -- Step 4: Verify Adler-32 integrity (computed on decompressed = serialized)
     local actualChecksum = self.Compressor:Adler32(decompressed)
     if actualChecksum ~= storedChecksum then
+        self.checksumFailures = (self.checksumFailures or 0) + 1
         Loothing:Debug("Protocol: Adler-32 mismatch — message may be corrupt",
             string.format("(stored=0x%08X actual=0x%08X)", storedChecksum, actualChecksum))
         return nil, nil, nil, nil
@@ -160,6 +175,7 @@ function ProtocolMixin:Decode(encoded)
     -- 4th return (msgID) is nil for v3 senders that don't include it
     local ok, version, command, msgData, msgID = self.Serializer:Deserialize(decompressed)
     if not ok then
+        self.decodeErrors = (self.decodeErrors or 0) + 1
         return nil, nil, nil, nil
     end
 

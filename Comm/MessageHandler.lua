@@ -58,6 +58,11 @@ local COMM_EVENTS = {
     "OnHeartbeat",
     "OnAck",
     "OnHistoryEntry",
+    "OnResponsePoll",
+    "OnIncrementalSyncRequest",
+    "OnIncrementalSyncData",
+    "OnClientReady",
+    "OnMessageDropped",
 }
 
 --[[--------------------------------------------------------------------
@@ -94,11 +99,15 @@ local CRITICAL_COMMANDS = {
     [Loothing.MsgType.ITEM_ADD]            = true,
     [Loothing.MsgType.ITEM_REMOVE]         = true,
     [Loothing.MsgType.VOTE_REQUEST]        = true,
+    [Loothing.MsgType.VOTE_CANCEL]         = true,
     [Loothing.MsgType.VOTE_AWARD]          = true,
     [Loothing.MsgType.VOTE_RESULTS]        = true,
+    [Loothing.MsgType.VOTE_SKIP]           = true,
     [Loothing.MsgType.PLAYER_RESPONSE]     = true,
     [Loothing.MsgType.PLAYER_RESPONSE_ACK] = true,
-    [Loothing.MsgType.BATCH]              = true,
+    [Loothing.MsgType.MLDB_BROADCAST]      = true,
+    [Loothing.MsgType.COUNCIL_ROSTER]      = true,
+    [Loothing.MsgType.BATCH]               = true,
 }
 
 --- Command → handler method name dispatch table
@@ -121,6 +130,10 @@ local HANDLERS = {
     [Loothing.MsgType.PLAYER_INFO_RESPONSE]    = "HandlePlayerInfoResponse",
     [Loothing.MsgType.PLAYER_RESPONSE]         = "HandlePlayerResponse",
     [Loothing.MsgType.PLAYER_RESPONSE_ACK]     = "HandlePlayerResponseAck",
+    [Loothing.MsgType.RESPONSE_POLL]           = "HandleResponsePoll",
+    [Loothing.MsgType.SYNC_INCREMENTAL]        = "HandleIncrementalSyncRequest",
+    [Loothing.MsgType.SYNC_INCREMENTAL_DATA]   = "HandleIncrementalSyncData",
+    [Loothing.MsgType.CLIENT_READY]            = "HandleClientReady",
     [Loothing.MsgType.VERSION_REQUEST]         = "HandleVersionRequest",
     [Loothing.MsgType.VERSION_RESPONSE]        = "HandleVersionResponse",
     [Loothing.MsgType.MLDB_BROADCAST]          = "HandleMLDBBroadcast",
@@ -167,18 +180,17 @@ end
 ---@param target string|nil Player name for WHISPER, nil for group broadcast
 ---@param priority string|nil "ALERT", "NORMAL" (default), or "BULK"
 function CommMixin.Send(self, command, data, target, priority)
-    local encoded = ns.Protocol:Encode(command, data)
-    if not encoded then
-        Loothing:Error("Comm:Send — Encode returned nil for", command, "(message dropped)")
-        return
-    end
-
     -- Self-send shortcut: if target is the local player, deliver locally instead of
-    -- going through the WoW addon message network. This avoids edge cases with
-    -- WHISPER-to-self delivery and addon restrictions.
+    -- going through the WoW addon message network. Self-send always works — it
+    -- bypasses WoW addon channels entirely, so combat/restriction blocking does not apply.
     if target then
         local localName = Utils.GetPlayerFullName()
         if localName and Utils.IsSamePlayer(target, localName) then
+            local encoded = ns.Protocol:Encode(command, data)
+            if not encoded then
+                Loothing:Error("Comm:Send — Encode returned nil for", command, "(message dropped)")
+                return
+            end
             Loothing:Debug("Comm:Send — self-send shortcut for", command)
             C_Timer.After(0, function()
                 self:OnMessage(encoded, "WHISPER", localName)
@@ -187,19 +199,76 @@ function CommMixin.Send(self, command, data, target, priority)
         end
     end
 
+    -- CommState gate: In WoW 12.0 (Midnight), ALL addon messages are blocked during
+    -- combat, not just during encounter restrictions. Check BEFORE encoding to avoid
+    -- wasting CPU on serialize + compress + Adler32 for messages that will be queued.
+    local prio = priority or "NORMAL"
+    local CommState = Loothing.CommState
+    if CommState and CommState:ShouldDefer(command, prio) then
+        local state = CommState:GetState()
+        if state == CommState.STATE_COMBAT or state == CommState.STATE_RESTRICTED then
+            -- Critical commands → guaranteed queue (replayed first on combat end)
+            -- Non-critical → combat defer queue (BULK priority, shorter TTL)
+            if CommState:IsCriticalCommand(command) then
+                if Loothing.Restrictions then
+                    Loothing.Restrictions:QueueGuaranteed(command, data, target, prio)
+                end
+            else
+                CommState:DeferForCombat(command, data, target, prio)
+            end
+        end
+        -- STATE_DISCONNECTED: silently dropped (ShouldDefer logged it)
+        return
+    end
+
+    -- Encode (only for messages that will actually be sent now)
+    local encoded = ns.Protocol:Encode(command, data)
+    if not encoded then
+        Loothing:Error("Comm:Send — Encode returned nil for", command, "(message dropped)")
+        return
+    end
+
     -- Test mode intercept
     if TestMode and TestMode.OnOutgoingComm then
         local channel = target and "WHISPER" or (IsInRaid() and "RAID" or "PARTY")
         TestMode:OnOutgoingComm(channel, target)
     end
 
-    -- Backpressure: downgrade non-critical NORMAL to BULK when queue is under pressure
-    local prio = priority or "NORMAL"
-    if prio == "NORMAL"
-        and not CRITICAL_COMMANDS[command]
-        and Comm:GetQueuePressure() > 0.5
-    then
-        prio = "BULK"
+    -- Progressive backpressure: graduated shedding based on transport queue pressure
+    local pressure = Comm:GetQueuePressure()
+    local isCritical = CRITICAL_COMMANDS[command]
+
+    if not isCritical then
+        if pressure > 0.7 then
+            -- Heavy pressure: downgrade NORMAL→BULK, drop existing BULK
+            if prio == "BULK" then
+                Loothing:Debug("Comm:Send — dropping BULK under heavy pressure:", command)
+                self:TriggerEvent("OnMessageDropped", command, "heavy_pressure", target)
+                return
+            elseif prio == "NORMAL" then
+                prio = "BULK"
+            end
+        elseif pressure > 0.5 then
+            -- Moderate pressure: drop non-critical BULK
+            if prio == "BULK" then
+                Loothing:Debug("Comm:Send — dropping BULK under moderate pressure:", command)
+                self:TriggerEvent("OnMessageDropped", command, "moderate_pressure", target)
+                return
+            end
+        elseif pressure > 0.3 then
+            -- Light pressure: downgrade non-critical NORMAL→BULK
+            if prio == "NORMAL" then
+                prio = "BULK"
+            end
+        end
+    end
+
+    -- Group membership gate: don't WHISPER players who left the group.
+    -- WoW returns GeneralError (9) / TargetOffline (12) for stale targets.
+    if target and not Utils.IsGroupMember(target) then
+        Loothing:Debug("Comm:Send — target left group, dropping WHISPER:",
+            command, "->", target)
+        return
     end
 
     if target then
@@ -265,21 +334,30 @@ function CommMixin:FlushBatch(key)
         return
     end
 
-    -- Single message: bypass BATCH wrapper (no overhead)
+    -- Single message: bypass BATCH wrapper (no overhead).
+    -- inner.command and inner.data are captured as locals before Release,
+    -- so the TempTable slot can be safely wiped.
     if #messages == 1 then
         local inner = messages[1]
-        self:Send(inner.command, inner.data, batch.target, batch.priority)
-        -- Send() is synchronous (encodes + enqueues); safe to release now
+        local cmd, dat = inner.command, inner.data
         Loolib.TempTable:Release(messages)
+        self:Send(cmd, dat, batch.target, batch.priority)
         return
     end
 
     -- Multiple messages: wrap in BATCH container.
-    -- Protocol:Encode serializes messages synchronously; release immediately after.
-    self:Send(Loothing.MsgType.BATCH, {
-        messages = messages,
-    }, batch.target, batch.priority)
+    -- Copy messages out of TempTable before calling Send(), because Send()
+    -- may defer (combat/disconnect) and store the data reference in a queue.
+    -- If we Released the TempTable first, the queue would hold stale data.
+    local messagesCopy = {}
+    for i, msg in ipairs(messages) do
+        messagesCopy[i] = msg
+    end
     Loolib.TempTable:Release(messages)
+
+    self:Send(Loothing.MsgType.BATCH, {
+        messages = messagesCopy,
+    }, batch.target, batch.priority)
 end
 
 --- Flush all pending batches immediately
@@ -304,14 +382,29 @@ function CommMixin:SendGuild(command, data, priority)
         return
     end
 
+    -- CommState gate: WoW 12.0 blocks all addon messages during combat,
+    -- including guild channel. Guild messages are non-critical (version
+    -- checks, settings/history sync) and user-initiated, so we drop them
+    -- rather than queue — replaying with target=nil would misroute to
+    -- RAID/PARTY instead of GUILD.
+    local prio = priority or "NORMAL"
+    local CommState = Loothing.CommState
+    if CommState and CommState:ShouldDefer(command, prio) then
+        Loothing:Debug("SendGuild: dropped during combat/restriction:", command)
+        return
+    end
+
     local encoded = ns.Protocol:Encode(command, data)
-    if not encoded then return end
+    if not encoded then
+        Loothing:Error("Comm:SendGuild — Encode returned nil for", command, "(message dropped)")
+        return
+    end
 
     if TestMode and TestMode.OnOutgoingComm then
         TestMode:OnOutgoingComm("GUILD", nil)
     end
 
-    Comm:SendCommMessage(Loothing.ADDON_PREFIX, encoded, "GUILD", nil, priority or "NORMAL")
+    Comm:SendCommMessage(Loothing.ADDON_PREFIX, encoded, "GUILD", nil, prio)
 end
 
 --- Send with guaranteed delivery (queued during encounter restrictions)
@@ -321,14 +414,26 @@ end
 -- @param target string|nil - Player name or nil for group
 -- @param priority string|nil
 function CommMixin:SendGuaranteed(command, data, target, priority)
-    -- Check encounter restrictions
+    -- In WoW 12.0 (Midnight), all addon messages are blocked during combat.
+    -- Queue guaranteed messages during both RESTRICTED and COMBAT states.
+    local shouldQueue = false
     if Loothing.Restrictions and Loothing.Restrictions:IsRestricted() then
-        Loothing.Restrictions:QueueGuaranteed(command, data, target, priority)
-        Loothing:Debug("Comm restricted, queued:", command)
+        shouldQueue = true
+    elseif Loothing.CommState then
+        local state = Loothing.CommState:GetState()
+        shouldQueue = (state == Loothing.CommState.STATE_RESTRICTED
+                    or state == Loothing.CommState.STATE_COMBAT)
+    end
+
+    if shouldQueue then
+        if Loothing.Restrictions then
+            Loothing.Restrictions:QueueGuaranteed(command, data, target, priority)
+        end
+        Loothing:Debug("Comm blocked (combat/restricted), queued guaranteed:", command)
         return
     end
 
-    -- Not restricted, send immediately
+    -- Not in combat or restricted, send immediately
     self:Send(command, data, target, priority)
 end
 
@@ -460,8 +565,11 @@ function CommMixin:BroadcastSessionStart(encounterID, encounterName, sessionID)
 end
 
 --- Broadcast session end
-function CommMixin:BroadcastSessionEnd()
-    self:SendGuaranteed(Loothing.MsgType.SESSION_END, {})
+-- @param sessionID string|nil - Session ID for validation on receivers
+function CommMixin:BroadcastSessionEnd(sessionID)
+    self:SendGuaranteed(Loothing.MsgType.SESSION_END, {
+        sessionID = sessionID,
+    })
 end
 
 --- Broadcast that ML has stopped handling loot entirely
@@ -680,6 +788,8 @@ end
 function CommMixin:SendPlayerResponseAck(itemGUID, success, target, sessionID)
     -- Self-loopback: when ML sends ACK to themselves, bypass network.
     -- Also used in test mode.
+    -- Deferred one frame to match SendPlayerResponse timing — ensures the
+    -- RollFrame's StartAckTimeout has been created before the ACK clears it.
     local isTestMode = TestMode and TestMode:IsEnabled()
     local isSelfSend = target and Utils.IsSamePlayer(target, Utils.GetPlayerFullName())
     if isTestMode or isSelfSend then
@@ -689,9 +799,11 @@ function CommMixin:SendPlayerResponseAck(itemGUID, success, target, sessionID)
             sessionID = sessionID,
             masterLooter = Utils.GetPlayerFullName(),
         }
-        if Loothing.Session then
-            Loothing.Session:HandlePlayerResponseAck(payload)
-        end
+        C_Timer.After(0, function()
+            if Loothing.Session then
+                Loothing.Session:HandlePlayerResponseAck(payload)
+            end
+        end)
         return
     end
 

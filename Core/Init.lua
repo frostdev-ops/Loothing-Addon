@@ -52,6 +52,7 @@ local mlRetryCount = 0              -- Number of ML retry attempts
 local mlRetryTimer = nil            -- Handle for the 0.5s retry timer (prevents parallel chains)
 local raidEnterTimer = nil          -- Pending OnRaidEnter timer handle
 local raidEnterAt = nil             -- Absolute trigger time for pending OnRaidEnter timer
+local mldbRosterTimer = nil         -- Debounce timer for MLDB re-broadcast on roster changes
 local OnRaidEnter
 
 -- Module references (populated during init)
@@ -256,6 +257,12 @@ local function InitializeModules()
         Loothing.Restrictions = ns.CreateRestrictions()
     end
 
+    -- Initialize CommState (centralized pause/resume state machine)
+    -- After Restrictions (hooks into restriction transitions) and Comm (routes sends)
+    if ns.CreateCommState then
+        Loothing.CommState = ns.CreateCommState()
+    end
+
     -- Initialize announcer AFTER Restrictions so it can register the callback
     if ns.CreateAnnouncer then
         Loothing.Announcer = ns.CreateAnnouncer()
@@ -265,6 +272,11 @@ local function InitializeModules()
     if ns.SyncMixin then
         Loothing.Sync = CreateFromMixins(ns.SyncMixin)
         Loothing.Sync:Init()
+    end
+
+    -- Wire CommState circuit breaker to Sync events (must be after both are initialized)
+    if Loothing.CommState and Loothing.Sync then
+        Loothing.CommState:RegisterSyncCallbacks()
     end
 
     -- Initialize AckTracker (ML heartbeat + client auto-recovery)
@@ -297,6 +309,11 @@ local function InitializeModules()
     if ns.SessionMixin then
         Loothing.Session = CreateFromMixins(ns.SessionMixin)
         Loothing.Session:Init()
+    end
+
+    -- Initialize ResponseTracker AFTER Session (needs Session callbacks)
+    if ns.CreateResponseTracker then
+        Loothing.ResponseTracker = ns.CreateResponseTracker()
     end
 
     -- Initialize voting engine (singleton, not a mixin)
@@ -415,6 +432,14 @@ local function ShouldSkipMLCheck()
     if Utils.IsInPvPOrScenario() then
         return true
     end
+    -- Never skip when there is active ML state that needs re-evaluation.
+    -- The "only in raids" restriction gates initial ML *activation*; it must
+    -- not block handoffs, loss detection, or cleanup for an already-active ML.
+    --   handleLoot / isMasterLooter: old ML must detect loss and stop
+    --   explicitMasterLooter:        new ML must detect gain and start
+    if Loothing.handleLoot or Loothing.isMasterLooter or Loothing.explicitMasterLooter then
+        return false
+    end
     -- Skip if "onlyUseInRaids" is set and we're not in a raid
     -- (allowOutOfRaid bypasses the instance-type check entirely)
     if Loothing.Settings and Loothing.Settings:Get("ml.onlyUseInRaids", true) then
@@ -472,7 +497,16 @@ end
 -- Handles retry for unknown ML, auto-disable on ML loss, and usage mode prompts
 local function PerformMLCheck()
     if ShouldSkipMLCheck() then
-        Loothing:Debug("ML check skipped - instance type not supported")
+        -- Even when skipping, force-clear stale ML state to prevent
+        -- loot handling persisting across instance type changes (e.g., raid → PvP).
+        if Loothing.handleLoot or Loothing.isMasterLooter then
+            Loothing:Debug("ML check skipped but clearing stale ML state")
+            if Loothing.handleLoot then
+                Loothing:StopHandleLoot()
+            end
+            Loothing.isMasterLooter = false
+            Loothing.masterLooter = nil
+        end
         return
     end
 
@@ -534,9 +568,12 @@ local function PerformMLCheck()
         return
     end
 
-    -- If ML changed (but we're not ML), wipe cached MLDB and wait for new broadcast
+    -- If ML changed (but we're not ML), stop handling if we were, then wait for new broadcast
     if not isNowML and ml ~= oldML then
-        if Loothing.MLDB then
+        if Loothing.handleLoot then
+            Loothing:Debug("New ML detected while handling loot, stopping")
+            Loothing:StopHandleLoot()  -- internally calls MLDB:Clear()
+        elseif Loothing.MLDB then
             Loothing.MLDB:Clear()
         end
         Loothing:Debug("New ML detected:", ml, "- waiting for MLDB")
@@ -577,8 +614,22 @@ local function PerformMLCheck()
     end
 end
 
---- Schedule an ML check with 2s delay (debounced)
-local function ScheduleMLCheck()
+--- Schedule an ML check with configurable delay (debounced with ceiling).
+-- @param delay number|nil - Delay in seconds (default 2). Use 0.5 for explicit handoffs.
+local mlCheckScheduledAt = nil
+local function ScheduleMLCheck(delay)
+    local now = GetTime()
+    -- Debounce ceiling: if a timer has been pending >1.5s, let it fire rather than
+    -- resetting. This caps roster-storm delays to ~3.5s (initial 2s + 1.5s of resets).
+    if mlCheckTimer and mlCheckScheduledAt and (now - mlCheckScheduledAt) > 1.5 then
+        -- Still cancel any in-flight retry chain so it doesn't race with the pending timer
+        if mlRetryTimer then
+            mlRetryTimer:Cancel()
+            mlRetryTimer = nil
+        end
+        mlRetryCount = 0
+        return
+    end
     if mlCheckTimer then
         mlCheckTimer:Cancel()
     end
@@ -588,7 +639,12 @@ local function ScheduleMLCheck()
         mlRetryTimer = nil
     end
     mlRetryCount = 0
-    mlCheckTimer = C_Timer.NewTimer(2, PerformMLCheck)
+    local d = delay or 2
+    mlCheckScheduledAt = now
+    mlCheckTimer = C_Timer.NewTimer(d, function()
+        mlCheckScheduledAt = nil
+        PerformMLCheck()
+    end)
 end
 
 -- Expose for slash commands and RosterPanel after ML reassignment
@@ -755,18 +811,29 @@ local function RegisterEvents()
         end
 
         if Loothing.handleLoot then
+            -- ML path: StopHandleLoot ends session, broadcasts, and clears MLDB
             Loothing:StopHandleLoot()
+        elseif Loothing.Session and Loothing.Session:IsActive() then
+            -- Non-ML path: end the remote session (no broadcast — we just left)
+            Loothing.Session:EndSession()
         end
+
         Loothing.isMasterLooter = false
         Loothing.masterLooter = nil
-        Loothing.explicitMasterLooter = nil
         Loothing.isInGuildGroup = false
         Loothing.lootMethod = nil
 
-        -- Clear MLDB when leaving group
+        -- Clear MLDB when leaving group (also restores non-ML settings if needed).
+        -- For the ML path, StopHandleLoot already called Clear(); this is a no-op.
+        -- For non-ML, OnSessionEnded callback above already called Clear(); this is a no-op.
+        -- This remains as a safety net in case neither path triggered (e.g. no active session).
         if Loothing.MLDB then
             Loothing.MLDB:Clear()
         end
+
+        -- Clear explicitMasterLooter AFTER MLDB:Clear() so RestoreSettings() isn't overridden.
+        -- When leaving a group, no explicit ML should persist regardless.
+        Loothing.explicitMasterLooter = nil
 
         -- Dismiss any pending ML usage prompt
         GetPopups():Hide("LOOTHING_ML_USAGE_PROMPT")
@@ -792,6 +859,19 @@ local function RegisterEvents()
         local versionCheck = GetVersionCheck()
         if versionCheck then
             versionCheck:OnGroupRosterUpdate()
+        end
+        -- Re-broadcast MLDB when roster changes so new members get handleLoot state.
+        -- Without this, members who join after StartHandleLoot never receive MLDB
+        -- and won't auto-pass group loot items for the ML.
+        -- Debounced: GROUP_ROSTER_UPDATE fires frequently in raids.
+        if Loothing.handleLoot and Loothing.MLDB and Loothing.MLDB:IsML() then
+            if mldbRosterTimer then mldbRosterTimer:Cancel() end
+            mldbRosterTimer = C_Timer.NewTimer(3, function()
+                mldbRosterTimer = nil
+                if Loothing.handleLoot and Loothing.MLDB and Loothing.MLDB:IsML() then
+                    Loothing.MLDB:BroadcastToRaid()
+                end
+            end)
         end
     end, Loothing)
 
@@ -887,6 +967,29 @@ local function RegisterEvents()
                 if Utils.IsSamePlayer(data.masterLooter, Loothing.masterLooter or "") then
                     Loothing.masterLooter = nil
                     Loothing.isMasterLooter = false
+                    -- Restore non-ML settings from pre-session snapshot
+                    if Loothing.MLDB then
+                        Loothing.MLDB:Clear()
+                    end
+                end
+            end
+        end, Loothing)
+    end
+
+    -- Re-run ML detection when MLDB changes the designated Master Looter.
+    -- This handles the case where the old ML transfers ML to us via /lt ml set:
+    -- the MLDB arrives (setting explicitMasterLooter to our name) but no roster
+    -- event fires, so we'd never notice we became ML without this.
+    if Loothing.MLDB then
+        Loothing.MLDB:RegisterCallback("OnMLDBApplied", function(_, data)
+            if data and data.settings and data.settings.masterLooter then
+                local newML = data.settings.masterLooter
+                local currentML = Loothing.masterLooter
+                -- Note: Session.masterLooter is already propagated inside
+                -- ApplyFromML() (MLDB.lua:587-589) before this callback fires.
+                if not currentML or not Utils.IsSamePlayer(newML, currentML) then
+                    Loothing:Debug("MLDB changed ML to", newML, "- scheduling ML check")
+                    ScheduleMLCheck()
                 end
             end
         end, Loothing)
@@ -932,6 +1035,15 @@ local function RegisterEvents()
                 if historyPanel then
                     historyPanel:ShowWebExport()
                 end
+            end
+        end, Loothing)
+    end
+
+    -- Restore non-ML settings when session ends (MLDB snapshot/restore)
+    if Loothing.Session and Loothing.MLDB then
+        Loothing.Session:RegisterCallback("OnSessionEnded", function()
+            if not Loothing.MLDB:IsML() then
+                Loothing.MLDB:Clear()
             end
         end, Loothing)
     end
@@ -1076,7 +1188,9 @@ local function RegisterSlashCommands()
             if Loothing.MLDB then
                 Loothing.MLDB:BroadcastToRaid(true)
             end
-            ScheduleMLCheck()
+            -- Revert global ML to raid leader (will be finalized by PerformMLCheck)
+            Loothing.masterLooter = Utils.GetRaidLeader()
+            ScheduleMLCheck(0.5)  -- Fast check for explicit clear
             printLine(L["ML_CLEARED"])
             return
         end
@@ -1086,13 +1200,46 @@ local function RegisterSlashCommands()
             printError(L["ERROR_NOT_ML_OR_RL"])
             return
         end
+
+        -- Check if target has Loothing installed (soft check, allow force override)
+        local isForce = argText:match("%s+force%s*$")
+        local cleanName = argText:gsub("%s+force%s*$", "")
+        local versionCheck = GetVersionCheck()
+        if versionCheck and not isForce then
+            local targetNorm = Utils.NormalizeName(cleanName)
+            local entry = versionCheck.versionCache and versionCheck.versionCache[targetNorm]
+            if not entry or not entry.version then
+                printError(targetNorm .. " doesn't appear to have Loothing installed.")
+                printError("Use '/lt ml " .. cleanName .. " force' to override.")
+                return
+            end
+        end
+        if isForce then
+            argText = cleanName
+        end
+
         -- Set the new explicit ML and broadcast while we still have authority
         Loothing.explicitMasterLooter = Utils.NormalizeName(argText)
         if Loothing.MLDB then
             Loothing.MLDB:BroadcastToRaid(true)
         end
-        ScheduleMLCheck()
+
+        -- Immediately update global ML identity (don't wait 2s for PerformMLCheck)
+        Loothing.masterLooter = Loothing.explicitMasterLooter
+
+        -- If WE were ML and just assigned someone else, stop handling immediately
+        local playerName = Utils.GetPlayerFullName()
+        if Loothing.handleLoot and not Utils.IsSamePlayer(Loothing.explicitMasterLooter, playerName) then
+            Loothing:StopHandleLoot()
+        end
+
+        ScheduleMLCheck(0.5)  -- Fast check for explicit handoff
         printLine(string.format(L["ML_ASSIGNED"], argText))
+
+        -- Warn if assigning ML outside a raid with raids-only setting active
+        if Loothing.Settings:Get("ml.onlyUseInRaids", true) and not Utils.IsInRaidInstance() then
+            printLine(L["ML_ASSIGNED_OUTSIDE_RAID_WARNING"])
+        end
     end
 
     local function handleSync(argText)
@@ -1272,6 +1419,69 @@ local function RegisterSlashCommands()
                     printLine("Stopped handling loot.")
                 else
                     printLine("Not currently handling loot.")
+                end
+            end,
+        },
+        {
+            key = "roll",
+            aliases = { "respond" },
+            description = "Reopen the loot response frame for unresponded items",
+            usage = { "/lt roll", "/lt respond" },
+            handler = function()
+                local tracker = Loothing.ResponseTracker
+                if not tracker or tracker:GetUnrespondedCount() == 0 then
+                    printLine("No items awaiting response.")
+                    return
+                end
+                if InCombatLockdown() then
+                    printLine("Cannot reopen frame during combat. It will appear when combat ends.")
+                    return
+                end
+                tracker:CheckAndReshowFrame()
+            end,
+        },
+        {
+            key = "resend",
+            description = "Resend your loot response(s) to the Master Looter",
+            usage = { "/lt resend" },
+            handler = function()
+                if not Loothing.Session or Loothing.Session:GetState() == Loothing.SessionState.INACTIVE then
+                    printError("No active session.")
+                    return
+                end
+                local tracker = Loothing.ResponseTracker
+                if not tracker then
+                    printError("No responses to resend.")
+                    return
+                end
+                local ml = Loothing.Session:GetMasterLooter()
+                if not ml or not Loothing.Comm then
+                    printError("Master Looter unavailable.")
+                    return
+                end
+                local count = 0
+                for guid, data in pairs(tracker.responses) do
+                    if data.response then
+                        local item = Loothing.Session:GetItemByGUID(guid)
+                        if item and item:IsVoting() then
+                            local roll, rMin, rMax = tracker:GetRoll(guid)
+                            pcall(function()
+                                Loothing.Comm:SendPlayerResponse(
+                                    guid, data.response, data.note,
+                                    roll or 0, rMin or 1, rMax or 100,
+                                    ml, Loothing.Session:GetSessionID()
+                                )
+                            end)
+                            -- Reset to pending so the ACK timeout fires again
+                            tracker:SetResponse(guid, data.response, data.note, false, true, 0)
+                            count = count + 1
+                            local itemName = item.itemLink or item.name or guid
+                            printLine("Resent response for " .. itemName)
+                        end
+                    end
+                end
+                if count == 0 then
+                    printLine("No pending responses to resend.")
                 end
             end,
         },
@@ -1504,11 +1714,12 @@ local function RegisterSlashCommands()
                 printLine("In raid: " .. tostring(IsInRaid()))
                 -- Test encode/decode round-trip
                 local testOK = false
+                local testCmd = Loothing.MsgType and Loothing.MsgType.HEARTBEAT or "HEARTBEAT"
                 if ns.Protocol then
-                    local encoded = ns.Protocol:Encode("HEARTBEAT", { test = true })
+                    local encoded = ns.Protocol:Encode(testCmd, { test = true })
                     if encoded then
                         local v, cmd = ns.Protocol:Decode(encoded)
-                        testOK = (v == Loothing.PROTOCOL_VERSION and cmd == "HEARTBEAT")
+                        testOK = (v == Loothing.PROTOCOL_VERSION and cmd == testCmd)
                     end
                 end
                 printLine("Encode/decode round-trip: " .. (testOK and "OK" or "FAILED"))
@@ -1689,6 +1900,11 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
     if event == "ADDON_LOADED" then
         local addonName = ...
         if addonName == ADDON_NAME then
+            -- Ensure SavedVariables table exists (first run or deleted WTF folder)
+            if _G.LoolibDB == nil then
+                _G.LoolibDB = {}
+            end
+
             -- Detect and apply Brainrot Mode (SavedVariables are now available)
             local svDB = _G.LoolibDB
             if type(svDB) == "table" then
@@ -1813,6 +2029,12 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
         end
     elseif event == "PLAYER_ENTERING_WORLD" then
         local isLogin, isReload = ...
+
+        -- Notify CommState of world entry (starts grace period if in group)
+        if Loothing.CommState and Loothing.initialized then
+            Loothing.CommState:OnPlayerEnteringWorld()
+        end
+
         if isReload and Loothing.initialized then
             -- UI reload - attempt to restore cached state
             Loothing:RestoreFromCache()
@@ -1829,8 +2051,18 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             end
         end
     elseif event == "PLAYER_LOGOUT" then
-        -- Cache state for reconnect
+        -- Cache state for reconnect (captures MLDB for session resume)
         Loothing:CacheStateForReconnect()
+
+        -- Restore pre-session settings if MLDB overwrote them.
+        -- Without this, ML-broadcast values persist to SavedVariables and
+        -- RemoveDefaults strips any that match defaults, permanently losing
+        -- the user's original non-default settings.
+        -- NOTE: RestoreSettings only touches settings + preSessionSnapshot,
+        -- not self.mldb, so the reconnect cache (captured above) is unaffected.
+        if Loothing.MLDB then
+            Loothing.MLDB:RestoreSettings()
+        end
 
         -- Save error log to SavedVariables
         if Loothing.ErrorHandler then
@@ -1878,6 +2110,36 @@ end
 -- @return boolean
 function Addon:IsReady()
     return self.initialized
+end
+
+--- Returns the current authoritative Master Looter name.
+-- Cascade: Session.masterLooter → explicitMasterLooter → Loothing.masterLooter → raid leader.
+-- All IsMasterLooter() checks should route through this to avoid disagreement.
+-- @return string|nil
+function Addon:GetCanonicalML()
+    if self.Session then
+        local sessionML = self.Session:GetMasterLooter()
+        if sessionML then return sessionML end
+    end
+    if self.explicitMasterLooter then
+        return self.explicitMasterLooter
+    end
+    if self.masterLooter then
+        return self.masterLooter
+    end
+    -- Final fallback: live raid leader
+    if self.Settings then
+        return self.Settings:GetMasterLooter()
+    end
+    return nil
+end
+
+--- Check if local player is the canonical ML
+-- @return boolean
+function Addon:IsCanonicalML()
+    local ml = self:GetCanonicalML()
+    if not ml then return false end
+    return Utils.IsSamePlayer(ml, Utils.GetPlayerFullName())
 end
 
 --- Get current session
@@ -2084,18 +2346,34 @@ function Addon:RestoreFromCache()
     -- Clear the cache after restore
     self.Settings:SetGlobalValue("reconnectCache", nil)
 
-    -- If we were handling loot and have an ML, send reconnect request
+    -- If we were handling loot and have an ML, send reconnect request.
+    -- Gated on CommState grace period + jitter to prevent thundering herd.
+    local CommState = self.CommState
     if cache.masterLooter and not cache.isMasterLooter then
-        -- We're not ML - request full state from ML
-        C_Timer.After(3, function()
-            if self.Sync and self.masterLooter then
+        -- We're not ML - request full state from ML after grace period
+        local function doReconnectSync()
+            if self.masterLooter then
                 self:Debug("Sending reconnect request to ML:", self.masterLooter)
-                self.Sync:RequestSync(self.masterLooter)
+                if CommState then
+                    CommState:RequestSyncIfNeeded("reconnect", self.masterLooter)
+                elseif self.Sync then
+                    self.Sync:RequestSync(self.masterLooter)
+                end
             end
-        end)
+        end
+
+        if CommState and CommState:IsInGracePeriod() then
+            CommState:RegisterCallback("OnGracePeriodEnded", function()
+                CommState:UnregisterCallback("OnGracePeriodEnded", self)
+                local delay = CommState:Jitter(1, 1.5)
+                C_Timer.After(delay, doReconnectSync)
+            end, self)
+        else
+            C_Timer.After(3, doReconnectSync)
+        end
     elseif cache.isMasterLooter and cache.handleLoot then
-        -- We ARE the ML - re-broadcast MLDB and council
-        C_Timer.After(2, function()
+        -- We ARE the ML - re-broadcast MLDB and council after grace period
+        local function doMLBroadcast()
             if self.MLDB then
                 self.MLDB:BroadcastToRaid()
             end
@@ -2103,7 +2381,17 @@ function Addon:RestoreFromCache()
                 local members = self.Council:GetAllMembers()
                 self.Comm:BroadcastCouncilRoster(members)
             end
-        end)
+        end
+
+        if CommState and CommState:IsInGracePeriod() then
+            CommState:RegisterCallback("OnGracePeriodEnded", function()
+                CommState:UnregisterCallback("OnGracePeriodEnded", self)
+                local delay = CommState:Jitter(0.5, 1.0)
+                C_Timer.After(delay, doMLBroadcast)
+            end, self)
+        else
+            C_Timer.After(2, doMLBroadcast)
+        end
     end
 
     self:Print(L["RECONNECT_RESTORED"])
