@@ -472,6 +472,54 @@ function CouncilTableMixin:UpdateMoreInfoPanel(candidate)
             self.moreInfoVoteBreakdown:SetText("")
         end
     end
+
+    -- Wishlist section
+    if self.moreInfoWishlist then
+        local wishEntry = candidate.wishlistEntry
+        if wishEntry then
+            local nlInfo = Loothing.NeedLevel[wishEntry.needLevel]
+            local label = nlInfo and nlInfo.label or (wishEntry.needLevel or "?")
+            local c = nlInfo and nlInfo.color or { r = 1, g = 1, b = 1 }
+
+            local wishParts = {}
+            wishParts[#wishParts + 1] = string.format("Wishlist: %s \194\183 Priority %d", label, wishEntry.priority or 0)
+
+            -- Character progress
+            local charInfo = Loothing.Wishlist and Loothing.Wishlist:GetCharacterInfo(candidate.playerName)
+            if charInfo and charInfo.totalItems and charInfo.totalItems > 0 then
+                local fulfilled = charInfo.fulfilledItems or 0
+                wishParts[#wishParts + 1] = string.format("  |  Progress: %d/%d", fulfilled, charInfo.totalItems)
+            end
+
+            -- Notes from wishlist entry
+            if wishEntry.notes and wishEntry.notes ~= "" then
+                wishParts[#wishParts + 1] = "\n" .. wishEntry.notes
+            end
+
+            self.moreInfoWishlist:SetText(table.concat(wishParts))
+            self.moreInfoWishlist:SetTextColor(c.r, c.g, c.b)
+        else
+            self.moreInfoWishlist:SetText("")
+        end
+    end
+
+    -- Item source (from itemDetails, loaded via desktop sync)
+    if self.moreInfoSource then
+        local itemID = self.currentItem and self.currentItem.itemID
+        local details = itemID and Loothing.Wishlist and Loothing.Wishlist:GetItemDetails(itemID)
+        if details and details.sourceBoss then
+            local sourceText = string.format("Drops from: %s", details.sourceBoss)
+            if details.source then
+                sourceText = sourceText .. " \194\183 " .. details.source
+            end
+            if details.difficulty then
+                sourceText = sourceText .. " (" .. details.difficulty .. ")"
+            end
+            self.moreInfoSource:SetText(sourceText)
+        else
+            self.moreInfoSource:SetText("")
+        end
+    end
 end
 
 --[[--------------------------------------------------------------------

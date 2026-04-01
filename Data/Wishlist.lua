@@ -28,6 +28,7 @@ function WishlistMixin:Init()
 
     self.byItemID = {}
     self.characters = {}
+    self.itemDetails = {}
     self.updatedAt = nil
 
     self:LoadFromSaved()
@@ -47,6 +48,7 @@ function WishlistMixin:LoadFromSaved()
     local wl = exchange.wishlists
     self.byItemID = wl.byItemID or {}
     self.characters = wl.characters or {}
+    self.itemDetails = wl.itemDetails or {}
     self.updatedAt = wl.updatedAt
 
     self:TriggerEvent("OnWishlistLoaded")
@@ -100,6 +102,14 @@ function WishlistMixin:GetCharacterInfo(playerName)
     if not playerName then return nil end
     playerName = Utils.NormalizeName(playerName)
     return self.characters[playerName]
+end
+
+--- Get item details from the desktop app data (name, quality, source, etc.)
+-- @param itemID number|string - Item ID to look up
+-- @return table|nil - {name, quality, itemLevel, slot, source, sourceBoss, sourceType, difficulty}
+function WishlistMixin:GetItemDetails(itemID)
+    if not itemID then return nil end
+    return self.itemDetails[tostring(itemID)] or self.itemDetails[itemID]
 end
 
 --- Get count of items with wishlist entries for a given player

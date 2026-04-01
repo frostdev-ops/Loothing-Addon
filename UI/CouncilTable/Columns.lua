@@ -25,7 +25,7 @@ CouncilTableMixin.COLUMNS = {
     { id = "wonSession",   name = L["COLUMN_WON"],                  width = 32,  maxWidth = 40,  flex = 0, sortable = true,  settingsKey = "wonSession" },
     { id = "wonInstance",  name = L["COLUMN_INST"],                 width = 32,  maxWidth = 40,  flex = 0, sortable = true,  settingsKey = "wonInstance" },
     { id = "wonWeekly",    name = L["COLUMN_WK"],                   width = 32,  maxWidth = 40,  flex = 0, sortable = true,  settingsKey = "wonWeekly" },
-    { id = "wishlist",     name = "Wish",                           width = 40,  maxWidth = 55,  flex = 0, sortable = true,  settingsKey = "wishlist" },
+    { id = "wishlist",     name = "Wish",                           width = 65,  maxWidth = 80,  flex = 0, sortable = true,  settingsKey = "wishlist" },
     { id = "gear1",        name = L["COUNCIL_COLUMN_GEAR1"],        width = 28,  maxWidth = 28,  flex = 0, sortable = false, settingsKey = "gear1" },
     { id = "gear2",        name = L["COUNCIL_COLUMN_GEAR2"],        width = 28,  maxWidth = 28,  flex = 0, sortable = false, settingsKey = "gear2" },
     { id = "roll",         name = L["COUNCIL_COLUMN_ROLL"],         width = 40,  maxWidth = 55,  flex = 1, sortable = true,  settingsKey = "roll" },
@@ -296,7 +296,50 @@ function CouncilTableMixin:RebuildColumnHeaders()
 
         -- Column header tooltips
         local tooltip = self.COLUMN_TOOLTIPS and self.COLUMN_TOOLTIPS[col.id]
-        if tooltip then
+        if col.id == "wishlist" then
+            -- Dynamic wishlist header tooltip with candidate breakdown
+            local councilTable = self
+            btn:SetScript("OnEnter", function(b)
+                GameTooltip:SetOwner(b, "ANCHOR_BOTTOM")
+                GameTooltip:AddLine(tooltip or "Wishlist priority from loothing.xyz", 1, 1, 1)
+
+                if councilTable.currentItem and councilTable.currentItem.candidateManager then
+                    local allCandidates = councilTable.currentItem.candidateManager:GetAllCandidates()
+                    local total = 0
+                    local byLevel = {}
+
+                    for _, cand in ipairs(allCandidates) do
+                        if cand.wishlistEntry then
+                            total = total + 1
+                            local nl = cand.wishlistEntry.needLevel or "unknown"
+                            byLevel[nl] = (byLevel[nl] or 0) + 1
+                        end
+                    end
+
+                    if total > 0 then
+                        GameTooltip:AddLine(" ")
+                        GameTooltip:AddLine(string.format("%d candidate(s) wishlisted this item:", total), 0.8, 0.8, 0.8)
+                        local order = { "bis", "major", "minor", "optional", "transmog" }
+                        for _, nl in ipairs(order) do
+                            if byLevel[nl] then
+                                local info = Loothing.NeedLevel[nl]
+                                local lbl = info and info.label or nl
+                                local c = info and info.color or { r = 1, g = 1, b = 1 }
+                                GameTooltip:AddLine(string.format("  %d %s", byLevel[nl], lbl), c.r, c.g, c.b)
+                            end
+                        end
+                    else
+                        GameTooltip:AddLine(" ")
+                        GameTooltip:AddLine("No candidates have this item wishlisted", 0.5, 0.5, 0.5)
+                    end
+                end
+
+                GameTooltip:Show()
+            end)
+            btn:SetScript("OnLeave", function()
+                GameTooltip:Hide()
+            end)
+        elseif tooltip then
             btn:SetScript("OnEnter", function(b)
                 GameTooltip:SetOwner(b, "ANCHOR_BOTTOM")
                 GameTooltip:AddLine(tooltip, 1, 1, 1)
@@ -526,41 +569,67 @@ CouncilTableMixin.CellUpdaters.wonWeekly = function(_, cell, candidate)
     end
 end
 
--- Wishlist priority (color-coded by need level)
+-- Wishlist badge + progress chip (color-coded by need level)
 CouncilTableMixin.CellUpdaters.wishlist = function(_, cell, candidate)
+    cell.candidate = candidate
     local wishEntry = candidate.wishlistEntry
     if not wishEntry then
         cell.text:SetText("-")
         cell.text:SetTextColor(0.4, 0.4, 0.4)
+        if cell.progressText then cell.progressText:SetText("") end
         return
     end
-    local colors = {
-        bis      = { 1.0, 0.5, 0.0 },   -- Orange
-        major    = { 0.0, 1.0, 0.0 },   -- Green
-        minor    = { 1.0, 1.0, 0.0 },   -- Yellow
-        optional = { 0.6, 0.6, 0.6 },   -- Gray
-        transmog = { 1.0, 0.0, 1.0 },   -- Magenta
-    }
-    local c = colors[wishEntry.needLevel] or { 1, 1, 1 }
-    cell.text:SetText(tostring(wishEntry.priority))
-    cell.text:SetTextColor(c[1], c[2], c[3])
 
-    -- Tooltip on hover
+    -- Look up centralized need level info
+    local nlInfo = Loothing.NeedLevel[wishEntry.needLevel]
+    local label = nlInfo and nlInfo.label or "?"
+    local c = nlInfo and nlInfo.color or { r = 1, g = 1, b = 1 }
+
+    -- Compound badge: "BiS·1"
+    cell.text:SetText(string.format("%s\194\183%d", label, wishEntry.priority or 0))
+    cell.text:SetTextColor(c.r, c.g, c.b)
+
+    -- Progress chip: "3/15" showing character wishlist completion
+    if not cell.progressText then
+        cell.progressText = cell:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        cell.progressText:SetPoint("TOPLEFT", cell.text, "BOTTOMLEFT", 0, -1)
+        cell.progressText:SetJustifyH("LEFT")
+    end
+
+    local charInfo = Loothing.Wishlist and Loothing.Wishlist:GetCharacterInfo(candidate.playerName)
+    if charInfo and charInfo.totalItems and charInfo.totalItems > 0 then
+        local fulfilled = charInfo.fulfilledItems or 0
+        cell.progressText:SetText(string.format("%d/%d", fulfilled, charInfo.totalItems))
+        cell.progressText:SetTextColor(0.5, 0.5, 0.5)
+    else
+        cell.progressText:SetText("")
+    end
+
+    -- Enhanced tooltip on hover
     if not cell._wishlistHooked then
         cell:SetScript("OnEnter", function(f)
             local entry = f.candidate and f.candidate.wishlistEntry
             if not entry then return end
+            local info = Loothing.NeedLevel[entry.needLevel]
+            local clr = info and info.color or { r = 1, g = 1, b = 1 }
+            local lbl = info and info.label or entry.needLevel or "unknown"
             GameTooltip:SetOwner(f, "ANCHOR_RIGHT")
-            GameTooltip:AddLine("Wishlist: Priority " .. entry.priority, 1, 1, 1)
-            GameTooltip:AddLine("Need: " .. (entry.needLevel or "unknown"), 0.8, 0.8, 0.8)
+            GameTooltip:AddLine("Wishlist: Priority " .. (entry.priority or 0), 1, 1, 1)
+            GameTooltip:AddLine("Need: " .. lbl, clr.r, clr.g, clr.b)
             if entry.isBiS then
                 GameTooltip:AddLine("Best in Slot", 1, 0.5, 0)
             end
             if entry.isOffspec then
-                GameTooltip:AddLine("Off-spec", 1, 0.5, 0)
+                GameTooltip:AddLine("Off-spec", 0.8, 0.8, 0.3)
             end
             if entry.notes and entry.notes ~= "" then
                 GameTooltip:AddLine("Notes: " .. entry.notes, 0.8, 0.8, 0.8, true)
+            end
+            -- Character wishlist progress
+            local ci = Loothing.Wishlist and Loothing.Wishlist:GetCharacterInfo(f.candidate.playerName)
+            if ci and ci.totalItems and ci.totalItems > 0 then
+                GameTooltip:AddLine(" ")
+                GameTooltip:AddLine(string.format("List Progress: %d/%d fulfilled", ci.fulfilledItems or 0, ci.totalItems), 0.6, 0.8, 1)
             end
             GameTooltip:Show()
         end)
@@ -569,7 +638,6 @@ CouncilTableMixin.CellUpdaters.wishlist = function(_, cell, candidate)
         end)
         cell._wishlistHooked = true
     end
-    cell.candidate = candidate
 end
 
 -- Gear slot 1 icon

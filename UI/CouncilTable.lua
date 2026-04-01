@@ -36,7 +36,7 @@ local ITEM_TAB_ICON_SIZE = 36
 local ITEM_TAB_BAR_HEIGHT = 52
 local SCROLL_ARROW_WIDTH = 16
 local SCROLL_STEP = 124  -- ITEM_TAB_WIDTH + ITEM_TAB_SPACING
-local MORE_INFO_HEIGHT = 120
+local MORE_INFO_HEIGHT = 150
 
 -- Throttle refresh to avoid spam during bulk candidate updates
 local REFRESH_THROTTLE = 0.15
@@ -704,6 +704,22 @@ function CouncilTableMixin:CreateMoreInfoPanel()
     voteBreakdown:SetJustifyH("LEFT")
     voteBreakdown:SetTextColor(0.6, 0.8, 0.6)
     self.moreInfoVoteBreakdown = voteBreakdown
+
+    -- Wishlist info
+    local wishlistInfo = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    wishlistInfo:SetPoint("TOPLEFT", note, "BOTTOMLEFT", 0, -6)
+    wishlistInfo:SetPoint("RIGHT", -8, 0)
+    wishlistInfo:SetJustifyH("LEFT")
+    wishlistInfo:SetWordWrap(true)
+    self.moreInfoWishlist = wishlistInfo
+
+    -- Item source (from itemDetails)
+    local sourceInfo = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    sourceInfo:SetPoint("TOPLEFT", wishlistInfo, "BOTTOMLEFT", 0, -2)
+    sourceInfo:SetPoint("RIGHT", -8, 0)
+    sourceInfo:SetJustifyH("LEFT")
+    sourceInfo:SetTextColor(0.6, 0.6, 0.6)
+    self.moreInfoSource = sourceInfo
 
     self.moreInfoPanel = panel
 

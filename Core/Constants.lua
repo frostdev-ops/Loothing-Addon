@@ -8,7 +8,7 @@ local _, ns = ...
 local Loothing = ns.Addon
 
 -- Addon info
-Loothing.VERSION = "1.5.9"
+Loothing.VERSION = "1.7.0"
 Loothing.PROTOCOL_VERSION = 4
 Loothing.ADDON_PREFIX = "LOOTHING"
 
@@ -156,7 +156,7 @@ Loothing.SessionTriggerAction = {
 
 Loothing.SessionTriggerTiming = {
     ENCOUNTER_END = "encounterEnd",   -- React immediately on ENCOUNTER_END
-    AFTER_LOOT    = "afterLoot",      -- Wait for ML loot receipt + debounce
+    AFTER_LOOT    = "afterLoot",      -- Wait for encounter loot + debounce (any recipient)
 }
 
 -- Encounter scope toggles: which instance types are eligible for triggers.
@@ -220,8 +220,6 @@ Loothing.MsgType = {
 
     -- Roll/Vote System Message Types (added for candidate response flow)
     PLAYER_RESPONSE = "PR",      -- Raid member -> ML: Submit response/roll for item
-    PLAYER_RESPONSE_ACK = "PA",  -- ML -> Raid member: Acknowledge response received
-
     -- MLDB (Master Looter Database)
     MLDB_BROADCAST = "MLDB",     -- ML -> Raid: Broadcast ML settings
 
@@ -240,9 +238,6 @@ Loothing.MsgType = {
     -- Response recovery
     RESPONSE_POLL = "RP",           -- ML -> Raid: Poll for missing responses
     VOTE_POLL     = "VP",           -- ML -> Council: Poll for missing council votes
-
-    -- Client combat-ready signal
-    CLIENT_READY = "CRD",          -- Client -> ML: Combat ended, ready with response state
 
     -- Combined session setup (replaces separate SS + MLDB + CR + IA broadcasts)
     SESSION_INIT = "SI",           -- ML -> RAID: Combined session initialization
@@ -657,7 +652,7 @@ Loothing.Timing = {
     RECONNECT_JITTER_SPREAD = 1.5, -- +/- seconds for reconnect timer jitter
 
     -- CommState: paced queue replay
-    REPLAY_INTERVAL = 0.05,        -- 50ms between replay ticks (doubles throughput)
+    REPLAY_INTERVAL = 0.1,         -- 100ms between replay ticks
     REPLAY_PAUSE_PRESSURE = 0.6,   -- Pause replay above this queue pressure
     REPLAY_HARD_PRESSURE = 0.8,    -- ALERT-only above this queue pressure
 
@@ -676,8 +671,7 @@ Loothing.Timing = {
     -- Response recovery
     RESPONSE_POLL_DELAY = 15,       -- Seconds after VOTE_REQUEST before ML polls missing responses
 
-    -- ResponseTracker / combat-ready
-    CLIENT_READY_DEBOUNCE = 1.0,    -- Min seconds between CLIENT_READY sends
+    -- ResponseTracker: RollFrame reopen after combat
     COMBAT_END_RECHECK_DELAY = 0.5, -- Delay after combat before re-showing RollFrame
     FRAME_REOPEN_DELAY = 30,        -- Seconds before gentle re-show of pending items
 
@@ -701,4 +695,16 @@ Loothing.ClassColors = {
     DRUID = { r = 1.00, g = 0.49, b = 0.04 },
     DEMONHUNTER = { r = 0.64, g = 0.19, b = 0.79 },
     EVOKER = { r = 0.20, g = 0.58, b = 0.50 },
+}
+
+--[[--------------------------------------------------------------------
+    Wishlist Need-Level Definitions
+----------------------------------------------------------------------]]
+
+Loothing.NeedLevel = {
+    bis      = { label = "BiS",   color = { r = 1.0, g = 0.5, b = 0.0 } },
+    major    = { label = "Major", color = { r = 0.0, g = 1.0, b = 0.0 } },
+    minor    = { label = "Minor", color = { r = 1.0, g = 1.0, b = 0.0 } },
+    optional = { label = "Opt",   color = { r = 0.6, g = 0.6, b = 0.6 } },
+    transmog = { label = "Tmog",  color = { r = 1.0, g = 0.0, b = 1.0 } },
 }

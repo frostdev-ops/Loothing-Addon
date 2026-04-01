@@ -23,6 +23,7 @@ local ITEM_DISPLAY_HEIGHT = 54
 local GEAR_COMPARISON_HEIGHT = 60
 local NOTE_INPUT_HEIGHT = 48
 local ROLL_SECTION_HEIGHT = 24
+local WISHLIST_INDICATOR_HEIGHT = 16
 local TIMER_BAR_HEIGHT = 20
 local SUBMIT_BUTTON_HEIGHT = 32
 local RESPONSE_LABEL_HEIGHT = 20
@@ -411,6 +412,9 @@ function RollFrameMixin:UpdateLayout()
 
     local height = 42 + SECTION_PADDING  -- account for header bar (36px) + gap
     height = height + ITEM_DISPLAY_HEIGHT + SECTION_PADDING
+    if self.wishlistIndicator and self.wishlistIndicator:IsShown() then
+        height = height + WISHLIST_INDICATOR_HEIGHT
+    end
 
     if showGear then
         height = height + GEAR_COMPARISON_HEIGHT + SECTION_PADDING
@@ -454,7 +458,11 @@ function RollFrameMixin:ReanchorSections(showGear, showTimer, showRolls, numButt
     self.itemContainer:ClearAllPoints()
     self.itemContainer:SetPoint("TOPLEFT", self.frame, "TOPLEFT", 20, -42)
     self.itemContainer:SetPoint("TOPRIGHT", self.frame, "TOPRIGHT", -20, -42)
-    self.itemContainer:SetHeight(ITEM_DISPLAY_HEIGHT)
+    local itemHeight = ITEM_DISPLAY_HEIGHT
+    if self.wishlistIndicator and self.wishlistIndicator:IsShown() then
+        itemHeight = itemHeight + WISHLIST_INDICATOR_HEIGHT
+    end
+    self.itemContainer:SetHeight(itemHeight)
 
     local lastSection = self.itemContainer
 
@@ -547,6 +555,15 @@ function RollFrameMixin:CreateItemDisplay()
     self.itemInfo = container:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     self.itemInfo:SetPoint("BOTTOMLEFT", iconBtn, "BOTTOMRIGHT", 8, 2)
     self.itemInfo:SetTextColor(1, 0.82, 0)
+
+    -- Wishlist indicator (shown when item is on player's wishlist)
+    local wishlistLine = container:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    wishlistLine:SetPoint("TOPLEFT", self.itemInfo, "BOTTOMLEFT", 0, -2)
+    wishlistLine:SetPoint("RIGHT", -8, 0)
+    wishlistLine:SetJustifyH("LEFT")
+    wishlistLine:SetWordWrap(false)
+    wishlistLine:Hide()
+    self.wishlistIndicator = wishlistLine
 
     self.itemContainer = container
 end

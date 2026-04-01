@@ -245,6 +245,9 @@ function RollFrameMixin:DisplayItem(item)
     end
     self.itemInfo:SetText(infoText)
 
+    -- Show wishlist indicator if this item is on the player's wishlist
+    self:UpdateWishlistIndicator(item)
+
     -- Update gear comparison
     self:UpdateGearComparison()
 
@@ -270,18 +273,46 @@ function RollFrameMixin:DisplayItem(item)
     self:UpdateLayout()
 end
 
+--- Update the wishlist indicator for the current item
+-- Shows a colored line if the item is on the local player's wishlist
+-- @param item table - LoothingItem instance
+function RollFrameMixin:UpdateWishlistIndicator(item)
+    if not self.wishlistIndicator then return end
+
+    if not item or not item.itemID or not Loothing.Wishlist or not Loothing.Wishlist:HasData() then
+        self.wishlistIndicator:Hide()
+        return
+    end
+
+    local playerName = Utils.GetPlayerFullName()
+    if not playerName then
+        self.wishlistIndicator:Hide()
+        return
+    end
+
+    local entry = Loothing.Wishlist:GetPlayerEntryForItem(item.itemID, playerName)
+    if not entry then
+        self.wishlistIndicator:Hide()
+        return
+    end
+
+    local nlInfo = Loothing.NeedLevel[entry.needLevel]
+    local label = nlInfo and nlInfo.label or (entry.needLevel or "?")
+    local c = nlInfo and nlInfo.color or { r = 1, g = 1, b = 1 }
+
+    self.wishlistIndicator:SetText(string.format("\226\152\133 On your wishlist: %s, Priority %d", label, entry.priority or 0))
+    self.wishlistIndicator:SetTextColor(c.r, c.g, c.b)
+    self.wishlistIndicator:Show()
+end
+
 --- Reset UI state
 -- @param previousResponse table|nil - Previous response data if item was already responded to
 function RollFrameMixin:ResetUIState(previousResponse)
     local alreadyResponded = previousResponse and previousResponse.submitted
-    local isPending = previousResponse and previousResponse.pending
 
     -- Clear or restore note
     if self.noteEditBox then
         if alreadyResponded then
-            self.noteEditBox:SetText(previousResponse.note or "")
-            self.noteEditBox:Disable()
-        elseif isPending then
             self.noteEditBox:SetText(previousResponse.note or "")
             self.noteEditBox:Disable()
         else
@@ -293,7 +324,7 @@ function RollFrameMixin:ResetUIState(previousResponse)
     -- Restore or clear response button selection
     for _, btn in pairs(self.responseButtons) do
         if btn.selectedGlow then btn.selectedGlow:Hide() end
-        if alreadyResponded or isPending then
+        if alreadyResponded then
             btn:Disable()
         else
             btn:Enable()
@@ -301,7 +332,7 @@ function RollFrameMixin:ResetUIState(previousResponse)
     end
 
     -- If already responded, show the previous selection
-    if (alreadyResponded or isPending) and previousResponse.response then
+    if alreadyResponded and previousResponse.response then
         self.selectedResponse = previousResponse.response
         local btn = self.responseButtons[previousResponse.response]
         if btn then
@@ -315,7 +346,7 @@ function RollFrameMixin:ResetUIState(previousResponse)
         self.rollButtonRoll.selected:Hide()
         self.rollPassSelected:Hide()
 
-        if alreadyResponded or isPending then
+        if alreadyResponded then
             self.rollButtonRoll:Disable()
             self.rollButtonPass:Disable()
         else
@@ -748,7 +779,7 @@ end
 function RollFrameMixin:UpdateSubmitButton()
     local canSubmit = self.selectedResponse ~= nil
     local current = self.item and self:GetItemResponse(self.item.guid) or nil
-    if current and (current.pending or current.submitted) then
+    if current and current.submitted then
         canSubmit = false
     end
 
@@ -769,10 +800,7 @@ function RollFrameMixin:UpdateSubmitButton()
 
         -- Combat-aware labels (takes priority over other states)
         if self.combatLocked then
-            if current and current.pending then
-                btnText = "Queued (Combat)"
-                canSubmit = false
-            elseif current and current.submitted then
+            if current and current.submitted then
                 btnText = "Already Submitted"
                 canSubmit = false
             elseif noteMissing and self.selectedResponse then
@@ -789,8 +817,6 @@ function RollFrameMixin:UpdateSubmitButton()
             btnText = "Note Required"
         elseif current and current.submitted then
             btnText = "Already Submitted"
-        elseif current and current.pending then
-            btnText = "Queued"
         else
             local L = Loothing.Locale
             btnText = L["SUBMIT_RESPONSE"]
@@ -837,9 +863,9 @@ end
 function RollFrameMixin:Submit()
     if not self.selectedResponse then return end
     if not self.item then return end
-    -- Prevent resubmits once this item is pending or already acknowledged
+    -- Prevent resubmits for already-submitted items
     local existing = self:GetItemResponse(self.item.guid)
-    if existing and (existing.pending or existing.submitted) then
+    if existing and existing.submitted then
         return
     end
 
@@ -867,9 +893,9 @@ function RollFrameMixin:SendResponse(note)
     local itemGUID = self.item.guid
     local response = self.selectedResponse
 
-    -- Guard against double-click: if we already have a pending response, ignore
+    -- Guard against double-click: if already submitted, ignore
     local existing = self:GetItemResponse(itemGUID)
-    if existing and existing.pending then return end
+    if existing and existing.submitted then return end
 
     -- Get roll for this specific item
     local roll, rollMin, rollMax = self:GetItemRoll(itemGUID)
@@ -920,8 +946,8 @@ function RollFrameMixin:SendResponse(note)
         self:FlushResponseBatch()
     end)
 
-    -- Track pending state for optimistic UI
-    self:SetItemResponse(itemGUID, response, note, false, true)
+    -- Mark as submitted immediately (fire-and-forget; RESPONSE_POLL handles recovery)
+    self:SetItemResponse(itemGUID, response, note, true)
 
     -- Immediately advance to next unresponded item (optimistic UX)
     if self.item and self.item.guid == itemGUID then
@@ -996,14 +1022,14 @@ end
 -- @return boolean
 function RollFrameMixin:HasRespondedToItem(itemGUID)
     if Loothing.ResponseTracker then
-        return Loothing.ResponseTracker:HasResponded(itemGUID)
+        return Loothing.ResponseTracker:HasLocalResponse(itemGUID)
     end
     return false
 end
 
 --- Get the response for an item (delegates to ResponseTracker)
 -- @param itemGUID string
--- @return table|nil - { response, note, submitted, pending, retryCount }
+-- @return table|nil - { response, note, submitted }
 function RollFrameMixin:GetItemResponse(itemGUID)
     if Loothing.ResponseTracker then
         return Loothing.ResponseTracker:GetResponse(itemGUID)
@@ -1015,68 +1041,10 @@ end
 -- @param itemGUID string
 -- @param response any - Response ID
 -- @param note string
-function RollFrameMixin:SetItemResponse(itemGUID, response, note, submitted, pending, retryCount)
+-- @param submitted boolean
+function RollFrameMixin:SetItemResponse(itemGUID, response, note, submitted)
     if Loothing.ResponseTracker then
-        Loothing.ResponseTracker:SetResponse(itemGUID, response, note, submitted, pending, retryCount)
-    end
-end
-
--- NOTE: StartAckTimeout, ClearAckTimeout, AutoRetryResponse have been moved
--- to ResponseTracker. The tracker manages all ack timeout logic directly
--- when SetResponse is called with pending=true.
-
---- Handle ack from master looter for a submitted response
--- @param itemGUID string
--- @param success boolean
-function RollFrameMixin:OnPlayerResponseAck(itemGUID, success, sessionID)
-    if not itemGUID then
-        return
-    end
-
-    -- Ignore acks for stale sessions
-    if sessionID and Loothing.Session and not Loothing.Session:IsCurrentSession(sessionID) then
-        return
-    end
-
-    local responseData = self:GetItemResponse(itemGUID)
-    if not responseData then
-        return
-    end
-
-    if Loothing.ResponseTracker then
-        Loothing.ResponseTracker:ClearAckTimeout(itemGUID)
-    end
-
-    if not success then
-        -- Silent advancement: stale session or invalid state. The frame has already
-        -- advanced (optimistic UX), so just log and clear the stale pending state.
-        Loothing:Debug("RollFrame: ACK rejected for", itemGUID, "(stale session)")
-        -- Clear pending so the retry ticker stops and state doesn't linger
-        if Loothing.ResponseTracker then
-            Loothing.ResponseTracker:SetResponse(itemGUID, nil, nil, false, false, 0)
-        end
-        if self.item and self.item.guid == itemGUID then
-            if not self:SwitchToNextUnrespondedItem() then
-                self:Close(true)
-            end
-        end
-        return
-    end
-
-    -- Mark as submitted
-    self:SetItemResponse(itemGUID, responseData.response, responseData.note, true, false)
-
-    -- Update UI if this is the current item
-    if self.item and self.item.guid == itemGUID then
-        self:ResetUIState(self:GetItemResponse(itemGUID))
-        self:UpdateSessionButtons()
-
-        -- Move to next if possible, otherwise close
-        if not self:SwitchToNextUnrespondedItem() then
-            self:Close(true)
-        end
-    else
-        self:UpdateSessionButtons()
+        Loothing.ResponseTracker:SetResponse(itemGUID, response, note, submitted)
     end
 end
 
@@ -1092,7 +1060,7 @@ function RollFrameMixin:SwitchToNextItem(filterFn)
         end
     end
 
-    for i = 1, self.currentItemIndex do
+    for i = 1, self.currentItemIndex - 1 do
         local item = self.items[i]
         if item and filterFn(item) then
             self:SwitchToItem(i)
@@ -1190,7 +1158,7 @@ function RollFrameMixin:Close(submitted)
         self:TriggerEvent("OnFrameClosed", self.item)
     end
 
-    -- Clear display state only — ResponseTracker owns response/roll/ack state
+    -- Clear display state only — ResponseTracker owns response/roll state
     self.item = nil
     self.selectedResponse = nil
     self.roll = nil
