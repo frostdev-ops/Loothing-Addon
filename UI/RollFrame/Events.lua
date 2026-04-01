@@ -101,12 +101,11 @@ function RollFrameMixin:RegisterSessionEvents()
         end, self)
     end
 
-    -- Combat state: lock/unlock submit button during combat
+    -- Restriction state: lock submit button during encounter restrictions
     if Loothing.CommState then
         Loothing.CommState:RegisterCallback("OnStateChanged", function(_, newState)
-            local inCombat = (newState == Loothing.CommState.STATE_COMBAT
-                           or newState == Loothing.CommState.STATE_RESTRICTED)
-            self:SetCombatLocked(inCombat)
+            local restricted = (newState == Loothing.CommState.STATE_RESTRICTED)
+            self:SetCombatLocked(restricted)
         end, self)
     end
 end
@@ -180,6 +179,12 @@ function RollFrameMixin:AutoPassItem(item)
     local ml = Loothing.Session and Loothing.Session:GetMasterLooter()
     local sessionID = Loothing.Session and Loothing.Session:GetSessionID()
     if Loothing.Comm and ml then
+        -- Include gear inline so the ML/processor never falls back to PIQ/PIS.
+        local gear1Link, gear2Link, gear1ilvl, gear2ilvl
+        if item.equipSlot and Loothing.Session and Loothing.Session.GetEquippedGearForSlot then
+            gear1Link, gear2Link, gear1ilvl, gear2ilvl =
+                Loothing.Session:GetEquippedGearForSlot(item.equipSlot)
+        end
         local ok = pcall(function()
             Loothing.Comm:SendPlayerResponse(
                 item.guid,
@@ -187,7 +192,11 @@ function RollFrameMixin:AutoPassItem(item)
                 "",
                 0, 1, 100,
                 ml,
-                sessionID
+                sessionID,
+                gear1Link,
+                gear2Link,
+                gear1ilvl,
+                gear2ilvl
             )
         end)
         if ok then

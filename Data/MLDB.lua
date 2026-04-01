@@ -80,6 +80,7 @@ local COMPRESSION_KEYS = {
     ["sessionTriggerDungeon"] = "std",
     ["sessionTriggerOpenWorld"] = "stow",
     ["groupLootMode"] = "glm",
+    ["handleLoot"] = "hl",
     ["masterLooter"] = "ml2",
 
     -- AutoPass settings
@@ -264,6 +265,7 @@ function MLDBMixin:GatherSettings()
     settings.sessionTriggerDungeon  = Loothing.Settings:GetSessionTriggerDungeon()
     settings.sessionTriggerOpenWorld = Loothing.Settings:GetSessionTriggerOpenWorld()
     settings.groupLootMode = Loothing.Settings:GetGroupLootMode()
+    settings.handleLoot = Loothing.handleLoot or false
     settings.masterLooter = Loothing.explicitMasterLooter
 
     -- Sort order
@@ -573,6 +575,11 @@ function MLDBMixin:ApplyFromML(settings, sender)
         if settings.groupLootMode then
             Loothing.Settings:SetGroupLootMode(settings.groupLootMode)
         end
+
+        -- NOTE: settings.handleLoot is stored in self.mldb (line 500) but NOT
+        -- applied to Loothing.handleLoot. That flag is ML-only and controls
+        -- session creation, loot processing, and ML detection. Non-ML clients
+        -- read mldb.handleLoot via MLDB:Get() in the auto-roll gate instead.
 
         -- Apply explicit ML override (runtime-only, not persisted)
         -- nil means "use raid leader"; a name means that player is ML

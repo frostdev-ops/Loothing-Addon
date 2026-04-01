@@ -316,6 +316,16 @@ local function InitializeModules()
         Loothing.ResponseTracker = ns.CreateResponseTracker()
     end
 
+    -- Initialize VoteTracker AFTER Session + Council (needs both callbacks)
+    if ns.CreateVoteTracker then
+        Loothing.VoteTracker = ns.CreateVoteTracker()
+    end
+
+    -- Expose VersionCheck on Loothing for version check UI
+    if ns.VersionCheck then
+        Loothing.VersionCheck = ns.VersionCheck
+    end
+
     -- Initialize voting engine (singleton, not a mixin)
     if ns.VotingEngine then
         Loothing.VotingEngine = ns.VotingEngine
@@ -783,6 +793,26 @@ function Addon:StopHandleLoot()
     end
 end
 
+--- Toggle handle-loot state without ending the session.
+-- Unlike StartHandleLoot/StopHandleLoot, this is a soft toggle:
+-- turning OFF stops auto-rolling but does NOT end the session or
+-- broadcast STOP_HANDLE_LOOT (which clears MLDB on clients).
+-- @param enabled boolean
+function Addon:SetHandleLoot(enabled)
+    if enabled then
+        self:StartHandleLoot()
+    else
+        self.handleLoot = false
+        self:Debug("SetHandleLoot(false) - soft disable, session preserved")
+        self:Print(L["HANDLE_LOOT_DISABLED"])
+
+        -- Re-broadcast MLDB with handleLoot=false so clients stop auto-passing
+        if self.MLDB and self.MLDB:IsML() then
+            self.MLDB:BroadcastToRaid()
+        end
+    end
+end
+
 --[[--------------------------------------------------------------------
     Event Registration
 ----------------------------------------------------------------------]]
@@ -860,7 +890,7 @@ local function RegisterEvents()
         if versionCheck then
             versionCheck:OnGroupRosterUpdate()
         end
-        -- Re-broadcast MLDB when roster changes so new members get handleLoot state.
+        -- Re-broadcast ML state when roster changes so new members get full context.
         -- Without this, members who join after StartHandleLoot never receive MLDB
         -- and won't auto-pass group loot items for the ML.
         -- Debounced: GROUP_ROSTER_UPDATE fires frequently in raids.
@@ -868,8 +898,24 @@ local function RegisterEvents()
             if mldbRosterTimer then mldbRosterTimer:Cancel() end
             mldbRosterTimer = C_Timer.NewTimer(3, function()
                 mldbRosterTimer = nil
-                if Loothing.handleLoot and Loothing.MLDB and Loothing.MLDB:IsML() then
-                    Loothing.MLDB:BroadcastToRaid()
+                if not (Loothing.handleLoot and Loothing.MLDB and Loothing.MLDB:IsML()) then
+                    return
+                end
+                -- MLDB (settings + handleLoot flag)
+                Loothing.MLDB:BroadcastToRaid()
+                -- Active session announcement (duplicate-safe: existing members ignore same sessionID)
+                local session = Loothing.Session
+                if session and session:IsActive() and session.sessionID then
+                    Loothing.Comm:BroadcastSessionStart(
+                        session.encounterID,
+                        session.encounterName,
+                        session.sessionID
+                    )
+                end
+                -- Council + observer rosters
+                if Loothing.Sync then
+                    Loothing.Sync:BroadcastCouncilRoster()
+                    Loothing.Sync:BroadcastObserverRoster()
                 end
             end)
         end
@@ -965,6 +1011,7 @@ local function RegisterEvents()
         Loothing.Comm:RegisterCallback("OnStopHandleLoot", function(_, data)
             if data and data.masterLooter then
                 if Utils.IsSamePlayer(data.masterLooter, Loothing.masterLooter or "") then
+                    Loothing.handleLoot = false
                     Loothing.masterLooter = nil
                     Loothing.isMasterLooter = false
                     -- Restore non-ML settings from pre-session snapshot
@@ -1017,23 +1064,31 @@ local function RegisterEvents()
     if Loothing.Session and Loothing.TradeQueue then
         Loothing.Session:RegisterCallback("OnItemAwarded", function(_, item, winner)
             if item.looter and Utils.IsSamePlayer(item.looter, Utils.GetPlayerFullName()) then
-                Loothing.TradeQueue:AddToQueue(item.guid, item.itemLink, winner, item.timestamp)
+                -- Skip self-awards: no trade needed if the looter IS the winner
+                if not Utils.IsSamePlayer(winner, Utils.GetPlayerFullName()) then
+                    Loothing.TradeQueue:AddToQueue(item.guid, item.itemLink, winner, item.timestamp)
+                end
             end
         end, Loothing)
     end
 
     -- Auto-show Web export when session ends (opt-in setting)
+    -- Trade tab takes priority over web export when items are pending.
     if Loothing.Session then
         Loothing.Session:RegisterCallback("OnSessionEnded", function()
             if Loothing.Settings:Get("historySettings.autoExportWeb")
                 and Loothing.History
                 and Loothing.History:GetFilteredCount() > 0
                 and Loothing.MainFrame then
-                Loothing.MainFrame:Show()
-                Loothing.MainFrame:SelectTab("history")
-                local historyPanel = Loothing.MainFrame:GetHistoryPanel()
-                if historyPanel then
-                    historyPanel:ShowWebExport()
+                local hasPendingTrades = Loothing.TradeQueue
+                    and #Loothing.TradeQueue:GetAllPending() > 0
+                if not hasPendingTrades then
+                    Loothing.MainFrame:Show()
+                    Loothing.MainFrame:SelectTab("history")
+                    local historyPanel = Loothing.MainFrame:GetHistoryPanel()
+                    if historyPanel then
+                        historyPanel:ShowWebExport()
+                    end
                 end
             end
         end, Loothing)
@@ -1465,11 +1520,18 @@ local function RegisterSlashCommands()
                         local item = Loothing.Session:GetItemByGUID(guid)
                         if item and item:IsVoting() then
                             local roll, rMin, rMax = tracker:GetRoll(guid)
+                            -- Include gear inline to prevent PIQ/PIS round-trip on resend.
+                            local g1Link, g2Link, g1ilvl, g2ilvl
+                            if item.equipSlot then
+                                g1Link, g2Link, g1ilvl, g2ilvl =
+                                    Loothing.Session:GetEquippedGearForSlot(item.equipSlot)
+                            end
                             pcall(function()
                                 Loothing.Comm:SendPlayerResponse(
                                     guid, data.response, data.note,
                                     roll or 0, rMin or 1, rMax or 100,
-                                    ml, Loothing.Session:GetSessionID()
+                                    ml, Loothing.Session:GetSessionID(),
+                                    g1Link, g2Link, g1ilvl, g2ilvl
                                 )
                             end)
                             -- Reset to pending so the ACK timeout fires again

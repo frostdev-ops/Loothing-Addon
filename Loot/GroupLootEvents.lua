@@ -59,12 +59,19 @@ function GroupLootMixin:OnStartLootRoll(_, rollID)
         return
     end
 
-    -- Auto-roll when ML is handling loot (session active or MLDB present).
-    -- MLDB presence on a non-ML client means the ML called StartHandleLoot and
-    -- broadcast settings — items should be funnelled to the ML even between sessions.
+    -- Auto-roll when ML is handling loot (session active or MLDB signals it).
+    -- Loothing.handleLoot is the ML-local flag (true only on the ML's client).
+    -- Non-ML clients check the MLDB handleLoot field instead. If the field is
+    -- absent (older ML version), MLDB presence alone signals handling for
+    -- backward compatibility; handleLoot=false explicitly disables auto-roll.
     local sessionActive = Loothing.Session and Loothing.Session:IsActive()
     local mlHandling = Loothing.handleLoot
-        or (Loothing.MLDB and Loothing.MLDB:Get() ~= nil)
+    if not mlHandling and Loothing.MLDB then
+        local mldb = Loothing.MLDB:Get()
+        if mldb and mldb.handleLoot ~= false then
+            mlHandling = true
+        end
+    end
     if not sessionActive and not mlHandling then
         return
     end

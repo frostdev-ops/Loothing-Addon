@@ -932,10 +932,14 @@ function RosterPanelMixin:ShowRowContextMenu(row, entry)
         -- Council toggle
         if canManageCouncilRoster and Loothing.Council and not isSelf then
             if entry.isCouncil then
-                rootDescription:CreateButton(L["ROSTER_REMOVE_COUNCIL"], function()
-                    Loothing.Council:RemoveMember(entry.name)
-                    self:Refresh()
-                end)
+                if Loothing.Council:IsExplicitMember(entry.name) then
+                    rootDescription:CreateButton(L["ROSTER_REMOVE_COUNCIL"], function()
+                        Loothing.Council:RemoveMember(entry.name)
+                        self:Refresh()
+                    end)
+                end
+                -- Auto-included members (officer/raid leader) have no remove option;
+                -- they're controlled by the "Auto-include" settings.
             else
                 rootDescription:CreateButton(L["ROSTER_ADD_COUNCIL"], function()
                     Loothing.Council:AddMember(entry.name)

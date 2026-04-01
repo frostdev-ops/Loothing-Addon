@@ -56,9 +56,9 @@ local COMM_EVENTS = {
     "OnTradable",
     "OnNonTradable",
     "OnHeartbeat",
-    "OnAck",
     "OnHistoryEntry",
     "OnResponsePoll",
+    "OnVotePoll",
     "OnIncrementalSyncRequest",
     "OnIncrementalSyncData",
     "OnClientReady",
@@ -104,10 +104,15 @@ local CRITICAL_COMMANDS = {
     [Loothing.MsgType.VOTE_RESULTS]        = true,
     [Loothing.MsgType.VOTE_SKIP]           = true,
     [Loothing.MsgType.PLAYER_RESPONSE]     = true,
-    [Loothing.MsgType.PLAYER_RESPONSE_ACK] = true,
     [Loothing.MsgType.MLDB_BROADCAST]      = true,
     [Loothing.MsgType.COUNCIL_ROSTER]      = true,
+    [Loothing.MsgType.OBSERVER_ROSTER]     = true,
+    [Loothing.MsgType.VOTE_COMMIT]         = true,
+    [Loothing.MsgType.VOTE_POLL]           = true,
+    [Loothing.MsgType.RESPONSE_POLL]       = true,
     [Loothing.MsgType.BATCH]               = true,
+    [Loothing.MsgType.SESSION_INIT]        = true,
+    [Loothing.MsgType.RESPONSE_BATCH]      = true,
 }
 
 --- Command → handler method name dispatch table
@@ -131,6 +136,7 @@ local HANDLERS = {
     [Loothing.MsgType.PLAYER_RESPONSE]         = "HandlePlayerResponse",
     [Loothing.MsgType.PLAYER_RESPONSE_ACK]     = "HandlePlayerResponseAck",
     [Loothing.MsgType.RESPONSE_POLL]           = "HandleResponsePoll",
+    [Loothing.MsgType.VOTE_POLL]               = "HandleVotePoll",
     [Loothing.MsgType.SYNC_INCREMENTAL]        = "HandleIncrementalSyncRequest",
     [Loothing.MsgType.SYNC_INCREMENTAL_DATA]   = "HandleIncrementalSyncData",
     [Loothing.MsgType.CLIENT_READY]            = "HandleClientReady",
@@ -153,8 +159,11 @@ local HANDLERS = {
     -- Burst / resilience infrastructure
     [Loothing.MsgType.BATCH]                   = "HandleBatch",
     [Loothing.MsgType.HEARTBEAT]               = "HandleHeartbeat",
-    [Loothing.MsgType.ACK]                     = "HandleAck",
     [Loothing.MsgType.HISTORY_ENTRY]           = "HandleHistoryEntry",
+    -- Combined session setup
+    [Loothing.MsgType.SESSION_INIT]            = "HandleSessionInit",
+    -- Batched responses
+    [Loothing.MsgType.RESPONSE_BATCH]          = "HandleResponseBatch",
 }
 
 --- Initialize communication handler
@@ -199,23 +208,20 @@ function CommMixin.Send(self, command, data, target, priority)
         end
     end
 
-    -- CommState gate: In WoW 12.0 (Midnight), ALL addon messages are blocked during
-    -- combat, not just during encounter restrictions. Check BEFORE encoding to avoid
-    -- wasting CPU on serialize + compress + Adler32 for messages that will be queued.
+    -- CommState gate: encounter/challenge restrictions block addon messages.
+    -- Combat does NOT block addon comms (confirmed by RCLC analysis of WoW 12.0).
     local prio = priority or "NORMAL"
     local CommState = Loothing.CommState
     if CommState and CommState:ShouldDefer(command, prio) then
         local state = CommState:GetState()
-        if state == CommState.STATE_COMBAT or state == CommState.STATE_RESTRICTED then
-            -- Critical commands → guaranteed queue (replayed first on combat end)
-            -- Non-critical → combat defer queue (BULK priority, shorter TTL)
+        if state == CommState.STATE_RESTRICTED then
+            -- Critical commands → guaranteed queue (replayed when restrictions lift)
             if CommState:IsCriticalCommand(command) then
                 if Loothing.Restrictions then
                     Loothing.Restrictions:QueueGuaranteed(command, data, target, prio)
                 end
-            else
-                CommState:DeferForCombat(command, data, target, prio)
             end
+            -- Non-critical during restrictions: silently dropped
         end
         -- STATE_DISCONNECTED: silently dropped (ShouldDefer logged it)
         return
@@ -335,8 +341,6 @@ function CommMixin:FlushBatch(key)
     end
 
     -- Single message: bypass BATCH wrapper (no overhead).
-    -- inner.command and inner.data are captured as locals before Release,
-    -- so the TempTable slot can be safely wiped.
     if #messages == 1 then
         local inner = messages[1]
         local cmd, dat = inner.command, inner.data
@@ -346,18 +350,13 @@ function CommMixin:FlushBatch(key)
     end
 
     -- Multiple messages: wrap in BATCH container.
-    -- Copy messages out of TempTable before calling Send(), because Send()
-    -- may defer (combat/disconnect) and store the data reference in a queue.
-    -- If we Released the TempTable first, the queue would hold stale data.
     local messagesCopy = {}
     for i, msg in ipairs(messages) do
         messagesCopy[i] = msg
     end
     Loolib.TempTable:Release(messages)
 
-    self:Send(Loothing.MsgType.BATCH, {
-        messages = messagesCopy,
-    }, batch.target, batch.priority)
+    self:Send(Loothing.MsgType.BATCH, { messages = messagesCopy }, batch.target, batch.priority)
 end
 
 --- Flush all pending batches immediately
@@ -382,15 +381,13 @@ function CommMixin:SendGuild(command, data, priority)
         return
     end
 
-    -- CommState gate: WoW 12.0 blocks all addon messages during combat,
-    -- including guild channel. Guild messages are non-critical (version
-    -- checks, settings/history sync) and user-initiated, so we drop them
-    -- rather than queue — replaying with target=nil would misroute to
-    -- RAID/PARTY instead of GUILD.
+    -- CommState gate: encounter restrictions block addon messages.
+    -- Guild messages are non-critical and user-initiated, so we drop them
+    -- during restrictions rather than queue.
     local prio = priority or "NORMAL"
     local CommState = Loothing.CommState
     if CommState and CommState:ShouldDefer(command, prio) then
-        Loothing:Debug("SendGuild: dropped during combat/restriction:", command)
+        Loothing:Debug("SendGuild: dropped during restriction:", command)
         return
     end
 
@@ -414,26 +411,14 @@ end
 -- @param target string|nil - Player name or nil for group
 -- @param priority string|nil
 function CommMixin:SendGuaranteed(command, data, target, priority)
-    -- In WoW 12.0 (Midnight), all addon messages are blocked during combat.
-    -- Queue guaranteed messages during both RESTRICTED and COMBAT states.
-    local shouldQueue = false
+    -- Queue during encounter/challenge restrictions (RCLC pattern).
+    -- Combat does NOT block addon comms — only encounter restrictions do.
     if Loothing.Restrictions and Loothing.Restrictions:IsRestricted() then
-        shouldQueue = true
-    elseif Loothing.CommState then
-        local state = Loothing.CommState:GetState()
-        shouldQueue = (state == Loothing.CommState.STATE_RESTRICTED
-                    or state == Loothing.CommState.STATE_COMBAT)
-    end
-
-    if shouldQueue then
-        if Loothing.Restrictions then
-            Loothing.Restrictions:QueueGuaranteed(command, data, target, priority)
-        end
-        Loothing:Debug("Comm blocked (combat/restricted), queued guaranteed:", command)
+        Loothing.Restrictions:QueueGuaranteed(command, data, target, priority)
+        Loothing:Debug("Comm restricted, queued guaranteed:", command)
         return
     end
 
-    -- Not in combat or restricted, send immediately
     self:Send(command, data, target, priority)
 end
 
@@ -552,10 +537,12 @@ end
     Broadcast Helpers - Session Management
 ----------------------------------------------------------------------]]
 
---- Broadcast session start
--- @param encounterID number
--- @param encounterName string
--- @param sessionID string|nil
+--- Broadcast combined session initialization (SS + MLDB + CR + items)
+-- @param sessionData table - { sessionStart, mldb, councilRoster, items }
+function CommMixin:BroadcastSessionInit(sessionData)
+    self:Send(Loothing.MsgType.SESSION_INIT, sessionData)
+end
+
 function CommMixin:BroadcastSessionStart(encounterID, encounterName, sessionID)
     self:Send(Loothing.MsgType.SESSION_START, {
         encounterID = encounterID,
@@ -567,7 +554,7 @@ end
 --- Broadcast session end
 -- @param sessionID string|nil - Session ID for validation on receivers
 function CommMixin:BroadcastSessionEnd(sessionID)
-    self:SendGuaranteed(Loothing.MsgType.SESSION_END, {
+    self:Send(Loothing.MsgType.SESSION_END, {
         sessionID = sessionID,
     })
 end
@@ -616,17 +603,17 @@ function CommMixin:BroadcastVoteRequest(itemGUID, timeout, sessionID)
     })
 end
 
---- Send vote commit to ML
+--- Send vote commit (broadcast to group — all council members tally locally)
 -- @param itemGUID string
 -- @param responses table
--- @param masterLooter string
+-- @param masterLooter string (unused, kept for API compat)
 -- @param sessionID string|nil
 function CommMixin:SendVoteCommit(itemGUID, responses, masterLooter, sessionID)
-    self:SendGuaranteed(Loothing.MsgType.VOTE_COMMIT, {
+    self:Send(Loothing.MsgType.VOTE_COMMIT, {
         itemGUID = itemGUID,
         responses = responses,
         sessionID = sessionID,
-    }, masterLooter)
+    })
 end
 
 --- Broadcast vote award
@@ -634,7 +621,7 @@ end
 -- @param winnerName string
 -- @param sessionID string|nil
 function CommMixin:BroadcastVoteAward(itemGUID, winnerName, sessionID)
-    self:SendGuaranteed(Loothing.MsgType.VOTE_AWARD, {
+    self:Send(Loothing.MsgType.VOTE_AWARD, {
         itemGUID = itemGUID,
         winner = winnerName,
         sessionID = sessionID,
@@ -645,7 +632,7 @@ end
 -- @param itemGUID string
 -- @param sessionID string|nil
 function CommMixin:BroadcastVoteSkip(itemGUID, sessionID)
-    self:SendGuaranteed(Loothing.MsgType.VOTE_SKIP, {
+    self:Send(Loothing.MsgType.VOTE_SKIP, {
         itemGUID = itemGUID,
         sessionID = sessionID,
     })
@@ -666,7 +653,7 @@ end
 -- @param results table
 -- @param sessionID string|nil
 function CommMixin:BroadcastVoteResults(itemGUID, results, sessionID)
-    self:SendGuaranteed(Loothing.MsgType.VOTE_RESULTS, {
+    self:Send(Loothing.MsgType.VOTE_RESULTS, {
         itemGUID = itemGUID,
         results = results,
         sessionID = sessionID,
@@ -733,7 +720,7 @@ function CommMixin:SendPlayerInfo(itemGUID, slot1Link, slot2Link, slot1ilvl, slo
     }, target)
 end
 
---- Send player response (raid member -> ML)
+--- Send player response (raid member -> ML or assigned processor)
 -- @param itemGUID string
 -- @param response number|string - Loothing.Response or SystemResponse value
 -- @param note string|nil
@@ -742,7 +729,13 @@ end
 -- @param rollMax number|nil
 -- @param masterLooter string
 -- @param sessionID string|nil
-function CommMixin:SendPlayerResponse(itemGUID, response, note, roll, rollMin, rollMax, masterLooter, sessionID)
+-- @param gear1Link string|nil - Equipped gear slot 1 link (self-report)
+-- @param gear2Link string|nil - Equipped gear slot 2 link (self-report)
+-- @param gear1ilvl number|nil - Equipped gear slot 1 item level
+-- @param gear2ilvl number|nil - Equipped gear slot 2 item level
+function CommMixin:SendPlayerResponse(itemGUID, response, note, roll, rollMin, rollMax,
+                                       masterLooter, sessionID, gear1Link, gear2Link,
+                                       gear1ilvl, gear2ilvl)
     local payload = {
         itemGUID = itemGUID,
         response = response,
@@ -752,6 +745,11 @@ function CommMixin:SendPlayerResponse(itemGUID, response, note, roll, rollMin, r
         rollMax = rollMax or 100,
         playerName = Utils.GetPlayerFullName(),
         sessionID = sessionID,
+        -- Gear self-report (eliminates PLAYER_INFO round-trip)
+        gear1Link = gear1Link,
+        gear2Link = gear2Link,
+        gear1ilvl = gear1ilvl or 0,
+        gear2ilvl = gear2ilvl or 0,
     }
 
     -- Self-loopback: when the ML is responding to their own session,
@@ -777,6 +775,22 @@ function CommMixin:SendPlayerResponse(itemGUID, response, note, roll, rollMin, r
         rollMin = rollMin or 1,
         rollMax = rollMax or 100,
         sessionID = sessionID,
+        gear1Link = gear1Link,
+        gear2Link = gear2Link,
+        gear1ilvl = gear1ilvl or 0,
+        gear2ilvl = gear2ilvl or 0,
+    }, masterLooter)
+end
+
+--- Send batched player responses (all items in one message)
+-- @param responses table - Array of {itemGUID, response, note, roll, rollMin, rollMax, gear1Link, gear2Link, gear1ilvl, gear2ilvl}
+-- @param masterLooter string
+-- @param sessionID string|nil
+function CommMixin:SendResponseBatch(responses, masterLooter, sessionID)
+    self:SendGuaranteed(Loothing.MsgType.RESPONSE_BATCH, {
+        responses = responses,
+        sessionID = sessionID,
+        playerName = Utils.GetPlayerFullName(),
     }, masterLooter)
 end
 
@@ -787,9 +801,6 @@ end
 -- @param sessionID string|nil
 function CommMixin:SendPlayerResponseAck(itemGUID, success, target, sessionID)
     -- Self-loopback: when ML sends ACK to themselves, bypass network.
-    -- Also used in test mode.
-    -- Deferred one frame to match SendPlayerResponse timing — ensures the
-    -- RollFrame's StartAckTimeout has been created before the ACK clears it.
     local isTestMode = TestMode and TestMode:IsEnabled()
     local isSelfSend = target and Utils.IsSamePlayer(target, Utils.GetPlayerFullName())
     if isTestMode or isSelfSend then
@@ -811,7 +822,7 @@ function CommMixin:SendPlayerResponseAck(itemGUID, success, target, sessionID)
         itemGUID = itemGUID,
         success = success,
         sessionID = sessionID,
-    }, target)
+    }, target, "ALERT")
 end
 
 --[[--------------------------------------------------------------------

@@ -749,12 +749,13 @@ local function RunEdge_CombatDuringVoting(ctx, onComplete)
         return
     end
 
-    Loothing.CommState:OnCombatStart()
-    assertEqual(Loothing.CommState:GetState(), Loothing.CommState.STATE_COMBAT,
-        "EDGE: CommState is COMBAT")
+    -- Verify restriction-based defer (combat no longer blocks comms)
+    Loothing.CommState:OnRestrictionActivated()
+    assertEqual(Loothing.CommState:GetState(), Loothing.CommState.STATE_RESTRICTED,
+        "EDGE: CommState is RESTRICTED")
 
     local shouldDefer = Loothing.CommState:ShouldDefer(Loothing.MsgType.CANDIDATE_UPDATE, "NORMAL")
-    assert(shouldDefer == true, "EDGE: ShouldDefer returns true during combat")
+    assert(shouldDefer == true, "EDGE: ShouldDefer returns true during restriction")
 
     local isCritical = Loothing.CommState:IsCriticalCommand(Loothing.MsgType.VOTE_AWARD)
     assert(isCritical == true, "EDGE: VOTE_AWARD is critical")
@@ -762,7 +763,7 @@ local function RunEdge_CombatDuringVoting(ctx, onComplete)
     local isNotCritical = Loothing.CommState:IsCriticalCommand(Loothing.MsgType.VERSION_REQUEST)
     assert(isNotCritical ~= true, "EDGE: VERSION_REQUEST is not critical")
 
-    Loothing.CommState:OnCombatEnd()
+    Loothing.CommState:OnRestrictionLifted()
     assertEqual(Loothing.CommState:GetState(), Loothing.CommState.STATE_CONNECTED,
         "EDGE: CommState returns to CONNECTED")
 
@@ -790,17 +791,17 @@ local function RunEdge_CombatDuringSessionStart(ctx, onComplete)
         return
     end
 
-    Loothing.CommState:OnCombatStart()
+    Loothing.CommState:OnRestrictionActivated()
 
     local shouldDefer = Loothing.CommState:ShouldDefer(Loothing.MsgType.SESSION_START, "NORMAL")
-    assert(shouldDefer == true, "EDGE: SESSION_START deferred during combat")
+    assert(shouldDefer == true, "EDGE: SESSION_START deferred during restriction")
 
     local isCrit = Loothing.CommState:IsCriticalCommand(Loothing.MsgType.SESSION_START)
     assert(isCrit == true, "EDGE: SESSION_START is critical")
 
-    Loothing.CommState:OnCombatEnd()
+    Loothing.CommState:OnRestrictionLifted()
     assertEqual(Loothing.CommState:GetState(), Loothing.CommState.STATE_CONNECTED,
-        "EDGE: Back to CONNECTED after combat")
+        "EDGE: Back to CONNECTED after restriction")
 
     ctx.edgeCaseResults[#ctx.edgeCaseResults + 1] = {
         name = "Combat During Session Start", passed = true
@@ -1209,30 +1210,21 @@ end
 ----------------------------------------------------------------------]]
 
 local function RunEdge_CombatRapidCycling(ctx, onComplete)
-    local assert = ctx.assert
     local assertEqual = ctx.assertEqual
 
     if not Loothing.CommState then
         ctx.edgeCaseResults[#ctx.edgeCaseResults + 1] = {
-            name = "Combat Rapid Cycling", passed = false, error = "CommState unavailable"
+            name = "CommState Basic", passed = false, error = "CommState unavailable"
         }
         onComplete()
         return
     end
 
-    for _ = 1, 3 do
-        Loothing.CommState:OnCombatStart()
-        Loothing.CommState:OnCombatEnd()
-    end
-
     assertEqual(Loothing.CommState:GetState(), Loothing.CommState.STATE_CONNECTED,
-        "EDGE: CommState is CONNECTED after rapid cycling")
-
-    assert(type(Loothing.CommState.combatDeferQueue) == "table",
-        "EDGE: Combat defer queue is valid table after cycling")
+        "EDGE: CommState is CONNECTED in default state")
 
     ctx.edgeCaseResults[#ctx.edgeCaseResults + 1] = {
-        name = "Combat Rapid Cycling", passed = true
+        name = "CommState Basic", passed = true
     }
 
     onComplete()

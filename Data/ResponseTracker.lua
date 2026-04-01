@@ -64,6 +64,7 @@ function ResponseTrackerMixin:Init()
 
     self:RegisterSessionEvents()
     self:RegisterCommEvents()
+    self:RegisterCombatEvents()
 end
 
 --[[--------------------------------------------------------------------
@@ -106,6 +107,14 @@ function ResponseTrackerMixin:RegisterCommEvents()
     -- Handle RESPONSE_POLL resend directly (doesn't need RollFrame open)
     Loothing.Comm:RegisterCallback("OnResponsePoll", function(_, data)
         self:HandleResponsePoll(data)
+    end, self)
+end
+
+function ResponseTrackerMixin:RegisterCombatEvents()
+    local Events = Loolib.Events
+    if not Events or not Events.Registry then return end
+    Events.Registry:RegisterEventCallback("PLAYER_REGEN_ENABLED", function()
+        self:OnCombatEnd()
     end, self)
 end
 
@@ -271,55 +280,55 @@ function ResponseTrackerMixin:FireUnrespondedCount()
 end
 
 --[[--------------------------------------------------------------------
-    ACK Timeout (moved from RollFrame)
+    Response Resend Timer
+
+    If ML hasn't processed our response within 8 seconds, resend once
+    as a safety net. ML's RESPONSE_POLL (periodic) provides further
+    recovery if the resend also fails. The RollFrame has already
+    advanced (optimistic UX), so this is invisible to the user.
 ----------------------------------------------------------------------]]
 
---- Start an ack timeout for a pending response.
--- First timeout: auto-retry the same response (5s timer).
--- Second timeout: mark as failed, allow manual resubmit.
--- During combat, the timeout is deferred — the response is combat-queued and
--- will be sent when combat ends, so timing out would be a false alarm.
+local RESPONSE_RETRY_DELAY = 8.0
+
+--- Start a single resend timer for a pending response.
+-- If ML hasn't processed the response after 8 seconds, resend once.
+-- ML's RESPONSE_POLL handles further recovery if needed.
 -- @param guid string
 function ResponseTrackerMixin:StartAckTimeout(guid)
     if not guid then return end
     self:ClearAckTimeout(guid)
 
-    local data = self.responses[guid]
-    local retries = data and data.retryCount or 0
-
-    local timeout
-    if retries == 0 then
-        timeout = (Loothing.Timing and Loothing.Timing.DEFAULT_VOTE_TIMEOUT) or 30
-        timeout = math.min(timeout, 10)
-    else
-        timeout = Loothing.Timing and Loothing.Timing.ACK_AUTO_RETRY_TIMEOUT or 5
-    end
-
-    self.ackTimers[guid] = C_Timer.NewTimer(timeout, function()
+    self.ackTimers[guid] = C_Timer.NewTimer(RESPONSE_RETRY_DELAY, function()
         self.ackTimers[guid] = nil
 
         local responseData = self.responses[guid]
         if not responseData or not responseData.pending then return end
+        if not Loothing.Session or not Loothing.Session:IsActive() then return end
 
-        -- During combat, messages are queued in the combat defer queue and will
-        -- be sent when combat ends. Don't timeout or show error — just restart
-        -- the timer so it fires after combat instead.
-        if InCombatLockdown() then
-            Loothing:Debug("ResponseTracker: ACK timeout deferred (in combat) for", guid)
-            self:StartAckTimeout(guid)
-            return
+        local ml = Loothing.Session:GetMasterLooter()
+        if not (Loothing.Comm and ml) then return end
+
+        local roll, rollMin, rollMax = self:GetRoll(guid)
+        local gear1Link, gear2Link, gear1ilvl, gear2ilvl
+        local retryItem = Loothing.Session:GetItemByGUID(guid)
+        if retryItem and retryItem.equipSlot and Loothing.Session.GetEquippedGearForSlot then
+            gear1Link, gear2Link, gear1ilvl, gear2ilvl =
+                Loothing.Session:GetEquippedGearForSlot(retryItem.equipSlot)
         end
 
-        if responseData.retryCount == 0 then
-            -- First timeout: auto-retry
-            Loothing:Debug("ResponseTracker: ACK timeout for", guid, "- auto-retrying")
-            responseData.retryCount = 1
-            self:AutoRetryResponse(guid, responseData)
-        else
-            -- Second timeout: unlock for manual resubmit
-            Loothing:Error("Response may not have reached the Master Looter. Click Submit to resend.")
-            self:SetResponse(guid, responseData.response, responseData.note, false, false, responseData.retryCount)
-        end
+        Loothing:Debug("ResponseTracker: resending response for", guid)
+
+        pcall(function()
+            Loothing.Comm:SendPlayerResponse(
+                guid,
+                responseData.response,
+                responseData.note,
+                roll or 0, rollMin or 1, rollMax or 100,
+                ml,
+                Loothing.Session:GetSessionID(),
+                gear1Link, gear2Link, gear1ilvl, gear2ilvl
+            )
+        end)
     end)
 end
 
@@ -330,38 +339,6 @@ function ResponseTrackerMixin:ClearAckTimeout(guid)
     if timer then
         timer:Cancel()
         self.ackTimers[guid] = nil
-    end
-end
-
---- Auto-retry sending the same response data after first ACK timeout
--- @param guid string
--- @param data table - The existing response entry
-function ResponseTrackerMixin:AutoRetryResponse(guid, data)
-    local ml = Loothing.Session and Loothing.Session:GetMasterLooter()
-    if not (Loothing.Comm and ml) then
-        self:SetResponse(guid, data.response, data.note, false, false, data.retryCount)
-        return
-    end
-
-    local roll, rollMin, rollMax = self:GetRoll(guid)
-
-    local ok = pcall(function()
-        Loothing.Comm:SendPlayerResponse(
-            guid,
-            data.response,
-            data.note,
-            roll or 0,
-            rollMin or 1,
-            rollMax or 100,
-            ml,
-            Loothing.Session and Loothing.Session:GetSessionID()
-        )
-    end)
-
-    if ok then
-        self:SetResponse(guid, data.response, data.note, false, true, data.retryCount)
-    else
-        self:SetResponse(guid, data.response, data.note, false, false, data.retryCount)
     end
 end
 
@@ -396,6 +373,15 @@ function ResponseTrackerMixin:HandleResponsePoll(data)
         local ml = Loothing.Session and Loothing.Session:GetMasterLooter()
         if Loothing.Comm and ml then
             local roll, rollMin, rollMax = self:GetRoll(data.itemGUID)
+
+            -- Include gear data so the ML doesn't re-enter the legacy PIQ/PIS path.
+            local gear1Link, gear2Link, gear1ilvl, gear2ilvl
+            local pollItem = Loothing.Session and Loothing.Session:GetItemByGUID(data.itemGUID)
+            if pollItem and pollItem.equipSlot and Loothing.Session.GetEquippedGearForSlot then
+                gear1Link, gear2Link, gear1ilvl, gear2ilvl =
+                    Loothing.Session:GetEquippedGearForSlot(pollItem.equipSlot)
+            end
+
             pcall(function()
                 Loothing.Comm:SendPlayerResponse(
                     data.itemGUID,
@@ -403,7 +389,11 @@ function ResponseTrackerMixin:HandleResponsePoll(data)
                     responseData.note,
                     roll or 0, rollMin or 1, rollMax or 100,
                     ml,
-                    Loothing.Session and Loothing.Session:GetSessionID()
+                    Loothing.Session and Loothing.Session:GetSessionID(),
+                    gear1Link,
+                    gear2Link,
+                    gear1ilvl,
+                    gear2ilvl
                 )
             end)
         end
@@ -418,7 +408,7 @@ end
     CLIENT_READY (combat-end notification to ML)
 ----------------------------------------------------------------------]]
 
---- Called when the local player leaves combat during an active session.
+--- Called on PLAYER_REGEN_ENABLED when the local player leaves combat.
 -- Sends CLIENT_READY to ML (debounced) and schedules frame re-check.
 function ResponseTrackerMixin:OnCombatEnd()
     -- Schedule frame recheck after short delay (let sync arrive first)

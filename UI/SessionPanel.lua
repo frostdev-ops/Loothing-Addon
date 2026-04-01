@@ -726,13 +726,56 @@ function SessionPanelMixin:CreateFooter()
     footer:SetPoint("BOTTOMRIGHT", -8, 8)
     footer:SetHeight(36)
 
+    -- Handle Loot toggle (ML only) — controls whether Loothing auto-passes
+    -- loot to the ML. Placed first because it's the prerequisite for sessions.
+    self.handleLootCheck = CreateFrame("CheckButton", nil, footer, "UICheckButtonTemplate")
+    self.handleLootCheck:SetSize(24, 24)
+    self.handleLootCheck:SetPoint("LEFT", 0, 0)
+    self.handleLootCheck.text = self.handleLootCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    self.handleLootCheck.text:SetPoint("LEFT", self.handleLootCheck, "RIGHT", 2, 0)
+    self.handleLootCheck.text:SetText(L["HANDLE_LOOT_TOGGLE"])
+    self.handleLootCheck:SetChecked(Loothing.handleLoot or false)
+    self.handleLootCheck:SetScript("OnClick", function(btn)
+        Loothing:SetHandleLoot(btn:GetChecked())
+        self:UpdateHandleLootVisual()
+    end)
+    self.handleLootCheck:SetScript("OnEnter", function(btn)
+        GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
+        GameTooltip:SetText(L["HANDLE_LOOT_TOGGLE"], 1, 0.82, 0)
+        GameTooltip:AddLine(L["HANDLE_LOOT_TOGGLE_DESC"], 1, 1, 1, true)
+        if not Loothing.handleLoot then
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine(L["HANDLE_LOOT_HINT_ENABLE"], 0.5, 0.8, 1, true)
+        end
+        GameTooltip:Show()
+    end)
+    self.handleLootCheck:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+    self.handleLootCheck:Hide()
+
     -- Start/End session button (ML only)
     self.sessionButton = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
     self.sessionButton:SetSize(120, 26)
-    self.sessionButton:SetPoint("LEFT")
+    self.sessionButton:SetPoint("LEFT", self.handleLootCheck.text, "RIGHT", 12, 0)
     self.sessionButton:SetText(L["START_SESSION"])
     self.sessionButton:SetScript("OnClick", function()
         self:OnSessionButtonClick()
+    end)
+    self.sessionButton:SetScript("OnEnter", function(btn)
+        GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
+        local state = Loothing.Session and Loothing.Session:GetState()
+        if state == Loothing.SessionState.ACTIVE then
+            GameTooltip:SetText(L["END_SESSION"], 1, 0.82, 0)
+            GameTooltip:AddLine(L["END_SESSION_DESC"], 1, 1, 1, true)
+        else
+            GameTooltip:SetText(L["START_SESSION"], 1, 0.82, 0)
+            GameTooltip:AddLine(L["START_SESSION_DESC"], 1, 1, 1, true)
+        end
+        GameTooltip:Show()
+    end)
+    self.sessionButton:SetScript("OnLeave", function()
+        GameTooltip:Hide()
     end)
 
     -- Start all votes button
@@ -832,6 +875,13 @@ function SessionPanelMixin:RegisterEvents()
     Loothing.Session:RegisterCallback("OnVoteReceived", function()
         self:RefreshItems()
     end, self)
+
+    -- Refresh Handle Loot toggle when MLDB changes (e.g., ML toggles remotely)
+    if Loothing.MLDB then
+        Loothing.MLDB:RegisterCallback("OnMLDBApplied", function()
+            self:UpdateFooter()
+        end, self)
+    end
 
     -- Cinematic auto-hide: hide session panel during cinematics
     if not self.cinematicFrame then
@@ -938,12 +988,24 @@ function SessionPanelMixin:UpdateHeader()
     end
 end
 
+--- Update the Handle Loot checkbox visual state (text color + checked state).
+function SessionPanelMixin:UpdateHandleLootVisual()
+    local active = Loothing.handleLoot or false
+    self.handleLootCheck:SetChecked(active)
+    if active then
+        self.handleLootCheck.text:SetTextColor(0.2, 0.9, 0.2)
+    else
+        self.handleLootCheck.text:SetTextColor(0.7, 0.7, 0.7)
+    end
+end
+
 --- Update footer buttons
 function SessionPanelMixin:UpdateFooter()
 
     local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
 
     if not Loothing.Session then
+        self.handleLootCheck:Hide()
         self.sessionButton:Hide()
         self.startAllButton:Hide()
         self.addItemBtn:Hide()
@@ -954,6 +1016,10 @@ function SessionPanelMixin:UpdateFooter()
     local state = Loothing.Session:GetState()
 
     if isML then
+        -- Handle Loot toggle is always visible for the ML
+        self.handleLootCheck:Show()
+        self:UpdateHandleLootVisual()
+
         self.sessionButton:Show()
 
         if state == Loothing.SessionState.INACTIVE then
@@ -995,6 +1061,7 @@ function SessionPanelMixin:UpdateFooter()
             self.awardLaterCheck:Hide()
         end
     else
+        self.handleLootCheck:Hide()
         self.sessionButton:Hide()
         self.startAllButton:Hide()
         self.addItemBtn:Hide()

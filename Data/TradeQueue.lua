@@ -44,6 +44,14 @@ local TRADE_WARNING_5MIN = 5 * 60
 local TRADE_TIMER_CHECK_INTERVAL = 60
 local ITEM_WATCH_DELAY = 0.5
 
+-- Resolve trade-complete constant once at load time.
+-- WoW 12.0 deprecated LE_ globals; the Enum key varies across builds.
+local TRADE_COMPLETE_MSG = LE_GAME_ERR_TRADE_COMPLETE
+    or (Enum and Enum.GameError and (
+        Enum.GameError.TradeComplete
+        or Enum.GameError.ErrTradeComplete
+    ))
+
 --- Initialize the trade queue
 function TradeQueueMixin:Init()
     CallbackRegistryMixin.OnLoad(self)
@@ -316,6 +324,25 @@ end
 --- Handle TRADE_CLOSED event
 function TradeQueueMixin:OnTradeClosed()
     Loothing:Debug("Trade closed")
+
+    -- Fallback: if items were staged but TRADE_COMPLETE never fired (constant
+    -- nil in this WoW build), check bags after a short delay. If the items are
+    -- gone, the trade succeeded.
+    if #self.itemsInTradeWindow > 0 and self.tradeTarget then
+        local stagedItems = { unpack(self.itemsInTradeWindow) }
+        local stagedTarget = self.tradeTarget
+
+        C_Timer.After(ITEM_WATCH_DELAY, function()
+            for _, link in ipairs(stagedItems) do
+                local bag, _slot = self:FindItemInBags(link)
+                if not bag then
+                    Loothing:Debug("TRADE_CLOSED fallback: item gone from bags:", link)
+                    self:MarkItemTraded(link, stagedTarget)
+                end
+            end
+        end)
+    end
+
     self.isTrading = false
     self.tradeTarget = nil
     wipe(self.itemsInTradeWindow)
@@ -342,10 +369,7 @@ end
 --- Handle UI_INFO_MESSAGE event (trade complete)
 -- @param messageType number - Message type
 function TradeQueueMixin:OnUIInfoMessage(messageType)
-    -- Handle both legacy LE_ and modern Enum.GameError constants
-    local TRADE_COMPLETE = LE_GAME_ERR_TRADE_COMPLETE
-        or (Enum.GameError and Enum.GameError.TradeComplete)
-    if TRADE_COMPLETE and messageType == TRADE_COMPLETE then
+    if TRADE_COMPLETE_MSG and messageType == TRADE_COMPLETE_MSG then
         Loothing:Debug("Trade completed with:", self.tradeTarget)
 
         -- Mark traded items as complete

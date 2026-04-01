@@ -219,8 +219,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Queue a critical message for guaranteed delivery
--- Called by SendGuaranteed() during restrictions and by Send() for critical
--- commands during combat (WoW 12.0 blocks all addon messages in combat).
+-- Called by SendGuaranteed() during encounter/challenge restrictions.
 -- @param command string - Loothing.MsgType
 -- @param data table - Message payload
 -- @param target string|nil - Whisper target or nil for group
@@ -257,12 +256,12 @@ local function compareMsgs(a, b)
 end
 
 --- Start paced replay of guaranteed queue
--- Called by CommState when combat ends or restrictions lift (and not in combat).
--- In WoW 12.0, addon messages are blocked during combat, so replay must wait.
+-- Called by CommState when encounter/challenge restrictions lift.
 function RestrictionsMixin:ReplayQueue()
     if #self.guaranteedQueue == 0 then return end
 
-    -- Safety: don't start replay during combat (WoW will drop messages)
+    -- Safety: defer replay during combat lockdown (encounter restrictions
+    -- typically coincide with combat, so this rarely activates independently)
     if InCombatLockdown() then
         Loothing:Debug("ReplayQueue deferred — still in combat lockdown")
         return
@@ -309,8 +308,8 @@ function RestrictionsMixin:ReplayTick()
         return
     end
 
-    -- Safety: WoW 12.0 blocks all addon messages during combat.
-    -- If somehow replay started while in combat, pause immediately.
+    -- Safety: pause replay during combat lockdown (encounter restriction
+    -- typically coincides with combat; this is defense-in-depth)
     if InCombatLockdown() then
         self:PauseReplay()
         return

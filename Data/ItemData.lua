@@ -407,6 +407,18 @@ function ItemMixin:IsTallied()
     return self.state == Loothing.ItemState.TALLIED
 end
 
+--- Check if the item can still accept votes (voting OR within late-accept window)
+-- @return boolean
+function ItemMixin:CanAcceptVotes()
+    if self.state == Loothing.ItemState.VOTING then
+        return true
+    end
+    -- TALLIED items accept late votes during the grace window
+    return self.state == Loothing.ItemState.TALLIED
+        and self.lateAcceptUntil ~= nil
+        and GetTime() <= self.lateAcceptUntil
+end
+
 --- Check if item has been awarded
 -- @return boolean
 function ItemMixin:IsAwarded()
@@ -456,6 +468,9 @@ function ItemMixin:EndVoting()
     end
 
     self.voteEndTime = GetTime()
+    -- Open a grace window so VOTE_COMMITs queued during combat (and replayed
+    -- after the timer fired) can still be recorded in the TALLIED state.
+    self.lateAcceptUntil = GetTime() + (Loothing.Timing.VOTE_LATE_ACCEPT_WINDOW or 30)
     self:SetState(Loothing.ItemState.TALLIED)
     return true
 end
@@ -502,7 +517,7 @@ end
 -- @param responses table - Array of response values (ranked)
 -- @return boolean - True if vote was added
 function ItemMixin:AddVote(voter, voterClass, responses)
-    if self.state ~= Loothing.ItemState.VOTING then
+    if not self:CanAcceptVotes() then
         return false
     end
 

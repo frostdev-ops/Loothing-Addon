@@ -8,7 +8,7 @@ local _, ns = ...
 local Loothing = ns.Addon
 
 -- Addon info
-Loothing.VERSION = "1.5.5"
+Loothing.VERSION = "1.5.9"
 Loothing.PROTOCOL_VERSION = 4
 Loothing.ADDON_PREFIX = "LOOTHING"
 
@@ -236,13 +236,19 @@ Loothing.MsgType = {
     -- Burst / resilience infrastructure
     BATCH     = "BT",            -- ML/Council: container wrapping multiple messages
     HEARTBEAT = "HB",            -- ML -> Raid: periodic state digest for auto-recovery
-    ACK       = "AK",            -- Universal point-to-point acknowledgment
 
     -- Response recovery
     RESPONSE_POLL = "RP",           -- ML -> Raid: Poll for missing responses
+    VOTE_POLL     = "VP",           -- ML -> Council: Poll for missing council votes
 
     -- Client combat-ready signal
     CLIENT_READY = "CRD",          -- Client -> ML: Combat ended, ready with response state
+
+    -- Combined session setup (replaces separate SS + MLDB + CR + IA broadcasts)
+    SESSION_INIT = "SI",           -- ML -> RAID: Combined session initialization
+
+    -- Batched player responses (all items in one message)
+    RESPONSE_BATCH = "RB",         -- Candidate -> ML: Batched responses for all items
 
     -- Incremental sync (lighter than full SYNC_DATA)
     SYNC_INCREMENTAL = "SIR",      -- Client -> ML: Request specific subset
@@ -630,6 +636,8 @@ Loothing.Timing = {
     VOTING_DEFAULT = 30,        -- Alias used in VotingSession / VotePanel
     MIN_VOTE_TIMEOUT = 10,
     MAX_VOTE_TIMEOUT = 120,
+    VOTE_LATE_ACCEPT_WINDOW = 30, -- Seconds after timer expiry to still accept queued VOTE_COMMITs
+    VOTE_POLL_DELAY = 5,          -- Seconds after tally before ML checks for missing council votes
     SYNC_TIMEOUT = 10,
     MESSAGE_THROTTLE = 0.1,     -- Seconds between messages
     -- CHUNK_SIZE removed: Loolib.Comm handles message chunking internally
@@ -648,12 +656,8 @@ Loothing.Timing = {
     RECONNECT_GRACE_PERIOD = 5, -- Suppress sync triggers for N seconds after reconnect
     RECONNECT_JITTER_SPREAD = 1.5, -- +/- seconds for reconnect timer jitter
 
-    -- CommState: combat defer queue
-    COMBAT_DEFER_STALE_TIME = 120, -- Max age of combat-deferred messages (2 min)
-    COMBAT_DEFER_MAX = 100,        -- Cap to prevent memory growth during long combat
-
     -- CommState: paced queue replay
-    REPLAY_INTERVAL = 0.1,         -- 100ms between replay ticks
+    REPLAY_INTERVAL = 0.05,        -- 50ms between replay ticks (doubles throughput)
     REPLAY_PAUSE_PRESSURE = 0.6,   -- Pause replay above this queue pressure
     REPLAY_HARD_PRESSURE = 0.8,    -- ALERT-only above this queue pressure
 
@@ -671,12 +675,12 @@ Loothing.Timing = {
 
     -- Response recovery
     RESPONSE_POLL_DELAY = 15,       -- Seconds after VOTE_REQUEST before ML polls missing responses
-    ACK_AUTO_RETRY_TIMEOUT = 5,     -- Shorter timeout for automatic ACK retry (after initial 10s)
 
     -- ResponseTracker / combat-ready
-    CLIENT_READY_DEBOUNCE = 5,      -- Min seconds between CLIENT_READY sends
-    COMBAT_END_RECHECK_DELAY = 2,   -- Delay after combat before re-showing RollFrame
+    CLIENT_READY_DEBOUNCE = 1.0,    -- Min seconds between CLIENT_READY sends
+    COMBAT_END_RECHECK_DELAY = 0.5, -- Delay after combat before re-showing RollFrame
     FRAME_REOPEN_DELAY = 30,        -- Seconds before gentle re-show of pending items
+
 }
 
 --[[--------------------------------------------------------------------

@@ -244,6 +244,7 @@ function CommMixin:HandleVoteCommit(data, sender)
         return
     end
     data.voter = sender
+    -- Broadcast votes: all council + ML process for local tally
     self:TriggerEvent("OnVoteCommit", data)
 end
 
@@ -429,8 +430,8 @@ end
 function CommMixin:HandlePlayerResponse(data, sender)
     if not validateHandler("HandlePlayerResponse", data, SCHEMAS.PLAYER_RESPONSE) then return end
 
-    -- Only ML processes player responses
-    if not Loothing.Session or not Loothing.Session:IsMasterLooter() then
+    -- Only ML processes responses authoritatively
+    if not (Loothing.Session and Loothing.Session:IsMasterLooter()) then
         return
     end
 
@@ -440,9 +441,6 @@ function CommMixin:HandlePlayerResponse(data, sender)
     Loothing:Debug("PLAYER_RESPONSE from", sender, "isGroupMember:", isMember)
     if not isMember and not isTestMode then
         Loothing:Debug("Rejected PLAYER_RESPONSE from non-group member:", sender)
-        if data.itemGUID then
-            self:SendPlayerResponseAck(data.itemGUID, false, sender)
-        end
         return
     end
 
@@ -467,6 +465,16 @@ function CommMixin:HandleResponsePoll(data, sender)
         return
     end
     self:TriggerEvent("OnResponsePoll", data)
+end
+
+function CommMixin:HandleVotePoll(data, sender)
+    if not validateHandler("HandleVotePoll", data) then return end
+    if not isMasterLooter(sender) then
+        Loothing:Debug("Rejected VOTE_POLL from non-ML:", sender)
+        return
+    end
+    data.masterLooter = sender
+    self:TriggerEvent("OnVotePoll", data)
 end
 
 function CommMixin:HandleClientReady(data, sender)
@@ -585,18 +593,6 @@ function CommMixin:HandleHeartbeat(data, sender, _distribution)
     self:TriggerEvent("OnHeartbeat", data, sender)
 end
 
---- Handle ACK message — reserved for point-to-point acknowledgment tracking
--- @param data table - { command, msgID, success }
--- @param sender string
-function CommMixin:HandleAck(data, sender, _distribution)
-    if not validateHandler("HandleAck", data) then return end
-    -- Forward to AckTracker if available
-    if Loothing.AckTracker and Loothing.AckTracker.HandleAck then
-        Loothing.AckTracker:HandleAck(data, sender)
-    end
-    self:TriggerEvent("OnAck", data, sender)
-end
-
 --[[--------------------------------------------------------------------
     Settings/History Sync Handlers (delegated to Sync module)
 ----------------------------------------------------------------------]]
@@ -661,6 +657,77 @@ function CommMixin:HandleHistoryData(data, sender)
         Loothing.Sync:HandleHistoryData(data.data, sender)
     end
 end
+
+--[[--------------------------------------------------------------------
+    Combined Session Setup Handler
+----------------------------------------------------------------------]]
+
+--- Handle SESSION_INIT — combined session initialization message.
+-- Unpacks and routes sub-messages through existing handlers for reuse.
+-- Idempotent: receiving both SESSION_INIT and individual messages is harmless.
+function CommMixin:HandleSessionInit(data, sender, distribution)
+    if not validateHandler("HandleSessionInit", data) then return end
+
+    -- Only accept from ML or group leader/assistant (same as SESSION_START)
+    if not isMasterLooter(sender) and not isGroupLeaderOrAssistant(sender) and not isGroupMember(sender) then
+        Loothing:Debug("Rejected SESSION_INIT from non-group sender:", sender)
+        return
+    end
+
+    -- Route each sub-payload through existing handlers
+    if data.sessionStart then
+        data.sessionStart.masterLooter = sender
+        self:TriggerEvent("OnSessionStart", data.sessionStart)
+    end
+
+    if data.mldb then
+        data.mldb.sender = sender
+        self:TriggerEvent("OnMLDBBroadcast", data.mldb)
+    end
+
+    if data.councilRoster then
+        data.councilRoster.masterLooter = sender
+        self:TriggerEvent("OnCouncilRoster", data.councilRoster)
+    end
+
+    if data.items and type(data.items) == "table" then
+        for _, itemData in ipairs(data.items) do
+            itemData.masterLooter = sender
+            self:TriggerEvent("OnItemAdd", itemData)
+        end
+    end
+end
+
+--[[--------------------------------------------------------------------
+    Batched Response Handler
+----------------------------------------------------------------------]]
+
+function CommMixin:HandleResponseBatch(data, sender)
+    if not validateHandler("HandleResponseBatch", data) then return end
+
+    -- Only ML processes responses
+    if not (Loothing.Session and Loothing.Session:IsMasterLooter()) then return end
+
+    -- Validate sender is in the group
+    local isTestMode = TestMode and TestMode:IsEnabled()
+    if not isGroupMember(sender) and not isTestMode then
+        Loothing:Debug("Rejected RESPONSE_BATCH from non-group member:", sender)
+        return
+    end
+
+    if not data.responses then return end
+
+    -- Unpack batch: fire OnPlayerResponse per item
+    for _, item in ipairs(data.responses) do
+        item.playerName = sender
+        item.sessionID = item.sessionID or data.sessionID
+        self:TriggerEvent("OnPlayerResponse", item)
+    end
+end
+
+--[[--------------------------------------------------------------------
+    Settings/History Sync Handlers (delegated to Sync module)
+----------------------------------------------------------------------]]
 
 function CommMixin:HandleProfileExportShare(data, sender, distribution)
     if not validateHandler("HandleProfileExportShare", data, SCHEMAS.PROFILE_EXPORT_SHARE) then return end

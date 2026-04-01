@@ -173,6 +173,18 @@ local function GetSessionSettingsOptions()
                         fontSize = "small",
                         width = "full",
                     },
+                    handleLootToggle = {
+                        type = "toggle",
+                        name = L["HANDLE_LOOT_TOGGLE"],
+                        desc = L["HANDLE_LOOT_TOGGLE_DESC"],
+                        order = 9.8,
+                        width = "full",
+                        get = function() return Loothing.handleLoot end,
+                        set = function(_, v) Loothing:SetHandleLoot(v) end,
+                        disabled = function()
+                            return not (Loothing.MLDB and Loothing.MLDB:IsML())
+                        end,
+                    },
                     groupLootMode = {
                         type = "select",
                         name = L["GROUP_LOOT_MODE"],

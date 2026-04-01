@@ -50,6 +50,7 @@ function ResponseManagerMixin:UpdateGlobalResponseInfo()
         local color = Utils.ColorToNamed(btn.color)
         Loothing.ResponseInfo[responseId] = {
             name  = btn.responseText or btn.text,
+            text  = btn.text or btn.responseText,
             color = color,
             icon  = btn.icon,
         }

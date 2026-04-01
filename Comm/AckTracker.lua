@@ -103,14 +103,13 @@ function AckTrackerMixin:BroadcastHeartbeat()
         return
     end
 
-    -- Skip during any combat — WoW 12.0 blocks all addon messages in combat.
-    -- Heartbeats are BULK and would just be deferred by Send() anyway, but
-    -- skipping here avoids the wasted CPU of BuildHeartbeatDigest() (item
+    -- Skip during encounter restrictions — WoW drops addon messages anyway,
+    -- and skipping here avoids the wasted CPU of BuildHeartbeatDigest() (item
     -- iteration, Adler-32 hash computation).
     local CommState = Loothing.CommState
     if CommState then
         local state = CommState:GetState()
-        if state == CommState.STATE_COMBAT or state == CommState.STATE_RESTRICTED then
+        if state == CommState.STATE_RESTRICTED then
             return
         end
     end
@@ -151,6 +150,9 @@ function AckTrackerMixin:BuildHeartbeatDigest()
 
     -- MLDB hash: Adler-32 of serialized MLDB
     digest.mldbHash = self:ComputeMLDBHash()
+
+    -- Observer hash: Adler-32 of sorted observer names
+    digest.observerHash = self:ComputeObserverHash()
 
     return digest
 end
@@ -212,6 +214,16 @@ function AckTrackerMixin:HandleHeartbeat(digest, sender)
                     Loothing:Debug("AckTracker: MLDB hash mismatch — incremental sync (mldb)")
                     needsSync = true
                     mismatchType = "mldb"
+                end
+            end
+
+            -- Deep-check observer hash (may be absent from older peers)
+            if not needsSync and digest.observerHash ~= nil then
+                local localObserverHash = self:ComputeObserverHash()
+                if localObserverHash ~= digest.observerHash then
+                    Loothing:Debug("AckTracker: observer hash mismatch — incremental sync (observer)")
+                    needsSync = true
+                    mismatchType = "observer"
                 end
             end
         end
@@ -334,6 +346,25 @@ function AckTrackerMixin:ComputeCouncilHash()
     -- Sort for determinism (order may differ between ML and clients)
     local sorted = {}
     for _, m in ipairs(members) do sorted[#sorted + 1] = m end
+    table.sort(sorted)
+
+    local str = table.concat(sorted, ",")
+    return Loolib.Compressor:Adler32(str)
+end
+
+--- Compute Adler-32 hash of the current observer list
+-- Uses the same pattern as ComputeCouncilHash for determinism.
+-- Returns 0 when the Observer module is absent or the list is empty.
+-- @return number
+function AckTrackerMixin:ComputeObserverHash()
+    if not Loothing.Observer then return 0 end
+
+    local observers = Loothing.Observer:GetObservers()
+    if not observers or #observers == 0 then return 0 end
+
+    -- Sort for determinism
+    local sorted = {}
+    for _, name in ipairs(observers) do sorted[#sorted + 1] = name end
     table.sort(sorted)
 
     local str = table.concat(sorted, ",")

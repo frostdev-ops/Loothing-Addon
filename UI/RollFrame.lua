@@ -790,7 +790,7 @@ function RollFrameMixin:UpdateSubmitButton()
         elseif current and current.submitted then
             btnText = "Already Submitted"
         elseif current and current.pending then
-            btnText = "Sending..."
+            btnText = "Queued"
         else
             local L = Loothing.Locale
             btnText = L["SUBMIT_RESPONSE"]
@@ -856,12 +856,14 @@ function RollFrameMixin:Submit()
     self:SendResponse(note)
 end
 
---- Send the response to master looter
+--- Send the response to master looter (buffered for batch delivery)
+-- Responses are accumulated and sent as a single RESPONSE_BATCH message
+-- after a 200ms debounce or when the frame closes. This reduces 5 messages
+-- per player (one per item) to 1 message (RCLC lootAck pattern).
 -- @param note string
 function RollFrameMixin:SendResponse(note)
     if not self.item or not self.selectedResponse then return end
 
-    -- Build response message
     local itemGUID = self.item.guid
     local response = self.selectedResponse
 
@@ -880,49 +882,93 @@ function RollFrameMixin:SendResponse(note)
         roll = math.random(rollMin, rollMax)
     end
 
-    -- Use passed note or get from edit box
     note = note or (self.noteEditBox and self.noteEditBox:GetText()) or ""
 
-    -- Send via Comm system first (requires ML target)
     local ml = Loothing.Session and Loothing.Session:GetMasterLooter()
     if not (Loothing.Comm and Protocol and ml) then
         Loothing:Error("Cannot send response: master looter unavailable or comm offline")
         return
     end
 
-    local ok = pcall(function()
-        Loothing.Comm:SendPlayerResponse(
-            itemGUID,
-            response,
-            note,
-            roll,
-            rollMin,
-            rollMax,
-            ml,
-            Loothing.Session and Loothing.Session:GetSessionID()
-        )
+    -- Gear self-report
+    local gear1Link, gear2Link, gear1ilvl, gear2ilvl
+    if self.item and self.item.equipSlot and Loothing.Session then
+        gear1Link, gear2Link, gear1ilvl, gear2ilvl =
+            Loothing.Session:GetEquippedGearForSlot(self.item.equipSlot)
+    end
+
+    -- Buffer response for batch delivery
+    self.pendingBatch = self.pendingBatch or {}
+    self.pendingBatch[#self.pendingBatch + 1] = {
+        itemGUID = itemGUID,
+        response = response,
+        note = note ~= "" and note or nil,
+        roll = roll,
+        rollMin = rollMin or 1,
+        rollMax = rollMax or 100,
+        gear1Link = gear1Link,
+        gear2Link = gear2Link,
+        gear1ilvl = gear1ilvl or 0,
+        gear2ilvl = gear2ilvl or 0,
+    }
+
+    -- Debounce: flush after 200ms (coalesces rapid clicks through multiple items)
+    if self.batchTimer then
+        self.batchTimer:Cancel()
+    end
+    self.batchTimer = C_Timer.NewTimer(0.2, function()
+        self:FlushResponseBatch()
     end)
 
-    if not ok then
-        Loothing:Error("Failed to send response; please try again")
+    -- Track pending state for optimistic UI
+    self:SetItemResponse(itemGUID, response, note, false, true)
+
+    -- Immediately advance to next unresponded item (optimistic UX)
+    if self.item and self.item.guid == itemGUID then
+        if not self:SwitchToNextUnrespondedItem() then
+            self:Close(true)
+        end
+    end
+
+    self:TriggerEvent("OnResponseSubmitted", self.item, response, note, roll)
+    self:PrintResponseToChat(self.item, response, note)
+    self:UpdateSessionButtons()
+end
+
+--- Flush buffered responses as a single RESPONSE_BATCH message
+function RollFrameMixin:FlushResponseBatch()
+    if self.batchTimer then
+        self.batchTimer:Cancel()
+        self.batchTimer = nil
+    end
+
+    local batch = self.pendingBatch
+    if not batch or #batch == 0 then return end
+    self.pendingBatch = nil
+
+    local ml = Loothing.Session and Loothing.Session:GetMasterLooter()
+    if not (Loothing.Comm and ml) then return end
+
+    local sessionID = Loothing.Session and Loothing.Session:GetSessionID()
+
+    -- Single item: use existing per-item path (lighter payload)
+    if #batch == 1 then
+        local r = batch[1]
+        pcall(function()
+            Loothing.Comm:SendPlayerResponse(
+                r.itemGUID, r.response, r.note,
+                r.roll, r.rollMin, r.rollMax,
+                ml, sessionID,
+                r.gear1Link, r.gear2Link, r.gear1ilvl, r.gear2ilvl
+            )
+        end)
         return
     end
 
-    -- Track pending ack (do not mark submitted yet)
-    self:SetItemResponse(itemGUID, response, note, false, true)
-
-    if self.item and self.item.guid == itemGUID then
-        self:ResetUIState(self:GetItemResponse(itemGUID))
-    end
-
-    -- Fire event
-    self:TriggerEvent("OnResponseSubmitted", self.item, response, note, roll)
-
-    -- Print response to chat if enabled
-    self:PrintResponseToChat(self.item, response, note)
-
-    -- Update session buttons to show this item as pending
-    self:UpdateSessionButtons()
+    -- Multiple items: send as RESPONSE_BATCH
+    pcall(function()
+        Loothing.Comm:SendResponseBatch(batch, ml, sessionID)
+    end)
 end
 
 --- Print response to chat for personal reference
@@ -1002,15 +1048,17 @@ function RollFrameMixin:OnPlayerResponseAck(itemGUID, success, sessionID)
     end
 
     if not success then
-        -- Clear pending state and allow resubmission
+        -- Silent advancement: stale session or invalid state. The frame has already
+        -- advanced (optimistic UX), so just log and clear the stale pending state.
+        Loothing:Debug("RollFrame: ACK rejected for", itemGUID, "(stale session)")
+        -- Clear pending so the retry ticker stops and state doesn't linger
         if Loothing.ResponseTracker then
             Loothing.ResponseTracker:SetResponse(itemGUID, nil, nil, false, false, 0)
         end
-        Loothing:Error("Response not accepted. Please try again.")
-
         if self.item and self.item.guid == itemGUID then
-            self:ResetUIState(nil)
-            self:UpdateSessionButtons()
+            if not self:SwitchToNextUnrespondedItem() then
+                self:Close(true)
+            end
         end
         return
     end
@@ -1131,6 +1179,9 @@ end
 --- Close the frame
 -- @param submitted boolean - True if response was submitted
 function RollFrameMixin:Close(submitted)
+    -- Flush any buffered responses before closing
+    self:FlushResponseBatch()
+
     self:StopTimer()
     self:SavePosition()
     self.frame:Hide()

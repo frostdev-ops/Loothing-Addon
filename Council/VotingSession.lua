@@ -266,6 +266,10 @@ function VotingSessionMixin:OnTimerExpired()
     self:StopTimer()
     self.endTime = GetTime()
 
+    -- Open a grace window so VOTE_COMMITs queued during combat (and replayed
+    -- immediately after combat ends) still get counted even though the timer fired.
+    self.lateAcceptUntil = GetTime() + (Loothing.Timing.VOTE_LATE_ACCEPT_WINDOW or 30)
+
     self:TriggerEvent("OnTimerExpired")
 
     -- End item's voting
@@ -315,7 +319,14 @@ end
 -- @param responses table - Array of response values
 -- @return boolean - True if vote recorded
 function VotingSessionMixin:RecordVote(voter, voterClass, responses)
-    if self.state ~= Loothing.VotingState.VOTING then
+    -- Allow votes that arrive during the late-accept grace window (e.g. VOTE_COMMITs
+    -- that were queued in the guaranteed queue during combat and replayed after the
+    -- session timer already fired).
+    local isLateAccept = self.state == Loothing.VotingState.TALLYING
+        and self.lateAcceptUntil
+        and GetTime() <= self.lateAcceptUntil
+
+    if self.state ~= Loothing.VotingState.VOTING and not isLateAccept then
         Loothing:Debug("Cannot record vote in state:", self.state)
         return false
     end
@@ -562,6 +573,7 @@ function VotingSessionMixin:Destroy()
     self.item = nil
     self.results = nil
     self.expectedVoters = {}
+    self.lateAcceptUntil = nil
 end
 
 --[[--------------------------------------------------------------------

@@ -619,6 +619,15 @@ function VersionCheckMixin:AddVersionEntry(name, version, tVersion, extraData)
     self:MarkRosterSnapshotDirty()
 end
 
+--- Get version info for a specific player
+-- @param name string - Player name
+-- @return table|nil - { version, tVersion, timestamp, isOutdated, ilvl, specID }
+function VersionCheckMixin:GetPlayerInfo(name)
+    name = Utils.NormalizeName(name)
+    if not name then return nil end
+    return self.versionCache[name]
+end
+
 function VersionCheckMixin:GetRosterSnapshot()
     if not self.rosterSnapshotDirty and self.rosterSnapshot then
         return self.rosterSnapshot

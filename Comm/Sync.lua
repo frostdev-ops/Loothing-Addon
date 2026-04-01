@@ -41,6 +41,7 @@ function SyncMixin:Init()
     self.syncTimeout = nil
     self.pendingItems = {}
     self.pendingSyncCheckTimer = nil
+    self.pendingObserverBroadcast = nil
 
     -- Listen for sync messages
     self:RegisterCommEvents()
@@ -827,6 +828,24 @@ function SyncMixin:HandleIncrementalSyncRequest(data)
         if Loothing.MLDB and Loothing.MLDB:Get() then
             responseData.mldb = Loothing.MLDB:Get()
         end
+    elseif mismatchType == "observer" then
+        -- Coalesce: when many clients hit the same heartbeat mismatch simultaneously,
+        -- each sends SYNC_INCREMENTAL for "observer" within ~1s of each other.
+        -- Schedule a deferred broadcast so the first request arms a timer; any
+        -- subsequent requests within the window are ignored and the single timer
+        -- satisfies them all.  The 2s window covers the jitter clients use when
+        -- scheduling incremental sync requests.
+        if not self.pendingObserverBroadcast then
+            Loothing:Debug("Sync: observer mismatch from", requester, "— scheduling coalesced broadcast")
+            self.pendingObserverBroadcast = C_Timer.NewTimer(2, function()
+                self.pendingObserverBroadcast = nil
+                self:BroadcastObserverRoster()
+                Loothing:Debug("Sync: observer broadcast fired (coalesced)")
+            end)
+        else
+            Loothing:Debug("Sync: observer mismatch from", requester, "— coalesced into pending broadcast")
+        end
+        return
     elseif mismatchType == "items" or mismatchType == "itemStates" then
         -- Send compact item list (guid + state + link, no candidate data)
         local session = Loothing.Session

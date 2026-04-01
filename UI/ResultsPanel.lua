@@ -38,6 +38,13 @@ function ResultsPanelMixin:Init()
 
     self:CreateFrame()
     self:CreateElements()
+
+    -- Close panel when session ends (prevent stale UI)
+    if Loothing.Session then
+        Loothing.Session:RegisterCallback("OnSessionEnded", function()
+            self:Hide()
+        end, self)
+    end
 end
 
 --- Create the main frame

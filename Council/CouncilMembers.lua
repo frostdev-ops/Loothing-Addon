@@ -149,6 +149,14 @@ function CouncilMixin:GetAllMembers()
     return result
 end
 
+--- Check if a member was explicitly added (vs auto-included as officer/leader).
+-- @param name string
+-- @return boolean
+function CouncilMixin:IsExplicitMember(name)
+    name = Utils.NormalizeName(name)
+    return self.members[name] ~= nil
+end
+
 function CouncilMixin:GetMemberCount()
     return #self:GetAllMembers()
 end
