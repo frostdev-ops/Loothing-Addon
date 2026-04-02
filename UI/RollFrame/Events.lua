@@ -21,7 +21,7 @@ function RollFrameMixin:RegisterSessionEvents()
         -- AutoPass: check if item should be auto-passed before showing to player
         -- Skip if already responded (double-fire guard for re-broadcasts)
         local existingResp = self:GetItemResponse(item.guid)
-        if not (existingResp and (existingResp.pending or existingResp.submitted)) then
+        if not (existingResp and existingResp.submitted) then
             local AutoPass = ns.AutoPass
             if AutoPass and AutoPass:CheckItem(item) then
                 self:AutoPassItem(item)
@@ -63,7 +63,7 @@ function RollFrameMixin:RegisterSessionEvents()
                     if not Loothing.Session or not Loothing.Session:IsActive() then return end
                     -- Only retry if player hasn't already responded
                     local resp = self:GetItemResponse(item.guid)
-                    if resp and (resp.pending or resp.submitted) then return end
+                    if resp and resp.submitted then return end
                     if AutoPass:CheckItem(item) then
                         self:AutoPassItem(item)
                     end
@@ -87,10 +87,6 @@ function RollFrameMixin:RegisterSessionEvents()
         -- ResponseTracker clears its own state via its own OnSessionEnded listener.
         -- We only need to close the frame display.
         self:Close(false)
-    end, self)
-
-    Loothing.Session:RegisterCallback("OnPlayerResponseAck", function(_, itemGUID, success, _, sessionID)
-        self:OnPlayerResponseAck(itemGUID, success, sessionID)
     end, self)
 
     -- Response recovery: ResponseTracker handles resend logic directly.
@@ -134,7 +130,6 @@ function RollFrameMixin:UnregisterSessionEvents()
     Loothing.Session:UnregisterCallback("OnItemAwarded", self)
     Loothing.Session:UnregisterCallback("OnVotingEnded", self)
     Loothing.Session:UnregisterCallback("OnSessionEnded", self)
-    Loothing.Session:UnregisterCallback("OnPlayerResponseAck", self)
     if Loothing.Comm then
         Loothing.Comm:UnregisterCallback("OnResponsePoll", self)
     end
@@ -163,7 +158,7 @@ function RollFrameMixin:OnResponsePoll(data)
     if not isInMissing then return end
 
     -- If we haven't interacted with this item at all, make sure the frame is visible.
-    -- HasLocalResponse covers submitted, pending, AND queued (player clicked a button).
+    -- HasLocalResponse covers submitted and queued (player clicked a button).
     local tracker = Loothing.ResponseTracker
     if tracker and not tracker:HasLocalResponse(data.itemGUID) then
         if self.frame and not self.frame:IsShown() then
@@ -173,37 +168,38 @@ function RollFrameMixin:OnResponsePoll(data)
 end
 
 --- Send an AUTOPASS response for an item and remove it from display
--- Used by both the immediate and deferred (OnItemInfoLoaded) autopass paths
+-- Used by both the immediate and deferred (OnItemInfoLoaded) autopass paths.
+-- Auto-pass responses are batched: multiple items accumulate over a 200ms
+-- window and flush as a single RESPONSE_BATCH (same path as manual responses).
 -- @param item table - LoothingItem instance
 function RollFrameMixin:AutoPassItem(item)
-    local ml = Loothing.Session and Loothing.Session:GetMasterLooter()
-    local sessionID = Loothing.Session and Loothing.Session:GetSessionID()
-    if Loothing.Comm and ml then
+    if Loothing.Comm and Loothing.Session then
         -- Include gear inline so the ML/processor never falls back to PIQ/PIS.
         local gear1Link, gear2Link, gear1ilvl, gear2ilvl
-        if item.equipSlot and Loothing.Session and Loothing.Session.GetEquippedGearForSlot then
+        if item.equipSlot and Loothing.Session.GetEquippedGearForSlot then
             gear1Link, gear2Link, gear1ilvl, gear2ilvl =
                 Loothing.Session:GetEquippedGearForSlot(item.equipSlot)
         end
-        local ok = pcall(function()
-            Loothing.Comm:SendPlayerResponse(
-                item.guid,
-                Loothing.SystemResponse.AUTOPASS,
-                "",
-                0, 1, 100,
-                ml,
-                sessionID,
-                gear1Link,
-                gear2Link,
-                gear1ilvl,
-                gear2ilvl
-            )
+        -- Buffer for batch delivery (same path as manual SendResponse)
+        self.pendingBatch = self.pendingBatch or {}
+        self.pendingBatch[#self.pendingBatch + 1] = {
+            itemGUID = item.guid,
+            response = Loothing.SystemResponse.AUTOPASS,
+            note = nil,
+            roll = 0,
+            rollMin = 1,
+            rollMax = 100,
+            gear1Link = gear1Link,
+            gear2Link = gear2Link,
+            gear1ilvl = gear1ilvl or 0,
+            gear2ilvl = gear2ilvl or 0,
+        }
+        -- Debounce: flush after 200ms (same window as SendResponse)
+        if self.batchTimer then self.batchTimer:Cancel() end
+        self.batchTimer = C_Timer.NewTimer(0.2, function()
+            self:FlushResponseBatch()
         end)
-        if ok then
-            self:SetItemResponse(item.guid, Loothing.SystemResponse.AUTOPASS, "", false, true)
-        else
-            Loothing:Debug("AutoPass: failed to send response for", item.name or "?")
-        end
+        self:SetItemResponse(item.guid, Loothing.SystemResponse.AUTOPASS, "", true)
     end
     -- Notify player unless silent
     if not (Loothing.Settings and Loothing.Settings:Get("autoPass.silent", false)) then

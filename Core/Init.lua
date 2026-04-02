@@ -67,7 +67,7 @@ Loothing.Observer = nil
 ---@type CommMixin?
 Loothing.Comm = nil
 Loothing.Sync = nil
-Loothing.AckTracker = nil
+Loothing.Heartbeat = nil
 Loothing.Restrictions = nil
 Loothing.MLDB = nil
 Loothing.History = nil
@@ -279,9 +279,9 @@ local function InitializeModules()
         Loothing.CommState:RegisterSyncCallbacks()
     end
 
-    -- Initialize AckTracker (ML heartbeat + client auto-recovery)
-    if ns.CreateAckTracker then
-        Loothing.AckTracker = ns.CreateAckTracker()
+    -- Initialize Heartbeat (ML heartbeat + client auto-recovery)
+    if ns.CreateHeartbeat then
+        Loothing.Heartbeat = ns.CreateHeartbeat()
     end
 
     -- Initialize whisper command handler
@@ -346,9 +346,15 @@ local function InitializeModules()
         Loothing.MainFrame = ns.CreateMainFrame()
     end
 
+    -- Initialize DiagPanel
+    if ns.CreateDiagPanel then
+        Loothing.DiagPanel = ns.CreateDiagPanel()
+    end
+
     -- Initialize UI namespace with all panels
     Loothing.UI = {
         MainFrame = Loothing.MainFrame,
+        DiagPanel = Loothing.DiagPanel,
     }
 
     -- Initialize Sync Panel (modal dialog for settings/history sync)
@@ -1496,6 +1502,61 @@ local function RegisterSlashCommands()
             end,
         },
         {
+            key = "vote",
+            aliases = { "ct" },
+            description = L["SLASH_DESC_VOTE"],
+            usage = { "/lt vote", "/lt ct" },
+            handler = function()
+                local ct = Loothing.UI and Loothing.UI.CouncilTable
+                if not ct then
+                    printError("Council table not available.")
+                    return
+                end
+                if not Loothing.Session or not Loothing.Session:IsActive() then
+                    printLine("No active session.")
+                    return
+                end
+                ct:Toggle()
+            end,
+        },
+        {
+            key = "resync",
+            description = L["SLASH_DESC_RESYNC"],
+            usage = { "/lt resync" },
+            handler = function()
+                if not Loothing.Session or not Loothing.Session:IsActive() then
+                    printError(L["RESYNC_NO_SESSION"])
+                    return
+                end
+                if Loothing.Session:IsMasterLooter() then
+                    printError(L["RESYNC_IS_ML"])
+                    return
+                end
+                local ml = Loothing.Session:GetMasterLooter()
+                if not ml then
+                    printError(L["RESYNC_NO_ML"])
+                    return
+                end
+                if not Loothing.Sync then
+                    printError(L["RESYNC_NO_SYNC"])
+                    return
+                end
+
+                -- Trash local session state
+                local sessionID = Loothing.Session:GetSessionID()
+                Loothing.Session:EndSession()
+
+                -- Clear ResponseTracker so we re-receive everything fresh
+                if Loothing.ResponseTracker then
+                    Loothing.ResponseTracker:Clear()
+                end
+
+                -- Request full sync from ML
+                printLine(string.format(L["RESYNC_STARTED"], ml))
+                Loothing.Sync:RequestSync(ml)
+            end,
+        },
+        {
             key = "resend",
             description = "Resend your loot response(s) to the Master Looter",
             usage = { "/lt resend" },
@@ -1514,7 +1575,9 @@ local function RegisterSlashCommands()
                     printError("Master Looter unavailable.")
                     return
                 end
-                local count = 0
+                -- Collect all resendable responses and batch them
+                local batch = {}
+                local resendNames = {}
                 for guid, data in pairs(tracker.responses) do
                     if data.response then
                         local item = Loothing.Session:GetItemByGUID(guid)
@@ -1526,24 +1589,41 @@ local function RegisterSlashCommands()
                                 g1Link, g2Link, g1ilvl, g2ilvl =
                                     Loothing.Session:GetEquippedGearForSlot(item.equipSlot)
                             end
-                            pcall(function()
-                                Loothing.Comm:SendPlayerResponse(
-                                    guid, data.response, data.note,
-                                    roll or 0, rMin or 1, rMax or 100,
-                                    ml, Loothing.Session:GetSessionID(),
-                                    g1Link, g2Link, g1ilvl, g2ilvl
-                                )
-                            end)
-                            -- Reset to pending so the ACK timeout fires again
-                            tracker:SetResponse(guid, data.response, data.note, false, true, 0)
-                            count = count + 1
-                            local itemName = item.itemLink or item.name or guid
-                            printLine("Resent response for " .. itemName)
+                            batch[#batch + 1] = {
+                                itemGUID = guid,
+                                response = data.response,
+                                note = data.note ~= "" and data.note or nil,
+                                roll = roll or 0,
+                                rollMin = rMin or 1,
+                                rollMax = rMax or 100,
+                                gear1Link = g1Link,
+                                gear2Link = g2Link,
+                                gear1ilvl = g1ilvl or 0,
+                                gear2ilvl = g2ilvl or 0,
+                            }
+                            tracker:SetResponse(guid, data.response, data.note, true)
+                            resendNames[#resendNames + 1] = item.itemLink or item.name or guid
                         end
                     end
                 end
-                if count == 0 then
+                if #batch == 0 then
                     printLine("No pending responses to resend.")
+                elseif #batch == 1 then
+                    local r = batch[1]
+                    pcall(function()
+                        Loothing.Comm:SendPlayerResponse(
+                            r.itemGUID, r.response, r.note,
+                            r.roll, r.rollMin, r.rollMax,
+                            ml, Loothing.Session:GetSessionID(),
+                            r.gear1Link, r.gear2Link, r.gear1ilvl, r.gear2ilvl
+                        )
+                    end)
+                    printLine("Resent response for " .. resendNames[1])
+                else
+                    pcall(function()
+                        Loothing.Comm:SendResponseBatch(batch, ml, Loothing.Session:GetSessionID())
+                    end)
+                    printLine("Resent " .. #batch .. " responses as batch")
                 end
             end,
         },
@@ -1743,49 +1823,11 @@ local function RegisterSlashCommands()
             description = "Communication pipeline diagnostics",
             usage = { "/lt diag" },
             handler = function()
-                printLine("=== Loothing Comm Diagnostics ===")
-                local localName = Utils.GetPlayerFullName() or "<nil>"
-                printLine("Local player: " .. localName)
-                printLine("Addon prefix: " .. tostring(Loothing.ADDON_PREFIX))
-                printLine("Protocol version: " .. tostring(Loothing.PROTOCOL_VERSION))
-                printLine("---")
-                printLine("handleLoot: " .. tostring(Loothing.handleLoot))
-                printLine("isMasterLooter: " .. tostring(Loothing.isMasterLooter))
-                printLine("masterLooter (global): " .. tostring(Loothing.masterLooter))
-                local sessionML = Loothing.Session and Loothing.Session:GetMasterLooter() or "<nil>"
-                printLine("masterLooter (session): " .. tostring(sessionML))
-                local settingsML = Loothing.Settings and Loothing.Settings:GetMasterLooter() or "<nil>"
-                printLine("masterLooter (settings): " .. tostring(settingsML))
-                printLine("---")
-                local sessionState = Loothing.Session and Loothing.Session:GetState() or "<nil>"
-                printLine("Session state: " .. tostring(sessionState))
-                local sessionID = Loothing.Session and Loothing.Session:GetSessionID() or "<nil>"
-                printLine("Session ID: " .. tostring(sessionID))
-                printLine("---")
-                local Comm = Loolib.Comm
-                local queued = Comm.GetQueuedMessageCount and Comm:GetQueuedMessageCount() or "?"
-                printLine("Comm queue: " .. tostring(queued) .. " messages")
-                local pressure = Comm.GetQueuePressure and Comm:GetQueuePressure() or "?"
-                printLine("Queue pressure: " .. tostring(pressure))
-                local isRegistered = Comm.IsCommRegistered and Comm:IsCommRegistered(Loothing.ADDON_PREFIX) or "?"
-                printLine("Prefix registered: " .. tostring(isRegistered))
-                printLine("---")
-                local restricted = Loothing.Restrictions and Loothing.Restrictions:IsRestricted() or false
-                printLine("Encounter restricted: " .. tostring(restricted))
-                printLine("In group: " .. tostring(IsInGroup()))
-                printLine("In raid: " .. tostring(IsInRaid()))
-                -- Test encode/decode round-trip
-                local testOK = false
-                local testCmd = Loothing.MsgType and Loothing.MsgType.HEARTBEAT or "HEARTBEAT"
-                if ns.Protocol then
-                    local encoded = ns.Protocol:Encode(testCmd, { test = true })
-                    if encoded then
-                        local v, cmd = ns.Protocol:Decode(encoded)
-                        testOK = (v == Loothing.PROTOCOL_VERSION and cmd == testCmd)
-                    end
+                if Loothing.DiagPanel then
+                    Loothing.DiagPanel:Toggle()
+                else
+                    printLine("Diagnostics panel not available.")
                 end
-                printLine("Encode/decode round-trip: " .. (testOK and "OK" or "FAILED"))
-                printLine("=== End Diagnostics ===")
             end,
         },
         {

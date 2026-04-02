@@ -474,26 +474,26 @@ end)
 ----------------------------------------------------------------------]]
 
 TestRunner:Describe("Session Trigger Policy - afterLoot Timing", function()
-    TestRunner:It("afterLoot only reacts to ML loot, not other players' loot", function()
-        local timing = "afterLoot"
-        local action = "prompt"
-        local isMyLoot = false  -- another player's loot
-        local shouldAct = timing == "afterLoot" and action ~= "manual" and isMyLoot
-        Assert.IsFalse(shouldAct, "Should not act on other player's loot")
+    -- Mirrors SessionMixin:OnLootReceived — no per-recipient check; any encounter loot counts.
+    local function shouldAdvanceAfterLootDebounce(timing, action, handleLoot)
+        return timing == "afterLoot" and action ~= "manual" and handleLoot
+    end
 
-        isMyLoot = true
-        shouldAct = timing == "afterLoot" and action ~= "manual" and isMyLoot
-        Assert.IsTrue(shouldAct, "Should act on ML's own loot")
+    TestRunner:It("afterLoot advances debounce when handleLoot is true (any recipient)", function()
+        Assert.IsTrue(shouldAdvanceAfterLootDebounce("afterLoot", "prompt", true))
+        Assert.IsTrue(shouldAdvanceAfterLootDebounce("afterLoot", "auto", true))
+        Assert.IsFalse(shouldAdvanceAfterLootDebounce("afterLoot", "manual", true), "manual does not arm debounce")
+        Assert.IsFalse(shouldAdvanceAfterLootDebounce("afterLoot", "prompt", false), "handleLoot off")
+        Assert.IsFalse(shouldAdvanceAfterLootDebounce("encounterEnd", "prompt", true), "wrong timing")
     end, { category = "unit" })
 
     TestRunner:It("afterLoot + auto starts directly after debounce", function()
         local timing = "afterLoot"
         local action = "auto"
-        local isMyLoot = true
-        local hasEligibleEncounter = true
+        local handleLoot = true
 
-        local shouldAct = timing == "afterLoot" and action ~= "manual" and isMyLoot and hasEligibleEncounter
-        local willAutoStart = shouldAct and action == "auto"
+        local shouldAdvance = shouldAdvanceAfterLootDebounce(timing, action, handleLoot)
+        local willAutoStart = shouldAdvance and action == "auto"
         Assert.IsTrue(willAutoStart, "afterLoot + auto should auto-start after debounce")
     end, { category = "unit" })
 

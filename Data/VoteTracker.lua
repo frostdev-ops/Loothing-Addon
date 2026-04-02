@@ -198,12 +198,15 @@ end
 -- Schedules a jittered re-show of VotePanel for any item still in
 -- VOTING state that the player has not yet voted on.
 function VoteTrackerMixin:OnCombatEnd()
+    -- Only act if there's an active session
+    if not Loothing.Session or not Loothing.Session:IsActive() then return end
+
     if self.reshowTimer then
         self.reshowTimer:Cancel()
         self.reshowTimer = nil
     end
 
-    -- Jittered delay: let the guaranteed-queue replay arrive first,
+    -- Jittered delay: let the queue replay arrive first,
     -- then check state once things have settled.
     local delay = 2 + math.random() * 3  -- 2–5 seconds
     self.reshowTimer = C_Timer.NewTimer(delay, function()

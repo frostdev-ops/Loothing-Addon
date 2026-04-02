@@ -832,6 +832,28 @@ function SessionPanelMixin:CreateFooter()
     end)
     self.awardLaterCheck:Hide()
 
+    -- Council Table button (council members, ML, observers)
+    self.councilTableBtn = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
+    self.councilTableBtn:SetSize(100, 26)
+    self.councilTableBtn:SetPoint("RIGHT", -88, 0)
+    self.councilTableBtn:SetText(L["SHOW_COUNCIL_TABLE"])
+    self.councilTableBtn:SetScript("OnClick", function()
+        local ct = Loothing.UI and Loothing.UI.CouncilTable
+        if ct then
+            ct:Toggle()
+        end
+    end)
+    self.councilTableBtn:SetScript("OnEnter", function(btn)
+        GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
+        GameTooltip:SetText(L["SHOW_COUNCIL_TABLE"], 1, 0.82, 0)
+        GameTooltip:AddLine(L["SHOW_COUNCIL_TABLE_DESC"], 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    self.councilTableBtn:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+    self.councilTableBtn:Hide()
+
     -- Refresh button
     self.refreshButton = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
     self.refreshButton:SetSize(80, 26)
@@ -1010,6 +1032,7 @@ function SessionPanelMixin:UpdateFooter()
         self.startAllButton:Hide()
         self.addItemBtn:Hide()
         self.awardLaterCheck:Hide()
+        self.councilTableBtn:Hide()
         return
     end
 
@@ -1066,6 +1089,24 @@ function SessionPanelMixin:UpdateFooter()
         self.startAllButton:Hide()
         self.addItemBtn:Hide()
         self.awardLaterCheck:Hide()
+    end
+
+    -- Council Table button: visible during active/closing sessions for council/ML/observers
+    if Loothing.Session:IsActive() then
+        local showCouncilBtn = isML
+        if not showCouncilBtn and Loothing.Council and Loothing.Council:IsPlayerCouncilMember() then
+            showCouncilBtn = true
+        end
+        if not showCouncilBtn and Loothing.Observer then
+            showCouncilBtn = Loothing.Observer:IsPlayerObserver() or Loothing.Observer:IsMLObserver()
+        end
+        if showCouncilBtn then
+            self.councilTableBtn:Show()
+        else
+            self.councilTableBtn:Hide()
+        end
+    else
+        self.councilTableBtn:Hide()
     end
 end
 

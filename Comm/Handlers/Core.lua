@@ -115,6 +115,7 @@ local SCHEMAS = {
         { "responses", "table",  true },
         { "sessionID", "string", false },
     },
+    RESPONSE_BATCH  = { { "responses", "table",  true } },
     BATCH           = { { "messages",  "table",  true } },
     MLDB_BROADCAST  = { { "data",      "table",  true } },
     COUNCIL_ROSTER  = { { "members",   "table",  true } },
@@ -429,33 +430,18 @@ end
 
 function CommMixin:HandlePlayerResponse(data, sender)
     if not validateHandler("HandlePlayerResponse", data, SCHEMAS.PLAYER_RESPONSE) then return end
-
-    -- Only ML processes responses authoritatively
-    if not (Loothing.Session and Loothing.Session:IsMasterLooter()) then
-        return
-    end
+    if not Loothing.Session then return end
 
     -- Validate sender is in the group (bypass in test mode)
     local isTestMode = TestMode and TestMode:IsEnabled()
-    local isMember = isGroupMember(sender)
-    Loothing:Debug("PLAYER_RESPONSE from", sender, "isGroupMember:", isMember)
-    if not isMember and not isTestMode then
+    if not isGroupMember(sender) and not isTestMode then
         Loothing:Debug("Rejected PLAYER_RESPONSE from non-group member:", sender)
         return
     end
 
     data.playerName = sender
+    -- All receivers (ML + council) process; Session distinguishes ML vs non-ML
     self:TriggerEvent("OnPlayerResponse", data)
-end
-
-function CommMixin:HandlePlayerResponseAck(data, sender)
-    if not validateHandler("HandlePlayerResponseAck", data) then return end
-    if not isMasterLooter(sender) then
-        Loothing:Debug("Rejected PLAYER_RESPONSE_ACK from non-ML:", sender)
-        return
-    end
-    data.masterLooter = sender
-    self:TriggerEvent("OnPlayerResponseAck", data)
 end
 
 function CommMixin:HandleResponsePoll(data, sender)
@@ -475,16 +461,6 @@ function CommMixin:HandleVotePoll(data, sender)
     end
     data.masterLooter = sender
     self:TriggerEvent("OnVotePoll", data)
-end
-
-function CommMixin:HandleClientReady(data, sender)
-    if not validateHandler("HandleClientReady", data) then return end
-    if not isGroupMember(sender) then
-        Loothing:Debug("Rejected CLIENT_READY from non-group:", sender)
-        return
-    end
-    data.sender = sender
-    self:TriggerEvent("OnClientReady", data)
 end
 
 --[[--------------------------------------------------------------------
@@ -581,14 +557,14 @@ function CommMixin:HandleBatch(data, sender, distribution)
     end
 end
 
---- Handle HEARTBEAT message — delegate to AckTracker for state comparison
+--- Handle HEARTBEAT message — delegate to Heartbeat for state comparison
 -- @param data table - Heartbeat digest { sessionID, state, itemCount, itemStates, councilHash, mldbHash }
 -- @param sender string
 function CommMixin:HandleHeartbeat(data, sender, _distribution)
     if not validateHandler("HandleHeartbeat", data) then return end
-    -- AckTracker handles the comparison and potential auto-sync trigger
-    if Loothing.AckTracker then
-        Loothing.AckTracker:HandleHeartbeat(data, sender)
+    -- Heartbeat handles the comparison and potential auto-sync trigger
+    if Loothing.Heartbeat then
+        Loothing.Heartbeat:HandleHeartbeat(data, sender)
     end
     self:TriggerEvent("OnHeartbeat", data, sender)
 end
@@ -607,13 +583,13 @@ function CommMixin:HandleSettingsSyncRequest(_data, sender)
     end
 end
 
-function CommMixin:HandleSettingsSyncAck(_data, sender)
+function CommMixin:HandleSettingsSyncConfirm(_data, sender)
     if not isGroupMember(sender) then
-        Loothing:Debug("Rejected SETTINGS_SYNC_ACK from non-group member:", sender)
+        Loothing:Debug("Rejected SETTINGS_SYNC_CONFIRM from non-group member:", sender)
         return
     end
     if Loothing.Sync then
-        Loothing.Sync:HandleSettingsSyncAck(sender)
+        Loothing.Sync:HandleSettingsSyncConfirm(sender)
     end
 end
 
@@ -638,13 +614,13 @@ function CommMixin:HandleHistorySyncRequest(data, sender)
     end
 end
 
-function CommMixin:HandleHistorySyncAck(_data, sender)
+function CommMixin:HandleHistorySyncConfirm(_data, sender)
     if not isGroupMember(sender) then
-        Loothing:Debug("Rejected HISTORY_SYNC_ACK from non-group member:", sender)
+        Loothing:Debug("Rejected HISTORY_SYNC_CONFIRM from non-group member:", sender)
         return
     end
     if Loothing.Sync then
-        Loothing.Sync:HandleHistorySyncAck(sender)
+        Loothing.Sync:HandleHistorySyncConfirm(sender)
     end
 end
 
@@ -703,10 +679,8 @@ end
 ----------------------------------------------------------------------]]
 
 function CommMixin:HandleResponseBatch(data, sender)
-    if not validateHandler("HandleResponseBatch", data) then return end
-
-    -- Only ML processes responses
-    if not (Loothing.Session and Loothing.Session:IsMasterLooter()) then return end
+    if not validateHandler("HandleResponseBatch", data, SCHEMAS.RESPONSE_BATCH) then return end
+    if not Loothing.Session then return end
 
     -- Validate sender is in the group
     local isTestMode = TestMode and TestMode:IsEnabled()
@@ -714,8 +688,6 @@ function CommMixin:HandleResponseBatch(data, sender)
         Loothing:Debug("Rejected RESPONSE_BATCH from non-group member:", sender)
         return
     end
-
-    if not data.responses then return end
 
     -- Unpack batch: fire OnPlayerResponse per item
     for _, item in ipairs(data.responses) do

@@ -238,6 +238,13 @@ function SyncMixin:HandleSyncRequest(data)
         return
     end
 
+    -- Don't respond when session is inactive — there's nothing useful to send.
+    -- Clients will receive SESSION_INIT when a session actually starts.
+    if Loothing.Session:GetState() == Loothing.SessionState.INACTIVE then
+        Loothing:Debug("Sync request ignored (no active session) from:", data.requester)
+        return
+    end
+
     local requester = data.requester
 
     -- Requester may have left between sending the request and us processing it
@@ -401,6 +408,12 @@ function SyncMixin:CheckNeedSync()
     -- Don't sync if we're the ML (we own the session)
     if Loothing.handleLoot then return end
 
+    -- Don't sync when session is inactive — there's nothing to sync.
+    -- Clients will receive SESSION_INIT when a session actually starts.
+    if not Loothing.Session or Loothing.Session:GetState() == Loothing.SessionState.INACTIVE then
+        return
+    end
+
     -- Don't sync during reconnect grace period (CommState will coordinate)
     local CommState = Loothing.CommState
     if CommState and CommState:IsInGracePeriod() then
@@ -408,15 +421,15 @@ function SyncMixin:CheckNeedSync()
         return
     end
 
-    -- Don't sync if we have a live session (confirmed by recent heartbeat).
-    -- Allow sync if session appears stale (no heartbeat for 90s = 3 missed intervals).
-    if Loothing.Session and Loothing.Session:GetState() ~= Loothing.SessionState.INACTIVE then
-        local lastHB = Loothing.AckTracker and Loothing.AckTracker.lastHeartbeatTime or 0
-        if (GetTime() - lastHB) < 90 then
-            return
-        end
-        Loothing:Debug("Sync: session appears stale (no heartbeat for 90s), allowing sync")
+    -- Don't sync if we have a live session confirmed by recent heartbeat.
+    -- Allow sync only if session appears stale (no heartbeat for 90s = 3 missed intervals).
+    -- lastHeartbeatTime == 0 means no heartbeat received yet — session just started,
+    -- trust SESSION_INIT and wait for the first heartbeat before checking staleness.
+    local lastHB = Loothing.Heartbeat and Loothing.Heartbeat.lastHeartbeatTime or 0
+    if lastHB == 0 or (GetTime() - lastHB) < 90 then
+        return
     end
+    Loothing:Debug("Sync: session appears stale (no heartbeat for 90s), allowing sync")
 
     -- Prefer known ML, fall back to raid leader
     local syncTarget = Loothing.masterLooter or Utils.GetRaidLeader()
@@ -575,15 +588,15 @@ end
 --- Accept settings sync from sender
 -- @param sender string
 function SyncMixin:AcceptSettingsSync(sender)
-    Loothing.Comm:SendSettingsSyncAck(sender)
+    Loothing.Comm:SendSettingsSyncConfirm(sender)
 
     self.awaitingSettingsFrom = sender
     Loothing:Print(string.format(L["SYNC_ACCEPTED_FROM"], sender))
 end
 
---- Handle settings sync acknowledgment
+--- Handle settings sync confirmation
 -- @param sender string
-function SyncMixin:HandleSettingsSyncAck(sender)
+function SyncMixin:HandleSettingsSyncConfirm(sender)
     if not self.settingsSyncInProgress or not self.pendingSettingsSync then
         return
     end
@@ -727,15 +740,15 @@ end
 --- Accept history sync
 -- @param sender string
 function SyncMixin:AcceptHistorySync(sender)
-    Loothing.Comm:SendHistorySyncAck(sender)
+    Loothing.Comm:SendHistorySyncConfirm(sender)
 
     self.awaitingHistoryFrom = sender
     Loothing:Print(string.format(L["SYNC_ACCEPTED_FROM"], sender))
 end
 
---- Handle history sync acknowledgment
+--- Handle history sync confirmation
 -- @param sender string
-function SyncMixin:HandleHistorySyncAck(sender)
+function SyncMixin:HandleHistorySyncConfirm(sender)
     if not self.historySyncInProgress or not self.pendingHistorySync then
         return
     end
@@ -797,7 +810,7 @@ end
 ----------------------------------------------------------------------]]
 
 --- Request an incremental sync from the ML for a specific mismatch type.
--- Called by AckTracker when it can identify exactly what diverged.
+-- Called by Heartbeat when it can identify exactly what diverged.
 -- @param mlName string
 -- @param mismatchType string - "council", "mldb", "items", "itemStates"
 function SyncMixin:RequestIncrementalSync(mlName, mismatchType)
@@ -813,6 +826,7 @@ end
 -- @param data table - { requester, type, sessionID }
 function SyncMixin:HandleIncrementalSyncRequest(data)
     if not Loothing.Session or not Loothing.Session:IsMasterLooter() then return end
+    if Loothing.Session:GetState() == Loothing.SessionState.INACTIVE then return end
 
     local requester = data.requester
     if not requester or not Utils.IsGroupMember(requester) then return end

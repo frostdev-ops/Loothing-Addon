@@ -39,22 +39,16 @@ function ResponseTrackerMixin:Init()
     self:GenerateCallbackEvents(TRACKER_EVENTS)
 
     -- Per-item response state (keyed by item GUID)
-    self.responses = {}     -- { [guid] = { response, note, submitted, pending, retryCount } }
+    self.responses = {}     -- { [guid] = { response, note, submitted } }
 
     -- Per-item roll state (keyed by item GUID)
     self.rolls = {}         -- { [guid] = { roll, min, max } }
-
-    -- Ack timers (keyed by item GUID)
-    self.ackTimers = {}     -- { [guid] = timerHandle }
 
     -- Items currently in VOTING state (keyed by item GUID)
     self.votingItems = {}   -- { [guid] = itemRef }
 
     -- Session scoping
     self.sessionID = nil
-
-    -- CLIENT_READY debounce
-    self.lastReadyTime = 0
 
     -- Gentle re-show timer
     self.reshowTimer = nil
@@ -131,7 +125,7 @@ end
 
 --- Get the response for an item
 -- @param guid string
--- @return table|nil - { response, note, submitted, pending, retryCount }
+-- @return table|nil - { response, note, submitted }
 function ResponseTrackerMixin:GetResponse(guid)
     return self.responses[guid]
 end
@@ -141,23 +135,12 @@ end
 -- @param response any - Response ID
 -- @param note string
 -- @param submitted boolean
--- @param pending boolean
--- @param retryCount number|nil
-function ResponseTrackerMixin:SetResponse(guid, response, note, submitted, pending, retryCount)
-    local existing = self.responses[guid]
+function ResponseTrackerMixin:SetResponse(guid, response, note, submitted)
     self.responses[guid] = {
         response = response,
         note = note or "",
         submitted = submitted == true,
-        pending = pending == true,
-        retryCount = retryCount or (existing and existing.retryCount) or 0,
     }
-
-    if pending then
-        self:StartAckTimeout(guid)
-    else
-        self:ClearAckTimeout(guid)
-    end
 
     self:TriggerEvent("OnResponseChanged", guid, self.responses[guid])
     self:FireUnrespondedCount()
@@ -221,13 +204,13 @@ function ResponseTrackerMixin:UntrackVotingItem(guid)
     end
 end
 
---- Check if the player has a local response for an item (submitted, pending, or queued).
+--- Check if the player has a local response for an item (submitted or queued).
 -- Used by frame-reshow logic: if the player already clicked a button, don't nag them.
 -- @param guid string
 -- @return boolean
 function ResponseTrackerMixin:HasLocalResponse(guid)
     local r = self.responses[guid]
-    return r and (r.submitted or r.pending or r.response ~= nil)
+    return r and (r.submitted or r.response ~= nil)
 end
 
 --- Get all VOTING items the player hasn't responded to
@@ -259,98 +242,22 @@ function ResponseTrackerMixin:GetUnrespondedCount()
     return count
 end
 
---- Get GUIDs of items the player has responded to (for CLIENT_READY payload).
--- Includes submitted, pending, and queued responses — if the player clicked
--- a button, the ML should not poll for this item even if the ACK hasn't
--- round-tripped yet.
--- @return table - Array of GUID strings
-function ResponseTrackerMixin:GetRespondedGUIDs()
-    local result = {}
-    for guid, data in pairs(self.responses) do
-        if data.submitted or data.pending or data.response ~= nil then
-            result[#result + 1] = guid
-        end
-    end
-    return result
-end
-
 --- Fire the unresponded count changed event
 function ResponseTrackerMixin:FireUnrespondedCount()
     self:TriggerEvent("OnUnrespondedCountChanged", self:GetUnrespondedCount())
 end
 
 --[[--------------------------------------------------------------------
-    Response Resend Timer
-
-    If ML hasn't processed our response within 8 seconds, resend once
-    as a safety net. ML's RESPONSE_POLL (periodic) provides further
-    recovery if the resend also fails. The RollFrame has already
-    advanced (optimistic UX), so this is invisible to the user.
+    RESPONSE_POLL Handling
 ----------------------------------------------------------------------]]
 
-local RESPONSE_RETRY_DELAY = 8.0
-
---- Start a single resend timer for a pending response.
--- If ML hasn't processed the response after 8 seconds, resend once.
--- ML's RESPONSE_POLL handles further recovery if needed.
--- @param guid string
-function ResponseTrackerMixin:StartAckTimeout(guid)
-    if not guid then return end
-    self:ClearAckTimeout(guid)
-
-    self.ackTimers[guid] = C_Timer.NewTimer(RESPONSE_RETRY_DELAY, function()
-        self.ackTimers[guid] = nil
-
-        local responseData = self.responses[guid]
-        if not responseData or not responseData.pending then return end
-        if not Loothing.Session or not Loothing.Session:IsActive() then return end
-
-        local ml = Loothing.Session:GetMasterLooter()
-        if not (Loothing.Comm and ml) then return end
-
-        local roll, rollMin, rollMax = self:GetRoll(guid)
-        local gear1Link, gear2Link, gear1ilvl, gear2ilvl
-        local retryItem = Loothing.Session:GetItemByGUID(guid)
-        if retryItem and retryItem.equipSlot and Loothing.Session.GetEquippedGearForSlot then
-            gear1Link, gear2Link, gear1ilvl, gear2ilvl =
-                Loothing.Session:GetEquippedGearForSlot(retryItem.equipSlot)
-        end
-
-        Loothing:Debug("ResponseTracker: resending response for", guid)
-
-        pcall(function()
-            Loothing.Comm:SendPlayerResponse(
-                guid,
-                responseData.response,
-                responseData.note,
-                roll or 0, rollMin or 1, rollMax or 100,
-                ml,
-                Loothing.Session:GetSessionID(),
-                gear1Link, gear2Link, gear1ilvl, gear2ilvl
-            )
-        end)
-    end)
-end
-
---- Clear a pending ack timer
--- @param guid string
-function ResponseTrackerMixin:ClearAckTimeout(guid)
-    local timer = guid and self.ackTimers[guid]
-    if timer then
-        timer:Cancel()
-        self.ackTimers[guid] = nil
-    end
-end
-
---[[--------------------------------------------------------------------
-    RESPONSE_POLL Handling (moved from RollFrame Events.lua)
-----------------------------------------------------------------------]]
-
---- Handle RESPONSE_POLL from ML: resend our response if we're in the missing list
--- Works even when RollFrame is closed because we have the response data.
--- @param data table - { itemGUID, sessionID, missing = { "Player1", ... } }
+--- Handle RESPONSE_POLL from ML: resend our responses if we're in the missing list.
+-- Uses data.items (array of all polled GUIDs) when available; falls back to
+-- data.itemGUID for backward compatibility. Batches multiple resends into a
+-- single RESPONSE_BATCH message to minimize addon traffic.
+-- @param data table - { itemGUID, items?, sessionID, missing = { "Player1", ... } }
 function ResponseTrackerMixin:HandleResponsePoll(data)
-    if not data or not data.itemGUID or not data.missing then return end
+    if not data or not data.missing then return end
 
     if data.sessionID and Loothing.Session and not Loothing.Session:IsCurrentSession(data.sessionID) then
         return
@@ -366,52 +273,79 @@ function ResponseTrackerMixin:HandleResponsePoll(data)
     end
     if not isInMissing then return end
 
-    -- Check if we have a local response to resend
-    local responseData = self:GetResponse(data.itemGUID)
-    if responseData and responseData.response then
-        Loothing:Debug("ResponseTracker: ML poll — resending response for", data.itemGUID)
-        local ml = Loothing.Session and Loothing.Session:GetMasterLooter()
-        if Loothing.Comm and ml then
-            local roll, rollMin, rollMax = self:GetRoll(data.itemGUID)
+    -- Collect resendable responses across all polled items
+    local itemGUIDs = data.items or (data.itemGUID and { data.itemGUID } or {})
+    local ml = Loothing.Session and Loothing.Session:GetMasterLooter()
+    if not (Loothing.Comm and ml) then return end
 
-            -- Include gear data so the ML doesn't re-enter the legacy PIQ/PIS path.
+    local batch = {}
+    local hasUnresponded = false
+
+    for _, guid in ipairs(itemGUIDs) do
+        local responseData = self:GetResponse(guid)
+        if responseData and responseData.response then
+            local roll, rollMin, rollMax = self:GetRoll(guid)
             local gear1Link, gear2Link, gear1ilvl, gear2ilvl
-            local pollItem = Loothing.Session and Loothing.Session:GetItemByGUID(data.itemGUID)
+            local pollItem = Loothing.Session and Loothing.Session:GetItemByGUID(guid)
             if pollItem and pollItem.equipSlot and Loothing.Session.GetEquippedGearForSlot then
                 gear1Link, gear2Link, gear1ilvl, gear2ilvl =
                     Loothing.Session:GetEquippedGearForSlot(pollItem.equipSlot)
             end
+            batch[#batch + 1] = {
+                itemGUID = guid,
+                response = responseData.response,
+                note = responseData.note ~= "" and responseData.note or nil,
+                roll = roll or 0,
+                rollMin = rollMin or 1,
+                rollMax = rollMax or 100,
+                gear1Link = gear1Link,
+                gear2Link = gear2Link,
+                gear1ilvl = gear1ilvl or 0,
+                gear2ilvl = gear2ilvl or 0,
+            }
+        else
+            hasUnresponded = true
+        end
+    end
 
+    if #batch > 0 then
+        local sessionID = Loothing.Session and Loothing.Session:GetSessionID()
+        Loothing:Debug("ResponseTracker: ML poll — resending", #batch, "response(s)")
+        if #batch == 1 then
+            local r = batch[1]
             pcall(function()
                 Loothing.Comm:SendPlayerResponse(
-                    data.itemGUID,
-                    responseData.response,
-                    responseData.note,
-                    roll or 0, rollMin or 1, rollMax or 100,
-                    ml,
-                    Loothing.Session and Loothing.Session:GetSessionID(),
-                    gear1Link,
-                    gear2Link,
-                    gear1ilvl,
-                    gear2ilvl
+                    r.itemGUID, r.response, r.note,
+                    r.roll, r.rollMin, r.rollMax,
+                    ml, sessionID,
+                    r.gear1Link, r.gear2Link, r.gear1ilvl, r.gear2ilvl
                 )
             end)
+        else
+            pcall(function()
+                Loothing.Comm:SendResponseBatch(batch, ml, sessionID)
+            end)
         end
-    else
-        -- We haven't responded — show the frame so the player can
+    end
+
+    if hasUnresponded then
         Loothing:Print("The Master Looter is waiting for your response!")
         self:CheckAndReshowFrame()
     end
 end
 
 --[[--------------------------------------------------------------------
-    CLIENT_READY (combat-end notification to ML)
+    Combat-End Frame Reshow
 ----------------------------------------------------------------------]]
 
 --- Called on PLAYER_REGEN_ENABLED when the local player leaves combat.
--- Sends CLIENT_READY to ML (debounced) and schedules frame re-check.
+-- Re-shows the RollFrame if there are unresponded items.
 function ResponseTrackerMixin:OnCombatEnd()
-    -- Schedule frame recheck after short delay (let sync arrive first)
+    -- Only act if there's an active session with unresponded items
+    if not Loothing.Session or not Loothing.Session:IsActive() then return end
+    if self:GetUnrespondedCount() == 0 then return end
+
+    -- Schedule frame recheck after short delay
     local recheckDelay = Loothing.Timing and Loothing.Timing.COMBAT_END_RECHECK_DELAY or 2
     if self.combatRecheckTimer then
         self.combatRecheckTimer:Cancel()
@@ -420,32 +354,6 @@ function ResponseTrackerMixin:OnCombatEnd()
         self.combatRecheckTimer = nil
         self:CheckAndReshowFrame()
     end)
-
-    -- Send CLIENT_READY to ML (debounced)
-    self:SendClientReady()
-end
-
---- Send CLIENT_READY to ML with our response state
-function ResponseTrackerMixin:SendClientReady()
-    if not Loothing.Session or not Loothing.Session:IsActive() then return end
-    if Loothing.Session:IsMasterLooter() then return end
-    if not Loothing.Comm then return end
-
-    -- Debounce: rapid combat toggling
-    local debounce = Loothing.Timing and Loothing.Timing.CLIENT_READY_DEBOUNCE or 5
-    local now = GetTime()
-    if now - self.lastReadyTime < debounce then return end
-    self.lastReadyTime = now
-
-    local ml = Loothing.Session:GetMasterLooter()
-    if not ml then return end
-
-    Loothing.Comm:Send(Loothing.MsgType.CLIENT_READY, {
-        sessionID = self.sessionID,
-        responded = self:GetRespondedGUIDs(),
-    }, ml, "NORMAL")
-
-    Loothing:Debug("ResponseTracker: sent CLIENT_READY to", ml)
 end
 
 --[[--------------------------------------------------------------------
@@ -519,12 +427,6 @@ function ResponseTrackerMixin:Clear()
     wipe(self.responses)
     wipe(self.rolls)
     wipe(self.votingItems)
-
-    -- Cancel all ack timers
-    for guid, timer in pairs(self.ackTimers) do
-        timer:Cancel()
-    end
-    wipe(self.ackTimers)
 
     -- Cancel reshow/recheck timers
     if self.reshowTimer then

@@ -46,7 +46,6 @@ local COMM_EVENTS = {
     "OnPlayerInfoRequest",
     "OnPlayerInfoResponse",
     "OnPlayerResponse",
-    "OnPlayerResponseAck",
     "OnVersionRequest",
     "OnVersionResponse",
     "OnMLDBBroadcast",
@@ -61,7 +60,6 @@ local COMM_EVENTS = {
     "OnVotePoll",
     "OnIncrementalSyncRequest",
     "OnIncrementalSyncData",
-    "OnClientReady",
     "OnMessageDropped",
 }
 
@@ -134,22 +132,20 @@ local HANDLERS = {
     [Loothing.MsgType.PLAYER_INFO_REQUEST]     = "HandlePlayerInfoRequest",
     [Loothing.MsgType.PLAYER_INFO_RESPONSE]    = "HandlePlayerInfoResponse",
     [Loothing.MsgType.PLAYER_RESPONSE]         = "HandlePlayerResponse",
-    [Loothing.MsgType.PLAYER_RESPONSE_ACK]     = "HandlePlayerResponseAck",
     [Loothing.MsgType.RESPONSE_POLL]           = "HandleResponsePoll",
     [Loothing.MsgType.VOTE_POLL]               = "HandleVotePoll",
     [Loothing.MsgType.SYNC_INCREMENTAL]        = "HandleIncrementalSyncRequest",
     [Loothing.MsgType.SYNC_INCREMENTAL_DATA]   = "HandleIncrementalSyncData",
-    [Loothing.MsgType.CLIENT_READY]            = "HandleClientReady",
     [Loothing.MsgType.VERSION_REQUEST]         = "HandleVersionRequest",
     [Loothing.MsgType.VERSION_RESPONSE]        = "HandleVersionResponse",
     [Loothing.MsgType.MLDB_BROADCAST]          = "HandleMLDBBroadcast",
     [Loothing.MsgType.CANDIDATE_UPDATE]        = "HandleCandidateUpdate",
     [Loothing.MsgType.VOTE_UPDATE]             = "HandleVoteUpdate",
     [Loothing.MsgType.SYNC_SETTINGS_REQUEST]   = "HandleSettingsSyncRequest",
-    [Loothing.MsgType.SYNC_SETTINGS_ACK]       = "HandleSettingsSyncAck",
+    [Loothing.MsgType.SYNC_SETTINGS_CONFIRM]   = "HandleSettingsSyncConfirm",
     [Loothing.MsgType.SYNC_SETTINGS_DATA]      = "HandleSettingsData",
     [Loothing.MsgType.SYNC_HISTORY_REQUEST]    = "HandleHistorySyncRequest",
-    [Loothing.MsgType.SYNC_HISTORY_ACK]        = "HandleHistorySyncAck",
+    [Loothing.MsgType.SYNC_HISTORY_CONFIRM]    = "HandleHistorySyncConfirm",
     [Loothing.MsgType.SYNC_HISTORY_DATA]       = "HandleHistoryData",
     [Loothing.MsgType.PROFILE_EXPORT_SHARE]    = "HandleProfileExportShare",
     [Loothing.MsgType.XREALM]                  = "HandleXRealm",
@@ -755,19 +751,17 @@ function CommMixin:SendPlayerResponse(itemGUID, response, note, roll, rollMin, r
     -- Self-loopback: when the ML is responding to their own session,
     -- bypass the network entirely. WHISPER-to-self through the throttled
     -- comm queue is unreliable (backpressure, self-delivery quirks).
-    -- Deferred one frame so RollFrame:StartAckTimeout() runs before the ACK arrives.
     local isTestMode = TestMode and TestMode:IsEnabled()
     local isSelfSend = masterLooter and Utils.IsSamePlayer(masterLooter, Utils.GetPlayerFullName())
     if isTestMode or isSelfSend then
-        C_Timer.After(0, function()
-            if Loothing.Session then
-                Loothing.Session:HandlePlayerResponse(payload)
-            end
-        end)
+        if Loothing.Session then
+            Loothing.Session:HandlePlayerResponse(payload)
+        end
         return
     end
 
-    self:SendGuaranteed(Loothing.MsgType.PLAYER_RESPONSE, {
+    -- Broadcast to group so ML + council all receive immediately
+    self:Send(Loothing.MsgType.PLAYER_RESPONSE, {
         itemGUID = itemGUID,
         response = response,
         note = note ~= "" and note or nil,
@@ -779,7 +773,7 @@ function CommMixin:SendPlayerResponse(itemGUID, response, note, roll, rollMin, r
         gear2Link = gear2Link,
         gear1ilvl = gear1ilvl or 0,
         gear2ilvl = gear2ilvl or 0,
-    }, masterLooter)
+    }, nil, "ALERT")
 end
 
 --- Send batched player responses (all items in one message)
@@ -787,42 +781,12 @@ end
 -- @param masterLooter string
 -- @param sessionID string|nil
 function CommMixin:SendResponseBatch(responses, masterLooter, sessionID)
-    self:SendGuaranteed(Loothing.MsgType.RESPONSE_BATCH, {
+    -- Broadcast to group so ML + council all receive immediately
+    self:Send(Loothing.MsgType.RESPONSE_BATCH, {
         responses = responses,
         sessionID = sessionID,
         playerName = Utils.GetPlayerFullName(),
-    }, masterLooter)
-end
-
---- Send player response acknowledgment (ML -> raid member)
--- @param itemGUID string
--- @param success boolean
--- @param target string
--- @param sessionID string|nil
-function CommMixin:SendPlayerResponseAck(itemGUID, success, target, sessionID)
-    -- Self-loopback: when ML sends ACK to themselves, bypass network.
-    local isTestMode = TestMode and TestMode:IsEnabled()
-    local isSelfSend = target and Utils.IsSamePlayer(target, Utils.GetPlayerFullName())
-    if isTestMode or isSelfSend then
-        local payload = {
-            itemGUID = itemGUID,
-            success = success,
-            sessionID = sessionID,
-            masterLooter = Utils.GetPlayerFullName(),
-        }
-        C_Timer.After(0, function()
-            if Loothing.Session then
-                Loothing.Session:HandlePlayerResponseAck(payload)
-            end
-        end)
-        return
-    end
-
-    self:Send(Loothing.MsgType.PLAYER_RESPONSE_ACK, {
-        itemGUID = itemGUID,
-        success = success,
-        sessionID = sessionID,
-    }, target, "ALERT")
+    }, nil, "ALERT")
 end
 
 --[[--------------------------------------------------------------------
@@ -911,10 +875,10 @@ function CommMixin:SendSettingsSyncRequest(target)
     end
 end
 
---- Send settings sync acknowledgment
+--- Send settings sync confirmation
 -- @param target string
-function CommMixin:SendSettingsSyncAck(target)
-    self:Send(Loothing.MsgType.SYNC_SETTINGS_ACK, {}, target)
+function CommMixin:SendSettingsSyncConfirm(target)
+    self:Send(Loothing.MsgType.SYNC_SETTINGS_CONFIRM, {}, target)
 end
 
 --- Send settings data
@@ -937,10 +901,10 @@ function CommMixin:SendHistorySyncRequest(target, days)
     end
 end
 
---- Send history sync acknowledgment
+--- Send history sync confirmation
 -- @param target string
-function CommMixin:SendHistorySyncAck(target)
-    self:Send(Loothing.MsgType.SYNC_HISTORY_ACK, {}, target)
+function CommMixin:SendHistorySyncConfirm(target)
+    self:Send(Loothing.MsgType.SYNC_HISTORY_CONFIRM, {}, target)
 end
 
 --- Send history data

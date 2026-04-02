@@ -48,6 +48,7 @@ ns.AddItemFrameMixin = AddItemFrameMixin
 function AddItemFrameMixin:Init()
     self.activeTab = 1
     self.itemQueue = {}
+    self.nextQueueID = 0
     self.bagRows = {}
     self.recentRows = {}
     self.queueRows = {}
@@ -357,7 +358,7 @@ function AddItemFrameMixin:CreateQueueRow(parent, itemData)
     removeTxt:SetText("X")
     removeTxt:SetTextColor(0.8, 0.3, 0.3)
     removeBtn:SetScript("OnClick", function()
-        self:RemoveFromQueue(itemData.link)
+        self:RemoveFromQueue(itemData.queueID)
         self:RefreshQueueList()
     end)
     removeBtn:SetScript("OnEnter", function()
@@ -395,15 +396,14 @@ function AddItemFrameMixin:OnItemInputChanged(text)
         if not self.frame:IsShown() then return end
         if self.activeTab ~= 1 then return end
 
-        -- Duplicate guard
-        if self:IsInQueue(link) then return end
-
+        self.nextQueueID = (self.nextQueueID or 0) + 1
         self.itemQueue[#self.itemQueue + 1] = {
             link = link,
             name = name,
             ilvl = ilvl,
             quality = quality,
             icon = icon,
+            queueID = self.nextQueueID,
         }
         self.editBox:SetText("")
         self:RefreshQueueList()
@@ -671,20 +671,23 @@ function AddItemFrameMixin:CreateItemRow(parent, itemData)
             -- Deselect
             btn._selected = false
             btn:SetBackdropColor(0.08, 0.08, 0.08, 1)
-            self:RemoveFromQueue(itemData.link)
-        else
-            -- Select — guard duplicates
-            if not self:IsInQueue(itemData.link) then
-                btn._selected = true
-                btn:SetBackdropColor(0.12, 0.12, 0.28, 1)
-                self.itemQueue[#self.itemQueue + 1] = {
-                    link = itemData.link,
-                    name = itemData.name,
-                    ilvl = itemData.ilvl or 0,
-                    quality = itemData.quality,
-                    icon = iconTex,
-                }
+            if btn._queueID then
+                self:RemoveFromQueue(btn._queueID)
             end
+        else
+            -- Select (duplicates allowed for multiple copies of same item)
+            btn._selected = true
+            btn:SetBackdropColor(0.12, 0.12, 0.28, 1)
+            self.nextQueueID = (self.nextQueueID or 0) + 1
+            btn._queueID = self.nextQueueID
+            self.itemQueue[#self.itemQueue + 1] = {
+                link = itemData.link,
+                name = itemData.name,
+                ilvl = itemData.ilvl or 0,
+                quality = itemData.quality,
+                icon = iconTex,
+                queueID = self.nextQueueID,
+            }
         end
         self:UpdateAddButton()
     end)
@@ -705,16 +708,9 @@ end
     Queue Helpers
 ----------------------------------------------------------------------]]
 
-function AddItemFrameMixin:IsInQueue(link)
-    for _, entry in ipairs(self.itemQueue) do
-        if entry.link == link then return true end
-    end
-    return false
-end
-
-function AddItemFrameMixin:RemoveFromQueue(link)
+function AddItemFrameMixin:RemoveFromQueue(queueID)
     for i = #self.itemQueue, 1, -1 do
-        if self.itemQueue[i].link == link then
+        if self.itemQueue[i].queueID == queueID then
             table.remove(self.itemQueue, i)
             break
         end

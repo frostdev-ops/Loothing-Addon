@@ -300,7 +300,15 @@ function VersionCheckMixin:OnGroupRosterUpdate()
     end
     self.lastRosterCheck = now
 
-    -- Send version request to group (non-blocking, just fires and forgets)
+    -- During active sessions, suppress version broadcasts — they generate N²
+    -- messages (every player requests + every player responds). Version data is
+    -- already cached from the initial group check. Only re-query when no session
+    -- is active (e.g., group forming, between bosses after session ends).
+    if Loothing.Session and Loothing.Session:IsActive() then
+        return
+    end
+
+    -- Send version request to group
     if Loothing.Comm then
         Loothing.Comm:SendVersionRequest()
     end
@@ -492,7 +500,10 @@ end
 --- Handle version request from another player
 -- @param sender string
 function VersionCheckMixin:HandleRequest(sender)
-    -- Send our version via Comm convenience method
+    -- Suppress version responses during active sessions to avoid N² message floods.
+    -- Version data is already cached from pre-session checks.
+    if Loothing.Session and Loothing.Session:IsActive() then return end
+
     Loothing.Comm:SendVersionResponse(sender)
 end
 

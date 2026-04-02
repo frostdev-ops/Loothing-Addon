@@ -8,7 +8,7 @@ local _, ns = ...
 local Loothing = ns.Addon
 
 -- Addon info
-Loothing.VERSION = "1.7.0"
+Loothing.VERSION = "1.7.2"
 Loothing.PROTOCOL_VERSION = 4
 Loothing.ADDON_PREFIX = "LOOTHING"
 
@@ -208,10 +208,10 @@ Loothing.MsgType = {
 
     -- Guild Sync (Settings and History)
     SYNC_SETTINGS_REQUEST = "SSR",   -- ML -> Target: Request to sync settings
-    SYNC_SETTINGS_ACK = "SSA",       -- Target -> ML: Accept settings sync
+    SYNC_SETTINGS_CONFIRM = "SSC",   -- Target -> ML: Confirm settings sync acceptance
     SYNC_SETTINGS_DATA = "SSD",      -- ML -> Target: Settings payload
     SYNC_HISTORY_REQUEST = "SHR",    -- ML -> Target: Request to sync history
-    SYNC_HISTORY_ACK = "SHA",        -- Target -> ML: Accept history sync
+    SYNC_HISTORY_CONFIRM = "SHC",    -- Target -> ML: Confirm history sync acceptance
     SYNC_HISTORY_DATA = "SHD",       -- ML -> Target: History payload
     PROFILE_EXPORT_SHARE = "PES",    -- Player -> Target: Share a settings export string
 
@@ -659,7 +659,7 @@ Loothing.Timing = {
     -- CommState: sync deduplication
     SYNC_DEDUP_WINDOW = 10,        -- Suppress duplicate sync requests within N seconds
 
-    -- AckTracker: jitter
+    -- Heartbeat: jitter
     HEARTBEAT_JITTER = 5,          -- +/- seconds on heartbeat interval (25-35s)
 
     -- Sync storm prevention

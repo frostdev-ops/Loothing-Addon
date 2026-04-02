@@ -23,7 +23,7 @@ It is built on **Loolib**, a custom mixin-based addon library, and uses Blizzard
 Core (Init, Settings, Utils)
  ├── Data Layer      (Session, History, Candidates, ItemData, PlayerCache, MLDB)
  ├── Council Layer   (CouncilManager, VotingSession, VotingEngine, Observers)
- ├── Comm Layer      (Protocol v3, MessageHandler, Sync, AckTracker, WhisperHandler)
+ ├── Comm Layer      (Protocol v3, MessageHandler, Sync, Heartbeat, WhisperHandler)
  ├── Loot Layer      (GroupLoot, GroupLootEvents, GroupLootState)
  ├── UI Layer        (MainFrame + 12 panels/components)
  └── Debug Layer     (TestMode, ErrorHandler, 15 test suites)
@@ -175,12 +175,12 @@ Uses `LoolibSerializer` and `LoolibCompressor` from Loolib. All messages include
 ### Transport
 `LoolibComm` handles chunking, throttling, and queuing over WoW's addon channel. Supported send modes:
 - `Send()` — standard delivery
-- `SendGuaranteed()` — with acknowledgment tracking
+- `SendGuaranteed()` — with encounter-restriction queuing
 - `SendGuild()` — guild-channel broadcast
 - `Broadcast*` — raid/party helpers
 
-### AckTracker
-Tracks guaranteed message acknowledgment. Unacknowledged messages can be retried or flagged as lost.
+### Heartbeat
+ML broadcasts a lightweight state digest every 10s during active sessions. Clients compare the digest against local state and trigger sync on mismatch, with jitter and cooldown to prevent sync storms. Dirty-tracking skips redundant broadcasts when state is unchanged.
 
 ### Encounter Restrictions
 During boss encounters, non-critical messages are queued and replayed after the encounter ends. This prevents communication congestion during combat without losing data.

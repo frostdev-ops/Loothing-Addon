@@ -7,6 +7,7 @@ local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local Protocol = ns.Protocol
+local Utils = ns.Utils
 
 --[[--------------------------------------------------------------------
     RollFrameMixin

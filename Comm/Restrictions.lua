@@ -154,8 +154,8 @@ function RestrictionsMixin:SetRestrictionBit(bitFlag, active)
         Loothing:Debug("Comm restrictions:", self.restrictionsEnabled and "ACTIVE" or "LIFTED")
 
         -- Notify CommState of restriction transitions.
-        -- CommState decides when to trigger ReplayQueue() based on combat state:
-        -- if still in combat when restrictions lift, replay is deferred to combat end.
+        -- CommState transitions state and triggers ReplayQueue(), which itself
+        -- checks InCombatLockdown() as defense-in-depth before replaying.
         local CommState = Loothing.CommState
         if CommState then
             if self.restrictionsEnabled then
@@ -327,9 +327,9 @@ function RestrictionsMixin:ReplayTick()
     if pressure > PRESSURE_HARD then
         maxThisTick = 1  -- Only ALERT under extreme pressure
     elseif pressure > PRESSURE_SOFT then
-        maxThisTick = 2  -- Slow down under moderate pressure
+        maxThisTick = 1  -- Conservative under moderate pressure
     else
-        maxThisTick = 3  -- Full speed when queue is clear
+        maxThisTick = 2  -- Normal speed when queue is clear
     end
 
     local buffer = self.replayBuffer
