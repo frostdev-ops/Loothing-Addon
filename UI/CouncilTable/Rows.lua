@@ -520,6 +520,218 @@ function CouncilTableMixin:UpdateMoreInfoPanel(candidate)
             self.moreInfoSource:SetText("")
         end
     end
+
+    -- Player Intel section (from desktop sync)
+    local intel = Loothing.PlayerIntel and Loothing.PlayerIntel:Get(candidate.playerName)
+    if intel then
+        self:UpdatePlayerIntelSection(intel)
+    else
+        self:ClearPlayerIntelSection()
+    end
+end
+
+--[[--------------------------------------------------------------------
+    Player Intel Display (Desktop-synced data)
+----------------------------------------------------------------------]]
+
+function CouncilTableMixin:UpdatePlayerIntelSection(intel)
+    -- Show separator
+    if self.moreInfoIntelSep then
+        self.moreInfoIntelSep:Show()
+    end
+
+    -- M+ Activity
+    if self.moreInfoMythicPlus then
+        local parts = {}
+        if intel.mpWeek then
+            if intel.mpWeek.count and intel.mpWeek.count > 0 then
+                parts[#parts + 1] = string.format("%d keys this week", intel.mpWeek.count)
+            end
+            if intel.mpWeek.highest and intel.mpWeek.highest > 0 then
+                parts[#parts + 1] = string.format("Highest: +%d", intel.mpWeek.highest)
+            end
+        end
+        if intel.mpScore and intel.mpScore > 0 then
+            parts[#parts + 1] = string.format("Score: %.0f", intel.mpScore)
+        end
+        if #parts > 0 then
+            self.moreInfoMythicPlus:SetText("M+: " .. table.concat(parts, "  |  "))
+            self.moreInfoMythicPlus:SetTextColor(0.4, 0.8, 1.0)
+        else
+            self.moreInfoMythicPlus:SetText("M+: No data")
+            self.moreInfoMythicPlus:SetTextColor(0.5, 0.5, 0.5)
+        end
+    end
+
+    -- Parse Performance
+    if self.moreInfoParses then
+        local parts = {}
+        if intel.parseAvg then
+            parts[#parts + 1] = string.format("Avg: %.0f", intel.parseAvg)
+        end
+        if intel.parseBest then
+            local bestText = string.format("Best: %.0f", intel.parseBest)
+            if intel.parseBestBoss then
+                bestText = bestText .. " (" .. intel.parseBestBoss .. ")"
+            end
+            parts[#parts + 1] = bestText
+        end
+
+        -- Trend indicator
+        if intel.parseTrend == "up" then
+            parts[#parts + 1] = "|cff33ee33\226\150\178|r"  -- green ▲
+        elseif intel.parseTrend == "down" then
+            parts[#parts + 1] = "|cffee3333\226\150\188|r"  -- red ▼
+        elseif intel.parseTrend == "stable" then
+            parts[#parts + 1] = "|cff999999\226\151\134|r"  -- gray ◆
+        end
+
+        if #parts > 0 then
+            self.moreInfoParses:SetText("Parses: " .. table.concat(parts, "  |  "))
+            self.moreInfoParses:SetTextColor(1.0, 0.8, 0.4)
+        else
+            self.moreInfoParses:SetText("Parses: No data")
+            self.moreInfoParses:SetTextColor(0.5, 0.5, 0.5)
+        end
+    end
+
+    -- Attendance (prefer event-based data, fall back to roster member percentage)
+    if self.moreInfoAttendance then
+        local parts = {}
+        if intel.eventAttendPct then
+            -- Event-based attendance from the events system
+            parts[#parts + 1] = string.format("%.0f%%", intel.eventAttendPct)
+            if intel.eventAttended and intel.eventEligible then
+                parts[#parts + 1] = string.format("%d/%d events", intel.eventAttended, intel.eventEligible)
+            end
+        elseif intel.attendance then
+            -- Fallback to roster member attendance percentage
+            parts[#parts + 1] = string.format("%.0f%%", intel.attendance * 100)
+        end
+        if intel.raidCount and intel.raidCount > 0 then
+            parts[#parts + 1] = string.format("%d raid dates", intel.raidCount)
+        end
+        if #parts > 0 then
+            self.moreInfoAttendance:SetText("Attendance: " .. table.concat(parts, "  |  "))
+        else
+            self.moreInfoAttendance:SetText("")
+        end
+    end
+
+    -- Gear Readiness (from audit data merged into intel)
+    if self.moreInfoGearReady then
+        local parts = {}
+        -- Tier set
+        if intel.tierCount then
+            local tierText = string.format("%dpc", intel.tierCount)
+            if intel.has4pc then
+                tierText = "|cffa335ee" .. tierText .. "|r"
+            elseif intel.has2pc then
+                tierText = "|cff0070dd" .. tierText .. "|r"
+            end
+            parts[#parts + 1] = "Tier: " .. tierText
+        end
+        -- Enchants
+        if intel.enchMissing then
+            if intel.enchMissing == 0 then
+                parts[#parts + 1] = "|cff33ee33Enchanted|r"
+            else
+                parts[#parts + 1] = string.format("|cffee3333%d missing enchants|r", intel.enchMissing)
+            end
+        end
+        -- Gems
+        if intel.gemMissing then
+            if intel.gemMissing == 0 then
+                parts[#parts + 1] = "|cff33ee33Gemmed|r"
+            else
+                parts[#parts + 1] = string.format("|cffee3333%d missing gems|r", intel.gemMissing)
+            end
+        end
+        -- Vault
+        if intel.vaultSlots then
+            parts[#parts + 1] = string.format("Vault: %d/9", intel.vaultSlots)
+        end
+        -- Raid progression
+        if intel.raidProg and intel.raidProg ~= "" then
+            parts[#parts + 1] = intel.raidProg
+        end
+        if #parts > 0 then
+            self.moreInfoGearReady:SetText(table.concat(parts, "  |  "))
+            self.moreInfoGearReady:SetTextColor(0.7, 0.8, 0.7)
+        else
+            self.moreInfoGearReady:SetText("")
+        end
+    end
+
+    -- Recent Loot History (compact, last 3 items)
+    if self.moreInfoLootHistory then
+        if intel.loot and #intel.loot > 0 then
+            local lines = {}
+            local maxShow = math.min(#intel.loot, 3)
+            for i = 1, maxShow do
+                local item = intel.loot[i]
+                local text = string.format("[%s] %s (%s)", item.date or "?", item.name or "?", item.resp or "?")
+                lines[#lines + 1] = text
+            end
+            if #intel.loot > maxShow then
+                lines[#lines + 1] = string.format("  ...and %d more", #intel.loot - maxShow)
+            end
+            self.moreInfoLootHistory:SetText("Recent Loot: " .. table.concat(lines, "\n"))
+            self.moreInfoLootHistory:SetTextColor(0.8, 0.8, 0.8)
+        else
+            self.moreInfoLootHistory:SetText("Recent Loot: None this tier")
+            self.moreInfoLootHistory:SetTextColor(0.5, 0.5, 0.5)
+        end
+    end
+
+    -- Alt Loot Summary
+    if self.moreInfoAltLoot then
+        if intel.altLoot and #intel.altLoot > 0 then
+            local parts = {}
+            for _, alt in ipairs(intel.altLoot) do
+                local altName = alt.alt or "?"
+                -- Strip realm from display
+                local dashIdx = altName:find("-")
+                local shortName = dashIdx and altName:sub(1, dashIdx - 1) or altName
+                parts[#parts + 1] = string.format("%s (%s): %d items", shortName, alt.cls or "?", alt.count or 0)
+            end
+            self.moreInfoAltLoot:SetText("Alt Loot: " .. table.concat(parts, "  |  "))
+        else
+            self.moreInfoAltLoot:SetText("")
+        end
+    end
+
+    -- Staleness indicator
+    if self.moreInfoStaleness then
+        local staleText, r, g, b = Loothing.PlayerIntel:GetStalenessInfo()
+        if staleText then
+            self.moreInfoStaleness:SetText("Synced " .. staleText)
+            self.moreInfoStaleness:SetTextColor(r, g, b)
+        else
+            self.moreInfoStaleness:SetText("")
+        end
+    end
+end
+
+function CouncilTableMixin:ClearPlayerIntelSection()
+    -- Hide separator
+    if self.moreInfoIntelSep then
+        self.moreInfoIntelSep:Hide()
+    end
+
+    local noDataMsg = Loothing.PlayerIntel and not Loothing.PlayerIntel:HasData()
+        and "Sync from desktop app for player intel" or ""
+
+    if self.moreInfoMythicPlus then
+        self.moreInfoMythicPlus:SetText(noDataMsg)
+        self.moreInfoMythicPlus:SetTextColor(0.5, 0.5, 0.5)
+    end
+    if self.moreInfoParses then self.moreInfoParses:SetText("") end
+    if self.moreInfoAttendance then self.moreInfoAttendance:SetText("") end
+    if self.moreInfoGearReady then self.moreInfoGearReady:SetText("") end
+    if self.moreInfoLootHistory then self.moreInfoLootHistory:SetText("") end
+    if self.moreInfoAltLoot then self.moreInfoAltLoot:SetText("") end
+    if self.moreInfoStaleness then self.moreInfoStaleness:SetText("") end
 end
 
 --[[--------------------------------------------------------------------

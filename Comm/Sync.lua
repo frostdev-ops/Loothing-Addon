@@ -41,7 +41,16 @@ function SyncMixin:Init()
     self.syncTimeout = nil
     self.pendingItems = {}
     self.pendingSyncCheckTimer = nil
+
+    -- Coalesce timers for incremental sync broadcasts
+    self.pendingCouncilBroadcast = nil
+    self.pendingMLDBBroadcast = nil
     self.pendingObserverBroadcast = nil
+    self.pendingItemsBroadcast = nil
+
+    -- Full sync coalesce state
+    self.syncCoalesceTimer = nil
+    self.pendingSyncRequesters = nil
 
     -- Listen for sync messages
     self:RegisterCommEvents()
@@ -150,6 +159,32 @@ function SyncMixin:CancelSync(reason)
 
     self:TriggerEvent("OnSyncFailed", reason or "Cancelled")
     Loothing:Debug("Sync cancelled:", reason)
+end
+
+--- Cancel all pending coalesce broadcast timers.
+-- Called on session end to prevent stale broadcasts.
+function SyncMixin:CancelPendingBroadcasts()
+    if self.pendingCouncilBroadcast then
+        self.pendingCouncilBroadcast:Cancel()
+        self.pendingCouncilBroadcast = nil
+    end
+    if self.pendingMLDBBroadcast then
+        self.pendingMLDBBroadcast:Cancel()
+        self.pendingMLDBBroadcast = nil
+    end
+    if self.pendingObserverBroadcast then
+        self.pendingObserverBroadcast:Cancel()
+        self.pendingObserverBroadcast = nil
+    end
+    if self.pendingItemsBroadcast then
+        self.pendingItemsBroadcast:Cancel()
+        self.pendingItemsBroadcast = nil
+    end
+    if self.syncCoalesceTimer then
+        self.syncCoalesceTimer:Cancel()
+        self.syncCoalesceTimer = nil
+    end
+    self.pendingSyncRequesters = nil
 end
 
 --- Handle received sync data
@@ -834,21 +869,50 @@ function SyncMixin:HandleIncrementalSyncRequest(data)
     local mismatchType = data.type
     local responseData = { type = mismatchType }
 
+    -- Coalesce all incremental sync types: when many clients hit the same
+    -- heartbeat mismatch simultaneously, each sends SYNC_INCREMENTAL within
+    -- ~1s of each other.  Schedule a deferred broadcast so the first request
+    -- arms a 2s timer; subsequent requests within the window are absorbed and
+    -- the single broadcast satisfies them all.  Converts O(N) whispers into
+    -- 1 broadcast per mismatch type per heartbeat cycle.
+
     if mismatchType == "council" then
-        if Loothing.Council then
-            responseData.councilRoster = Loothing.Council:GetAllMembers()
+        if not self.pendingCouncilBroadcast then
+            Loothing:Debug("Sync: council mismatch from", requester, "— scheduling coalesced broadcast")
+            self.pendingCouncilBroadcast = C_Timer.NewTimer(2, function()
+                self.pendingCouncilBroadcast = nil
+                if not (Loothing.Session and Loothing.Session:IsMasterLooter()) then return end
+                if Loothing.Council then
+                    Loothing.Comm:Send(Loothing.MsgType.SYNC_INCREMENTAL_DATA, {
+                        type = "council",
+                        councilRoster = Loothing.Council:GetAllMembers(),
+                    }, nil, "NORMAL")
+                    Loothing:Debug("Sync: council broadcast fired (coalesced)")
+                end
+            end)
+        else
+            Loothing:Debug("Sync: council mismatch from", requester, "— coalesced into pending broadcast")
         end
+        return
     elseif mismatchType == "mldb" then
-        if Loothing.MLDB and Loothing.MLDB:Get() then
-            responseData.mldb = Loothing.MLDB:Get()
+        if not self.pendingMLDBBroadcast then
+            Loothing:Debug("Sync: mldb mismatch from", requester, "— scheduling coalesced broadcast")
+            self.pendingMLDBBroadcast = C_Timer.NewTimer(2, function()
+                self.pendingMLDBBroadcast = nil
+                if not (Loothing.Session and Loothing.Session:IsMasterLooter()) then return end
+                if Loothing.MLDB and Loothing.MLDB:Get() then
+                    Loothing.Comm:Send(Loothing.MsgType.SYNC_INCREMENTAL_DATA, {
+                        type = "mldb",
+                        mldb = Loothing.MLDB:Get(),
+                    }, nil, "NORMAL")
+                    Loothing:Debug("Sync: mldb broadcast fired (coalesced)")
+                end
+            end)
+        else
+            Loothing:Debug("Sync: mldb mismatch from", requester, "— coalesced into pending broadcast")
         end
+        return
     elseif mismatchType == "observer" then
-        -- Coalesce: when many clients hit the same heartbeat mismatch simultaneously,
-        -- each sends SYNC_INCREMENTAL for "observer" within ~1s of each other.
-        -- Schedule a deferred broadcast so the first request arms a timer; any
-        -- subsequent requests within the window are ignored and the single timer
-        -- satisfies them all.  The 2s window covers the jitter clients use when
-        -- scheduling incremental sync requests.
         if not self.pendingObserverBroadcast then
             Loothing:Debug("Sync: observer mismatch from", requester, "— scheduling coalesced broadcast")
             self.pendingObserverBroadcast = C_Timer.NewTimer(2, function()
@@ -861,30 +925,41 @@ function SyncMixin:HandleIncrementalSyncRequest(data)
         end
         return
     elseif mismatchType == "items" or mismatchType == "itemStates" then
-        -- Send compact item list (guid + state + link, no candidate data)
-        local session = Loothing.Session
-        responseData.items = {}
-        if session.items then
-            for _, item in session.items:Enumerate() do
-                responseData.items[#responseData.items + 1] = {
-                    guid = item.guid,
-                    itemLink = item.itemLink,
-                    looter = item.looter,
-                    state = item:GetState(),
-                }
-            end
+        if not self.pendingItemsBroadcast then
+            Loothing:Debug("Sync: items mismatch from", requester, "— scheduling coalesced broadcast")
+            self.pendingItemsBroadcast = C_Timer.NewTimer(2, function()
+                self.pendingItemsBroadcast = nil
+                if not (Loothing.Session and Loothing.Session:IsMasterLooter()) then return end
+                local session = Loothing.Session
+                if session.items then
+                    local items = {}
+                    for _, item in session.items:Enumerate() do
+                        items[#items + 1] = {
+                            guid = item.guid,
+                            itemLink = item.itemLink,
+                            looter = item.looter,
+                            state = item:GetState(),
+                        }
+                    end
+                    Loothing.Comm:Send(Loothing.MsgType.SYNC_INCREMENTAL_DATA, {
+                        type = "items",
+                        items = items,
+                        sessionID = session:GetSessionID(),
+                        sessionState = session:GetState(),
+                    }, nil, "NORMAL")
+                    Loothing:Debug("Sync: items broadcast fired (coalesced)")
+                end
+            end)
+        else
+            Loothing:Debug("Sync: items mismatch from", requester, "— coalesced into pending broadcast")
         end
-        responseData.sessionID = session:GetSessionID()
-        responseData.sessionState = session:GetState()
+        return
     else
         -- Unknown type — fall back to full sync
         Loothing:Debug("Sync: unknown incremental type", mismatchType, "— falling back to full")
         self:HandleSyncRequest(data)
         return
     end
-
-    Loothing:Debug("Sync: sending incremental data (type:", mismatchType, ") to", requester)
-    Loothing.Comm:Send(Loothing.MsgType.SYNC_INCREMENTAL_DATA, responseData, requester, "NORMAL")
 end
 
 --- Client-side: apply incremental sync data from ML
@@ -919,7 +994,7 @@ function SyncMixin:HandleIncrementalSyncData(data)
             local localItem = localItems[remoteItem.guid]
             if not localItem then
                 -- Missing item — add it
-                session:AddItem(remoteItem.itemLink, remoteItem.looter, remoteItem.guid, true)
+                session:AddItem(remoteItem.itemLink, remoteItem.looter, remoteItem.guid, true, true)
                 localItem = session:GetItemByGUID(remoteItem.guid)
             end
             if localItem and remoteItem.state then

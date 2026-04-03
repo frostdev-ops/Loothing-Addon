@@ -1391,7 +1391,7 @@ function SessionMixin:RetractAllVotes(itemGUID)
                     }, nil, "NORMAL")
                 end
             end
-            Loothing.Comm:FlushAll()
+            -- Let 100ms batch window coalesce with other vote updates
         end
     end
 
@@ -1492,7 +1492,7 @@ function SessionMixin:SubmitVote(itemGUID, responses)
                     end
                 end
             end
-            Loothing.Comm:FlushAll()
+            -- Let 100ms batch window coalesce with other vote updates
         end
     end
 
@@ -2089,7 +2089,7 @@ function SessionMixin:HandleRemoteItemAdd(data)
     end
 
     -- Use AddItem with forced flag to bypass checks and register callbacks properly
-    self:AddItem(data.itemLink, data.looter, data.guid, true)
+    self:AddItem(data.itemLink, data.looter, data.guid, true, true)
 end
 
 function SessionMixin:HandleRemoteItemRemove(data)
@@ -2231,7 +2231,7 @@ function SessionMixin:HandleRemoteVoteCommit(data)
                         end
                     end
                 end
-                Loothing.Comm:FlushAll()
+                -- Let 100ms batch window coalesce with other vote updates
             end
         end
 
@@ -2322,7 +2322,7 @@ function SessionMixin:HandleRemoteVoteCommit(data)
                     end
                 end
             end
-            Loothing.Comm:FlushAll()
+            -- Let 100ms batch window coalesce with other vote updates
         end
     else
         -- Non-ML council: local vote applied, update all candidate voter arrays
@@ -3007,8 +3007,8 @@ function SessionMixin:SyncFromData(data)
         self.items:Flush()
 
         for _, itemData in ipairs(data.items) do
-            -- Use AddItem with force=true to bypass checks
-            local item = self:AddItem(itemData.itemLink, itemData.looter, itemData.guid, true)
+            -- Use AddItem with force=true, skipBroadcast=true to bypass checks
+            local item = self:AddItem(itemData.itemLink, itemData.looter, itemData.guid, true, true)
             if item then
                 if itemData.state then
                     item:SetState(itemData.state)

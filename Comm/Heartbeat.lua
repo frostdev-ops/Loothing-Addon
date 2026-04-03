@@ -249,12 +249,43 @@ function HeartbeatMixin:HandleHeartbeat(digest, sender)
             needsSync = true
             mismatchType = "items"
         else
+            -- Deep-check item states (detect VOTING→AWARDED etc. when count matches)
+            if not needsSync and digest.itemStates and session.items then
+                -- Forward check: local items whose state diverges from ML
+                for _, item in session.items:Enumerate() do
+                    local remoteState = digest.itemStates[item.guid]
+                    if remoteState and remoteState ~= item:GetState() then
+                        Loothing:Debug("Heartbeat: item state mismatch for", item.guid, "-- incremental sync (itemStates)")
+                        needsSync = true
+                        mismatchType = "itemStates"
+                        break
+                    end
+                end
+                -- Reverse check: items ML has that we don't (count-preserving swap)
+                if not needsSync then
+                    local localGUIDs = {}
+                    for _, item in session.items:Enumerate() do
+                        localGUIDs[item.guid] = true
+                    end
+                    for guid in pairs(digest.itemStates) do
+                        if not localGUIDs[guid] then
+                            Loothing:Debug("Heartbeat: ML has item", guid, "not present locally -- incremental sync (itemStates)")
+                            needsSync = true
+                            mismatchType = "itemStates"
+                            break
+                        end
+                    end
+                end
+            end
+
             -- Deep-check council hash
-            local localCouncilHash = self:ComputeCouncilHash()
-            if localCouncilHash ~= digest.councilHash then
-                Loothing:Debug("Heartbeat: council hash mismatch -- incremental sync (council)")
-                needsSync = true
-                mismatchType = "council"
+            if not needsSync then
+                local localCouncilHash = self:ComputeCouncilHash()
+                if localCouncilHash ~= digest.councilHash then
+                    Loothing:Debug("Heartbeat: council hash mismatch -- incremental sync (council)")
+                    needsSync = true
+                    mismatchType = "council"
+                end
             end
 
             -- Deep-check MLDB hash

@@ -219,6 +219,18 @@ local function InitializeModules()
         Loothing.Wishlist:Init()
     end
 
+    -- Initialize roster data (desktop exchange)
+    if ns.RosterMixin then
+        Loothing.Roster = CreateFromMixins(ns.RosterMixin)
+        Loothing.Roster:Init()
+    end
+
+    -- Initialize player intel data (desktop exchange)
+    if ns.PlayerIntelMixin then
+        Loothing.PlayerIntel = CreateFromMixins(ns.PlayerIntelMixin)
+        Loothing.PlayerIntel:Init()
+    end
+
     -- Initialize player cache (GUID-based player data)
     if ns.CreatePlayerCache then
         Loothing.PlayerCache = ns.CreatePlayerCache()
@@ -348,7 +360,12 @@ local function InitializeModules()
 
     -- Initialize DiagPanel
     if ns.CreateDiagPanel then
-        Loothing.DiagPanel = ns.CreateDiagPanel()
+        local success, result = pcall(ns.CreateDiagPanel)
+        if success and result then
+            Loothing.DiagPanel = result
+        else
+            Loothing:Error("Failed to create DiagPanel:", result or "unknown error")
+        end
     end
 
     -- Initialize UI namespace with all panels
@@ -1106,6 +1123,13 @@ local function RegisterEvents()
             if not Loothing.MLDB:IsML() then
                 Loothing.MLDB:Clear()
             end
+        end, Loothing)
+    end
+
+    -- Cancel pending sync coalesce timers when session ends
+    if Loothing.Session and Loothing.Sync then
+        Loothing.Session:RegisterCallback("OnSessionEnded", function()
+            Loothing.Sync:CancelPendingBroadcasts()
         end, Loothing)
     end
 

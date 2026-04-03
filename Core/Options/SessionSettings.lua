@@ -74,7 +74,10 @@ local function GetSessionSettingsOptions()
                             [Loothing.VotingMode.RANKED_CHOICE] = L["RANKED_VOTING"],
                         },
                         get = function() return Loothing.Settings:GetVotingMode() end,
-                        set = function(_, v) Loothing.Settings:SetVotingMode(v) end,
+                        set = function(_, v)
+                            Loothing.Settings:SetVotingMode(v)
+                            BroadcastMLDBIfNeeded()
+                        end,
                     },
                     votingTimeoutEnabled = {
                         type = "toggle",
@@ -90,6 +93,7 @@ local function GetSessionSettingsOptions()
                             else
                                 Loothing.Settings:SetVotingTimeout(Loothing.Timing.NO_TIMEOUT)
                             end
+                            BroadcastMLDBIfNeeded()
                         end,
                     },
                     votingTimeout = {
@@ -104,7 +108,10 @@ local function GetSessionSettingsOptions()
                             return Loothing.Settings:GetVotingTimeout() == Loothing.Timing.NO_TIMEOUT
                         end,
                         get = function() return Loothing.Settings:GetVotingTimeout() end,
-                        set = function(_, v) Loothing.Settings:SetVotingTimeout(v) end,
+                        set = function(_, v)
+                            Loothing.Settings:SetVotingTimeout(v)
+                            BroadcastMLDBIfNeeded()
+                        end,
                     },
                     -- Session Trigger Policy (split model)
                     triggerHeader = {
@@ -124,7 +131,10 @@ local function GetSessionSettingsOptions()
                         },
                         sorting = { "manual", "prompt", "auto" },
                         get = function() return Loothing.Settings:GetSessionTriggerAction() end,
-                        set = function(_, v) Loothing.Settings:SetSessionTriggerAction(v) end,
+                        set = function(_, v)
+                            Loothing.Settings:SetSessionTriggerAction(v)
+                            BroadcastMLDBIfNeeded()
+                        end,
                     },
                     sessionTriggerTiming = {
                         type = "select",
@@ -137,7 +147,10 @@ local function GetSessionSettingsOptions()
                         },
                         sorting = { "encounterEnd", "afterLoot" },
                         get = function() return Loothing.Settings:GetSessionTriggerTiming() end,
-                        set = function(_, v) Loothing.Settings:SetSessionTriggerTiming(v) end,
+                        set = function(_, v)
+                            Loothing.Settings:SetSessionTriggerTiming(v)
+                            BroadcastMLDBIfNeeded()
+                        end,
                     },
                     sessionTriggerRaid = {
                         type = "toggle",
@@ -146,7 +159,10 @@ local function GetSessionSettingsOptions()
                         order = 7,
                         width = "half",
                         get = function() return Loothing.Settings:GetSessionTriggerRaid() end,
-                        set = function(_, v) Loothing.Settings:SetSessionTriggerRaid(v) end,
+                        set = function(_, v)
+                            Loothing.Settings:SetSessionTriggerRaid(v)
+                            BroadcastMLDBIfNeeded()
+                        end,
                     },
                     sessionTriggerDungeon = {
                         type = "toggle",
@@ -155,7 +171,10 @@ local function GetSessionSettingsOptions()
                         order = 8,
                         width = "half",
                         get = function() return Loothing.Settings:GetSessionTriggerDungeon() end,
-                        set = function(_, v) Loothing.Settings:SetSessionTriggerDungeon(v) end,
+                        set = function(_, v)
+                            Loothing.Settings:SetSessionTriggerDungeon(v)
+                            BroadcastMLDBIfNeeded()
+                        end,
                     },
                     sessionTriggerOpenWorld = {
                         type = "toggle",
@@ -164,7 +183,10 @@ local function GetSessionSettingsOptions()
                         order = 9,
                         width = "half",
                         get = function() return Loothing.Settings:GetSessionTriggerOpenWorld() end,
-                        set = function(_, v) Loothing.Settings:SetSessionTriggerOpenWorld(v) end,
+                        set = function(_, v)
+                            Loothing.Settings:SetSessionTriggerOpenWorld(v)
+                            BroadcastMLDBIfNeeded()
+                        end,
                     },
                     triggerScopeNote = {
                         type = "description",
@@ -209,7 +231,10 @@ local function GetSessionSettingsOptions()
                         order = 11,
                         width = "half",
                         get = function() return Loothing.Settings:GetSelfVote() end,
-                        set = function(_, v) Loothing.Settings:SetSelfVote(v) end,
+                        set = function(_, v)
+                            Loothing.Settings:SetSelfVote(v)
+                            BroadcastMLDBIfNeeded()
+                        end,
                     },
                     multiVote = {
                         type = "toggle",
@@ -218,7 +243,10 @@ local function GetSessionSettingsOptions()
                         order = 12,
                         width = "half",
                         get = function() return Loothing.Settings:GetMultiVote() end,
-                        set = function(_, v) Loothing.Settings:SetMultiVote(v) end,
+                        set = function(_, v)
+                            Loothing.Settings:SetMultiVote(v)
+                            BroadcastMLDBIfNeeded()
+                        end,
                     },
                     anonymousVoting = {
                         type = "toggle",
@@ -227,7 +255,10 @@ local function GetSessionSettingsOptions()
                         order = 13,
                         width = "half",
                         get = function() return Loothing.Settings:GetAnonymousVoting() end,
-                        set = function(_, v) Loothing.Settings:SetAnonymousVoting(v) end,
+                        set = function(_, v)
+                            Loothing.Settings:SetAnonymousVoting(v)
+                            BroadcastMLDBIfNeeded()
+                        end,
                     },
                     hideVotes = {
                         type = "toggle",
@@ -236,7 +267,10 @@ local function GetSessionSettingsOptions()
                         order = 14,
                         width = "half",
                         get = function() return Loothing.Settings:GetHideVotes() end,
-                        set = function(_, v) Loothing.Settings:SetHideVotes(v) end,
+                        set = function(_, v)
+                            Loothing.Settings:SetHideVotes(v)
+                            BroadcastMLDBIfNeeded()
+                        end,
                     },
                     mlIsObserver = {
                         type = "toggle",
@@ -269,7 +303,10 @@ local function GetSessionSettingsOptions()
                         order = 17,
                         width = "half",
                         get = function() return Loothing.Settings:GetAutoAddRolls() end,
-                        set = function(_, v) Loothing.Settings:SetAutoAddRolls(v) end,
+                        set = function(_, v)
+                            Loothing.Settings:SetAutoAddRolls(v)
+                            BroadcastMLDBIfNeeded()
+                        end,
                     },
                     requireNotes = {
                         type = "toggle",
@@ -278,7 +315,10 @@ local function GetSessionSettingsOptions()
                         order = 18,
                         width = "half",
                         get = function() return Loothing.Settings:GetRequireNotes() end,
-                        set = function(_, v) Loothing.Settings:SetRequireNotes(v) end,
+                        set = function(_, v)
+                            Loothing.Settings:SetRequireNotes(v)
+                            BroadcastMLDBIfNeeded()
+                        end,
                     },
                     mlSeesVotes = {
                         type = "toggle",
@@ -287,7 +327,10 @@ local function GetSessionSettingsOptions()
                         order = 19,
                         width = "half",
                         get = function() return Loothing.Settings:GetMlSeesVotes() end,
-                        set = function(_, v) Loothing.Settings:SetMlSeesVotes(v) end,
+                        set = function(_, v)
+                            Loothing.Settings:SetMlSeesVotes(v)
+                            BroadcastMLDBIfNeeded()
+                        end,
                     },
                     autoPassSilent = {
                         type = "toggle",
@@ -321,7 +364,10 @@ local function GetSessionSettingsOptions()
                             return Loothing.Settings:GetVotingMode() ~= Loothing.VotingMode.RANKED_CHOICE
                         end,
                         get = function() return Loothing.Settings:GetMaxRanks() end,
-                        set = function(_, v) Loothing.Settings:SetMaxRanks(v) end,
+                        set = function(_, v)
+                            Loothing.Settings:SetMaxRanks(v)
+                            BroadcastMLDBIfNeeded()
+                        end,
                     },
                     minRanks = {
                         type = "range",
@@ -335,7 +381,10 @@ local function GetSessionSettingsOptions()
                             return Loothing.Settings:GetVotingMode() ~= Loothing.VotingMode.RANKED_CHOICE
                         end,
                         get = function() return Loothing.Settings:GetMinRanks() end,
-                        set = function(_, v) Loothing.Settings:SetMinRanks(v) end,
+                        set = function(_, v)
+                            Loothing.Settings:SetMinRanks(v)
+                            BroadcastMLDBIfNeeded()
+                        end,
                     },
                 },
             },
@@ -387,7 +436,10 @@ local function GetSessionSettingsOptions()
                             AUTO_HIGHEST_CONFIRM = L["WINNER_MODE_AUTO_CONFIRM"],
                         },
                         get = function() return Loothing.Settings:Get("winnerDetermination.mode", "ML_CONFIRM") end,
-                        set = function(_, v) Loothing.Settings:Set("winnerDetermination.mode", v) end,
+                        set = function(_, v)
+                            Loothing.Settings:Set("winnerDetermination.mode", v)
+                            BroadcastMLDBIfNeeded()
+                        end,
                     },
                     tieBreaker = {
                         type = "select",
@@ -400,7 +452,10 @@ local function GetSessionSettingsOptions()
                             REVOTE = L["WINNER_TIE_REVOTE"],
                         },
                         get = function() return Loothing.Settings:GetTieBreakerMode() end,
-                        set = function(_, v) Loothing.Settings:Set("winnerDetermination.tieBreaker", v) end,
+                        set = function(_, v)
+                            Loothing.Settings:Set("winnerDetermination.tieBreaker", v)
+                            BroadcastMLDBIfNeeded()
+                        end,
                     },
                     autoAwardOnUnanimous = {
                         type = "toggle",
@@ -408,7 +463,10 @@ local function GetSessionSettingsOptions()
                         desc = L["WINNER_AUTO_AWARD_UNANIMOUS_DESC"],
                         order = 3,
                         get = function() return Loothing.Settings:GetAutoAwardOnUnanimous() end,
-                        set = function(_, v) Loothing.Settings:Set("winnerDetermination.autoAwardOnUnanimous", v) end,
+                        set = function(_, v)
+                            Loothing.Settings:Set("winnerDetermination.autoAwardOnUnanimous", v)
+                            BroadcastMLDBIfNeeded()
+                        end,
                     },
                     requireConfirmation = {
                         type = "toggle",
@@ -416,7 +474,10 @@ local function GetSessionSettingsOptions()
                         desc = L["WINNER_REQUIRE_CONFIRMATION_DESC"],
                         order = 4,
                         get = function() return Loothing.Settings:GetRequireConfirmation() end,
-                        set = function(_, v) Loothing.Settings:Set("winnerDetermination.requireConfirmation", v) end,
+                        set = function(_, v)
+                            Loothing.Settings:Set("winnerDetermination.requireConfirmation", v)
+                            BroadcastMLDBIfNeeded()
+                        end,
                     },
                     maxRevotes = {
                         type = "range",
@@ -427,7 +488,10 @@ local function GetSessionSettingsOptions()
                         max = 10,
                         step = 1,
                         get = function() return Loothing.Settings:GetMaxRevotes() end,
-                        set = function(_, v) Loothing.Settings:SetMaxRevotes(v) end,
+                        set = function(_, v)
+                            Loothing.Settings:SetMaxRevotes(v)
+                            BroadcastMLDBIfNeeded()
+                        end,
                     },
                 },
             },

@@ -68,11 +68,14 @@ local ITEM_STATE_COLORS = {
 
 local REFRESH_INTERVAL = 1.0
 
+-- Encode/decode test is cached once per session (avoids inflating Protocol msgSeq)
+local encodeTestResult = nil
+
 --[[--------------------------------------------------------------------
     DiagPanelMixin
 ----------------------------------------------------------------------]]
 
-local DiagPanelMixin = {}
+local DiagPanelMixin = ns.DiagPanelMixin or {}
 ns.DiagPanelMixin = DiagPanelMixin
 
 function DiagPanelMixin:Init()
@@ -194,6 +197,11 @@ function DiagPanelMixin:BuildCopyDialog()
     dialog:SetScript("OnDragStop", dialog.StopMovingOrSizing)
     dialog:Hide()
 
+    local editBoxRef
+    dialog:SetScript("OnHide", function()
+        if editBoxRef then editBoxRef:SetText("") end
+    end)
+
     SkinningMixin:ApplySkin(dialog)
 
     local title = dialog:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -221,6 +229,7 @@ function DiagPanelMixin:BuildCopyDialog()
 
     scrollFrame:SetScrollChild(editBox)
 
+    editBoxRef = editBox
     self.copyDialog = dialog
     self.copyEditBox = editBox
 end
@@ -438,9 +447,9 @@ function DiagPanelMixin:Refresh()
     local sessionState = session and session:GetState() or nil
     local stateName = sessionState and SESSION_STATE_NAMES[sessionState] or "N/A"
     local stateColor = COLOR_DIM
-    if sessionState == 2 then
+    if sessionState == Loothing.SessionState.ACTIVE then
         stateColor = COLOR_OK
-    elseif sessionState == 3 then
+    elseif sessionState == Loothing.SessionState.CLOSED then
         stateColor = COLOR_WARN
     end
     SetText(v.sessionState, stateName, stateColor)
@@ -452,8 +461,7 @@ function DiagPanelMixin:Refresh()
     SetText(v.encounter, encounterName or "none", encounterName and COLOR_VALUE or COLOR_DIM)
 
     -- Item count summary
-    local hasSession = session and session.IsActive and session:IsActive()
-    if hasSession or (sessionState and sessionState ~= 1) then
+    if sessionState and sessionState ~= Loothing.SessionState.INACTIVE then
         local itemCount = session:GetItemCount()
         local counts = { 0, 0, 0, 0, 0 } -- pending, voting, tallied, awarded, skipped
         for _, item in session:GetItems():Enumerate() do
@@ -522,17 +530,22 @@ function DiagPanelMixin:Refresh()
         SetText(v.restricted, "No", COLOR_OK)
     end
 
-    -- Encode/decode test
-    local testOK = false
-    local testCmd = Loothing.MsgType and Loothing.MsgType.HEARTBEAT or "HEARTBEAT"
-    if ns.Protocol then
-        local encoded = ns.Protocol:Encode(testCmd, { test = true })
-        if encoded then
-            local pv, cmd = ns.Protocol:Decode(encoded)
-            testOK = (pv == Loothing.PROTOCOL_VERSION and cmd == testCmd)
+    -- Encode/decode test (cached once to avoid inflating Protocol msgSeq)
+    if encodeTestResult == nil then
+        local testCmd = Loothing.MsgType and Loothing.MsgType.HEARTBEAT or "HEARTBEAT"
+        if ns.Protocol then
+            local encoded = ns.Protocol:Encode(testCmd, { test = true })
+            if encoded then
+                local pv, cmd = ns.Protocol:Decode(encoded)
+                encodeTestResult = (pv == Loothing.PROTOCOL_VERSION and cmd == testCmd)
+            else
+                encodeTestResult = false
+            end
+        else
+            encodeTestResult = false
         end
     end
-    if testOK then
+    if encodeTestResult then
         SetText(v.encodeTest, "OK", COLOR_OK)
     else
         SetText(v.encodeTest, "FAILED", COLOR_BAD)
@@ -588,7 +601,7 @@ end
 function DiagPanelMixin:RefreshSessionItems()
     local session = Loothing.Session
     local sessionState = session and session:GetState() or nil
-    local hasItems = sessionState and sessionState ~= 1 and session:GetItemCount() > 0
+    local hasItems = sessionState and sessionState ~= Loothing.SessionState.INACTIVE and session:GetItemCount() > 0
 
     if not hasItems then
         -- Hide entire section
@@ -638,15 +651,17 @@ function DiagPanelMixin:RefreshSessionItems()
         -- Line 2: candidates + winner or count
         local detailText
         local cm = item.candidateManager
+        local respCounts = cm and cm:GetResponseCounts() or nil
         if item.winner then
             local winResp = item.winnerResponse and GetResponseName(item.winnerResponse) or "?"
             detailText = format("Winner: %s (%s)", item.winner, winResp)
         elseif cm then
             local candCount = cm:GetCandidateCount()
-            local respCounts = cm:GetResponseCounts()
             local responded = 0
-            for _, count in pairs(respCounts) do
-                responded = responded + count
+            if respCounts then
+                for _, count in pairs(respCounts) do
+                    responded = responded + count
+                end
             end
             detailText = format("%d candidates, %d responded", candCount, responded)
         else
@@ -661,13 +676,14 @@ function DiagPanelMixin:RefreshSessionItems()
         slot.detailFS:Show()
         y = y - LINE_HEIGHT
 
-        -- Line 3: response breakdown (separate line)
+        -- Line 3: response breakdown (separate line, reuse respCounts)
         local respText = ""
-        if cm and not item.winner then
-            local respCounts = cm:GetResponseCounts()
+        if respCounts and not item.winner then
             local respParts = {}
             for resp, count in pairs(respCounts) do
-                tinsert(respParts, GetResponseName(resp) .. ":" .. count)
+                if count > 0 then
+                    tinsert(respParts, GetResponseName(resp) .. ":" .. count)
+                end
             end
             if #respParts > 0 then
                 respText = tconcat(respParts, "  ")
@@ -740,7 +756,7 @@ function DiagPanelMixin:BuildClipboardText()
     local encName = session and session.GetEncounterName and session:GetEncounterName() or "none"
     local encID = session and session.GetEncounterID and session:GetEncounterID() or "none"
     L(format("  Encounter: %s (ID: %s)", tostring(encName), tostring(encID)))
-    if session and sessionState and sessionState ~= 1 then
+    if session and sessionState and sessionState ~= Loothing.SessionState.INACTIVE then
         L(format("  Item Count: %d", session:GetItemCount()))
     end
     Sep()
@@ -759,16 +775,7 @@ function DiagPanelMixin:BuildClipboardText()
     local restricted = Loothing.Restrictions and Loothing.Restrictions.IsRestricted and Loothing.Restrictions:IsRestricted() or false
     L(format("  Enc. Restricted: %s", tostring(restricted)))
 
-    local testOK = false
-    local testCmd = Loothing.MsgType and Loothing.MsgType.HEARTBEAT or "HEARTBEAT"
-    if ns.Protocol then
-        local encoded = ns.Protocol:Encode(testCmd, { test = true })
-        if encoded then
-            local pv, cmd = ns.Protocol:Decode(encoded)
-            testOK = (pv == Loothing.PROTOCOL_VERSION and cmd == testCmd)
-        end
-    end
-    L(format("  Encode/Decode: %s", testOK and "OK" or "FAILED"))
+    L(format("  Encode/Decode: %s", encodeTestResult and "OK" or "FAILED"))
     Sep()
 
     -- Group
@@ -804,7 +811,7 @@ function DiagPanelMixin:BuildClipboardText()
     Sep()
 
     -- Session Items (detailed)
-    if session and sessionState and sessionState ~= 1 and session:GetItemCount() > 0 then
+    if session and sessionState and sessionState ~= Loothing.SessionState.INACTIVE and session:GetItemCount() > 0 then
         L("[Session Items]")
         local itemIndex = 0
         for _, item in session:GetItems():Enumerate() do

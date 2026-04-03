@@ -36,7 +36,7 @@ local ITEM_TAB_ICON_SIZE = 36
 local ITEM_TAB_BAR_HEIGHT = 52
 local SCROLL_ARROW_WIDTH = 16
 local SCROLL_STEP = 124  -- ITEM_TAB_WIDTH + ITEM_TAB_SPACING
-local MORE_INFO_HEIGHT = 150
+local MORE_INFO_HEIGHT = 340
 
 -- Throttle refresh to avoid spam during bulk candidate updates
 local REFRESH_THROTTLE = 0.15
@@ -700,7 +700,7 @@ function CouncilTableMixin:CreateMoreInfoPanel()
     -- Vote breakdown text (below note)
     local voteBreakdown = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     voteBreakdown:SetPoint("BOTTOMLEFT", 8, 6)
-    voteBreakdown:SetPoint("BOTTOMRIGHT", -8, 6)
+    voteBreakdown:SetPoint("RIGHT", panel, "RIGHT", -140, 0)
     voteBreakdown:SetJustifyH("LEFT")
     voteBreakdown:SetTextColor(0.6, 0.8, 0.6)
     self.moreInfoVoteBreakdown = voteBreakdown
@@ -720,6 +720,73 @@ function CouncilTableMixin:CreateMoreInfoPanel()
     sourceInfo:SetJustifyH("LEFT")
     sourceInfo:SetTextColor(0.6, 0.6, 0.6)
     self.moreInfoSource = sourceInfo
+
+    -- ===== Player Intel Section (from desktop sync) =====
+
+    -- Separator line
+    local intelSep = panel:CreateTexture(nil, "ARTWORK")
+    intelSep:SetPoint("TOPLEFT", sourceInfo, "BOTTOMLEFT", 0, -6)
+    intelSep:SetPoint("RIGHT", -8, 0)
+    intelSep:SetHeight(1)
+    intelSep:SetColorTexture(0.3, 0.3, 0.3, 0.6)
+    self.moreInfoIntelSep = intelSep
+
+    -- M+ Activity
+    local mpInfo = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    mpInfo:SetPoint("TOPLEFT", intelSep, "BOTTOMLEFT", 0, -4)
+    mpInfo:SetPoint("RIGHT", -8, 0)
+    mpInfo:SetJustifyH("LEFT")
+    mpInfo:SetTextColor(0.4, 0.8, 1.0)
+    self.moreInfoMythicPlus = mpInfo
+
+    -- Parse Performance
+    local parseInfo = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    parseInfo:SetPoint("TOPLEFT", mpInfo, "BOTTOMLEFT", 0, -2)
+    parseInfo:SetPoint("RIGHT", -8, 0)
+    parseInfo:SetJustifyH("LEFT")
+    parseInfo:SetTextColor(1.0, 0.8, 0.4)
+    self.moreInfoParses = parseInfo
+
+    -- Attendance
+    local attendInfo = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    attendInfo:SetPoint("TOPLEFT", parseInfo, "BOTTOMLEFT", 0, -2)
+    attendInfo:SetPoint("RIGHT", -8, 0)
+    attendInfo:SetJustifyH("LEFT")
+    attendInfo:SetTextColor(0.7, 0.7, 0.7)
+    self.moreInfoAttendance = attendInfo
+
+    -- Gear Readiness (tier set, enchants, gems, vault, raid prog)
+    local gearReady = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    gearReady:SetPoint("TOPLEFT", attendInfo, "BOTTOMLEFT", 0, -2)
+    gearReady:SetPoint("RIGHT", -8, 0)
+    gearReady:SetJustifyH("LEFT")
+    gearReady:SetTextColor(0.7, 0.8, 0.7)
+    self.moreInfoGearReady = gearReady
+
+    -- Recent Loot History
+    local lootHistory = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    lootHistory:SetPoint("TOPLEFT", gearReady, "BOTTOMLEFT", 0, -4)
+    lootHistory:SetPoint("RIGHT", -8, 0)
+    lootHistory:SetJustifyH("LEFT")
+    lootHistory:SetWordWrap(true)
+    lootHistory:SetTextColor(0.8, 0.8, 0.8)
+    self.moreInfoLootHistory = lootHistory
+
+    -- Alt Loot Summary
+    local altLoot = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    altLoot:SetPoint("TOPLEFT", lootHistory, "BOTTOMLEFT", 0, -2)
+    altLoot:SetPoint("RIGHT", -8, 0)
+    altLoot:SetJustifyH("LEFT")
+    altLoot:SetWordWrap(true)
+    altLoot:SetTextColor(0.7, 0.7, 0.9)
+    self.moreInfoAltLoot = altLoot
+
+    -- Staleness indicator (bottom-right of panel)
+    local staleness = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    staleness:SetPoint("BOTTOMRIGHT", -8, 6)
+    staleness:SetJustifyH("RIGHT")
+    staleness:SetTextColor(0.5, 0.5, 0.5)
+    self.moreInfoStaleness = staleness
 
     self.moreInfoPanel = panel
 
