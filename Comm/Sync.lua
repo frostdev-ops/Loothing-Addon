@@ -967,6 +967,9 @@ end
 function SyncMixin:HandleIncrementalSyncData(data)
     if not data or not data.type then return end
 
+    -- ML ignores its own broadcasts (it's the authoritative source)
+    if Loothing.Session and Loothing.Session:IsMasterLooter() then return end
+
     local mismatchType = data.type
     Loothing:Debug("Sync: applying incremental data (type:", mismatchType, ")")
 
