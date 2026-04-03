@@ -86,6 +86,10 @@ function SessionMixin:Init()
     self.receivedLootCount = 0
     self.lootBuffer = {}  -- Pre-session loot buffer (items arrive before session starts)
 
+    -- Post-encounter bag scanner (RCLC-style distributed item collection)
+    self.bagScanTimer = nil
+    self.reportedTradeableItems = {}  -- { [itemID.."-"..looter] = true } dedup
+
     -- Legacy aliases (kept for any external reads)
     self.lastEncounterID = nil
     self.lastEncounterName = nil
@@ -248,38 +252,115 @@ function SessionMixin:RegisterCommEvents()
     end, self)
 end
 
---- Handle tradability status for a looted item
+--- Handle tradability status for a looted item.
+-- RCLC-style: when a raid member loots a tradeable item, they report it here.
+-- ML uses this to add items to the session (primary item collection path).
 -- @param data table - { itemLink, timeRemaining, playerName, guid, itemID }
 function SessionMixin:HandleTradable(data)
-    if not self:IsActive() then return end
     if not data or not data.itemLink then return end
 
-    -- Find the matching item: prefer GUID > itemID+looter > itemLink fallback
+    local itemLink = data.itemLink
+    local playerName = data.playerName
+    local isML = self:IsMasterLooter() or (Loothing.handleLoot and Loothing.isMasterLooter)
+
+    -- Try to match an existing item first (update tradability)
     local matched = nil
-    if data.guid then
-        matched = self:GetItemByGUID(data.guid)
-    end
-    if not matched and data.itemID then
-        for _, item in self.items:Enumerate() do
-            if item.itemID == data.itemID and data.playerName and item.looter == data.playerName then
-                matched = item
-                break
+    if self:IsActive() then
+        if data.guid then
+            matched = self:GetItemByGUID(data.guid)
+        end
+        if not matched and data.itemID then
+            for _, item in self.items:Enumerate() do
+                if item.itemID == data.itemID and playerName and item.looter == playerName then
+                    matched = item
+                    break
+                end
             end
         end
-    end
-    if not matched then
-        for _, item in self.items:Enumerate() do
-            if item.itemLink == data.itemLink and (not data.playerName or item.looter == data.playerName) then
-                matched = item
-                break
+        if not matched then
+            for _, item in self.items:Enumerate() do
+                if item.itemLink == itemLink and (not playerName or item.looter == playerName) then
+                    matched = item
+                    break
+                end
             end
         end
     end
 
     if matched then
+        -- Existing item: update tradability status
         matched.isTradable = true
         matched.tradeTimeRemaining = data.timeRemaining
         self:TriggerEvent("OnItemTradabilityChanged", matched)
+        return
+    end
+
+    -- No matching item — ML adds it to the session (distributed item collection)
+    if not isML then return end
+
+    -- Quality check
+    local quality = Utils.GetItemQuality(itemLink)
+    if not quality or quality < Loothing.MinQuality then return end
+
+    -- Filter check
+    if Loothing.ItemFilter and Loothing.ItemFilter:ShouldIgnoreItem(itemLink) then return end
+
+    if self:IsActive() then
+        -- Active session: add item and broadcast
+        Loothing:Debug("HandleTradable: adding item from", playerName, ":", itemLink)
+        local item = self:AddItem(itemLink, playerName, nil, nil, true)
+        if item then
+            item.isTradable = true
+            item.tradeTimeRemaining = data.timeRemaining
+            if Loothing.Comm then
+                Loothing.Comm:QueueForBatch(Loothing.MsgType.ITEM_ADD, {
+                    itemLink  = itemLink,
+                    guid      = item.guid,
+                    looter    = playerName,
+                    sessionID = self.sessionID,
+                }, nil, "NORMAL")
+                -- Debounced flush (coalesces rapid item arrivals)
+                if self.lootBatchTimer then
+                    self.lootBatchTimer:Cancel()
+                end
+                self.lootBatchTimer = C_Timer.NewTimer(0.5, function()
+                    self.lootBatchTimer = nil
+                    if Loothing.Comm then
+                        Loothing.Comm:FlushAll()
+                    end
+                end)
+            end
+        end
+    elseif Loothing.handleLoot then
+        -- No active session: buffer item and trigger session start
+        Loothing:Debug("HandleTradable: buffering item from", playerName, ":", itemLink)
+        table.insert(self.lootBuffer, {
+            itemLink = itemLink,
+            playerName = playerName,
+            encounterID = self.lastEncounterID,
+            timestamp = time(),
+        })
+        -- Trigger session start via debounce (same as afterLoot path)
+        self.receivedLootCount = (self.receivedLootCount or 0) + 1
+        if self.pendingLootTimer then
+            self.pendingLootTimer:Cancel()
+        end
+        local debounceDelay = Loothing.Timing and Loothing.Timing.LOOT_DEBOUNCE_DELAY or 2.5
+        self.pendingLootTimer = C_Timer.NewTimer(debounceDelay, function()
+            if self.receivedLootCount > 0
+               and self.state == Loothing.SessionState.INACTIVE
+               and Loothing.handleLoot then
+                local enc = self.lastEligibleEncounter
+                if enc then
+                    self:ApplyTriggerAction(enc.id, enc.name)
+                else
+                    -- No cached encounter — auto-start with generic name
+                    self:ApplyTriggerAction(self.lastEncounterID or 0, self.lastEncounterName or "Loot")
+                end
+            end
+            self.receivedLootCount = 0
+            self.pendingLootTimer = nil
+        end)
     end
 end
 
@@ -470,6 +551,9 @@ function SessionMixin:EndSession()
             Loothing.Comm:FlushAll()
         end
     end
+
+    -- Stop post-encounter bag scanner
+    self:StopPostEncounterBagScan()
 
     -- Clear trigger state
     self.receivedLootCount = 0
@@ -1808,55 +1892,135 @@ function SessionMixin:OnEncounterEnd(encounterID, encounterName, _difficultyID, 
         "success:", success, "handleLoot:", tostring(Loothing.handleLoot),
         "state:", tostring(self.state), "isML:", tostring(Loothing.isMasterLooter))
 
-    -- Gate 1: must be a kill
-    if success ~= 1 then
-        Loothing:Debug("OnEncounterEnd: gate 1 fail — not a kill (success=", success, ")")
-        return
-    end
+    -- Must be a kill and in a group
+    if success ~= 1 then return end
+    if not IsInGroup() and not IsTestModeEnabled() then return end
 
-    -- Gate 2: must be in group (or test mode)
-    if not IsInGroup() and not IsTestModeEnabled() then
-        Loothing:Debug("OnEncounterEnd: gate 2 fail — not in group")
-        return
-    end
+    -- Cache encounter info (used by bag scanner and session start)
+    self.lastEligibleEncounter = { id = encounterID, name = encounterName }
+    self.lastEncounterID = encounterID
+    self.lastEncounterName = encounterName
 
-    -- Gate 3: must be handling loot (or test mode)
+    -- Distributed item collection: ALL clients scan bags for tradeable items
+    -- after a boss kill and report them to the ML via TRADABLE comm.  This is
+    -- the primary item detection path and does not depend on
+    -- ENCOUNTER_LOOT_RECEIVED (which is unreliable with group loot in 12.0).
+    self:StartPostEncounterBagScan()
+
+    -- Session auto-start gates (ML-only)
     if not Loothing.handleLoot and not IsTestModeEnabled() then
-        Loothing:Debug("OnEncounterEnd: gate 3 fail — handleLoot is false")
+        Loothing:Debug("OnEncounterEnd: skipping session trigger — handleLoot is false")
         return
     end
 
-    -- Gate 4: no active session
     if self.state ~= Loothing.SessionState.INACTIVE then
-        Loothing:Debug("OnEncounterEnd: gate 4 fail — session already active:", encounterName)
+        Loothing:Debug("OnEncounterEnd: skipping session trigger — session already active")
         return
     end
 
-    -- Gate 5: encounter scope must be enabled (test mode bypasses)
     if not IsTestModeEnabled() then
         local scope = self:ClassifyEncounterScope()
         if not scope or not self:IsScopeEnabled(scope) then
-            Loothing:Debug("OnEncounterEnd: gate 5 fail — scope not enabled:", scope or "nil", encounterName)
+            Loothing:Debug("OnEncounterEnd: skipping session trigger — scope not enabled:", scope or "nil")
             return
         end
     end
 
-    Loothing:Debug("OnEncounterEnd: all gates passed for", encounterName)
-
-    -- Cache the eligible encounter for afterLoot / manual use
-    self.lastEligibleEncounter = { id = encounterID, name = encounterName }
-    -- Keep legacy aliases in sync
-    self.lastEncounterID = encounterID
-    self.lastEncounterName = encounterName
-
     local timing = Loothing.Settings:GetSessionTriggerTiming()
     local action = Loothing.Settings:GetSessionTriggerAction()
-    Loothing:Debug("OnEncounterEnd: timing=", timing, "action=", action)
+    Loothing:Debug("OnEncounterEnd: all gates passed, timing=", timing, "action=", action)
 
     if timing == "encounterEnd" then
         self:ApplyTriggerAction(encounterID, encounterName)
     end
-    -- "afterLoot": waits for OnLootReceived + debounce before applying action
+    -- "afterLoot": HandleTradable on ML will trigger session start when items arrive
+end
+
+--[[--------------------------------------------------------------------
+    Post-Encounter Bag Scanner (RCLC-style distributed item collection)
+
+    After ENCOUNTER_END with success, every player scans their bags for
+    items with trade time remaining > 0 (indicating recently looted items).
+    Found items are reported to the ML via TRADABLE comm.  The ML adds
+    them to the session (or buffers them for session start).
+
+    This replaces the unreliable ENCOUNTER_LOOT_RECEIVED dependency.
+----------------------------------------------------------------------]]
+
+--- Start periodic bag scanning after an encounter kill.
+-- Scans every 2s for up to 30s to catch items arriving in bags.
+function SessionMixin:StartPostEncounterBagScan()
+    self:StopPostEncounterBagScan()
+    wipe(self.reportedTradeableItems)
+
+    local scanCount = 0
+    local maxScans = 15  -- 15 scans × 2s = 30s window
+
+    Loothing:Debug("BagScan: starting post-encounter scan")
+
+    self.bagScanTimer = C_Timer.NewTicker(2, function()
+        scanCount = scanCount + 1
+        self:ScanBagsForTradeableItems()
+
+        if scanCount >= maxScans then
+            Loothing:Debug("BagScan: scan window expired")
+            self:StopPostEncounterBagScan()
+        end
+    end)
+
+    -- Also do an immediate scan
+    C_Timer.After(1, function()
+        self:ScanBagsForTradeableItems()
+    end)
+end
+
+--- Stop the post-encounter bag scanner.
+function SessionMixin:StopPostEncounterBagScan()
+    if self.bagScanTimer then
+        self.bagScanTimer:Cancel()
+        self.bagScanTimer = nil
+    end
+end
+
+--- Scan all bags for items with trade time remaining > 0.
+-- Reports new tradeable items to the group via TRADABLE comm.
+function SessionMixin:ScanBagsForTradeableItems()
+    if not IsInGroup() then return end
+    if not Loothing.Comm then return end
+
+    local TradeQueue = Loothing.TradeQueue
+    if not TradeQueue then return end
+
+    local playerName = Utils.GetPlayerFullName()
+
+    for bag = 0, _G.NUM_BAG_SLOTS do
+        local numSlots = C_Container.GetContainerNumSlots(bag)
+        for slot = 1, numSlots or 0 do
+            local itemLink = C_Container.GetContainerItemLink(bag, slot)
+            if itemLink then
+                local quality = Utils.GetItemQuality(itemLink)
+                if quality and quality >= Loothing.MinQuality then
+                    local timeRemaining = TradeQueue:GetContainerItemTradeTimeRemaining(bag, slot)
+                    if timeRemaining and timeRemaining > 0 and timeRemaining ~= math.huge then
+                        -- This item was recently looted and is tradeable
+                        local itemID = Utils.GetItemID(itemLink)
+                        local dedupKey = (itemID or "0") .. "-" .. bag .. "-" .. slot
+                        if not self.reportedTradeableItems[dedupKey] then
+                            self.reportedTradeableItems[dedupKey] = true
+                            Loothing:Debug("BagScan: found tradeable item:", itemLink, "from bag", bag, "slot", slot)
+                            -- Filter check
+                            if not (Loothing.ItemFilter and Loothing.ItemFilter:ShouldIgnoreItem(itemLink)) then
+                                Loothing.Comm:Send(Loothing.MsgType.TRADABLE, {
+                                    itemLink = itemLink,
+                                    timeRemaining = timeRemaining,
+                                })
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
 end
 
 --- Show session start confirmation dialog to ML
