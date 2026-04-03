@@ -17,9 +17,9 @@ CouncilTableMixin.COLUMNS = {
     { id = "priority",     name = "#",                              width = 30,  maxWidth = 36,  flex = 0, sortable = true,  settingsKey = "priority" },
     { id = "class",        name = "",                               width = 22,  maxWidth = 22,  flex = 0, sortable = true,  settingsKey = "class" },
     { id = "spec",         name = "",                               width = 24,  maxWidth = 24,  flex = 0, sortable = false, settingsKey = "spec" },
-    { id = "player",       name = L["COUNCIL_COLUMN_PLAYER"],       width = 100, maxWidth = 180, flex = 2, stretch = 4, sortable = true,  settingsKey = "player" },
+    { id = "player",       name = L["COUNCIL_COLUMN_PLAYER"],       width = 100, maxWidth = 140, flex = 1, sortable = true,  settingsKey = "player" },
     { id = "role",         name = L["COLUMN_ROLE"],                 width = 30,  maxWidth = 36,  flex = 0, sortable = true,  settingsKey = "role" },
-    { id = "response",     name = L["COUNCIL_COLUMN_RESPONSE"],     width = 120, maxWidth = 200, flex = 2, stretch = 4, sortable = true,  settingsKey = "response" },
+    { id = "response",     name = L["COUNCIL_COLUMN_RESPONSE"],     width = 110, maxWidth = 150, flex = 1, sortable = true,  settingsKey = "response" },
     { id = "ilvl",         name = L["COUNCIL_COLUMN_ILVL"],         width = 40,  maxWidth = 48,  flex = 0, sortable = true,  settingsKey = "ilvl" },
     { id = "ilvlDiff",     name = L["COUNCIL_COLUMN_ILVL_DIFF"],    width = 40,  maxWidth = 48,  flex = 0, sortable = true,  settingsKey = "ilvlDiff" },
     { id = "wonSession",   name = L["COLUMN_WON"],                  width = 32,  maxWidth = 40,  flex = 0, sortable = true,  settingsKey = "wonSession" },
@@ -30,7 +30,7 @@ CouncilTableMixin.COLUMNS = {
     { id = "gear2",        name = L["COUNCIL_COLUMN_GEAR2"],        width = 28,  maxWidth = 28,  flex = 0, sortable = false, settingsKey = "gear2" },
     { id = "roll",         name = L["COUNCIL_COLUMN_ROLL"],         width = 40,  maxWidth = 55,  flex = 1, sortable = true,  settingsKey = "roll" },
     { id = "note",         name = L["COUNCIL_COLUMN_NOTE"],         width = 24,  maxWidth = 28,  flex = 0, sortable = false, settingsKey = "note" },
-    { id = "vote",         name = L["COLUMN_VOTE"],                 width = 55,  maxWidth = 70,  flex = 1, stretch = 1, sortable = true,  settingsKey = "vote" },
+    { id = "vote",         name = L["COLUMN_VOTE"],                 width = 55,  maxWidth = 70,  flex = 1, sortable = true,  settingsKey = "vote" },
 }
 
 CouncilTableMixin.COLUMN_SORT_MAP = {
@@ -113,51 +113,10 @@ end
     Column Layout
 ----------------------------------------------------------------------]]
 
-local function DistributeRemainingWidth(widths, visible, extra, key)
-    if extra <= 0 then
-        return 0
-    end
-
-    local weighted = {}
-    local totalWeight = 0
-    for i, col in ipairs(visible) do
-        local weight = col[key] or 0
-        if weight > 0 then
-            weighted[#weighted + 1] = { index = i, weight = weight }
-            totalWeight = totalWeight + weight
-        end
-    end
-
-    if totalWeight == 0 then
-        return 0
-    end
-
-    local distributed = 0
-    for _, entry in ipairs(weighted) do
-        local bonus = math.floor(extra * entry.weight / totalWeight)
-        widths[entry.index] = widths[entry.index] + bonus
-        distributed = distributed + bonus
-    end
-
-    local remainder = extra - distributed
-    local cursor = 1
-    while remainder > 0 and #weighted > 0 do
-        local entry = weighted[cursor]
-        widths[entry.index] = widths[entry.index] + 1
-        remainder = remainder - 1
-        cursor = cursor + 1
-        if cursor > #weighted then
-            cursor = 1
-        end
-    end
-
-    return extra
-end
-
 --- Compute column widths that fill available space proportionally.
 -- Each column starts at its base width. Extra space is distributed to flex
--- columns up to their soft maxWidth, then any remaining space stretches the
--- most important columns so wide windows still use their available space.
+-- columns (flex > 0) up to their maxWidth. Any remaining space after all
+-- flex columns cap out is left unused.
 -- @param availableWidth number - Total width to fill
 -- @return table - Array of {col, computedWidth} matching visible column order
 function CouncilTableMixin:ComputeColumnWidths(availableWidth)
@@ -176,7 +135,8 @@ function CouncilTableMixin:ComputeColumnWidths(availableWidth)
 
     local extra = math.max(0, usable - totalBase)
 
-    -- Distribute extra space in passes (capped columns free space for others)
+    -- Distribute extra space to flex columns, respecting maxWidth caps.
+    -- Runs multiple passes so space freed by capped columns goes to uncapped ones.
     if extra > 0 then
         local capped = {}
         for _ = 1, 4 do
@@ -194,7 +154,7 @@ function CouncilTableMixin:ComputeColumnWidths(availableWidth)
                 if not capped[i] and (col.flex or 0) > 0 then
                     local bonus = math.floor(extra * col.flex / totalFlex)
                     local maxW = col.maxWidth or (col.width * 3)
-                    local target = col.width + bonus
+                    local target = widths[i] + bonus
                     if target > maxW then
                         target = maxW
                         capped[i] = true
@@ -207,15 +167,6 @@ function CouncilTableMixin:ComputeColumnWidths(availableWidth)
             extra = math.max(0, extra - distributed)
             if not newCap or extra < 1 then break end
         end
-    end
-
-    if extra > 0 then
-        local stretchDistributed = DistributeRemainingWidth(widths, visible, extra, "stretch")
-        extra = math.max(0, extra - stretchDistributed)
-    end
-
-    if extra > 0 then
-        DistributeRemainingWidth(widths, visible, extra, "flex")
     end
 
     local result = {}
@@ -389,7 +340,10 @@ end
 function CouncilTableMixin:DoCellUpdate(cell, col, candidate, row)
     local handler = self.CellUpdaters[col.id]
     if handler then
-        handler(self, cell, candidate, row)
+        local ok, err = pcall(handler, self, cell, candidate, row)
+        if not ok and Loothing.Debug then
+            Loothing.Debug:Log("CellUpdate error [" .. col.id .. "]: " .. tostring(err))
+        end
     end
 end
 
@@ -448,17 +402,16 @@ end
 -- Spec icon
 CouncilTableMixin.CellUpdaters.spec = function(_, cell, candidate)
     if not cell.icon then return end
+    cell.icon:Hide()
     local specID = candidate.specID
-    if specID then
-        local _, _, _, icon = C_SpecializationInfo.GetSpecializationInfoByID(specID)
+    if specID and GetSpecializationInfoForSpecID then
+        local _, _, _, icon = GetSpecializationInfoForSpecID(specID)
         if icon then
             cell.icon:SetTexture(icon)
             cell.icon:SetTexCoord(0, 1, 0, 1)
             cell.icon:Show()
-            return
         end
     end
-    cell.icon:Hide()
 end
 
 -- Response (color bar + text)
@@ -471,23 +424,20 @@ CouncilTableMixin.CellUpdaters.response = function(_, cell, candidate)
         return
     end
     local responseId = candidate.response
-    local responseInfo = responseId and Loothing.ResponseInfo[responseId]
+    local responseInfo = responseId and (Loothing.ResponseInfo[responseId] or Loothing.SystemResponseInfo[responseId])
 
     if responseInfo then
         cell.text:SetText(responseInfo.name)
         cell.text:SetTextColor(responseInfo.color.r, responseInfo.color.g, responseInfo.color.b)
         if cell.colorBar then
-            cell.colorBar:SetColorTexture(responseInfo.color.r, responseInfo.color.g, responseInfo.color.b, 1)
-            cell.colorBar:Show()
+            if responseInfo.color.a and responseInfo.color.a > 0 then
+                cell.colorBar:SetColorTexture(responseInfo.color.r, responseInfo.color.g, responseInfo.color.b, 1)
+                cell.colorBar:Show()
+            else
+                cell.colorBar:Hide()
+            end
         end
-    elseif candidate.response == "AUTOPASS" then
-        cell.text:SetText(L["RESPONSE_AUTO_PASS"])
-        cell.text:SetTextColor(0.5, 0.5, 0.5)
-        if cell.colorBar then
-            cell.colorBar:SetColorTexture(0.5, 0.5, 0.5, 1)
-            cell.colorBar:Show()
-        end
-    elseif candidate.response == "WAIT" or not candidate.response then
+    elseif not candidate.response then
         cell.text:SetText(L["RESPONSE_WAITING"])
         cell.text:SetTextColor(0.5, 0.5, 0.5)
         if cell.colorBar then
@@ -607,6 +557,7 @@ CouncilTableMixin.CellUpdaters.wishlist = function(_, cell, candidate)
 
     -- Enhanced tooltip on hover
     if not cell._wishlistHooked then
+        cell:SetMouseMotionEnabled(true)
         cell:SetScript("OnEnter", function(f)
             local entry = f.candidate and f.candidate.wishlistEntry
             if not entry then return end
@@ -649,6 +600,7 @@ CouncilTableMixin.CellUpdaters.gear1 = function(_, cell, candidate)
 
         -- Tooltip on hover
         if not cell._gear1Hooked then
+            cell:SetMouseMotionEnabled(true)
             cell:SetScript("OnEnter", function(c)
                 if c.candidate and c.candidate.gear1Link then
                     GameTooltip:SetOwner(c, "ANCHOR_RIGHT")
@@ -675,6 +627,7 @@ CouncilTableMixin.CellUpdaters.gear2 = function(_, cell, candidate)
         cell.icon:Show()
 
         if not cell._gear2Hooked then
+            cell:SetMouseMotionEnabled(true)
             cell:SetScript("OnEnter", function(c)
                 if c.candidate and c.candidate.gear2Link then
                     GameTooltip:SetOwner(c, "ANCHOR_RIGHT")
@@ -717,6 +670,7 @@ CouncilTableMixin.CellUpdaters.note = function(_, cell, candidate)
             cell.icon:Show()
         end
         if not cell._noteHooked then
+            cell:SetMouseMotionEnabled(true)
             cell:SetScript("OnEnter", function(c)
                 if c.candidate and c.candidate.note and c.candidate.note ~= "" then
                     GameTooltip:SetOwner(c, "ANCHOR_RIGHT")
@@ -755,6 +709,7 @@ CouncilTableMixin.CellUpdaters.vote = function(_, cell, candidate)
 
     -- Voter tooltip on hover of vote count text
     if not cell._voteTextHooked then
+        cell:SetMouseMotionEnabled(true)
         cell:SetScript("OnEnter", function(c)
             if not c.candidate then return end
             local voters = c.candidate.voters

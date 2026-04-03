@@ -1,7 +1,7 @@
 --[[--------------------------------------------------------------------
     Loothing - UI: Council Table (Composite)
     Orchestrates Columns, Rows, Events, item tabs, voter progress,
-    "More Info" panel, and skinning integration.
+    detail tooltip, and skinning integration.
 ----------------------------------------------------------------------]]
 
 local _, ns = ...
@@ -36,8 +36,6 @@ local ITEM_TAB_ICON_SIZE = 36
 local ITEM_TAB_BAR_HEIGHT = 52
 local SCROLL_ARROW_WIDTH = 16
 local SCROLL_STEP = 124  -- ITEM_TAB_WIDTH + ITEM_TAB_SPACING
-local MORE_INFO_HEIGHT = 340
-
 -- Throttle refresh to avoid spam during bulk candidate updates
 local REFRESH_THROTTLE = 0.15
 
@@ -161,8 +159,8 @@ function CouncilTableMixin:CreateElements()
     -- Candidate list (scrollable)
     self:CreateCandidateList()
 
-    -- "More Info" panel at bottom
-    self:CreateMoreInfoPanel()
+    -- Floating detail tooltip (anchored outside frame, right edge)
+    self:CreateDetailTooltip()
 
     -- Action buttons (bottom right)
     self:CreateActionButtons()
@@ -471,6 +469,8 @@ function CouncilTableMixin:SelectItemTab(itemGUID)
     if not targetItem then return end
 
     self.currentItem = targetItem
+    self.selectedCandidate = nil
+    self:HideDetailTooltip()
 
     -- Update tab visuals based on selection + item state
     for i, tab in ipairs(self.itemTabs) do
@@ -619,7 +619,7 @@ end
 function CouncilTableMixin:CreateCandidateList()
     local container = CreateFrame("Frame", nil, self.frame, "BackdropTemplate")
     container:SetPoint("TOPLEFT", 16, -121)
-    container:SetPoint("BOTTOMRIGHT", -16, MORE_INFO_HEIGHT + 50)
+    container:SetPoint("BOTTOMRIGHT", -16, 50)
     container:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Buttons\\WHITE8x8",
@@ -648,164 +648,223 @@ function CouncilTableMixin:CreateCandidateList()
 end
 
 --[[--------------------------------------------------------------------
-    "More Info" Panel
+    Detail Tooltip (floating panel, anchored to right edge of frame)
 ----------------------------------------------------------------------]]
 
-function CouncilTableMixin:CreateMoreInfoPanel()
-    local panel = CreateFrame("Frame", nil, self.frame, "BackdropTemplate")
-    panel:SetPoint("BOTTOMLEFT", 16, 44)
-    panel:SetPoint("BOTTOMRIGHT", -16, 44)
-    panel:SetHeight(MORE_INFO_HEIGHT)
-    panel:SetBackdrop({
+local DETAIL_TOOLTIP_WIDTH = 220
+
+function CouncilTableMixin:CreateDetailTooltip()
+    local tooltip = CreateFrame("Frame", nil, self.frame, "BackdropTemplate")
+    tooltip:SetWidth(DETAIL_TOOLTIP_WIDTH)
+    tooltip:SetPoint("TOPLEFT", self.frame, "TOPRIGHT", 6, 0)
+    tooltip:SetPoint("BOTTOMLEFT", self.frame, "BOTTOMRIGHT", 6, 0)
+    tooltip:SetFrameStrata("DIALOG")
+    tooltip:SetFrameLevel(self.frame:GetFrameLevel() + 10)
+    tooltip:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Buttons\\WHITE8x8",
         tile = false, edgeSize = 1,
         insets = { left = 1, right = 1, top = 1, bottom = 1 },
     })
-    panel:SetBackdropColor(0.06, 0.06, 0.08, 0.9)
-    panel:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
-    panel:Hide()
+    tooltip:SetBackdropColor(0.06, 0.06, 0.08, 0.95)
+    tooltip:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+    tooltip:SetClampedToScreen(true)
+    tooltip:Hide()
+
+    -- Close/unpin button (top-right corner)
+    local closeBtn = CreateFrame("Button", nil, tooltip)
+    closeBtn:SetSize(14, 14)
+    closeBtn:SetPoint("TOPRIGHT", -4, -4)
+    closeBtn:SetNormalTexture("Interface\\Buttons\\UI-StopButton")
+    closeBtn:SetHighlightTexture("Interface\\Buttons\\UI-StopButton", "ADD")
+    closeBtn:SetScript("OnClick", function()
+        self:HideDetailTooltip()
+        self.selectedCandidate = nil
+        self:RefreshCandidates()
+    end)
+
+    -- Scroll frame so content can exceed tooltip height
+    local scrollFrame = CreateFrame("ScrollFrame", nil, tooltip, "UIPanelScrollFrameTemplate")
+    scrollFrame:SetPoint("TOPLEFT", 2, -2)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -18, 2)
+
+    local content = CreateFrame("Frame", nil, scrollFrame)
+    content:SetWidth(DETAIL_TOOLTIP_WIDTH - 40)
+    content:SetHeight(1) -- dynamic
+    scrollFrame:SetScrollChild(content)
+    self.detailContent = content
+    self.detailScrollFrame = scrollFrame
 
     -- Name
-    local name = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    name:SetPoint("TOPLEFT", 8, -8)
+    local name = content:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    name:SetPoint("TOPLEFT", 6, -6)
+    name:SetPoint("RIGHT", -6, 0)
+    name:SetWordWrap(false)
     self.moreInfoName = name
 
     -- Response
-    local response = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    response:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -4)
+    local response = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    response:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -2)
+    response:SetPoint("RIGHT", -6, 0)
     self.moreInfoResponse = response
 
     -- Details (ilvl, role, rank)
-    local details = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    details:SetPoint("TOPLEFT", response, "BOTTOMLEFT", 0, -4)
+    local details = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    details:SetPoint("TOPLEFT", response, "BOTTOMLEFT", 0, -2)
+    details:SetPoint("RIGHT", -6, 0)
     details:SetTextColor(0.7, 0.7, 0.7)
+    details:SetWordWrap(true)
     self.moreInfoDetails = details
 
     -- Note
-    local note = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local note = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     note:SetPoint("TOPLEFT", details, "BOTTOMLEFT", 0, -4)
-    note:SetPoint("RIGHT", -8, 0)
+    note:SetPoint("RIGHT", -6, 0)
     note:SetJustifyH("LEFT")
     note:SetWordWrap(true)
     self.moreInfoNote = note
 
     -- Gear text
-    local gear = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    gear:SetPoint("TOPRIGHT", -8, -8)
-    gear:SetJustifyH("RIGHT")
+    local gear = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    gear:SetPoint("TOPLEFT", note, "BOTTOMLEFT", 0, -6)
+    gear:SetPoint("RIGHT", -6, 0)
+    gear:SetJustifyH("LEFT")
     gear:SetTextColor(0.8, 0.8, 0.8)
+    gear:SetWordWrap(true)
     self.moreInfoGear = gear
 
-    -- Vote breakdown text (below note)
-    local voteBreakdown = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    voteBreakdown:SetPoint("BOTTOMLEFT", 8, 6)
-    voteBreakdown:SetPoint("RIGHT", panel, "RIGHT", -140, 0)
+    -- Vote breakdown
+    local voteBreakdown = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    voteBreakdown:SetPoint("TOPLEFT", gear, "BOTTOMLEFT", 0, -6)
+    voteBreakdown:SetPoint("RIGHT", -6, 0)
     voteBreakdown:SetJustifyH("LEFT")
     voteBreakdown:SetTextColor(0.6, 0.8, 0.6)
+    voteBreakdown:SetWordWrap(true)
     self.moreInfoVoteBreakdown = voteBreakdown
 
     -- Wishlist info
-    local wishlistInfo = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    wishlistInfo:SetPoint("TOPLEFT", note, "BOTTOMLEFT", 0, -6)
-    wishlistInfo:SetPoint("RIGHT", -8, 0)
+    local wishlistInfo = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    wishlistInfo:SetPoint("TOPLEFT", voteBreakdown, "BOTTOMLEFT", 0, -4)
+    wishlistInfo:SetPoint("RIGHT", -6, 0)
     wishlistInfo:SetJustifyH("LEFT")
     wishlistInfo:SetWordWrap(true)
     self.moreInfoWishlist = wishlistInfo
 
-    -- Item source (from itemDetails)
-    local sourceInfo = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    -- Item source
+    local sourceInfo = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     sourceInfo:SetPoint("TOPLEFT", wishlistInfo, "BOTTOMLEFT", 0, -2)
-    sourceInfo:SetPoint("RIGHT", -8, 0)
+    sourceInfo:SetPoint("RIGHT", -6, 0)
     sourceInfo:SetJustifyH("LEFT")
     sourceInfo:SetTextColor(0.6, 0.6, 0.6)
+    sourceInfo:SetWordWrap(true)
     self.moreInfoSource = sourceInfo
 
     -- ===== Player Intel Section (from desktop sync) =====
 
     -- Separator line
-    local intelSep = panel:CreateTexture(nil, "ARTWORK")
+    local intelSep = content:CreateTexture(nil, "ARTWORK")
     intelSep:SetPoint("TOPLEFT", sourceInfo, "BOTTOMLEFT", 0, -6)
-    intelSep:SetPoint("RIGHT", -8, 0)
+    intelSep:SetPoint("RIGHT", -6, 0)
     intelSep:SetHeight(1)
     intelSep:SetColorTexture(0.3, 0.3, 0.3, 0.6)
     self.moreInfoIntelSep = intelSep
 
     -- M+ Activity
-    local mpInfo = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local mpInfo = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     mpInfo:SetPoint("TOPLEFT", intelSep, "BOTTOMLEFT", 0, -4)
-    mpInfo:SetPoint("RIGHT", -8, 0)
+    mpInfo:SetPoint("RIGHT", -6, 0)
     mpInfo:SetJustifyH("LEFT")
     mpInfo:SetTextColor(0.4, 0.8, 1.0)
+    mpInfo:SetWordWrap(true)
     self.moreInfoMythicPlus = mpInfo
 
     -- Parse Performance
-    local parseInfo = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local parseInfo = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     parseInfo:SetPoint("TOPLEFT", mpInfo, "BOTTOMLEFT", 0, -2)
-    parseInfo:SetPoint("RIGHT", -8, 0)
+    parseInfo:SetPoint("RIGHT", -6, 0)
     parseInfo:SetJustifyH("LEFT")
     parseInfo:SetTextColor(1.0, 0.8, 0.4)
+    parseInfo:SetWordWrap(true)
     self.moreInfoParses = parseInfo
 
     -- Attendance
-    local attendInfo = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local attendInfo = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     attendInfo:SetPoint("TOPLEFT", parseInfo, "BOTTOMLEFT", 0, -2)
-    attendInfo:SetPoint("RIGHT", -8, 0)
+    attendInfo:SetPoint("RIGHT", -6, 0)
     attendInfo:SetJustifyH("LEFT")
     attendInfo:SetTextColor(0.7, 0.7, 0.7)
+    attendInfo:SetWordWrap(true)
     self.moreInfoAttendance = attendInfo
 
-    -- Gear Readiness (tier set, enchants, gems, vault, raid prog)
-    local gearReady = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    -- Gear Readiness
+    local gearReady = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     gearReady:SetPoint("TOPLEFT", attendInfo, "BOTTOMLEFT", 0, -2)
-    gearReady:SetPoint("RIGHT", -8, 0)
+    gearReady:SetPoint("RIGHT", -6, 0)
     gearReady:SetJustifyH("LEFT")
     gearReady:SetTextColor(0.7, 0.8, 0.7)
+    gearReady:SetWordWrap(true)
     self.moreInfoGearReady = gearReady
 
     -- Recent Loot History
-    local lootHistory = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local lootHistory = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     lootHistory:SetPoint("TOPLEFT", gearReady, "BOTTOMLEFT", 0, -4)
-    lootHistory:SetPoint("RIGHT", -8, 0)
+    lootHistory:SetPoint("RIGHT", -6, 0)
     lootHistory:SetJustifyH("LEFT")
     lootHistory:SetWordWrap(true)
     lootHistory:SetTextColor(0.8, 0.8, 0.8)
     self.moreInfoLootHistory = lootHistory
 
     -- Alt Loot Summary
-    local altLoot = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local altLoot = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     altLoot:SetPoint("TOPLEFT", lootHistory, "BOTTOMLEFT", 0, -2)
-    altLoot:SetPoint("RIGHT", -8, 0)
+    altLoot:SetPoint("RIGHT", -6, 0)
     altLoot:SetJustifyH("LEFT")
     altLoot:SetWordWrap(true)
     altLoot:SetTextColor(0.7, 0.7, 0.9)
     self.moreInfoAltLoot = altLoot
 
-    -- Staleness indicator (bottom-right of panel)
-    local staleness = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    staleness:SetPoint("BOTTOMRIGHT", -8, 6)
+    -- Staleness indicator
+    local staleness = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    staleness:SetPoint("TOPLEFT", altLoot, "BOTTOMLEFT", 0, -4)
+    staleness:SetPoint("RIGHT", -6, 0)
     staleness:SetJustifyH("RIGHT")
     staleness:SetTextColor(0.5, 0.5, 0.5)
     self.moreInfoStaleness = staleness
 
-    self.moreInfoPanel = panel
+    self.detailTooltip = tooltip
+    self.tooltipPinned = false
+end
 
-    -- Toggle button to expand/collapse the more info panel
-    local toggleBtn = CreateFrame("Button", nil, self.frame, "UIPanelButtonNoTooltipTemplate")
-    toggleBtn:SetSize(24, 24)
-    toggleBtn:SetPoint("BOTTOMRIGHT", panel, "TOPRIGHT", 0, 2)
-    toggleBtn:SetText("<<")
-    toggleBtn:SetNormalFontObject("GameFontNormalSmall")
-    toggleBtn:SetScript("OnClick", function(btn)
-        if self.moreInfoPanel:IsShown() then
-            self.moreInfoPanel:Hide()
-            btn:SetText(">>")
+--- Recalculate the scroll content height so the scroll frame
+--- can accommodate all visible text. Deferred one frame so
+--- font string layouts are finalized.
+function CouncilTableMixin:ResizeDetailTooltip()
+    if not self.detailTooltip or not self.detailContent then return end
+
+    C_Timer.After(0, function()
+        if not self.detailTooltip:IsShown() then return end
+
+        local contentTop = self.detailContent:GetTop()
+        local lastBottom = self.moreInfoStaleness and self.moreInfoStaleness:GetBottom()
+
+        local contentHeight
+        if contentTop and lastBottom then
+            contentHeight = contentTop - lastBottom + 12
         else
-            self.moreInfoPanel:Show()
-            btn:SetText("<<")
+            contentHeight = 600
         end
+        self.detailContent:SetHeight(math.max(contentHeight, 100))
     end)
-    self.moreInfoToggle = toggleBtn
+end
+
+function CouncilTableMixin:HideDetailTooltip()
+    if self.detailTooltip then
+        self.detailTooltip:Hide()
+    end
+    if self.detailScrollFrame then
+        self.detailScrollFrame:SetVerticalScroll(0)
+    end
+    self.tooltipPinned = false
 end
 
 --[[--------------------------------------------------------------------
@@ -1143,9 +1202,7 @@ function CouncilTableMixin:Clear()
     if self.emptyText then
         self.emptyText:Show()
     end
-    if self.moreInfoPanel then
-        self.moreInfoPanel:Hide()
-    end
+    self:HideDetailTooltip()
 
     self:UpdateActionButtons()
 end
@@ -1174,6 +1231,7 @@ end
 
 -- Show/Hide/Toggle
 function CouncilTableMixin:Show()
+    self:HideDetailTooltip()
     self:LoadPosition()
     self.frame:Show()
     self.frame:Raise()

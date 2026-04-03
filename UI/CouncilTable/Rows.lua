@@ -1,6 +1,6 @@
 --[[--------------------------------------------------------------------
     Loothing - UI: Council Table Rows
-    Row creation, cell rendering, context menu, and "More Info" panel
+    Row creation, cell rendering, context menu, and detail tooltip
 ----------------------------------------------------------------------]]
 
 local _, ns = ...
@@ -26,7 +26,7 @@ function CouncilTableMixin:CreateCell(parent, col)
     local cell = CreateFrame("Button", nil, parent)
     cell:SetSize(col.width, ROW_HEIGHT)
     cell:SetMouseClickEnabled(false)
-    cell:SetMouseMotionEnabled(true)
+    cell:SetMouseMotionEnabled(false)
 
     -- Text (used by most columns)
     local text = cell:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -37,7 +37,7 @@ function CouncilTableMixin:CreateCell(parent, col)
     cell.text = text
 
     -- Icon (used by class, role, gear, note columns)
-    if col.id == "class" or col.id == "role" or col.id == "gear1" or col.id == "gear2" or col.id == "note" then
+    if col.id == "class" or col.id == "spec" or col.id == "role" or col.id == "gear1" or col.id == "gear2" or col.id == "note" then
         local icon = cell:CreateTexture(nil, "ARTWORK")
         icon:SetSize(ROW_HEIGHT - 4, ROW_HEIGHT - 4)
         icon:SetPoint("CENTER")
@@ -156,6 +156,45 @@ function CouncilTableMixin:CreateCandidateRow(_parent)
             end
         end)
         row._clickHooked = true
+    end
+
+    -- Hover handlers for detail tooltip (show on enter, hide on leave unless pinned)
+    if not row._hoverHooked then
+        row:SetScript("OnEnter", function(r)
+            if not r.candidate then return end
+            if not r._councilTable.tooltipPinned then
+                r._councilTable:UpdateDetailTooltip(r.candidate)
+            end
+        end)
+        row:SetScript("OnLeave", function(r)
+            if not r._councilTable.tooltipPinned then
+                r._councilTable:HideDetailTooltip()
+            end
+        end)
+        row._hoverHooked = true
+    end
+
+    -- Hook cells that have mouse motion enabled (tooltips) to also propagate
+    -- hover to the row for the detail tooltip. Cells with mouse motion disabled
+    -- pass events through to the row automatically.
+    for _, cell in pairs(row.cells) do
+        if not cell._hoverForwarded then
+            cell:HookScript("OnEnter", function()
+                local r = cell:GetParent()
+                if r and r.candidate and r._councilTable then
+                    if not r._councilTable.tooltipPinned then
+                        r._councilTable:UpdateDetailTooltip(r.candidate)
+                    end
+                end
+            end)
+            cell:HookScript("OnLeave", function()
+                local r = cell:GetParent()
+                if r and r._councilTable and not r._councilTable.tooltipPinned then
+                    r._councilTable:HideDetailTooltip()
+                end
+            end)
+            cell._hoverForwarded = true
+        end
     end
 
     return row
@@ -302,7 +341,10 @@ function CouncilTableMixin:EnrichCandidates(candidates)
         if not candidate.specID and Utils.IsSamePlayer(candidate.playerName or candidate.name, Utils.GetPlayerFullName()) then
             local specIndex = GetSpecialization and GetSpecialization()
             if specIndex then
-                candidate.specID = GetSpecializationInfo(specIndex)
+                local getInfo = C_SpecializationInfo and C_SpecializationInfo.GetSpecializationInfo or GetSpecializationInfo
+                if getInfo then
+                    candidate.specID = getInfo(specIndex)
+                end
             end
         end
 
@@ -369,24 +411,25 @@ function CouncilTableMixin:SortCandidates(candidates)
 end
 
 --[[--------------------------------------------------------------------
-    Candidate Selection & "More Info"
+    Candidate Selection & Detail Tooltip
 ----------------------------------------------------------------------]]
 
 function CouncilTableMixin:SelectCandidate(candidate)
     self.selectedCandidate = candidate
+    self.tooltipPinned = true
     self:RefreshCandidates()
-    self:UpdateMoreInfoPanel(candidate)
+    self:UpdateDetailTooltip(candidate)
     self:TriggerEvent("OnCandidateSelected", candidate)
 end
 
-function CouncilTableMixin:UpdateMoreInfoPanel(candidate)
-    if not self.moreInfoPanel then return end
+function CouncilTableMixin:UpdateDetailTooltip(candidate)
+    if not self.detailTooltip then return end
     if not candidate then
-        self.moreInfoPanel:Hide()
+        self:HideDetailTooltip()
         return
     end
 
-    self.moreInfoPanel:Show()
+    self.detailTooltip:Show()
 
     -- Player name with class color
     local class = candidate.class
@@ -528,6 +571,9 @@ function CouncilTableMixin:UpdateMoreInfoPanel(candidate)
     else
         self:ClearPlayerIntelSection()
     end
+
+    -- Resize tooltip to fit content
+    self:ResizeDetailTooltip()
 end
 
 --[[--------------------------------------------------------------------

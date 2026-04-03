@@ -21,6 +21,8 @@ local pairs = pairs
 local ipairs = ipairs
 local tconcat = table.concat
 local tinsert = table.insert
+local tsort = table.sort
+local wipe = wipe
 
 --[[--------------------------------------------------------------------
     Constants
@@ -70,6 +72,14 @@ local REFRESH_INTERVAL = 1.0
 
 -- Encode/decode test is cached once per session (avoids inflating Protocol msgSeq)
 local encodeTestResult = nil
+
+-- Reusable tables for Refresh() to avoid per-tick allocations
+local _counts = { 0, 0, 0, 0, 0 }
+local _parts = {}
+local _respParts = {}
+local _queueBreakdown = {}
+local _fmtKeys = {}
+local _fmtParts = {}
 
 --[[--------------------------------------------------------------------
     DiagPanelMixin
@@ -283,6 +293,13 @@ function DiagPanelMixin:BuildContent()
     self.values.prefixReg     = self:AddRow("Prefix Registered:")
     self.values.restricted    = self:AddRow("Enc. Restricted:")
     self.values.encodeTest    = self:AddRow("Encode/Decode:")
+    self.values.protocolErrors = self:AddRow("Proto Errors:")
+    self.values.commSent       = self:AddRow("Sent:")
+    self.values.commReceived   = self:AddRow("Received:")
+    self.values.commDropped    = self:AddRow("Dropped:")
+    self.values.queueBreakdown = self:AddRow("Guar. Queue:")
+    self.values.replayStatus   = self:AddRow("Replay:")
+    self.values.batchDedup     = self:AddRow("Batch / Dedup:")
 
     -- Group
     self:AddHeader("Group")
@@ -342,6 +359,11 @@ function DiagPanelMixin:BuildContent()
         slot.respFS:SetPoint("RIGHT", self.content, "RIGHT")
         slot.respFS:SetJustifyH("LEFT")
         slot.respFS:Hide()
+
+        -- Cached Y positions to avoid anchor churn (memory leak fix)
+        slot.nameLastY = nil
+        slot.detailLastY = nil
+        slot.respLastY = nil
 
         self.itemSlots[i] = slot
     end
@@ -418,6 +440,21 @@ local function GetResponseName(responseID)
     return tostring(responseID)
 end
 
+--- Format a wireCode->count map as "HB:5 PR:12 SS:2" (sorted alphabetically)
+local function FormatStatMap(map)
+    wipe(_fmtKeys)
+    wipe(_fmtParts)
+    for k in pairs(map) do
+        _fmtKeys[#_fmtKeys + 1] = k
+    end
+    if #_fmtKeys == 0 then return "" end
+    tsort(_fmtKeys)
+    for i, k in ipairs(_fmtKeys) do
+        _fmtParts[i] = k .. ":" .. map[k]
+    end
+    return tconcat(_fmtParts, " ", 1, #_fmtParts)
+end
+
 --[[--------------------------------------------------------------------
     Refresh (called every 1 second)
 ----------------------------------------------------------------------]]
@@ -463,20 +500,22 @@ function DiagPanelMixin:Refresh()
     -- Item count summary
     if sessionState and sessionState ~= Loothing.SessionState.INACTIVE then
         local itemCount = session:GetItemCount()
-        local counts = { 0, 0, 0, 0, 0 } -- pending, voting, tallied, awarded, skipped
+        local counts = _counts
+        counts[1], counts[2], counts[3], counts[4], counts[5] = 0, 0, 0, 0, 0
         for _, item in session:GetItems():Enumerate() do
             local s = item.state
             if s and counts[s] then
                 counts[s] = counts[s] + 1
             end
         end
-        local parts = {}
+        local parts = _parts
+        wipe(parts)
         if counts[1] > 0 then tinsert(parts, counts[1] .. "P") end
         if counts[2] > 0 then tinsert(parts, counts[2] .. "V") end
         if counts[3] > 0 then tinsert(parts, counts[3] .. "T") end
         if counts[4] > 0 then tinsert(parts, counts[4] .. "A") end
         if counts[5] > 0 then tinsert(parts, counts[5] .. "S") end
-        local detail = #parts > 0 and (" (" .. tconcat(parts, " ") .. ")") or ""
+        local detail = #parts > 0 and (" (" .. tconcat(parts, " ", 1, #parts) .. ")") or ""
         SetText(v.itemCounts, tostring(itemCount) .. detail)
     else
         SetText(v.itemCounts, "0", COLOR_DIM)
@@ -551,6 +590,72 @@ function DiagPanelMixin:Refresh()
         SetText(v.encodeTest, "FAILED", COLOR_BAD)
     end
 
+    -- Protocol errors
+    if ns.Protocol and ns.Protocol.GetDiagnostics then
+        local diag = ns.Protocol:GetDiagnostics()
+        local total = diag.checksumFailures + diag.decodeErrors
+        if total > 0 then
+            SetText(v.protocolErrors, format("%d (chk:%d dec:%d)", total, diag.checksumFailures, diag.decodeErrors), COLOR_BAD)
+        else
+            SetText(v.protocolErrors, "0", COLOR_OK)
+        end
+    else
+        SetText(v.protocolErrors, "N/A", COLOR_DIM)
+    end
+
+    -- Sent/received/dropped totals (per-type breakdown in clipboard only)
+    local commObj = Loothing.Comm
+    if commObj and commObj.GetCommStats then
+        local stats = commObj:GetCommStats()
+
+        local sentTotal = 0
+        for _, c in pairs(stats.sent) do sentTotal = sentTotal + c end
+        SetText(v.commSent, tostring(sentTotal), COLOR_VALUE)
+
+        local recvTotal = 0
+        for _, c in pairs(stats.received) do recvTotal = recvTotal + c end
+        SetText(v.commReceived, tostring(recvTotal), COLOR_VALUE)
+
+        local dropTotal = 0
+        for _, c in pairs(stats.dropped) do dropTotal = dropTotal + c end
+        SetText(v.commDropped, tostring(dropTotal), dropTotal > 0 and COLOR_WARN or COLOR_OK)
+    else
+        SetText(v.commSent, "N/A", COLOR_DIM)
+        SetText(v.commReceived, "N/A", COLOR_DIM)
+        SetText(v.commDropped, "N/A", COLOR_DIM)
+    end
+
+    -- Queue contents breakdown
+    local restrictions = Loothing.Restrictions
+    if restrictions and restrictions.GetQueuedBreakdown then
+        local breakdown = restrictions:GetQueuedBreakdown(_queueBreakdown)
+        local bkStr = FormatStatMap(breakdown)
+        SetText(v.queueBreakdown, bkStr ~= "" and bkStr or "empty", COLOR_VALUE)
+    else
+        SetText(v.queueBreakdown, "N/A", COLOR_DIM)
+    end
+
+    -- Replay status
+    if restrictions and restrictions.IsReplaying then
+        if restrictions:IsReplaying() then
+            local sent, remaining, total = restrictions:GetReplayProgress()
+            SetText(v.replayStatus, format("ACTIVE %d/%d sent, %d left", sent, total, remaining), COLOR_WARN)
+        else
+            SetText(v.replayStatus, "Idle", COLOR_OK)
+        end
+    else
+        SetText(v.replayStatus, "N/A", COLOR_DIM)
+    end
+
+    -- Batch / Dedup state
+    if commObj and commObj.GetBatchAccumulatorCount and commObj.GetSeenIDCount then
+        local batchCount = commObj:GetBatchAccumulatorCount()
+        local seenCount = commObj:GetSeenIDCount()
+        SetText(v.batchDedup, format("batch:%d  dedup:%d", batchCount, seenCount), COLOR_VALUE)
+    else
+        SetText(v.batchDedup, "N/A", COLOR_DIM)
+    end
+
     -- Group
     SetBool(v.inGroup, IsInGroup())
     SetBool(v.inRaid, IsInRaid())
@@ -608,9 +713,13 @@ function DiagPanelMixin:RefreshSessionItems()
         self.sessionItemsHeader:Hide()
         self.sessionItemsSep:Hide()
         for i = 1, MAX_ITEM_SLOTS do
-            self.itemSlots[i].nameFS:Hide()
-            self.itemSlots[i].detailFS:Hide()
-            self.itemSlots[i].respFS:Hide()
+            local slot = self.itemSlots[i]
+            slot.nameFS:Hide()
+            slot.detailFS:Hide()
+            slot.respFS:Hide()
+            slot.nameLastY = nil
+            slot.detailLastY = nil
+            slot.respLastY = nil
         end
         self.scrollChild:SetHeight(self.staticContentHeight)
         return
@@ -640,9 +749,12 @@ function DiagPanelMixin:RefreshSessionItems()
         local ilvlStr = item.itemLevel and ("  ilvl " .. item.itemLevel) or ""
         local nameText = format("%s [%s]%s", item.name or "?", stateName, ilvlStr)
 
-        slot.nameFS:ClearAllPoints()
-        slot.nameFS:SetPoint("TOPLEFT", self.content, "TOPLEFT", 4, y)
-        slot.nameFS:SetPoint("RIGHT", self.content, "RIGHT")
+        if slot.nameLastY ~= y then
+            slot.nameFS:ClearAllPoints()
+            slot.nameFS:SetPoint("TOPLEFT", self.content, "TOPLEFT", 4, y)
+            slot.nameFS:SetPoint("RIGHT", self.content, "RIGHT")
+            slot.nameLastY = y
+        end
         slot.nameFS:SetText(nameText)
         slot.nameFS:SetTextColor(unpack(stateColor))
         slot.nameFS:Show()
@@ -668,46 +780,58 @@ function DiagPanelMixin:RefreshSessionItems()
             detailText = "No candidate data"
         end
 
-        slot.detailFS:ClearAllPoints()
-        slot.detailFS:SetPoint("TOPLEFT", self.content, "TOPLEFT", 12, y)
-        slot.detailFS:SetPoint("RIGHT", self.content, "RIGHT")
+        if slot.detailLastY ~= y then
+            slot.detailFS:ClearAllPoints()
+            slot.detailFS:SetPoint("TOPLEFT", self.content, "TOPLEFT", 12, y)
+            slot.detailFS:SetPoint("RIGHT", self.content, "RIGHT")
+            slot.detailLastY = y
+        end
         slot.detailFS:SetText(detailText)
         slot.detailFS:SetTextColor(unpack(COLOR_LABEL))
         slot.detailFS:Show()
         y = y - LINE_HEIGHT
 
-        -- Line 3: response breakdown (separate line, reuse respCounts)
+        -- Line 3: response breakdown (reuse cached table)
         local respText = ""
         if respCounts and not item.winner then
-            local respParts = {}
+            local respParts = _respParts
+            wipe(respParts)
             for resp, count in pairs(respCounts) do
                 if count > 0 then
                     tinsert(respParts, GetResponseName(resp) .. ":" .. count)
                 end
             end
             if #respParts > 0 then
-                respText = tconcat(respParts, "  ")
+                respText = tconcat(respParts, "  ", 1, #respParts)
             end
         end
 
         if respText ~= "" then
-            slot.respFS:ClearAllPoints()
-            slot.respFS:SetPoint("TOPLEFT", self.content, "TOPLEFT", 12, y)
-            slot.respFS:SetPoint("RIGHT", self.content, "RIGHT")
+            if slot.respLastY ~= y then
+                slot.respFS:ClearAllPoints()
+                slot.respFS:SetPoint("TOPLEFT", self.content, "TOPLEFT", 12, y)
+                slot.respFS:SetPoint("RIGHT", self.content, "RIGHT")
+                slot.respLastY = y
+            end
             slot.respFS:SetText(respText)
             slot.respFS:SetTextColor(unpack(COLOR_DIM))
             slot.respFS:Show()
             y = y - LINE_HEIGHT
         else
             slot.respFS:Hide()
+            slot.respLastY = nil
         end
     end
 
     -- Hide unused slots
     for i = slotIndex + 1, MAX_ITEM_SLOTS do
-        self.itemSlots[i].nameFS:Hide()
-        self.itemSlots[i].detailFS:Hide()
-        self.itemSlots[i].respFS:Hide()
+        local slot = self.itemSlots[i]
+        slot.nameFS:Hide()
+        slot.detailFS:Hide()
+        slot.respFS:Hide()
+        slot.nameLastY = nil
+        slot.detailLastY = nil
+        slot.respLastY = nil
     end
 
     -- Update scroll child height
@@ -776,6 +900,42 @@ function DiagPanelMixin:BuildClipboardText()
     L(format("  Enc. Restricted: %s", tostring(restricted)))
 
     L(format("  Encode/Decode: %s", encodeTestResult and "OK" or "FAILED"))
+
+    if ns.Protocol and ns.Protocol.GetDiagnostics then
+        local diag = ns.Protocol:GetDiagnostics()
+        L(format("  Protocol Errors: %d (checksum: %d, decode: %d)",
+            diag.checksumFailures + diag.decodeErrors, diag.checksumFailures, diag.decodeErrors))
+    end
+
+    local commObj = Loothing.Comm
+    if commObj and commObj.GetCommStats then
+        local stats = commObj:GetCommStats()
+        local sentStr = FormatStatMap(stats.sent)
+        local recvStr = FormatStatMap(stats.received)
+        local dropStr = FormatStatMap(stats.dropped)
+        L(format("  Sent: %s", sentStr ~= "" and sentStr or "none"))
+        L(format("  Received: %s", recvStr ~= "" and recvStr or "none"))
+        L(format("  Dropped: %s", dropStr ~= "" and dropStr or "none"))
+    end
+
+    local clipRestrictions = Loothing.Restrictions
+    if clipRestrictions and clipRestrictions.GetQueuedBreakdown then
+        local breakdown = clipRestrictions:GetQueuedBreakdown(_queueBreakdown)
+        local bkStr = FormatStatMap(breakdown)
+        L(format("  Queue Contents: %s", bkStr ~= "" and bkStr or "empty"))
+    end
+    if clipRestrictions and clipRestrictions.IsReplaying then
+        if clipRestrictions:IsReplaying() then
+            local sent, remaining, total = clipRestrictions:GetReplayProgress()
+            L(format("  Replay: ACTIVE %d/%d sent, %d remaining", sent, total, remaining))
+        else
+            L("  Replay: Idle")
+        end
+    end
+    if commObj and commObj.GetBatchAccumulatorCount and commObj.GetSeenIDCount then
+        L(format("  Batch Accum: %d", commObj:GetBatchAccumulatorCount()))
+        L(format("  Dedup Entries: %d", commObj:GetSeenIDCount()))
+    end
     Sep()
 
     -- Group

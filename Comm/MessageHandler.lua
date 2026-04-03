@@ -83,6 +83,13 @@ local seenIDs    = {}
 local SEEN_TTL   = 120
 local lastCleanup = 0
 
+-- Per-type comm statistics for diagnostics (/lt diag)
+local commStats = {
+    sent = {},       -- [wireCode] = count
+    received = {},   -- [wireCode] = count
+    dropped = {},    -- [wireCode] = count
+}
+
 local function GetBatchKey(target, priority)
     return (target or "_broadcast") .. ":" .. (priority or "NORMAL")
 end
@@ -174,6 +181,32 @@ function CommMixin:Init()
     end, self)
 end
 
+--- Get per-type comm statistics for diagnostics
+-- @return table - { sent = {wireCode=count}, received = {wireCode=count}, dropped = {wireCode=count} }
+function CommMixin:GetCommStats()
+    return commStats
+end
+
+--- Get count of entries in the dedup table
+-- @return number
+function CommMixin:GetSeenIDCount()
+    local count = 0
+    for _ in pairs(seenIDs) do
+        count = count + 1
+    end
+    return count
+end
+
+--- Get count of active batch accumulator entries
+-- @return number
+function CommMixin:GetBatchAccumulatorCount()
+    local count = 0
+    for _ in pairs(batchAccumulator) do
+        count = count + 1
+    end
+    return count
+end
+
 --[[--------------------------------------------------------------------
     Core Send / Receive
 ----------------------------------------------------------------------]]
@@ -200,6 +233,7 @@ function CommMixin.Send(self, command, data, target, priority)
             C_Timer.After(0, function()
                 self:OnMessage(encoded, "WHISPER", localName)
             end)
+            commStats.sent[command] = (commStats.sent[command] or 0) + 1
             return
         end
     end
@@ -215,11 +249,18 @@ function CommMixin.Send(self, command, data, target, priority)
             if CommState:IsCriticalCommand(command) then
                 if Loothing.Restrictions then
                     Loothing.Restrictions:QueueGuaranteed(command, data, target, prio)
+                else
+                    Loothing:Error("Comm:Send — Restrictions not loaded, critical message dropped:", command)
+                    commStats.dropped[command] = (commStats.dropped[command] or 0) + 1
                 end
+            else
+                -- Non-critical during restrictions: silently dropped
+                commStats.dropped[command] = (commStats.dropped[command] or 0) + 1
             end
-            -- Non-critical during restrictions: silently dropped
+        else
+            -- STATE_DISCONNECTED: silently dropped (ShouldDefer logged it)
+            commStats.dropped[command] = (commStats.dropped[command] or 0) + 1
         end
-        -- STATE_DISCONNECTED: silently dropped (ShouldDefer logged it)
         return
     end
 
@@ -245,6 +286,7 @@ function CommMixin.Send(self, command, data, target, priority)
             -- Heavy pressure: downgrade NORMAL→BULK, drop existing BULK
             if prio == "BULK" then
                 Loothing:Debug("Comm:Send — dropping BULK under heavy pressure:", command)
+                commStats.dropped[command] = (commStats.dropped[command] or 0) + 1
                 self:TriggerEvent("OnMessageDropped", command, "heavy_pressure", target)
                 return
             elseif prio == "NORMAL" then
@@ -254,6 +296,7 @@ function CommMixin.Send(self, command, data, target, priority)
             -- Moderate pressure: drop non-critical BULK
             if prio == "BULK" then
                 Loothing:Debug("Comm:Send — dropping BULK under moderate pressure:", command)
+                commStats.dropped[command] = (commStats.dropped[command] or 0) + 1
                 self:TriggerEvent("OnMessageDropped", command, "moderate_pressure", target)
                 return
             end
@@ -270,6 +313,7 @@ function CommMixin.Send(self, command, data, target, priority)
     if target and not Utils.IsGroupMember(target) then
         Loothing:Debug("Comm:Send — target left group, dropping WHISPER:",
             command, "->", target)
+        commStats.dropped[command] = (commStats.dropped[command] or 0) + 1
         return
     end
 
@@ -279,6 +323,8 @@ function CommMixin.Send(self, command, data, target, priority)
         local channel = IsInRaid() and "RAID" or "PARTY"
         Comm:SendCommMessage(Loothing.ADDON_PREFIX, encoded, channel, nil, prio)
     end
+
+    commStats.sent[command] = (commStats.sent[command] or 0) + 1
 end
 
 --[[--------------------------------------------------------------------
@@ -384,6 +430,7 @@ function CommMixin:SendGuild(command, data, priority)
     local CommState = Loothing.CommState
     if CommState and CommState:ShouldDefer(command, prio) then
         Loothing:Debug("SendGuild: dropped during restriction:", command)
+        commStats.dropped[command] = (commStats.dropped[command] or 0) + 1
         return
     end
 
@@ -398,6 +445,7 @@ function CommMixin:SendGuild(command, data, priority)
     end
 
     Comm:SendCommMessage(Loothing.ADDON_PREFIX, encoded, "GUILD", nil, prio)
+    commStats.sent[command] = (commStats.sent[command] or 0) + 1
 end
 
 --- Send with guaranteed delivery (queued during encounter restrictions)
@@ -465,6 +513,7 @@ function CommMixin:OnMessage(message, distribution, sender)
         local dedupKey = sender .. "-" .. msgID
         if seenIDs[dedupKey] then
             Loothing:Debug("Dropped duplicate", command, "from", sender, "msgID=", msgID)
+            commStats.dropped[command] = (commStats.dropped[command] or 0) + 1
             return
         end
         seenIDs[dedupKey] = now
@@ -491,6 +540,7 @@ end
 -- @param distribution string - Channel
 function CommMixin:RouteMessage(command, data, sender, distribution)
     Loothing:Debug("Received:", command, "from", sender)
+    commStats.received[command] = (commStats.received[command] or 0) + 1
 
     local handlerName = HANDLERS[command]
     if handlerName and self[handlerName] then
@@ -849,8 +899,11 @@ function CommMixin:SendVersionResponse(target)
     local _, equippedIlvl = GetAverageItemLevel()
     local specID
     local specIndex = GetSpecialization and GetSpecialization()
-    if specIndex and GetSpecializationInfo then
-        specID = GetSpecializationInfo(specIndex)
+    if specIndex then
+        local getInfo = C_SpecializationInfo and C_SpecializationInfo.GetSpecializationInfo or GetSpecializationInfo
+        if getInfo then
+            specID = getInfo(specIndex)
+        end
     end
 
     self:Send(Loothing.MsgType.VERSION_RESPONSE, {

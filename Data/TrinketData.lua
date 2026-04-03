@@ -182,7 +182,7 @@ end
 function TrinketData:CanPlayerUse(itemID)
     -- Use SafeUnitClass to avoid secret value tainting
     local _, _, classID = Loolib.SecretUtil.SafeUnitClass("player")
-    local specIndex = GetSpecialization()
+    local specIndex = GetSpecialization and GetSpecialization()
 
     if not classID or not specIndex then
         return true -- Can't determine, don't restrict
@@ -231,7 +231,10 @@ function TrinketData:GetUsableSpecs(itemID)
             for specIndex = 1, numSpecs do
                 local specBit = 2 ^ (specIndex - 1)
                 if bit.band(specBits, specBit) > 0 then
-                    local _, specName = GetSpecializationInfoForClassID(classID, specIndex)
+                    local specName
+                    if GetSpecializationInfoForClassID then
+                        _, specName = GetSpecializationInfoForClassID(classID, specIndex)
+                    end
                     result[#result + 1] = {
                         classID = classID,
                         specIndex = specIndex,

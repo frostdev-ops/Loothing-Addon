@@ -489,9 +489,12 @@ function RosterPanelMixin:GatherRosterData()
 
         -- Spec: try unit API if we have a unit and didn't get from cache
         if not entry.specID and unit and UnitIsUnit(unit, "player") then
-            local specIndex = GetSpecialization()
+            local specIndex = GetSpecialization and GetSpecialization()
             if specIndex then
-                entry.specID = GetSpecializationInfo(specIndex)
+                local getInfo = C_SpecializationInfo and C_SpecializationInfo.GetSpecializationInfo or GetSpecializationInfo
+                if getInfo then
+                    entry.specID = getInfo(specIndex)
+                end
             end
         end
 
@@ -836,9 +839,9 @@ function RosterPanelMixin:ShowRowTooltip(row, entry)
     local roleStr = entry.role or "NONE"
     if roleStr == "NONE" or roleStr == "" then roleStr = L["ROSTER_NO_ROLE"] end
     local specStr = ""
-    if entry.specID and entry.specID > 0 then
-        local _, specName = GetSpecializationInfoByID(entry.specID)
-        if specName then
+    if entry.specID and entry.specID > 0 and GetSpecializationInfoForSpecID then
+        local ok, _, specName = pcall(GetSpecializationInfoForSpecID, entry.specID)
+        if ok and specName then
             specStr = " - " .. specName
         end
     end

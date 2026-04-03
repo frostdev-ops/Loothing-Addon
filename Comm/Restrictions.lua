@@ -193,7 +193,7 @@ end
 function RestrictionsMixin:GetQueuedCount()
     local count = #self.guaranteedQueue
     if self.replayBuffer then
-        count = count + (#self.replayBuffer - self.replayIndex + 1)
+        count = count + (#self.replayBuffer - math.max(1, self.replayIndex) + 1)
     end
     return count
 end
@@ -212,6 +212,25 @@ function RestrictionsMixin:GetReplayProgress()
     end
     local remaining = math.max(0, #self.replayBuffer - self.replayIndex + 1)
     return self.replayStats.sent, remaining, self.replayStats.total
+end
+
+--- Get per-command-type breakdown of the guaranteed queue
+-- Includes both the main guaranteedQueue and any active replayBuffer.
+-- @param out table|nil - Optional reusable table (wiped before use)
+-- @return table - { [wireCode] = count, ... }
+function RestrictionsMixin:GetQueuedBreakdown(out)
+    if out then wipe(out) else out = {} end
+    for _, msg in ipairs(self.guaranteedQueue) do
+        local cmd = msg.command
+        out[cmd] = (out[cmd] or 0) + 1
+    end
+    if self.replayBuffer then
+        for i = math.max(1, self.replayIndex), #self.replayBuffer do
+            local cmd = self.replayBuffer[i].command
+            out[cmd] = (out[cmd] or 0) + 1
+        end
+    end
+    return out
 end
 
 --[[--------------------------------------------------------------------
