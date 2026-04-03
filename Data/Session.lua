@@ -24,6 +24,40 @@ local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local Utils = ns.Utils
 
+-- Item classes that should never be added to loot council sessions.
+-- Matches RCLC's blacklistedItemClasses. Keys are Enum.ItemClass values,
+-- sub-keys are Enum.ItemXSubclass values or "all" for the entire class.
+local BLACKLISTED_ITEM_CLASSES = {
+    [0]  = { all = true },  -- Consumables
+    [5]  = { all = true },  -- Reagents
+    [7]  = { all = true },  -- Tradeskill items
+    [12] = { all = true },  -- Quest items
+    [15] = { [1] = true, [4] = true },  -- Miscellaneous: Reagent, Other (Anima)
+    [20] = { all = true },  -- Decor / Housing
+}
+
+--- Check if an item should be excluded from loot council by its item class.
+-- @param itemLink string
+-- @return boolean - true if the item is blacklisted
+local function IsItemClassBlacklisted(itemLink)
+    if not itemLink then return false end
+    local _, _, _, _, _, itemClassID, itemSubClassID = C_Item.GetItemInfoInstant(itemLink)
+    if not itemClassID then return false end
+    local classEntry = BLACKLISTED_ITEM_CLASSES[itemClassID]
+    if not classEntry then return false end
+    return classEntry.all or classEntry[itemSubClassID] or false
+end
+
+--- Check if an item is Bind on Equip (not soulbound raid loot).
+-- BoE items are excluded from loot council unless explicitly enabled.
+-- @param itemLink string
+-- @return boolean - true if the item is BoE
+local function IsItemBoE(itemLink)
+    if not itemLink then return false end
+    local bindType = select(14, C_Item.GetItemInfo(itemLink))
+    return bindType == 2  -- Enum.ItemBind.OnEquip
+end
+
 local function GetPopups()
     return ns.Popups
 end
@@ -88,7 +122,8 @@ function SessionMixin:Init()
 
     -- Post-encounter bag scanner (RCLC-style distributed item collection)
     self.bagScanTimer = nil
-    self.reportedTradeableItems = {}  -- { [itemID.."-"..looter] = true } dedup
+    self.reportedTradeableItems = {}  -- { [itemLink] = true } dedup
+    self.preEncounterBagSnapshot = {} -- { [itemLink] = count } taken at ENCOUNTER_START
 
     -- Legacy aliases (kept for any external reads)
     self.lastEncounterID = nil
@@ -302,7 +337,14 @@ function SessionMixin:HandleTradable(data)
     local quality = Utils.GetItemQuality(itemLink)
     if not quality or quality < Loothing.MinQuality then return end
 
-    -- Filter check
+    -- Item class blacklist (consumables, reagents, quest items, etc.)
+    if IsItemClassBlacklisted(itemLink) then return end
+
+    -- BoE check (skip unless setting enables BoE collection)
+    local boe = IsItemBoE(itemLink)
+    if boe and not (Loothing.Settings and Loothing.Settings:Get("ml.autoAddBoEs", false)) then return end
+
+    -- User ignore list
     if Loothing.ItemFilter and Loothing.ItemFilter:ShouldIgnoreItem(itemLink) then return end
 
     if self:IsActive() then
@@ -1832,6 +1874,26 @@ function SessionMixin:OnEncounterStart()
 
     -- Stop any in-progress bag scan from previous encounter
     self:StopPostEncounterBagScan()
+
+    -- Snapshot current bag contents so post-encounter scan can distinguish
+    -- newly looted items from old inventory still in the trade window.
+    self:SnapshotBags()
+end
+
+--- Take a snapshot of all tradeable item links currently in bags.
+-- Used to diff against post-encounter scan to find only NEW items.
+function SessionMixin:SnapshotBags()
+    wipe(self.preEncounterBagSnapshot)
+    for bag = 0, NUM_BAG_SLOTS do
+        local numSlots = C_Container.GetContainerNumSlots(bag)
+        for slot = 1, numSlots or 0 do
+            local itemLink = C_Container.GetContainerItemLink(bag, slot)
+            if itemLink then
+                self.preEncounterBagSnapshot[itemLink] = (self.preEncounterBagSnapshot[itemLink] or 0) + 1
+            end
+        end
+    end
+    Loothing:Debug("BagSnapshot: captured", next(self.preEncounterBagSnapshot) and "items" or "empty bags")
 end
 
 --[[--------------------------------------------------------------------
@@ -1985,8 +2047,8 @@ function SessionMixin:StopPostEncounterBagScan()
     end
 end
 
---- Scan all bags for items with trade time remaining > 0.
--- Reports new tradeable items to the group via TRADABLE comm.
+--- Scan all bags for NEW tradeable items and report them via TRADABLE comm.
+-- Compares against the pre-encounter snapshot to exclude old inventory.
 function SessionMixin:ScanBagsForTradeableItems()
     if not IsInGroup() then return end
     if not Loothing.Comm then return end
@@ -1994,28 +2056,46 @@ function SessionMixin:ScanBagsForTradeableItems()
     local TradeQueue = Loothing.TradeQueue
     if not TradeQueue then return end
 
-    local playerName = Utils.GetPlayerFullName()
-
-    for bag = 0, _G.NUM_BAG_SLOTS do
+    -- Build a count of current bag contents to diff against snapshot
+    local currentBags = {}
+    for bag = 0, NUM_BAG_SLOTS do
         local numSlots = C_Container.GetContainerNumSlots(bag)
         for slot = 1, numSlots or 0 do
             local itemLink = C_Container.GetContainerItemLink(bag, slot)
             if itemLink then
+                currentBags[itemLink] = (currentBags[itemLink] or 0) + 1
+            end
+        end
+    end
+
+    -- Find items that are NEW since the pre-encounter snapshot
+    local snapshot = self.preEncounterBagSnapshot
+    for itemLink, currentCount in pairs(currentBags) do
+        local preCount = snapshot[itemLink] or 0
+        if currentCount > preCount then
+            -- This item is new (more copies than before the encounter)
+            if not self.reportedTradeableItems[itemLink] then
+                -- Quality check
                 local quality = Utils.GetItemQuality(itemLink)
                 if quality and quality >= Loothing.MinQuality then
-                    local timeRemaining = TradeQueue:GetContainerItemTradeTimeRemaining(bag, slot)
-                    if timeRemaining and timeRemaining > 0 and timeRemaining ~= math.huge then
-                        -- This item was recently looted and is tradeable.
-                        -- Dedup by itemLink (position-independent — survives bag sorting).
-                        if not self.reportedTradeableItems[itemLink] then
-                            self.reportedTradeableItems[itemLink] = true
-                            Loothing:Debug("BagScan: found tradeable item:", itemLink, "bag", bag, "slot", slot)
-                            -- Filter check
+                    -- Item class blacklist (consumables, reagents, quest items, etc.)
+                    if not IsItemClassBlacklisted(itemLink) then
+                        -- BoE check (skip unless setting enables BoE collection)
+                        local boe = IsItemBoE(itemLink)
+                        local autoAddBoEs = Loothing.Settings and Loothing.Settings:Get("ml.autoAddBoEs", false)
+                        if not boe or autoAddBoEs then
+                            -- User ignore list
                             if not (Loothing.ItemFilter and Loothing.ItemFilter:ShouldIgnoreItem(itemLink)) then
-                                Loothing.Comm:Send(Loothing.MsgType.TRADABLE, {
-                                    itemLink = itemLink,
-                                    timeRemaining = timeRemaining,
-                                })
+                                -- Find the bag/slot to check trade time
+                                local tradeTime = self:FindTradeTimeForItem(itemLink, TradeQueue)
+                                if tradeTime and tradeTime > 0 then
+                                    self.reportedTradeableItems[itemLink] = true
+                                    Loothing:Debug("BagScan: new tradeable item:", itemLink)
+                                    Loothing.Comm:Send(Loothing.MsgType.TRADABLE, {
+                                        itemLink = itemLink,
+                                        timeRemaining = tradeTime,
+                                    })
+                                end
                             end
                         end
                     end
@@ -2023,6 +2103,26 @@ function SessionMixin:ScanBagsForTradeableItems()
             end
         end
     end
+end
+
+--- Find the trade time remaining for an item link by scanning bags.
+-- @param itemLink string
+-- @param TradeQueue table
+-- @return number|nil
+function SessionMixin:FindTradeTimeForItem(itemLink, TradeQueue)
+    for bag = 0, NUM_BAG_SLOTS do
+        local numSlots = C_Container.GetContainerNumSlots(bag)
+        for slot = 1, numSlots or 0 do
+            local slotLink = C_Container.GetContainerItemLink(bag, slot)
+            if slotLink == itemLink then
+                local t = TradeQueue:GetContainerItemTradeTimeRemaining(bag, slot)
+                if t and t > 0 and t ~= math.huge then
+                    return t
+                end
+            end
+        end
+    end
+    return nil
 end
 
 --- Show session start confirmation dialog to ML
