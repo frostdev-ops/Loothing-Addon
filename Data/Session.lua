@@ -1804,18 +1804,31 @@ end
 -- @param groupSize number
 -- @param success number - 1 if boss killed, 0 if wipe
 function SessionMixin:OnEncounterEnd(encounterID, encounterName, _difficultyID, _groupSize, success)
+    Loothing:Debug("OnEncounterEnd:", encounterName, "id:", encounterID,
+        "success:", success, "handleLoot:", tostring(Loothing.handleLoot),
+        "state:", tostring(self.state), "isML:", tostring(Loothing.isMasterLooter))
+
     -- Gate 1: must be a kill
-    if success ~= 1 then return end
+    if success ~= 1 then
+        Loothing:Debug("OnEncounterEnd: gate 1 fail — not a kill (success=", success, ")")
+        return
+    end
 
     -- Gate 2: must be in group (or test mode)
-    if not IsInGroup() and not IsTestModeEnabled() then return end
+    if not IsInGroup() and not IsTestModeEnabled() then
+        Loothing:Debug("OnEncounterEnd: gate 2 fail — not in group")
+        return
+    end
 
     -- Gate 3: must be handling loot (or test mode)
-    if not Loothing.handleLoot and not IsTestModeEnabled() then return end
+    if not Loothing.handleLoot and not IsTestModeEnabled() then
+        Loothing:Debug("OnEncounterEnd: gate 3 fail — handleLoot is false")
+        return
+    end
 
     -- Gate 4: no active session
     if self.state ~= Loothing.SessionState.INACTIVE then
-        Loothing:Debug("Encounter ended but session already active, ignoring:", encounterName)
+        Loothing:Debug("OnEncounterEnd: gate 4 fail — session already active:", encounterName)
         return
     end
 
@@ -1823,10 +1836,12 @@ function SessionMixin:OnEncounterEnd(encounterID, encounterName, _difficultyID, 
     if not IsTestModeEnabled() then
         local scope = self:ClassifyEncounterScope()
         if not scope or not self:IsScopeEnabled(scope) then
-            Loothing:Debug("Encounter scope not enabled:", scope or "nil", encounterName)
+            Loothing:Debug("OnEncounterEnd: gate 5 fail — scope not enabled:", scope or "nil", encounterName)
             return
         end
     end
+
+    Loothing:Debug("OnEncounterEnd: all gates passed for", encounterName)
 
     -- Cache the eligible encounter for afterLoot / manual use
     self.lastEligibleEncounter = { id = encounterID, name = encounterName }
@@ -1835,6 +1850,8 @@ function SessionMixin:OnEncounterEnd(encounterID, encounterName, _difficultyID, 
     self.lastEncounterName = encounterName
 
     local timing = Loothing.Settings:GetSessionTriggerTiming()
+    local action = Loothing.Settings:GetSessionTriggerAction()
+    Loothing:Debug("OnEncounterEnd: timing=", timing, "action=", action)
 
     if timing == "encounterEnd" then
         self:ApplyTriggerAction(encounterID, encounterName)
@@ -1875,6 +1892,10 @@ end
 
 --- Handle loot received
 function SessionMixin:OnLootReceived(encounterID, _itemID, itemLink, _quantity, playerName)
+    Loothing:Debug("OnLootReceived:", itemLink, "from", playerName,
+        "encounter:", encounterID, "active:", tostring(self:IsActive()),
+        "isML:", tostring(self:IsMasterLooter()), "handleLoot:", tostring(Loothing.handleLoot))
+
     local timing = Loothing.Settings:GetSessionTriggerTiming()
     local action = Loothing.Settings:GetSessionTriggerAction()
 
