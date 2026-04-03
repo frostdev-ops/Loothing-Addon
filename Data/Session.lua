@@ -1829,6 +1829,9 @@ function SessionMixin:OnEncounterStart()
         self.pendingLootTimer = nil
     end
     self.receivedLootCount = 0
+
+    -- Stop any in-progress bag scan from previous encounter
+    self:StopPostEncounterBagScan()
 end
 
 --[[--------------------------------------------------------------------
@@ -2002,12 +2005,11 @@ function SessionMixin:ScanBagsForTradeableItems()
                 if quality and quality >= Loothing.MinQuality then
                     local timeRemaining = TradeQueue:GetContainerItemTradeTimeRemaining(bag, slot)
                     if timeRemaining and timeRemaining > 0 and timeRemaining ~= math.huge then
-                        -- This item was recently looted and is tradeable
-                        local itemID = Utils.GetItemID(itemLink)
-                        local dedupKey = (itemID or "0") .. "-" .. bag .. "-" .. slot
-                        if not self.reportedTradeableItems[dedupKey] then
-                            self.reportedTradeableItems[dedupKey] = true
-                            Loothing:Debug("BagScan: found tradeable item:", itemLink, "from bag", bag, "slot", slot)
+                        -- This item was recently looted and is tradeable.
+                        -- Dedup by itemLink (position-independent — survives bag sorting).
+                        if not self.reportedTradeableItems[itemLink] then
+                            self.reportedTradeableItems[itemLink] = true
+                            Loothing:Debug("BagScan: found tradeable item:", itemLink, "bag", bag, "slot", slot)
                             -- Filter check
                             if not (Loothing.ItemFilter and Loothing.ItemFilter:ShouldIgnoreItem(itemLink)) then
                                 Loothing.Comm:Send(Loothing.MsgType.TRADABLE, {
