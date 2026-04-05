@@ -1198,6 +1198,18 @@ function SettingsMixin:SetHideVotes(enabled)
     self:Set("voting.hideVotes", enabled)
 end
 
+--- Get allow response change setting
+-- @return boolean
+function SettingsMixin:GetAllowResponseChange()
+    return self:Get("voting.allowResponseChange", false)
+end
+
+--- Set allow response change setting
+-- @param enabled boolean
+function SettingsMixin:SetAllowResponseChange(enabled)
+    self:Set("voting.allowResponseChange", enabled)
+end
+
 --- Get observe mode setting (DEPRECATED - redirects to GetOpenObservation)
 -- @return boolean
 function SettingsMixin:GetObserveMode()

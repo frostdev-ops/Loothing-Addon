@@ -43,6 +43,7 @@ local COMPRESSION_KEYS = {
     ["maxRanks"] = "mxr",
     ["minRanks"] = "mnr",
     ["maxRevotes"] = "mrv",
+    ["allowResponseChange"] = "arc",
 
     -- responseSets fields
     ["responseSets"] = "rs2",
@@ -248,6 +249,7 @@ function MLDBMixin:GatherSettings()
     settings.maxRanks    = votingSettings.maxRanks or 0
     settings.minRanks    = votingSettings.minRanks or 1
     settings.maxRevotes  = votingSettings.maxRevotes or 2
+    settings.allowResponseChange = votingSettings.allowResponseChange or false
 
     -- Observer settings
     settings.mlIsObserver = Loothing.Settings:Get("observers.mlIsObserver", false)
@@ -544,6 +546,9 @@ function MLDBMixin:ApplyFromML(settings, sender)
         end
         if settings.maxRevotes ~= nil then
             votingSettings.maxRevotes = settings.maxRevotes
+        end
+        if settings.allowResponseChange ~= nil then
+            votingSettings.allowResponseChange = settings.allowResponseChange
         end
 
         Loothing.Settings:Set("voting", votingSettings)

@@ -1544,6 +1544,52 @@ local function RegisterSlashCommands()
             end,
         },
         {
+            key = "reopen",
+            description = L["SLASH_DESC_REOPEN"],
+            usage = { "/lt reopen response", "/lt reopen council", "/lt reopen award" },
+            handler = function(args)
+                local sub = (args or ""):lower():match("^(%S+)") or ""
+
+                if sub == "response" or sub == "respond" or sub == "roll" then
+                    local tracker = Loothing.ResponseTracker
+                    if not tracker or tracker:GetUnrespondedCount() == 0 then
+                        printLine("No items awaiting response.")
+                        return
+                    end
+                    if InCombatLockdown() then
+                        printLine("Cannot reopen frame during combat. It will appear when combat ends.")
+                        return
+                    end
+                    tracker:CheckAndReshowFrame()
+
+                elseif sub == "council" or sub == "vote" then
+                    local ct = Loothing.UI and Loothing.UI.CouncilTable
+                    if not ct then
+                        printError("Council table not available.")
+                        return
+                    end
+                    if not Loothing.Session or not Loothing.Session:IsActive() then
+                        printLine("No active session.")
+                        return
+                    end
+                    ct:Show()
+
+                elseif sub == "award" or sub == "session" or sub == "trade" then
+                    if not Loothing.Session or not Loothing.Session:IsActive() then
+                        printLine("No active session.")
+                        return
+                    end
+                    ensureMainFrame("session")
+
+                else
+                    printLine("Usage: /lt reopen {response, council, award}")
+                    printLine("  response — Reopen loot response frame")
+                    printLine("  council  — Reopen council voting table")
+                    printLine("  award    — Reopen session/award panel")
+                end
+            end,
+        },
+        {
             key = "resync",
             description = L["SLASH_DESC_RESYNC"],
             usage = { "/lt resync" },

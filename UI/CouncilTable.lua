@@ -1243,6 +1243,10 @@ end
 
 function CouncilTableMixin:Hide()
     self.frame:Hide()
+    -- Hint: tell council members how to reopen if session is still active
+    if Loothing.Session and Loothing.Session:IsActive() then
+        Loothing:Print(L["COUNCIL_TABLE_HIDDEN_HINT"])
+    end
 end
 
 function CouncilTableMixin:Toggle()

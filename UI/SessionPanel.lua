@@ -854,6 +854,46 @@ function SessionPanelMixin:CreateFooter()
     end)
     self.councilTableBtn:Hide()
 
+    -- Reopen Response button (all players during active session)
+    self.reopenResponseBtn = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
+    self.reopenResponseBtn:SetSize(110, 26)
+    self.reopenResponseBtn:SetPoint("RIGHT", self.councilTableBtn, "LEFT", -8, 0)
+    self.reopenResponseBtn:SetText(L["REOPEN_RESPONSE_FRAME"])
+    self.reopenResponseBtn:SetScript("OnClick", function()
+        local mldb = Loothing.MLDB and Loothing.MLDB.mldb
+        local allowChange = mldb and mldb.allowResponseChange
+
+        local rollFrame = Loothing.UI and Loothing.UI.RollFrame
+        if not rollFrame then return end
+
+        local tracker = Loothing.ResponseTracker
+        if not tracker then return end
+
+        -- If unresponded items exist, just reshow (always allowed)
+        if tracker:GetUnrespondedCount() > 0 then
+            tracker:CheckAndReshowFrame()
+            return
+        end
+
+        -- If all items responded, need allowResponseChange permission
+        if not allowChange then
+            Loothing:Print(L["RESPONSE_CHANGE_NOT_ALLOWED"])
+            return
+        end
+
+        rollFrame:ReopenForChange()
+    end)
+    self.reopenResponseBtn:SetScript("OnEnter", function(btn)
+        GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
+        GameTooltip:SetText(L["REOPEN_RESPONSE_FRAME"], 1, 0.82, 0)
+        GameTooltip:AddLine(L["REOPEN_RESPONSE_FRAME_DESC"], 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    self.reopenResponseBtn:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+    self.reopenResponseBtn:Hide()
+
     -- Refresh button
     self.refreshButton = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
     self.refreshButton:SetSize(80, 26)
@@ -1033,6 +1073,7 @@ function SessionPanelMixin:UpdateFooter()
         self.addItemBtn:Hide()
         self.awardLaterCheck:Hide()
         self.councilTableBtn:Hide()
+        self.reopenResponseBtn:Hide()
         return
     end
 
@@ -1107,6 +1148,20 @@ function SessionPanelMixin:UpdateFooter()
         end
     else
         self.councilTableBtn:Hide()
+    end
+
+    -- Reopen Response button: visible during active session for all players
+    if Loothing.Session:IsActive() then
+        self.reopenResponseBtn:Show()
+        -- Re-anchor: if council button is hidden, anchor to refresh button instead
+        self.reopenResponseBtn:ClearAllPoints()
+        if self.councilTableBtn:IsShown() then
+            self.reopenResponseBtn:SetPoint("RIGHT", self.councilTableBtn, "LEFT", -8, 0)
+        else
+            self.reopenResponseBtn:SetPoint("RIGHT", self.refreshButton, "LEFT", -8, 0)
+        end
+    else
+        self.reopenResponseBtn:Hide()
     end
 end
 

@@ -8,7 +8,7 @@ local _, ns = ...
 local Loothing = ns.Addon
 
 -- Addon info
-Loothing.VERSION = "1.9.1"
+Loothing.VERSION = "1.9.4"
 Loothing.PROTOCOL_VERSION = 4
 Loothing.ADDON_PREFIX = "LOOTHING"
 
@@ -300,6 +300,7 @@ Loothing.DefaultSettings = {
         maxRanks = 0,               -- 0 = unlimited (rank all buttons)
         minRanks = 1,               -- Minimum rankings required to submit
         maxRevotes = 2,             -- Maximum re-votes per item
+        allowResponseChange = false, -- Allow players to change their response after submission
     },
 
     announcements = {

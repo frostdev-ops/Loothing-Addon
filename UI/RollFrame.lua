@@ -311,18 +311,21 @@ end
 function RollFrameMixin:ResetUIState(previousResponse)
     local alreadyResponded = previousResponse and previousResponse.submitted
 
-    -- Clear or restore note
+    -- Restore note from previous response (editable in change mode, locked if submitted)
     if self.noteEditBox then
-        if alreadyResponded then
-            self.noteEditBox:SetText(previousResponse.note or "")
-            self.noteEditBox:Disable()
+        if previousResponse and (previousResponse.note or "") ~= "" then
+            self.noteEditBox:SetText(previousResponse.note)
         else
             self.noteEditBox:SetText("")
+        end
+        if alreadyResponded then
+            self.noteEditBox:Disable()
+        else
             self.noteEditBox:Enable()
         end
     end
 
-    -- Restore or clear response button selection
+    -- Enable/disable response buttons (enabled in change mode, locked if submitted)
     for _, btn in pairs(self.responseButtons) do
         if btn.selectedGlow then btn.selectedGlow:Hide() end
         if alreadyResponded then
@@ -332,8 +335,8 @@ function RollFrameMixin:ResetUIState(previousResponse)
         end
     end
 
-    -- If already responded, show the previous selection
-    if alreadyResponded and previousResponse.response then
+    -- Restore previous selection if any (whether locked or changeable)
+    if previousResponse and previousResponse.response then
         self.selectedResponse = previousResponse.response
         local btn = self.responseButtons[previousResponse.response]
         if btn then
@@ -1143,6 +1146,31 @@ end
 -- @return boolean
 function RollFrameMixin:IsShown()
     return self.frame:IsShown()
+end
+
+--- Reopen the frame allowing the player to change already-submitted responses.
+-- Un-marks submitted responses so the UI unlocks them. The original roll
+-- for each item is preserved (stored separately in ResponseTracker.rolls).
+function RollFrameMixin:ReopenForChange()
+    local tracker = Loothing.ResponseTracker
+    if not tracker then return end
+
+    -- Collect all voting items (responded and unresponded)
+    local items = {}
+    for guid, itemRef in pairs(tracker.votingItems) do
+        if itemRef.IsVoting and itemRef:IsVoting() then
+            -- Un-mark submitted responses so the RollFrame UI unlocks them
+            if tracker:HasResponded(guid) then
+                tracker:AllowResponseChange(guid)
+            end
+            items[#items + 1] = itemRef
+        end
+    end
+
+    if #items == 0 then return end
+
+    self:SetItems(items)
+    self:Show()
 end
 
 --- Close the frame

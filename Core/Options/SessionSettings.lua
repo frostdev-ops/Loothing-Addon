@@ -272,11 +272,23 @@ local function GetSessionSettingsOptions()
                             BroadcastMLDBIfNeeded()
                         end,
                     },
+                    allowResponseChange = {
+                        type = "toggle",
+                        name = L["ALLOW_RESPONSE_CHANGE"],
+                        desc = L["ALLOW_RESPONSE_CHANGE_DESC"],
+                        order = 15,
+                        width = "half",
+                        get = function() return Loothing.Settings:GetAllowResponseChange() end,
+                        set = function(_, v)
+                            Loothing.Settings:SetAllowResponseChange(v)
+                            BroadcastMLDBIfNeeded()
+                        end,
+                    },
                     mlIsObserver = {
                         type = "toggle",
                         name = L["CONFIG_ML_OBSERVER"],
                         desc = L["CONFIG_ML_OBSERVER_DESC"],
-                        order = 15,
+                        order = 16,
                         width = "half",
                         get = function() return Loothing.Settings:GetMLIsObserver() end,
                         set = function(_, v)

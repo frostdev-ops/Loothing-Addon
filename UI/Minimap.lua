@@ -211,6 +211,29 @@ function MinimapButtonMixin:ShowContextMenu()
                 Config:Open("Loothing")
             end
         end)
+        if Loothing.Session and Loothing.Session:IsActive() then
+            local L = Loothing.Locale
+            rootDescription:CreateDivider()
+            rootDescription:CreateTitle(L and L["MINIMAP_ACTIVE_SESSION"] or "Active Session")
+            rootDescription:CreateButton(L and L["MINIMAP_REOPEN_COUNCIL"] or "Reopen Council Table", function()
+                local ct = Loothing.UI and Loothing.UI.CouncilTable
+                if ct then ct:Show() end
+            end)
+            rootDescription:CreateButton(L and L["MINIMAP_REOPEN_RESPONSE"] or "Reopen Response Frame", function()
+                local tracker = Loothing.ResponseTracker
+                if tracker and tracker:GetUnrespondedCount() > 0 then
+                    tracker:CheckAndReshowFrame()
+                end
+            end)
+            rootDescription:CreateButton(L and L["MINIMAP_REOPEN_AWARD"] or "Reopen Award Panel", function()
+                if Loothing.UI and Loothing.UI.MainFrame then
+                    Loothing.UI.MainFrame:Show()
+                    if Loothing.UI.MainFrame.SelectTab then
+                        Loothing.UI.MainFrame:SelectTab("session")
+                    end
+                end
+            end)
+        end
         rootDescription:CreateDivider()
         rootDescription:CreateButton(L["HIDE_MINIMAP_BUTTON"], function()
             self:Hide()

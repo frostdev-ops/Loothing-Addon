@@ -154,6 +154,36 @@ function ResponseTrackerMixin:HasResponded(guid)
     return r and r.submitted == true
 end
 
+--- Un-mark a response as submitted so the player can change it.
+-- The roll is preserved (stored separately in self.rolls).
+-- Sets changePending so HasLocalResponse treats this as unresponded
+-- (enabling reshow reminders if the player closes without resubmitting).
+-- The flag is automatically cleared when SetResponse overwrites the record.
+-- @param guid string
+function ResponseTrackerMixin:AllowResponseChange(guid)
+    local r = self.responses[guid]
+    if r then
+        r.submitted = false
+        r.changePending = true
+        self:TriggerEvent("OnResponseChanged", guid, r)
+        self:FireUnrespondedCount()
+    end
+end
+
+--- Get all VOTING items the player HAS responded to
+-- @return table - Array of { guid = string, item = itemRef }
+function ResponseTrackerMixin:GetRespondedVotingItems()
+    local result = {}
+    for guid, itemRef in pairs(self.votingItems) do
+        if self:HasResponded(guid) then
+            if itemRef.IsVoting and itemRef:IsVoting() then
+                result[#result + 1] = { guid = guid, item = itemRef }
+            end
+        end
+    end
+    return result
+end
+
 --[[--------------------------------------------------------------------
     Roll State
 ----------------------------------------------------------------------]]
@@ -206,11 +236,14 @@ end
 
 --- Check if the player has a local response for an item (submitted or queued).
 -- Used by frame-reshow logic: if the player already clicked a button, don't nag them.
+-- Returns false for changePending responses so reshow reminders still fire.
 -- @param guid string
 -- @return boolean
 function ResponseTrackerMixin:HasLocalResponse(guid)
     local r = self.responses[guid]
-    return r and (r.submitted or r.response ~= nil)
+    if not r then return false end
+    if r.changePending then return false end
+    return r.submitted or r.response ~= nil
 end
 
 --- Get all VOTING items the player hasn't responded to
