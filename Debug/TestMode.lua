@@ -805,8 +805,7 @@ function TestMode:ShowCouncilTable()
             end
         end
 
-        -- Set session on council table
-        Loothing.UI.CouncilTable:SetSession(session)
+        -- CouncilTable receives session data via event callbacks — just show it
     end
 
     Loothing.UI.CouncilTable:Show()
@@ -1053,11 +1052,8 @@ function TestMode:ShowCouncilTableForSession()
         return
     end
 
-    -- Set session on CouncilTable
-    if Loothing.Session then
-        Loothing.UI.CouncilTable:SetSession(Loothing.Session)
-    end
-
+    -- CouncilTable receives session data via event callbacks
+    -- (OnSessionStarted, OnItemAdded, OnVotingStarted) — just show it
     Loothing.UI.CouncilTable:Show()
     print("|cff00ff00[Loothing Test]|r CouncilTable opened - select a candidate to award")
 end

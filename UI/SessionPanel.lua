@@ -834,8 +834,8 @@ function SessionPanelMixin:CreateFooter()
 
     -- Council Table button (council members, ML, observers)
     self.councilTableBtn = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
-    self.councilTableBtn:SetSize(100, 26)
-    self.councilTableBtn:SetPoint("RIGHT", -88, 0)
+    self.councilTableBtn:SetSize(80, 26)
+    self.councilTableBtn:SetPoint("RIGHT", -78, 0)
     self.councilTableBtn:SetText(L["SHOW_COUNCIL_TABLE"])
     self.councilTableBtn:SetScript("OnClick", function()
         local ct = Loothing.UI and Loothing.UI.CouncilTable
@@ -856,8 +856,8 @@ function SessionPanelMixin:CreateFooter()
 
     -- Reopen Response button (all players during active session)
     self.reopenResponseBtn = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
-    self.reopenResponseBtn:SetSize(110, 26)
-    self.reopenResponseBtn:SetPoint("RIGHT", self.councilTableBtn, "LEFT", -8, 0)
+    self.reopenResponseBtn:SetSize(80, 26)
+    self.reopenResponseBtn:SetPoint("RIGHT", self.councilTableBtn, "LEFT", -4, 0)
     self.reopenResponseBtn:SetText(L["REOPEN_RESPONSE_FRAME"])
     self.reopenResponseBtn:SetScript("OnClick", function()
         local mldb = Loothing.MLDB and Loothing.MLDB.mldb
@@ -896,7 +896,7 @@ function SessionPanelMixin:CreateFooter()
 
     -- Refresh button
     self.refreshButton = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
-    self.refreshButton:SetSize(80, 26)
+    self.refreshButton:SetSize(70, 26)
     self.refreshButton:SetPoint("RIGHT")
     self.refreshButton:SetText(L["REFRESH"])
     self.refreshButton:SetScript("OnClick", function()
@@ -1156,9 +1156,9 @@ function SessionPanelMixin:UpdateFooter()
         -- Re-anchor: if council button is hidden, anchor to refresh button instead
         self.reopenResponseBtn:ClearAllPoints()
         if self.councilTableBtn:IsShown() then
-            self.reopenResponseBtn:SetPoint("RIGHT", self.councilTableBtn, "LEFT", -8, 0)
+            self.reopenResponseBtn:SetPoint("RIGHT", self.councilTableBtn, "LEFT", -4, 0)
         else
-            self.reopenResponseBtn:SetPoint("RIGHT", self.refreshButton, "LEFT", -8, 0)
+            self.reopenResponseBtn:SetPoint("RIGHT", self.refreshButton, "LEFT", -4, 0)
         end
     else
         self.reopenResponseBtn:Hide()
