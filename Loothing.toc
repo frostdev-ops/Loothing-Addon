@@ -1,7 +1,7 @@
 ## Interface: 120000
 ## AllowLoadGameType: standard
 ## Title: Loothing
-## Notes: Loot Council addon for WoW 12.0+ with ranked choice voting
+## Notes: Loot council addon for WoW 12.0+ — syncs to loothing.xyz. Discord: discord.gg/nNRfxQApEB
 ## Author: James Kueller
 ## Version: 1.9.5
 ## SavedVariables: LoolibDB

@@ -1,70 +1,84 @@
 # Loothing
 
-A loot council addon for World of Warcraft 12.0+ (Midnight). Built on [Loolib](https://github.com/frostdev-ops/Loolib).
+The in-game companion addon for [Loothing.xyz](https://loothing.xyz/), a free guild management platform. Loot history, council decisions, and session data sync to your guild's dashboard on the web.
 
-**Version**: 1.5.9 | **Interface**: 120000 | **License**: MIT
+Join the community: **[Loothing Discord](https://discord.gg/nNRfxQApEB)**
 
----
-
-## Features
-
-- **Council voting** — Designate council members who vote on each item. Votes are tallied in real time with percentage bars and a recommended winner
-- **Candidate table** — Sortable columns for class, role, item level, equipped gear, response, roll, loot count (session / instance / weekly), and council votes
-- **Session management** — Master Looter adds items, starts sessions, and awards loot with optional award reasons. Items can be queued for later
-- **Observer system** — Granular observer permissions: ML-observer mode, per-player observer list, open observation for the whole raid. Configurable visibility of votes, voter identities, responses, and notes
-- **Roster tab** — Full raid overview with version status, council membership, role, item level, and history counts. Right-click to manage council/observer/ML assignments
-- **Trade queue** — Awarded items are automatically tracked for the 2-hour trade window
-- **Loot history** — Per-player history with instance and weekly counts. Used to populate loot-count columns
-- **Silent rolls** — Every response includes a roll value (auto-generated if the player doesn't `/roll`) so the council always has a tiebreaker
-- **Whisper responses** — Players without the addon can respond via whisper
-- **Version check** — Broadcasts addon version to the raid; Roster tab shows color-coded version status per player
-- **Test mode** — Full in-game test harness (`/lt test`) with fake candidates, votes, and stress tests
-
----
+Having issues or suggestions? Head over to the [Loothing GitHub Issues](https://github.com/frostdev-ops/Loothing-Addon/issues) page!
 
 ## Requirements
 
-- World of Warcraft 12.0+ (Midnight, Interface 120000)
-- [Loolib](https://github.com/frostdev-ops/Loolib) (required dependency)
+**WoW 12.0+ (Midnight), retail only.** All dependencies are bundled.
 
----
+## Group Loot
 
-## Installation
+Since Dragonflight, raids use group loot only. Loothing handles this by having the group leader automatically need on loot while everyone else passes. Configurable to guild-only groups and per quality threshold.
 
-1. Download the latest release zip
-2. Extract `Loothing/` into your `World of Warcraft/_retail_/Interface/AddOns/` directory
-3. Standalone `Loolib/` is only needed for source-linked development workflows; the release package embeds the required runtime subset automatically
-4. Reload or launch the game
+All raid members should have Loothing installed for automatic rolling. If someone doesn't, they should pass manually and let the leader collect. If an item ends up with the wrong person, have them trade it to the leader or use `/lt add PlayerName [item]` to add it to the session manually.
 
----
+## Features
+
+*   **Loot Council Automation** — Detects tradable items after boss kills and prompts the ML to start a session. Council members vote, raiders submit responses.
+*   **Dual Voting** — Simple Majority or Ranked Choice / Instant Runoff. Configurable tie-breaking (rolls, ML choice, revote).
+*   **Custom Response Buttons** — Two built-in sets (Need/Greed/Offspec/Transmog/Pass and BIS/Major/Minor/Sidegrade/Pass). Fully customizable text, colors, and count (1-10).
+*   **Custom Council** — Auto-include guild officers, raid leader, or specific members. Solo council mode available.
+*   **Real-Time Voting** — Live vote updates across the raid. Anonymous voting, hidden counts, self-voting restrictions, required notes.
+*   **Trade Distribution** — After awarding, the item owner sees who to trade to. Click to auto-trade when in range. Tracks bind-on-trade timers.
+*   **Whisper Support** — Raiders without the addon can whisper `!need`, `!greed`, `!pass` etc. to the ML.
+*   **Auto Pass** — Skips items your class can't equip. Optional auto-pass on weapons, BoE, transmog, and off-class trinkets.
+*   **Auto Award** — Auto-award items in a quality range to a designated player (e.g., disenchanter).
+*   **Loot History** — Full metadata logging (winner, reason, ilvl, votes, timestamp, encounter). CSV/TSV import/export. Guild sync.
+*   **Announcements** — Template-based award/item announcements with tokens (`{item}`, `{winner}`, `{reason}`, `{ilvl}`, etc.) to any channel.
+*   **Award Reasons** — Six built-in (Main Spec, Off Spec, PvP, DE, Free Roll, Bank). Customizable names, colors, sort order.
+*   **Sync** — Sync settings and history across guild members. Late joiners auto-sync session state.
+*   **Item Filtering** — Filter by class, response, rank, equippability. Permanent ignore list for unwanted items.
+*   **Encounter-Aware Comms** — Messages queue during boss fights and replay after — no lost votes or awards.
+*   **Version Check** — See who has Loothing and what version from the addon UI.
+*   **Test Mode** — Simulates full loot council workflows with fake items. No raid required.
+*   **Localization** — EN, DE, ES, PT, RU, FR, IT, KO, zhCN, zhTW, and Brainrot.
+*   **Minimap & Addon Compartment** — Click to toggle, right-click for settings.
+
+## Setup
+
+Install Loothing and you're ready to go. Raiders without the addon can whisper responses to the ML using keywords.
 
 ## Usage
 
-Open the main window via the minimap button or `/lt`.
+The raid leader is prompted to enable Loothing upon entering a raid. When enabled, the addon watches for tradable items after boss kills. The ML sees a Session Frame with detected items — click "Start" to begin.
+
+Council members see the Voting Frame (candidates, responses, gear comparisons, ilvl diffs, items won). Raiders see the Roll Frame to pick their response. The ML right-clicks a candidate to award or skip. The item owner then sees the Trade Panel to complete the handoff.
+
+Works out of the box. Settings panel available for voting rules, announcements, auto-pass, auto-award, button sets, council, and more.
+
+## Commands
+
+Prefix: `/lt` or `/loothing`
 
 | Command | Description |
 | --- | --- |
-| `/lt` | Toggle main window |
-| `/lt test` | Open test mode menu |
-| `/lt version` | Print addon version |
+| `/lt` or `/lt show` | Show the main window |
+| `/lt hide` | Hide the main window |
+| `/lt toggle` | Toggle the main window |
+| `/lt config [section]` | Open settings (`council`, etc.) |
+| `/lt history` | Open the history tab |
+| `/lt council` | Open council settings |
+| `/lt ml [name\|clear]` | Show, set, or clear the Master Looter |
+| `/lt vote` | Toggle the council voting table |
+| `/lt roll` | Reopen the Roll Frame for unresponded items |
+| `/lt reopen <type>` | Reopen response, council, or award window |
+| `/lt ignore <item>` | Add/remove an item from the ignore list |
+| `/lt sync settings [target]` | Sync settings to guild or a player |
+| `/lt sync history [target] [days]` | Sync loot history (default 7 days) |
+| `/lt import <data>` | Import history from CSV/TSV |
+| `/lt help [command]` | Show command list or detailed usage |
 
-**Setting up a session:**
+### Debug Commands (require `/lt debug on`)
 
-1. Zone into a raid instance
-2. The Master Looter opens Loothing and items appear automatically when looted
-3. Start a session — candidates respond via the RollFrame or whisper
-4. Council members vote in the CouncilTable
-5. ML selects a winner in the ResultsPanel and clicks Award
-
----
-
-## Slash Commands
-
-- `/lt` — Toggle main frame
-- `/lt test [subcommand]` — Test mode (see in-game menu)
-- `/lt debug` — Toggle debug output
-
----
+| Command | Description |
+| --- | --- |
+| `/lt debug [on\|off]` | Toggle debug mode |
+| `/lt test ...` | Test mode utilities |
+| `/lt testmode ...` | Control test mode persistence |
 
 ## License
 
