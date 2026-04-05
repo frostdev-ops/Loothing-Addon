@@ -2,9 +2,7 @@
 
 The in-game companion addon for [Loothing.xyz](https://loothing.xyz/), a free guild management platform. Loot history, council decisions, and session data sync to your guild's dashboard on the web.
 
-Join the community: **[Loothing Discord](https://discord.gg/nNRfxQApEB)**
-
-Having issues or suggestions? Head over to the [Loothing GitHub Issues](https://github.com/frostdev-ops/Loothing-Addon/issues) page!
+Having issues, suggestions, or just want to hang out? Join the **[Loothing Discord](https://discord.gg/nNRfxQApEB)**!
 
 ## Requirements
 
