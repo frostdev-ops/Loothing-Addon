@@ -1713,6 +1713,13 @@ function SessionMixin:AwardItem(guid, winner, response, awardReasonId, awardReas
 
         local instanceData = item.instanceData or {}
 
+        -- Resolve the winner's response text for top-level fields
+        local responseInfo = Loothing.ResponseInfo[response]
+        local responseText = responseInfo
+            and (responseInfo.text or responseInfo.name) or nil
+
+        local now = time()
+
         local historyEntry = {
             -- Item identification
             itemLink      = item.itemLink,
@@ -1724,11 +1731,10 @@ function SessionMixin:AwardItem(guid, winner, response, awardReasonId, awardReas
             subTypeID     = item.subTypeID,
             bindType      = item.bindType,
             isBoe         = item.isBoe,
-            -- Winner info
+            -- Winner info (original field names kept for backward compat)
             winner          = winner,
             winnerResponse  = response,
-            winnerResponseText = Loothing.ResponseInfo[response]
-                and (Loothing.ResponseInfo[response].text or Loothing.ResponseInfo[response].name) or nil,
+            winnerResponseText = responseText,
             winnerClass     = winnerCandidate and winnerCandidate.playerClass or nil,
             winnerNote      = winnerCandidate and winnerCandidate.note or nil,
             winnerRoll      = winnerCandidate and winnerCandidate.roll or nil,
@@ -1737,9 +1743,17 @@ function SessionMixin:AwardItem(guid, winner, response, awardReasonId, awardReas
             winnerGear1ilvl = winnerCandidate and winnerCandidate.gear1ilvl or nil,
             winnerGear2ilvl = winnerCandidate and winnerCandidate.gear2ilvl or nil,
             winnerIlvlDiff  = winnerCandidate and winnerCandidate.ilvlDiff or nil,
+            -- Top-level response fields for direct import (avoids candidate lookup)
+            response        = responseText,
+            responseID      = response,
+            -- Timestamps: unix epoch + pre-formatted UTC strings
+            timestamp     = now,
+            date          = date("!%Y-%m-%d", now),
+            time          = date("!%H:%M:%S", now),
             -- Session / encounter
             encounterID    = self.encounterID,
             encounterName  = self.encounterName,
+            boss           = self.encounterName,
             instance       = instanceData.name,
             difficultyID   = instanceData.difficultyID,
             difficultyName = instanceData.difficultyName,
@@ -1747,7 +1761,6 @@ function SessionMixin:AwardItem(guid, winner, response, awardReasonId, awardReas
             mapID          = instanceData.mapID,
             -- Award metadata
             votes         = item:GetVotes():GetSize(),
-            timestamp     = time(),
             awardReasonId = awardReasonId,
             awardReason   = awardReason,
             owner         = item.looter,

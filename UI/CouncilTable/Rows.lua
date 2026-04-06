@@ -7,6 +7,7 @@ local _, ns = ...
 local Loothing = ns.Addon
 local Utils = ns.Utils
 local TestMode = ns.TestMode
+local SkinningMixin = ns.SkinningMixin
 
 local CouncilTableMixin = ns.CouncilTableMixin or {}
 ns.CouncilTableMixin = CouncilTableMixin
@@ -34,6 +35,9 @@ function CouncilTableMixin:CreateCell(parent, col)
     text:SetPoint("RIGHT", -2, 0)
     text:SetJustifyH("LEFT")
     text:SetWordWrap(false)
+    if SkinningMixin then
+        SkinningMixin:StyleText(text, "bodySmall", "text")
+    end
     cell.text = text
 
     -- Icon (used by class, role, gear, note columns)
@@ -68,11 +72,14 @@ function CouncilTableMixin:CreateCell(parent, col)
 
     -- Vote button (toggle button replacing checkbox)
     if col.id == "vote" then
-        local voteBtn = CreateFrame("Button", nil, cell, "UIPanelButtonTemplate")
+        local voteBtn = ns.CreateThemedButton(cell)
         voteBtn:SetSize(46, 18)
         voteBtn:SetPoint("RIGHT", cell, "RIGHT", -2, 0)
         voteBtn:Hide()
         cell.voteButton = voteBtn
+        if SkinningMixin then
+            SkinningMixin:StylePlainButton(voteBtn)
+        end
         -- Vote count shown to the left of the button
         text:SetPoint("LEFT", 2, 0)
     end
@@ -210,14 +217,14 @@ function CouncilTableMixin:UpdateRow(row, candidate, index)
 
     -- Alternating row colors
     if index % 2 == 0 then
-        row.bg:SetColorTexture(0.08, 0.08, 0.12, 0.6)
+        row.bg:SetColorTexture(unpack(SkinningMixin:GetColor("row")))
     else
-        row.bg:SetColorTexture(0.05, 0.05, 0.08, 0.4)
+        row.bg:SetColorTexture(unpack(SkinningMixin:GetColor("rowAlt")))
     end
 
     -- Selected highlight
     if self.selectedCandidate and candidate.name == self.selectedCandidate.name then
-        row.bg:SetColorTexture(0.15, 0.15, 0.25, 0.8)
+        row.bg:SetColorTexture(unpack(SkinningMixin:GetColor("rowSelected")))
     end
 
     -- Update each cell via DoCellUpdate

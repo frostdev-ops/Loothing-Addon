@@ -135,10 +135,11 @@ function VersionCheckPanelMixin:CreateElements()
     self:CreateScrollArea()
 
     -- Query button
-    self.queryBtn = CreateFrame("Button", nil, self.frame, "UIPanelButtonTemplate")
+    self.queryBtn = ns.CreateThemedButton(self.frame)
     self.queryBtn:SetSize(140, 26)
     self.queryBtn:SetPoint("BOTTOMLEFT", 20, 18)
     self.queryBtn:SetText(L["QUERY_GROUP"])
+    ns.SkinningMixin:StylePlainButton(self.queryBtn, "primary")
     self.queryBtn:SetScript("OnClick", function()
         self:QueryVersions()
     end)

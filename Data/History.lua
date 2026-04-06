@@ -69,6 +69,30 @@ function HistoryMixin:AddEntry(entry)
     entry.timestamp = entry.timestamp or time()
     entry.guid = entry.guid or Utils.GenerateGUID()
 
+    -- Backfill date/time from timestamp if missing (pre-1.10 entries or remote sync)
+    if not entry.date and entry.timestamp > 0 then
+        entry.date = date("!%Y-%m-%d", entry.timestamp)
+    end
+    if not entry.time and entry.timestamp > 0 then
+        entry.time = date("!%H:%M:%S", entry.timestamp)
+    end
+
+    -- Backfill top-level response/responseID from winnerResponse if missing
+    if not entry.response and entry.winnerResponse then
+        local info = Loothing.ResponseInfo[entry.winnerResponse]
+        if info then
+            entry.response = info.text or info.name
+        end
+    end
+    if not entry.responseID and entry.winnerResponse then
+        entry.responseID = entry.winnerResponse
+    end
+
+    -- Backfill boss from encounterName if missing
+    if not entry.boss and entry.encounterName then
+        entry.boss = entry.encounterName
+    end
+
     -- Parse item info if not present
     if entry.itemLink and not entry.itemName then
         local itemInfo = Utils.GetItemInfo(entry.itemLink)
@@ -644,18 +668,55 @@ function HistoryMixin:LoadFromSaved()
         return
     end
 
+    local needsResave = false
+
     for _, entryData in ipairs(saved) do
         local entry = {}
         for k, v in pairs(entryData) do
             entry[k] = v
         end
         entry.guid = entry.guid or Utils.GenerateGUID()
+
+        -- Backfill new fields on legacy entries (pre-1.10)
+        local ts = entry.timestamp or 0
+        if not entry.date and ts > 0 then
+            entry.date = date("!%Y-%m-%d", ts)
+            needsResave = true
+        end
+        if not entry.time and ts > 0 then
+            entry.time = date("!%H:%M:%S", ts)
+            needsResave = true
+        end
+        if not entry.response and entry.winnerResponse then
+            local info = Loothing.ResponseInfo and Loothing.ResponseInfo[entry.winnerResponse]
+            if info then
+                entry.response = info.text or info.name
+                needsResave = true
+            end
+        end
+        if not entry.responseID and entry.winnerResponse then
+            entry.responseID = entry.winnerResponse
+            needsResave = true
+        end
+        if not entry.boss and entry.encounterName then
+            entry.boss = entry.encounterName
+            needsResave = true
+        end
+
         self.entries:Insert(entry)
     end
 
     -- Auto-prune entries older than 180 days on load
     self:DeleteByAge(180)
     self:PruneSavedHistory()
+
+    -- Re-persist if legacy entries were backfilled with new fields
+    if needsResave then
+        self:RebuildSavedHistory()
+    end
+
+    -- Ensure responseDefs are in SavedVariables
+    self:PersistResponseDefs()
 
     -- Apply initial filter (shows all)
     self:ApplyFilter()
@@ -673,6 +734,9 @@ function HistoryMixin:SaveEntry(entry)
         persistable[k] = v
     end
     Loothing.Settings:AddHistoryEntry(persistable)
+
+    -- Keep responseDefs in sync alongside history
+    self:PersistResponseDefs()
 end
 
 function HistoryMixin:SaveEntries(entries)
@@ -690,6 +754,39 @@ function HistoryMixin:SaveEntries(entries)
     end
 
     Loothing.Settings:AddHistoryEntries(persistables)
+
+    -- Keep responseDefs in sync alongside history
+    self:PersistResponseDefs()
+end
+
+--- Persist the current response definitions to SavedVariables.
+-- Stored in LoolibDB.addons.Loothing.global.responseDefs so the desktop
+-- app can include them in uploads without a separate web export.
+function HistoryMixin:PersistResponseDefs()
+    if not Loothing.Settings then return end
+    Loothing.Settings:SetGlobalValue("responseDefs", self:GetResponseDefs())
+end
+
+--- Rebuild the entire SavedVariables history from in-memory entries.
+-- Used to persist backfilled fields (date, time, response, boss) on
+-- legacy entries after LoadFromSaved enriches them.
+function HistoryMixin:RebuildSavedHistory()
+    if not Loothing.Settings then return end
+
+    Loothing.Settings:ClearHistory()
+
+    local all = {}
+    for _, entry in self.entries:Enumerate() do
+        local persistable = {}
+        for k, v in pairs(entry) do
+            persistable[k] = v
+        end
+        all[#all + 1] = persistable
+    end
+
+    if #all > 0 then
+        Loothing.Settings:AddHistoryEntries(all)
+    end
 end
 
 --- Remove a saved entry

@@ -8,6 +8,7 @@ local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local Utils = ns.Utils
 local Popups = ns.Popups
+local SkinningMixin = ns.SkinningMixin
 
 --[[--------------------------------------------------------------------
     HistoryPanelMixin
@@ -38,6 +39,7 @@ function HistoryPanelMixin:Init(parent)
 
     self:CreateFrame()
     self:CreateElements()
+    self:ApplyTheme()
 
     if Loothing.History then
         Loothing.History:RegisterCallback("OnHistoryChanged", function()
@@ -69,8 +71,7 @@ function HistoryPanelMixin:CreateElements()
     datePane:SetPoint("TOPLEFT")
     datePane:SetPoint("BOTTOMLEFT")
     datePane:SetWidth(100)
-    datePane:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background" })
-    datePane:SetBackdropColor(0, 0, 0, 0.3)
+    SkinningMixin:StyleSurface(datePane, "inset")
     self.datePane = datePane
 
     -- Center pane: Player list
@@ -78,8 +79,7 @@ function HistoryPanelMixin:CreateElements()
     playerPane:SetPoint("TOPLEFT", datePane, "TOPRIGHT", 2, 0)
     playerPane:SetPoint("BOTTOMLEFT", datePane, "BOTTOMRIGHT", 2, 0)
     playerPane:SetWidth(120)
-    playerPane:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background" })
-    playerPane:SetBackdropColor(0, 0, 0, 0.3)
+    SkinningMixin:StyleSurface(playerPane, "inset")
     self.playerPane = playerPane
 
     -- Right pane: History (filter bar + list)
@@ -116,13 +116,13 @@ function HistoryPanelMixin:CreateFilterBar()
     searchBox:SetPoint("LEFT")
     searchBox:SetAutoFocus(false)
     searchBox:SetText(placeholder)
-    searchBox:SetTextColor(0.5, 0.5, 0.5)
+    searchBox:SetTextColor(unpack(SkinningMixin:GetColor("textSubtle")))
     searchBox:SetScript("OnEditFocusGained", function(editBox)
         local fb = editBox:GetParent()
         if fb._placeholderActive then
             fb._placeholderActive = false
             editBox:SetText("")
-            editBox:SetTextColor(1, 1, 1)
+            editBox:SetTextColor(unpack(SkinningMixin:GetColor("text")))
         end
     end)
     searchBox:SetScript("OnEditFocusLost", function(editBox)
@@ -130,7 +130,7 @@ function HistoryPanelMixin:CreateFilterBar()
             local fb = editBox:GetParent()
             fb._placeholderActive = true
             editBox:SetText(fb._placeholder)
-            editBox:SetTextColor(0.5, 0.5, 0.5)
+            editBox:SetTextColor(unpack(SkinningMixin:GetColor("textSubtle")))
         end
     end)
     searchBox:SetScript("OnTextChanged", function(editBox)
@@ -145,48 +145,52 @@ function HistoryPanelMixin:CreateFilterBar()
     self.searchBox = searchBox
 
     -- Winner filter dropdown
-    local winnerButton = CreateFrame("Button", nil, filterBar, "UIPanelButtonTemplate")
+    local winnerButton = ns.CreateThemedButton(filterBar)
     winnerButton:SetSize(80, 20)
     winnerButton:SetPoint("LEFT", searchBox, "RIGHT", 8, 0)
     winnerButton:SetText(L["ALL_WINNERS"])
     winnerButton:SetScript("OnClick", function()
         self:ShowWinnerDropdown()
     end)
+    SkinningMixin:StylePlainButton(winnerButton)
     self.winnerButton = winnerButton
 
     -- Response filter
-    local responseButton = CreateFrame("Button", nil, filterBar, "UIPanelButtonTemplate")
+    local responseButton = ns.CreateThemedButton(filterBar)
     responseButton:SetSize(80, 20)
     responseButton:SetPoint("LEFT", winnerButton, "RIGHT", 4, 0)
     responseButton:SetText("Response")
     responseButton:SetScript("OnClick", function()
         self:ShowResponseFilterDropdown()
     end)
+    SkinningMixin:StylePlainButton(responseButton)
     self.responseFilterButton = responseButton
 
     -- Class filter
-    local classButton = CreateFrame("Button", nil, filterBar, "UIPanelButtonTemplate")
+    local classButton = ns.CreateThemedButton(filterBar)
     classButton:SetSize(60, 20)
     classButton:SetPoint("LEFT", responseButton, "RIGHT", 4, 0)
     classButton:SetText("Class")
     classButton:SetScript("OnClick", function()
         self:ShowClassFilterDropdown()
     end)
+    SkinningMixin:StylePlainButton(classButton)
     self.classFilterButton = classButton
 
     -- Clear filters button
-    local clearButton = CreateFrame("Button", nil, filterBar, "UIPanelButtonTemplate")
+    local clearButton = ns.CreateThemedButton(filterBar)
     clearButton:SetSize(50, 20)
     clearButton:SetPoint("RIGHT")
     clearButton:SetText(L["CLEAR"])
     clearButton:SetScript("OnClick", function()
         self:ClearFilters()
     end)
+    SkinningMixin:StylePlainButton(clearButton, "primary")
 
     -- Entry count
     self.countText = filterBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     self.countText:SetPoint("RIGHT", clearButton, "LEFT", -8, 0)
-    self.countText:SetTextColor(0.7, 0.7, 0.7)
+    SkinningMixin:StyleText(self.countText, "bodySmall", "textMuted")
 
     filterBar.mixin = self
     self.filterBar = filterBar
@@ -260,21 +264,14 @@ function HistoryPanelMixin:CreateHistoryList()
     local container = CreateFrame("Frame", nil, self.historyPane, "BackdropTemplate")
     container:SetPoint("TOPLEFT", 0, 0)
     container:SetPoint("BOTTOMRIGHT", 0, 0)
-    container:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        tile = false,
-        edgeSize = 1,
-        insets = { left = 1, right = 1, top = 1, bottom = 1 },
-    })
-    container:SetBackdropColor(0.05, 0.05, 0.05, 0.9)
-    container:SetBackdropBorderColor(0.2, 0.2, 0.2, 1)
+    SkinningMixin:StyleSurface(container, "inset")
 
     -- Column headers
     local headerFrame = CreateFrame("Frame", nil, container)
     headerFrame:SetPoint("TOPLEFT", 8, -4)
     headerFrame:SetPoint("TOPRIGHT", -24, -4)
     headerFrame:SetHeight(20)
+    self.listHeaderFrame = headerFrame
 
     local L = Loothing.Locale
 
@@ -282,24 +279,28 @@ function HistoryPanelMixin:CreateHistoryList()
     dateHeader:SetPoint("LEFT")
     dateHeader:SetWidth(80)
     dateHeader:SetText(L["DATE"])
-    dateHeader:SetTextColor(0.7, 0.7, 0.7)
+    SkinningMixin:StyleText(dateHeader, "bodySmall", "textMuted")
+    self.dateHeaderText = dateHeader
 
     local itemHeader = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     itemHeader:SetPoint("LEFT", dateHeader, "RIGHT", 8, 0)
     itemHeader:SetText(L["ITEM"])
-    itemHeader:SetTextColor(0.7, 0.7, 0.7)
+    SkinningMixin:StyleText(itemHeader, "bodySmall", "textMuted")
+    self.itemHeaderText = itemHeader
 
     local winnerHeader = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     winnerHeader:SetPoint("RIGHT", -80, 0)
     winnerHeader:SetText(L["WINNER"])
-    winnerHeader:SetTextColor(0.7, 0.7, 0.7)
+    SkinningMixin:StyleText(winnerHeader, "bodySmall", "textMuted")
+    self.winnerHeaderText = winnerHeader
 
     -- Separator
     local sep = container:CreateTexture(nil, "ARTWORK")
     sep:SetPoint("TOPLEFT", 8, -24)
     sep:SetPoint("TOPRIGHT", -8, -24)
     sep:SetHeight(1)
-    sep:SetColorTexture(0.3, 0.3, 0.3, 1)
+    sep:SetColorTexture(unpack(SkinningMixin:GetColor("border")))
+    self.listSeparator = sep
 
     -- Scroll frame
     local scrollFrame = CreateFrame("ScrollFrame", nil, container, "UIPanelScrollFrameTemplate")
@@ -334,7 +335,7 @@ function HistoryPanelMixin:CreateHistoryList()
     self.emptyText = container:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     self.emptyText:SetPoint("CENTER")
     self.emptyText:SetText(L["NO_HISTORY"])
-    self.emptyText:SetTextColor(0.5, 0.5, 0.5)
+    SkinningMixin:StyleText(self.emptyText, "body", "textSubtle")
 end
 
 --- Create footer
@@ -347,24 +348,82 @@ function HistoryPanelMixin:CreateFooter()
     footer:SetHeight(36)
 
     -- Export button
-    self.exportButton = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
+    self.exportButton = ns.CreateThemedButton(footer)
     self.exportButton:SetSize(80, 26)
     self.exportButton:SetPoint("LEFT")
     self.exportButton:SetText(L["EXPORT"])
     self.exportButton:SetScript("OnClick", function()
         self:ShowExportDialog()
     end)
+    SkinningMixin:StylePlainButton(self.exportButton)
 
     -- Clear history button
-    self.clearButton = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
+    self.clearButton = ns.CreateThemedButton(footer)
     self.clearButton:SetSize(100, 26)
     self.clearButton:SetPoint("RIGHT")
     self.clearButton:SetText(L["CLEAR_HISTORY"])
     self.clearButton:SetScript("OnClick", function()
         self:ConfirmClearHistory()
     end)
+    SkinningMixin:StylePlainButton(self.clearButton, "primary")
 
     self.footer = footer
+end
+
+function HistoryPanelMixin:ApplyTheme()
+    local inset = SkinningMixin:GetLayoutValue("panelInset", 8)
+    local footerInset = SkinningMixin:GetLayoutValue("footerInset", 8)
+
+    if self.paneContainer then
+        self.paneContainer:ClearAllPoints()
+        self.paneContainer:SetPoint("TOPLEFT", inset, -40)
+        self.paneContainer:SetPoint("BOTTOMRIGHT", -inset, 50)
+    end
+
+    if self.filterBar then
+        self.filterBar:ClearAllPoints()
+        self.filterBar:SetPoint("TOPLEFT", inset, -inset)
+        self.filterBar:SetPoint("TOPRIGHT", -inset, -inset)
+    end
+
+    if self.footer then
+        self.footer:ClearAllPoints()
+        self.footer:SetPoint("BOTTOMLEFT", footerInset, footerInset)
+        self.footer:SetPoint("BOTTOMRIGHT", -footerInset, footerInset)
+    end
+
+    if self.datePane then
+        SkinningMixin:StyleSurface(self.datePane, "inset")
+    end
+    if self.playerPane then
+        SkinningMixin:StyleSurface(self.playerPane, "inset")
+    end
+    if self.listContainer then
+        SkinningMixin:StyleSurface(self.listContainer, "inset")
+    end
+
+    if self.searchBox then
+        if self.filterBar and self.filterBar._placeholderActive then
+            self.searchBox:SetTextColor(unpack(SkinningMixin:GetColor("textSubtle")))
+        else
+            self.searchBox:SetTextColor(unpack(SkinningMixin:GetColor("text")))
+        end
+    end
+
+    SkinningMixin:StylePlainButton(self.winnerButton)
+    SkinningMixin:StylePlainButton(self.responseFilterButton)
+    SkinningMixin:StylePlainButton(self.classFilterButton)
+    SkinningMixin:StylePlainButton(self.exportButton)
+    SkinningMixin:StylePlainButton(self.clearButton, "primary")
+    SkinningMixin:StyleText(self.countText, "bodySmall", "textMuted")
+    SkinningMixin:StyleText(self.dateHeaderText, "bodySmall", "textMuted")
+    SkinningMixin:StyleText(self.itemHeaderText, "bodySmall", "textMuted")
+    SkinningMixin:StyleText(self.winnerHeaderText, "bodySmall", "textMuted")
+    SkinningMixin:StyleText(self.emptyText, "body", "textSubtle")
+
+    if self.listSeparator then
+        self.listSeparator:SetColorTexture(unpack(SkinningMixin:GetColor("border")))
+    end
 end
 
 --- Create date list in the left pane
@@ -1096,74 +1155,83 @@ function HistoryPanelMixin:ShowExportDialog()
         end)
 
         -- Format buttons
-        local csvButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+        local csvButton = ns.CreateThemedButton(frame)
         csvButton:SetSize(45, 22)
         csvButton:SetPoint("BOTTOMLEFT", 16, 16)
         csvButton:SetText("CSV")
+        SkinningMixin:StylePlainButton(csvButton)
         csvButton:SetScript("OnClick", function()
             self:SetExportText(Loothing.History:ExportCSV())
         end)
 
-        local tsvButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+        local tsvButton = ns.CreateThemedButton(frame)
         tsvButton:SetSize(45, 22)
         tsvButton:SetPoint("LEFT", csvButton, "RIGHT", 4, 0)
         tsvButton:SetText("TSV")
+        SkinningMixin:StylePlainButton(tsvButton)
         tsvButton:SetScript("OnClick", function()
             self:SetExportText(Loothing.History:ExportTSV())
         end)
 
-        local luaButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+        local luaButton = ns.CreateThemedButton(frame)
         luaButton:SetSize(45, 22)
         luaButton:SetPoint("LEFT", tsvButton, "RIGHT", 4, 0)
         luaButton:SetText("Lua")
+        SkinningMixin:StylePlainButton(luaButton)
         luaButton:SetScript("OnClick", function()
             self:SetExportText(Loothing.History:ExportLua())
         end)
 
-        local bbcodeButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+        local bbcodeButton = ns.CreateThemedButton(frame)
         bbcodeButton:SetSize(70, 22)
         bbcodeButton:SetPoint("LEFT", luaButton, "RIGHT", 4, 0)
         bbcodeButton:SetText("BBCode")
+        SkinningMixin:StylePlainButton(bbcodeButton)
         bbcodeButton:SetScript("OnClick", function()
             self:SetExportText(Loothing.History:ExportBBCode())
         end)
 
-        local discordButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+        local discordButton = ns.CreateThemedButton(frame)
         discordButton:SetSize(70, 22)
         discordButton:SetPoint("LEFT", bbcodeButton, "RIGHT", 4, 0)
         discordButton:SetText("Discord")
+        SkinningMixin:StylePlainButton(discordButton)
         discordButton:SetScript("OnClick", function()
             self:SetExportText(Loothing.History:ExportDiscord())
         end)
 
-        local jsonButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+        local jsonButton = ns.CreateThemedButton(frame)
         jsonButton:SetSize(50, 22)
         jsonButton:SetPoint("LEFT", discordButton, "RIGHT", 4, 0)
         jsonButton:SetText("JSON")
+        SkinningMixin:StylePlainButton(jsonButton)
         jsonButton:SetScript("OnClick", function()
             self:SetExportText(Loothing.History:ExportJSON())
         end)
 
-        local eqdkpButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+        local eqdkpButton = ns.CreateThemedButton(frame)
         eqdkpButton:SetSize(60, 22)
         eqdkpButton:SetPoint("LEFT", jsonButton, "RIGHT", 4, 0)
         eqdkpButton:SetText(L["EXPORT_EQDKP"])
+        SkinningMixin:StylePlainButton(eqdkpButton)
         eqdkpButton:SetScript("OnClick", function()
             self:SetExportText(Loothing.History:ExportEQdkp())
         end)
 
-        local webButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+        local webButton = ns.CreateThemedButton(frame)
         webButton:SetSize(50, 22)
         webButton:SetPoint("LEFT", eqdkpButton, "RIGHT", 4, 0)
         webButton:SetText("Web")
+        SkinningMixin:StylePlainButton(webButton)
         webButton:SetScript("OnClick", function()
             self:SetExportText(Loothing.History:ExportCompact())
         end)
 
-        local selectAll = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+        local selectAll = ns.CreateThemedButton(frame)
         selectAll:SetSize(80, 22)
         selectAll:SetPoint("BOTTOMRIGHT", -16, 16)
         selectAll:SetText(L["SELECT_ALL"])
+        SkinningMixin:StylePlainButton(selectAll)
         selectAll:SetScript("OnClick", function()
             editBox:HighlightText()
             editBox:SetFocus()

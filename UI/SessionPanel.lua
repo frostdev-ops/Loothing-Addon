@@ -9,6 +9,7 @@ local Loothing = ns.Addon
 local L = ns.Locale
 local Utils = ns.Utils
 local Popups = ns.Popups
+local SkinningMixin = ns.SkinningMixin
 
 --[[--------------------------------------------------------------------
     SessionPanelMixin
@@ -39,6 +40,7 @@ function SessionPanelMixin:Init(parent)
     self:CreateFrame()
     self:CreateElements()
     self:RegisterEvents()
+    self:ApplyTheme()
 end
 
 --- Create the main frame
@@ -82,20 +84,22 @@ function SessionPanelMixin:CreateHeader()
     self.statusText = header:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     self.statusText:SetPoint("TOPLEFT")
     self.statusText:SetText(L["NO_SESSION"])
+    SkinningMixin:StyleText(self.statusText, "title", "text")
 
     -- Encounter info
     self.encounterText = header:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     self.encounterText:SetPoint("TOPLEFT", self.statusText, "BOTTOMLEFT", 0, -4)
-    self.encounterText:SetTextColor(0.7, 0.7, 0.7)
+    SkinningMixin:StyleText(self.encounterText, "body", "textMuted")
 
     -- Item count
     self.itemCountText = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     self.itemCountText:SetPoint("TOPRIGHT")
-    self.itemCountText:SetTextColor(0.7, 0.7, 0.7)
+    SkinningMixin:StyleText(self.itemCountText, "bodySmall", "textMuted")
 
     -- ML indicator
     self.mlIndicator = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     self.mlIndicator:SetPoint("TOPRIGHT", self.itemCountText, "BOTTOMRIGHT", 0, -2)
+    SkinningMixin:StyleText(self.mlIndicator, "bodySmall", "accent")
 
     self.header = header
 end
@@ -142,38 +146,34 @@ function SessionPanelMixin:CreateItemList()
     local container = CreateFrame("Frame", nil, self.frame, "BackdropTemplate")
     container:SetPoint("TOPLEFT", 8, -66)
     container:SetPoint("BOTTOMRIGHT", -8, 50)
-    container:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        tile = false,
-        edgeSize = 1,
-        insets = { left = 1, right = 1, top = 1, bottom = 1 },
-    })
-    container:SetBackdropColor(0.05, 0.05, 0.05, 0.9)
-    container:SetBackdropBorderColor(0.2, 0.2, 0.2, 1)
+    SkinningMixin:StyleSurface(container, "inset")
 
     -- Column headers
     local headerFrame = CreateFrame("Frame", nil, container)
     headerFrame:SetPoint("TOPLEFT", 8, -4)
     headerFrame:SetPoint("TOPRIGHT", -24, -4)
     headerFrame:SetHeight(20)
+    self.listHeaderFrame = headerFrame
 
     local itemHeader = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     itemHeader:SetPoint("LEFT")
     itemHeader:SetText(L["ITEM"])
-    itemHeader:SetTextColor(0.7, 0.7, 0.7)
+    SkinningMixin:StyleText(itemHeader, "bodySmall", "textMuted")
+    self.itemHeaderText = itemHeader
 
     local statusHeader = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     statusHeader:SetPoint("RIGHT", -80, 0)
     statusHeader:SetText(L["STATUS"])
-    statusHeader:SetTextColor(0.7, 0.7, 0.7)
+    SkinningMixin:StyleText(statusHeader, "bodySmall", "textMuted")
+    self.statusHeaderText = statusHeader
 
     -- Separator
     local sep = container:CreateTexture(nil, "ARTWORK")
     sep:SetPoint("TOPLEFT", 8, -24)
     sep:SetPoint("TOPRIGHT", -8, -24)
     sep:SetHeight(1)
-    sep:SetColorTexture(0.3, 0.3, 0.3, 1)
+    sep:SetColorTexture(unpack(SkinningMixin:GetColor("border")))
+    self.listSeparator = sep
 
     -- Scroll frame
     local scrollFrame = CreateFrame("ScrollFrame", nil, container, "UIPanelScrollFrameTemplate")
@@ -197,7 +197,7 @@ function SessionPanelMixin:CreateItemList()
     self.emptyText = container:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     self.emptyText:SetPoint("CENTER")
     self.emptyText:SetText(L["NO_ITEMS"])
-    self.emptyText:SetTextColor(0.5, 0.5, 0.5)
+    SkinningMixin:StyleText(self.emptyText, "body", "textSubtle")
 end
 
 --[[--------------------------------------------------------------------
@@ -357,20 +357,14 @@ function SessionPanelMixin:CreateBulkActionBar()
     bar:SetPoint("TOPLEFT", 0, -25)
     bar:SetPoint("TOPRIGHT", 0, -25)
     bar:SetHeight(28)
-    bar:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        tile = false,
-        edgeSize = 1,
-        insets = { left = 1, right = 1, top = 1, bottom = 1 },
-    })
-    bar:SetBackdropColor(0.15, 0.12, 0.02, 0.9)
-    bar:SetBackdropBorderColor(0.6, 0.5, 0.1, 1)
+    SkinningMixin:StyleSurface(bar, "alt")
+    bar:SetBackdropColor(unpack(SkinningMixin:GetColor("accentSoft")))
+    bar:SetBackdropBorderColor(unpack(SkinningMixin:GetColor("accent")))
     bar:SetFrameLevel(self.listContainer:GetFrameLevel() + 10)
     bar:Hide()
 
     -- Select All button
-    local selectAllBtn = CreateFrame("Button", nil, bar, "UIPanelButtonTemplate")
+    local selectAllBtn = ns.CreateThemedButton(bar)
     selectAllBtn:SetSize(70, 22)
     selectAllBtn:SetPoint("LEFT", 4, 0)
     selectAllBtn:SetText(L["SELECT_ALL"])
@@ -379,7 +373,7 @@ function SessionPanelMixin:CreateBulkActionBar()
     end)
 
     -- Deselect button
-    local deselectBtn = CreateFrame("Button", nil, bar, "UIPanelButtonTemplate")
+    local deselectBtn = ns.CreateThemedButton(bar)
     deselectBtn:SetSize(60, 22)
     deselectBtn:SetPoint("LEFT", selectAllBtn, "RIGHT", 4, 0)
     deselectBtn:SetText(L["DESELECT_ALL"])
@@ -391,10 +385,11 @@ function SessionPanelMixin:CreateBulkActionBar()
     local sep = bar:CreateTexture(nil, "ARTWORK")
     sep:SetPoint("LEFT", deselectBtn, "RIGHT", 6, 0)
     sep:SetSize(1, 18)
-    sep:SetColorTexture(0.4, 0.4, 0.4, 1)
+    sep:SetColorTexture(unpack(SkinningMixin:GetColor("borderStrong")))
+    self.bulkSeparator = sep
 
     -- Start Vote bulk button
-    local startVoteBtn = CreateFrame("Button", nil, bar, "UIPanelButtonTemplate")
+    local startVoteBtn = ns.CreateThemedButton(bar)
     startVoteBtn:SetSize(90, 22)
     startVoteBtn:SetPoint("LEFT", sep, "RIGHT", 6, 0)
     startVoteBtn:SetText(string.format(L["BULK_START_VOTE"], 0))
@@ -403,7 +398,7 @@ function SessionPanelMixin:CreateBulkActionBar()
     end)
 
     -- End Vote bulk button
-    local endVoteBtn = CreateFrame("Button", nil, bar, "UIPanelButtonTemplate")
+    local endVoteBtn = ns.CreateThemedButton(bar)
     endVoteBtn:SetSize(85, 22)
     endVoteBtn:SetPoint("LEFT", startVoteBtn, "RIGHT", 4, 0)
     endVoteBtn:SetText(string.format(L["BULK_END_VOTE"], 0))
@@ -412,7 +407,7 @@ function SessionPanelMixin:CreateBulkActionBar()
     end)
 
     -- Skip bulk button
-    local skipBtn = CreateFrame("Button", nil, bar, "UIPanelButtonTemplate")
+    local skipBtn = ns.CreateThemedButton(bar)
     skipBtn:SetSize(65, 22)
     skipBtn:SetPoint("LEFT", endVoteBtn, "RIGHT", 4, 0)
     skipBtn:SetText(string.format(L["BULK_SKIP"], 0))
@@ -421,7 +416,7 @@ function SessionPanelMixin:CreateBulkActionBar()
     end)
 
     -- Remove bulk button
-    local removeBtn = CreateFrame("Button", nil, bar, "UIPanelButtonTemplate")
+    local removeBtn = ns.CreateThemedButton(bar)
     removeBtn:SetSize(80, 22)
     removeBtn:SetPoint("LEFT", skipBtn, "RIGHT", 4, 0)
     removeBtn:SetText(string.format(L["BULK_REMOVE"], 0))
@@ -430,7 +425,7 @@ function SessionPanelMixin:CreateBulkActionBar()
     end)
 
     -- Re-Vote bulk button
-    local revoteBtn = CreateFrame("Button", nil, bar, "UIPanelButtonTemplate")
+    local revoteBtn = ns.CreateThemedButton(bar)
     revoteBtn:SetSize(80, 22)
     revoteBtn:SetPoint("LEFT", removeBtn, "RIGHT", 4, 0)
     revoteBtn:SetText(string.format(L["BULK_REVOTE"], 0))
@@ -441,11 +436,13 @@ function SessionPanelMixin:CreateBulkActionBar()
     -- Selected count label (right-aligned)
     local countLabel = bar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     countLabel:SetPoint("RIGHT", -8, 0)
-    countLabel:SetTextColor(1, 0.82, 0)
+    SkinningMixin:StyleText(countLabel, "bodySmall", "accent")
     countLabel:SetText("")
 
     self.bulkBar = bar
     self.bulkBarButtons = {
+        selectAll = selectAllBtn,
+        deselect = deselectBtn,
         startVote = startVoteBtn,
         endVote = endVoteBtn,
         skip = skipBtn,
@@ -453,6 +450,14 @@ function SessionPanelMixin:CreateBulkActionBar()
         revote = revoteBtn,
     }
     self.bulkCountLabel = countLabel
+
+    SkinningMixin:StylePlainButton(selectAllBtn)
+    SkinningMixin:StylePlainButton(deselectBtn)
+    SkinningMixin:StylePlainButton(startVoteBtn, "primary")
+    SkinningMixin:StylePlainButton(endVoteBtn)
+    SkinningMixin:StylePlainButton(skipBtn)
+    SkinningMixin:StylePlainButton(removeBtn)
+    SkinningMixin:StylePlainButton(revoteBtn)
 end
 
 --- Show bulk action bar and adjust scroll frame
@@ -755,7 +760,7 @@ function SessionPanelMixin:CreateFooter()
     self.handleLootCheck:Hide()
 
     -- Start/End session button (ML only)
-    self.sessionButton = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
+    self.sessionButton = ns.CreateThemedButton(footer)
     self.sessionButton:SetSize(120, 26)
     self.sessionButton:SetPoint("LEFT", self.handleLootCheck.text, "RIGHT", 12, 0)
     self.sessionButton:SetText(L["START_SESSION"])
@@ -779,7 +784,7 @@ function SessionPanelMixin:CreateFooter()
     end)
 
     -- Start all votes button
-    self.startAllButton = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
+    self.startAllButton = ns.CreateThemedButton(footer)
     self.startAllButton:SetSize(100, 26)
     self.startAllButton:SetPoint("LEFT", self.sessionButton, "RIGHT", 8, 0)
     self.startAllButton:SetText(L["START_ALL"])
@@ -789,7 +794,7 @@ function SessionPanelMixin:CreateFooter()
     self.startAllButton:Hide()
 
     -- Add Item button (ML only)
-    self.addItemBtn = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
+    self.addItemBtn = ns.CreateThemedButton(footer)
     self.addItemBtn:SetSize(80, 26)
     self.addItemBtn:SetPoint("LEFT", self.startAllButton, "RIGHT", 8, 0)
     self.addItemBtn:SetText(L["ADD_ITEM"])
@@ -833,7 +838,7 @@ function SessionPanelMixin:CreateFooter()
     self.awardLaterCheck:Hide()
 
     -- Council Table button (council members, ML, observers)
-    self.councilTableBtn = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
+    self.councilTableBtn = ns.CreateThemedButton(footer)
     self.councilTableBtn:SetSize(80, 26)
     self.councilTableBtn:SetPoint("RIGHT", -78, 0)
     self.councilTableBtn:SetText(L["SHOW_COUNCIL_TABLE"])
@@ -855,7 +860,7 @@ function SessionPanelMixin:CreateFooter()
     self.councilTableBtn:Hide()
 
     -- Reopen Response button (all players during active session)
-    self.reopenResponseBtn = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
+    self.reopenResponseBtn = ns.CreateThemedButton(footer)
     self.reopenResponseBtn:SetSize(80, 26)
     self.reopenResponseBtn:SetPoint("RIGHT", self.councilTableBtn, "LEFT", -4, 0)
     self.reopenResponseBtn:SetText(L["REOPEN_RESPONSE_FRAME"])
@@ -895,7 +900,7 @@ function SessionPanelMixin:CreateFooter()
     self.reopenResponseBtn:Hide()
 
     -- Refresh button
-    self.refreshButton = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
+    self.refreshButton = ns.CreateThemedButton(footer)
     self.refreshButton:SetSize(70, 26)
     self.refreshButton:SetPoint("RIGHT")
     self.refreshButton:SetText(L["REFRESH"])
@@ -904,6 +909,87 @@ function SessionPanelMixin:CreateFooter()
     end)
 
     self.footer = footer
+end
+
+function SessionPanelMixin:ApplyTheme()
+    local inset = SkinningMixin:GetLayoutValue("panelInset", 8)
+    local footerInset = SkinningMixin:GetLayoutValue("footerInset", 8)
+
+    if self.header then
+        self.header:ClearAllPoints()
+        self.header:SetPoint("TOPLEFT", inset, -inset)
+        self.header:SetPoint("TOPRIGHT", -inset, -inset)
+    end
+
+    if self.filterBar then
+        self.filterBar:ClearAllPoints()
+        self.filterBar:SetPoint("TOPLEFT", inset, -(inset + 58))
+        self.filterBar:SetPoint("TOPRIGHT", -inset, -(inset + 58))
+    end
+
+    if self.listContainer then
+        self.listContainer:ClearAllPoints()
+        if self.filterBar and self.filterBar:IsShown() then
+            self.listContainer:SetPoint("TOPLEFT", inset, -154)
+        else
+            self.listContainer:SetPoint("TOPLEFT", inset, -66)
+        end
+        self.listContainer:SetPoint("BOTTOMRIGHT", -inset, 50)
+        SkinningMixin:StyleSurface(self.listContainer, "inset")
+    end
+
+    if self.footer then
+        self.footer:ClearAllPoints()
+        self.footer:SetPoint("BOTTOMLEFT", footerInset, footerInset)
+        self.footer:SetPoint("BOTTOMRIGHT", -footerInset, footerInset)
+    end
+
+    SkinningMixin:StyleText(self.statusText, "title", "text")
+    SkinningMixin:StyleText(self.encounterText, "body", "textMuted")
+    SkinningMixin:StyleText(self.itemCountText, "bodySmall", "textMuted")
+    SkinningMixin:StyleText(self.mlIndicator, "bodySmall", "accent")
+    SkinningMixin:StyleText(self.itemHeaderText, "bodySmall", "textMuted")
+    SkinningMixin:StyleText(self.statusHeaderText, "bodySmall", "textMuted")
+    SkinningMixin:StyleText(self.emptyText, "body", "textSubtle")
+
+    if self.listSeparator then
+        self.listSeparator:SetColorTexture(unpack(SkinningMixin:GetColor("border")))
+    end
+
+    if self.bulkBar then
+        SkinningMixin:StyleSurface(self.bulkBar, "alt")
+        self.bulkBar:SetBackdropColor(unpack(SkinningMixin:GetColor("accentSoft")))
+        self.bulkBar:SetBackdropBorderColor(unpack(SkinningMixin:GetColor("accent")))
+    end
+    if self.bulkSeparator then
+        self.bulkSeparator:SetColorTexture(unpack(SkinningMixin:GetColor("borderStrong")))
+    end
+    if self.bulkCountLabel then
+        SkinningMixin:StyleText(self.bulkCountLabel, "bodySmall", "accent")
+    end
+    if self.bulkBarButtons then
+        SkinningMixin:StylePlainButton(self.bulkBarButtons.selectAll)
+        SkinningMixin:StylePlainButton(self.bulkBarButtons.deselect)
+        SkinningMixin:StylePlainButton(self.bulkBarButtons.startVote, "primary")
+        SkinningMixin:StylePlainButton(self.bulkBarButtons.endVote)
+        SkinningMixin:StylePlainButton(self.bulkBarButtons.skip)
+        SkinningMixin:StylePlainButton(self.bulkBarButtons.remove)
+        SkinningMixin:StylePlainButton(self.bulkBarButtons.revote)
+    end
+
+    if self.handleLootCheck and self.handleLootCheck.text then
+        SkinningMixin:StyleText(self.handleLootCheck.text, "bodySmall", "textMuted")
+    end
+    if self.awardLaterCheck and self.awardLaterCheck.text then
+        SkinningMixin:StyleText(self.awardLaterCheck.text, "bodySmall", "textMuted")
+    end
+
+    SkinningMixin:StylePlainButton(self.sessionButton, "primary")
+    SkinningMixin:StylePlainButton(self.startAllButton)
+    SkinningMixin:StylePlainButton(self.addItemBtn)
+    SkinningMixin:StylePlainButton(self.councilTableBtn)
+    SkinningMixin:StylePlainButton(self.reopenResponseBtn)
+    SkinningMixin:StylePlainButton(self.refreshButton)
 end
 
 --[[--------------------------------------------------------------------

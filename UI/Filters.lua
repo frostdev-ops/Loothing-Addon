@@ -338,40 +338,44 @@ function FiltersMixin:CreateFilterBar(parent)
     local yOffset = -35
 
     -- Class filter button
-    local classButton = CreateFrame("Button", nil, filterBar, "UIPanelButtonTemplate")
+    local classButton = ns.CreateThemedButton(filterBar)
     classButton:SetSize(120, 22)
     classButton:SetPoint("TOPLEFT", 10, yOffset)
     classButton:SetText(L["FILTER_BY_CLASS"])
+    ns.SkinningMixin:StylePlainButton(classButton)
     classButton:SetScript("OnClick", function()
         self:ShowClassFilterMenu(classButton)
     end)
     filterBar.classButton = classButton
 
     -- Response filter button
-    local responseButton = CreateFrame("Button", nil, filterBar, "UIPanelButtonTemplate")
+    local responseButton = ns.CreateThemedButton(filterBar)
     responseButton:SetSize(130, 22)
     responseButton:SetPoint("LEFT", classButton, "RIGHT", 5, 0)
     responseButton:SetText(L["FILTER_BY_RESPONSE"])
+    ns.SkinningMixin:StylePlainButton(responseButton)
     responseButton:SetScript("OnClick", function()
         self:ShowResponseFilterMenu(responseButton)
     end)
     filterBar.responseButton = responseButton
 
     -- Guild rank filter button
-    local rankButton = CreateFrame("Button", nil, filterBar, "UIPanelButtonTemplate")
+    local rankButton = ns.CreateThemedButton(filterBar)
     rankButton:SetSize(140, 22)
     rankButton:SetPoint("LEFT", responseButton, "RIGHT", 5, 0)
     rankButton:SetText(L["FILTER_BY_RANK"])
+    ns.SkinningMixin:StylePlainButton(rankButton)
     rankButton:SetScript("OnClick", function()
         self:ShowRankFilterMenu(rankButton)
     end)
     filterBar.rankButton = rankButton
 
     -- Clear filters button
-    local clearButton = CreateFrame("Button", nil, filterBar, "UIPanelButtonTemplate")
+    local clearButton = ns.CreateThemedButton(filterBar)
     clearButton:SetSize(100, 22)
     clearButton:SetPoint("TOPRIGHT", -10, yOffset)
     clearButton:SetText(L["CLEAR_FILTERS"])
+    ns.SkinningMixin:StylePlainButton(clearButton)
     clearButton:SetScript("OnClick", function()
         Loothing.Settings:ClearAllFilters()
         self:TriggerEvent("OnFiltersChanged")

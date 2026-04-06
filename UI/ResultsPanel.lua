@@ -231,25 +231,27 @@ function ResultsPanelMixin:CreateActionButtons()
     local L = Loothing.Locale
 
     -- Award button
-    self.awardButton = CreateFrame("Button", nil, self.frame, "UIPanelButtonTemplate")
+    self.awardButton = ns.CreateThemedButton(self.frame)
     self.awardButton:SetSize(90, 26)
     self.awardButton:SetPoint("BOTTOMRIGHT", -20, 20)
     self.awardButton:SetText(L["AWARD"])
     self.awardButton:SetScript("OnClick", function()
         self:OnAwardClick()
     end)
+    ns.SkinningMixin:StylePlainButton(self.awardButton, "primary")
 
     -- Re-vote button
-    self.revoteButton = CreateFrame("Button", nil, self.frame, "UIPanelButtonTemplate")
+    self.revoteButton = ns.CreateThemedButton(self.frame)
     self.revoteButton:SetSize(90, 26)
     self.revoteButton:SetPoint("RIGHT", self.awardButton, "LEFT", -8, 0)
     self.revoteButton:SetText(L["RE_VOTE"])
     self.revoteButton:SetScript("OnClick", function()
         self:TriggerEvent("OnRevoteClicked", self.item)
     end)
+    ns.SkinningMixin:StylePlainButton(self.revoteButton)
 
     -- Skip button
-    self.skipButton = CreateFrame("Button", nil, self.frame, "UIPanelButtonTemplate")
+    self.skipButton = ns.CreateThemedButton(self.frame)
     self.skipButton:SetSize(90, 26)
     self.skipButton:SetPoint("RIGHT", self.revoteButton, "LEFT", -8, 0)
     self.skipButton:SetText(L["SKIP_ITEM"])
@@ -257,6 +259,7 @@ function ResultsPanelMixin:CreateActionButtons()
         self:TriggerEvent("OnSkipClicked", self.item)
         self:Hide()
     end)
+    ns.SkinningMixin:StylePlainButton(self.skipButton)
 end
 
 --[[--------------------------------------------------------------------

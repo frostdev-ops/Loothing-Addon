@@ -7,6 +7,7 @@ local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local Utils = ns.Utils
+local SkinningMixin = ns.SkinningMixin
 
 --[[--------------------------------------------------------------------
     TradePanelMixin
@@ -37,6 +38,7 @@ function TradePanelMixin:Init(parent)
     self:CreateFrame()
     self:CreateElements()
     self:RegisterEvents()
+    self:ApplyTheme()
 end
 
 --[[--------------------------------------------------------------------
@@ -76,17 +78,18 @@ function TradePanelMixin:CreateHeader()
     self.titleText = header:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     self.titleText:SetPoint("TOPLEFT")
     self.titleText:SetText(L["TRADE_QUEUE"])
+    SkinningMixin:StyleText(self.titleText, "title", "text")
 
     -- Item count
     self.countText = header:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     self.countText:SetPoint("TOPLEFT", self.titleText, "BOTTOMLEFT", 0, -4)
-    self.countText:SetTextColor(0.7, 0.7, 0.7)
+    SkinningMixin:StyleText(self.countText, "body", "textMuted")
 
     -- Help text
     self.helpText = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     self.helpText:SetPoint("TOPRIGHT")
     self.helpText:SetText(L["TRADE_PANEL_HELP"])
-    self.helpText:SetTextColor(0.7, 0.7, 0.7)
+    SkinningMixin:StyleText(self.helpText, "bodySmall", "textMuted")
 
     self.header = header
 end
@@ -99,43 +102,40 @@ function TradePanelMixin:CreateList()
     local container = CreateFrame("Frame", nil, self.frame, "BackdropTemplate")
     container:SetPoint("TOPLEFT", 8, -66)
     container:SetPoint("BOTTOMRIGHT", -8, 50)
-    container:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        tile = false,
-        edgeSize = 1,
-        insets = { left = 1, right = 1, top = 1, bottom = 1 },
-    })
-    container:SetBackdropColor(0.05, 0.05, 0.05, 0.9)
-    container:SetBackdropBorderColor(0.2, 0.2, 0.2, 1)
+    SkinningMixin:StyleSurface(container, "inset")
 
     -- Column headers
     local headerFrame = CreateFrame("Frame", nil, container)
     headerFrame:SetPoint("TOPLEFT", 8, -4)
     headerFrame:SetPoint("TOPRIGHT", -24, -4)
     headerFrame:SetHeight(20)
+    self.listHeaderFrame = headerFrame
 
     local itemHeader = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     itemHeader:SetPoint("LEFT", 40, 0)
     itemHeader:SetText(L["ITEM"])
-    itemHeader:SetTextColor(0.7, 0.7, 0.7)
+    SkinningMixin:StyleText(itemHeader, "bodySmall", "textMuted")
+    self.itemHeaderText = itemHeader
 
     local winnerHeader = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     winnerHeader:SetPoint("LEFT", 280, 0)
     winnerHeader:SetText(L["WINNER"])
-    winnerHeader:SetTextColor(0.7, 0.7, 0.7)
+    SkinningMixin:StyleText(winnerHeader, "bodySmall", "textMuted")
+    self.winnerHeaderText = winnerHeader
 
     local timeHeader = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     timeHeader:SetPoint("RIGHT", -60, 0)
     timeHeader:SetText(L["TIME_REMAINING"])
-    timeHeader:SetTextColor(0.7, 0.7, 0.7)
+    SkinningMixin:StyleText(timeHeader, "bodySmall", "textMuted")
+    self.timeHeaderText = timeHeader
 
     -- Separator
     local sep = container:CreateTexture(nil, "ARTWORK")
     sep:SetPoint("TOPLEFT", 8, -24)
     sep:SetPoint("TOPRIGHT", -8, -24)
     sep:SetHeight(1)
-    sep:SetColorTexture(0.3, 0.3, 0.3, 1)
+    sep:SetColorTexture(unpack(SkinningMixin:GetColor("border")))
+    self.listSeparator = sep
 
     -- Scroll frame
     local scrollFrame = CreateFrame("ScrollFrame", nil, container, "UIPanelScrollFrameTemplate")
@@ -158,7 +158,7 @@ function TradePanelMixin:CreateList()
     self.emptyText = container:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     self.emptyText:SetPoint("CENTER")
     self.emptyText:SetText(L["NO_PENDING_TRADES"])
-    self.emptyText:SetTextColor(0.5, 0.5, 0.5)
+    SkinningMixin:StyleText(self.emptyText, "body", "textSubtle")
 end
 
 --- Create footer
@@ -171,22 +171,24 @@ function TradePanelMixin:CreateFooter()
     footer:SetHeight(36)
 
     -- Refresh button
-    self.refreshButton = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
+    self.refreshButton = ns.CreateThemedButton(footer)
     self.refreshButton:SetSize(80, 26)
     self.refreshButton:SetPoint("LEFT")
     self.refreshButton:SetText(L["REFRESH"])
     self.refreshButton:SetScript("OnClick", function()
         self:Refresh()
     end)
+    SkinningMixin:StylePlainButton(self.refreshButton)
 
     -- Clear completed button
-    self.clearButton = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
+    self.clearButton = ns.CreateThemedButton(footer)
     self.clearButton:SetSize(120, 26)
     self.clearButton:SetPoint("LEFT", self.refreshButton, "RIGHT", 8, 0)
     self.clearButton:SetText(L["CLEAR_COMPLETED"])
     self.clearButton:SetScript("OnClick", function()
         self:ClearCompleted()
     end)
+    SkinningMixin:StylePlainButton(self.clearButton, "primary")
 
     -- Auto-trade checkbox
     self.autoTradeCheckbox = CreateFrame("CheckButton", nil, footer, "UICheckButtonTemplate")
@@ -202,8 +204,50 @@ function TradePanelMixin:CreateFooter()
     local checkboxLabel = footer:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     checkboxLabel:SetPoint("RIGHT", self.autoTradeCheckbox, "LEFT", -4, 0)
     checkboxLabel:SetText(L["AUTO_TRADE"])
+    SkinningMixin:StyleText(checkboxLabel, "body", "textMuted")
+    self.autoTradeLabel = checkboxLabel
 
     self.footer = footer
+end
+
+function TradePanelMixin:ApplyTheme()
+    local inset = SkinningMixin:GetLayoutValue("panelInset", 8)
+    local footerInset = SkinningMixin:GetLayoutValue("footerInset", 8)
+
+    if self.header then
+        self.header:ClearAllPoints()
+        self.header:SetPoint("TOPLEFT", inset, -inset)
+        self.header:SetPoint("TOPRIGHT", -inset, -inset)
+    end
+
+    if self.listContainer then
+        self.listContainer:ClearAllPoints()
+        self.listContainer:SetPoint("TOPLEFT", inset, -66)
+        self.listContainer:SetPoint("BOTTOMRIGHT", -inset, 50)
+        SkinningMixin:StyleSurface(self.listContainer, "inset")
+    end
+
+    if self.footer then
+        self.footer:ClearAllPoints()
+        self.footer:SetPoint("BOTTOMLEFT", footerInset, footerInset)
+        self.footer:SetPoint("BOTTOMRIGHT", -footerInset, footerInset)
+    end
+
+    SkinningMixin:StyleText(self.titleText, "title", "text")
+    SkinningMixin:StyleText(self.countText, "body", "textMuted")
+    SkinningMixin:StyleText(self.helpText, "bodySmall", "textMuted")
+    SkinningMixin:StyleText(self.itemHeaderText, "bodySmall", "textMuted")
+    SkinningMixin:StyleText(self.winnerHeaderText, "bodySmall", "textMuted")
+    SkinningMixin:StyleText(self.timeHeaderText, "bodySmall", "textMuted")
+    SkinningMixin:StyleText(self.emptyText, "body", "textSubtle")
+    SkinningMixin:StyleText(self.autoTradeLabel, "body", "textMuted")
+
+    if self.listSeparator then
+        self.listSeparator:SetColorTexture(unpack(SkinningMixin:GetColor("border")))
+    end
+
+    SkinningMixin:StylePlainButton(self.refreshButton)
+    SkinningMixin:StylePlainButton(self.clearButton, "primary")
 end
 
 --[[--------------------------------------------------------------------
@@ -447,11 +491,12 @@ function TradePanelMixin:CreateRow()
     row.timeText:SetPoint("RIGHT", -70, 0)
 
     -- Trade button
-    row.tradeButton = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+    row.tradeButton = ns.CreateThemedButton(row)
     row.tradeButton:SetSize(50, 20)
     row.tradeButton:SetPoint("RIGHT", -32, 0)
     local L = Loothing.Locale
     row.tradeButton:SetText(L["TRADE_BTN"])
+    SkinningMixin:StylePlainButton(row.tradeButton, "primary")
 
     -- Arrow indicator (shows direction: you -> winner)
     row.arrowText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")

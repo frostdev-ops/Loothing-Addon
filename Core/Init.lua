@@ -2176,10 +2176,11 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
                 versionText:SetTextColor(0.7, 0.7, 0.7)
                 versionText:SetText("v" .. (Loothing.VERSION or "?"))
 
-                local openBtn = CreateFrame("Button", nil, settingsFrame, "UIPanelButtonTemplate")
+                local openBtn = ns.CreateThemedButton(settingsFrame)
                 openBtn:SetSize(200, 30)
                 openBtn:SetPoint("TOP", versionText, "BOTTOM", 0, -20)
                 openBtn:SetText(L["OPEN_SETTINGS"])
+                ns.SkinningMixin:StylePlainButton(openBtn, "primary")
                 openBtn:SetScript("OnClick", function()
                     if SettingsPanel then
                         SettingsPanel:Close()

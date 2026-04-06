@@ -118,7 +118,7 @@ function CouncilTableMixin:CreateFrame()
     local title = titleBar:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     title:SetPoint("LEFT", 4, 0)
     title:SetText(L["LOOT_COUNCIL"])
-    title:SetTextColor(1, 0.82, 0)
+    SkinningMixin:StyleText(title, "title", "text")
     self.titleText = title
 
     -- Resize grip
@@ -156,6 +156,11 @@ function CouncilTableMixin:CreateElements()
     self.headersContainer:SetPoint("TOPRIGHT", -16, -96)
     self.headersContainer:SetHeight(22)
 
+    local headerDivider = SkinningMixin:CreateDivider(self.frame, "horizontal", "borderStrong", 1)
+    headerDivider:SetPoint("TOPLEFT", 16, -90)
+    headerDivider:SetPoint("TOPRIGHT", -16, -90)
+    self.headerDivider = headerDivider
+
     -- Candidate list (scrollable)
     self:CreateCandidateList()
 
@@ -169,13 +174,13 @@ function CouncilTableMixin:CreateElements()
     self.emptyText = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     self.emptyText:SetPoint("CENTER", self.listContainer, "CENTER")
     self.emptyText:SetText(L["COUNCIL_NO_CANDIDATES"])
-    self.emptyText:SetTextColor(0.5, 0.5, 0.5)
+    SkinningMixin:StyleText(self.emptyText, "body", "textSubtle")
 
     -- Observer mode indicator (shown in title bar when observing)
     local observerText = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     observerText:SetPoint("RIGHT", closeButton, "LEFT", -8, 0)
     observerText:SetText("(" .. L["OBSERVER"] .. ")")
-    observerText:SetTextColor(0.7, 0.7, 0.3)
+    SkinningMixin:StyleText(observerText, "bodySmall", "warning")
     observerText:Hide()
     self.observerText = observerText
 
@@ -184,6 +189,7 @@ function CouncilTableMixin:CreateElements()
 
     -- Build column headers
     self:RebuildColumnHeaders()
+    self:ApplyTheme()
 end
 
 --[[--------------------------------------------------------------------
@@ -197,6 +203,11 @@ function CouncilTableMixin:CreateItemTabBar()
     bar:SetHeight(ITEM_TAB_BAR_HEIGHT)
     self.itemTabBar = bar
     self.scrollOffset = 0
+
+    local barDivider = SkinningMixin:CreateDivider(bar, "horizontal", "border", 1)
+    barDivider:SetPoint("BOTTOMLEFT")
+    barDivider:SetPoint("BOTTOMRIGHT")
+    self.itemTabDivider = barDivider
 
     -- Left scroll arrow
     local leftArrow = CreateFrame("Button", nil, bar)
@@ -296,14 +307,7 @@ function CouncilTableMixin:CreateItemTab(index, item)
     local tab = CreateFrame("Button", nil, self.itemTabContent, "BackdropTemplate")
     tab:SetSize(ITEM_TAB_WIDTH, ITEM_TAB_HEIGHT)
     tab:SetPoint("LEFT", (index - 1) * SCROLL_STEP, 0)
-
-    tab:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        tile = false, edgeSize = 1,
-        insets = { left = 1, right = 1, top = 1, bottom = 1 },
-    })
-    tab:SetBackdropColor(0.08, 0.08, 0.12, 0.9)
+    SkinningMixin:StyleSurface(tab, "alt")
 
     local quality = item.quality or 1
     local qr, qg, qb = C_Item.GetItemQualityColor(quality)
@@ -323,7 +327,7 @@ function CouncilTableMixin:CreateItemTab(index, item)
     glow:SetTexture("Interface\\SpellActivationOverlay\\IconAlert")
     glow:SetTexCoord(0.00781250, 0.50781250, 0.27734375, 0.52734375)
     glow:SetVertexColor(qr, qg, qb, 1)
-    glow:SetAlpha(0.4)
+    glow:SetAlpha(0.22)
     tab.glow = glow
 
     -- Item icon
@@ -354,7 +358,7 @@ function CouncilTableMixin:CreateItemTab(index, item)
 
     local ilvlText = ilvlBadge:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     ilvlText:SetPoint("CENTER")
-    ilvlText:SetTextColor(1, 0.82, 0)
+    SkinningMixin:StyleText(ilvlText, "highlightSmall", "accent")
     local ilvl = item.ilvl or 0
     if ilvl > 0 then
         ilvlText:SetText(tostring(ilvl))
@@ -379,7 +383,7 @@ function CouncilTableMixin:CreateItemTab(index, item)
     slotText:SetPoint("RIGHT", tab, "RIGHT", -22, 0)
     slotText:SetJustifyH("LEFT")
     slotText:SetWordWrap(false)
-    slotText:SetTextColor(0.7, 0.7, 0.7)
+    SkinningMixin:StyleText(slotText, "bodySmall", "textMuted")
     if item.equipSlot and item.equipSlot ~= "" then
         slotText:SetText(_G[item.equipSlot] or item.equipSlot)
     else
@@ -416,7 +420,7 @@ function CouncilTableMixin:CreateItemTab(index, item)
     selectBar:SetHeight(2)
     selectBar:SetPoint("BOTTOMLEFT", 1, 1)
     selectBar:SetPoint("BOTTOMRIGHT", -1, 1)
-    selectBar:SetColorTexture(1, 0.82, 0, 1)
+    selectBar:SetColorTexture(unpack(SkinningMixin:GetColor("accent")))
     selectBar:Hide()
     tab.selectBar = selectBar
 
@@ -428,7 +432,7 @@ function CouncilTableMixin:CreateItemTab(index, item)
     highlight:SetBlendMode("ADD")
 
     -- Quality border default
-    tab:SetBackdropBorderColor(qr, qg, qb, 1)
+    tab:SetBackdropBorderColor(unpack(SkinningMixin:GetColor("borderStrong")))
     tab.quality = quality
 
     -- Tooltip
@@ -481,49 +485,45 @@ function CouncilTableMixin:SelectItemTab(itemGUID)
         local qr, qg, qb = C_Item.GetItemQualityColor(q)
 
         if item.guid == itemGUID then
-            -- Selected state: gold border, blue-shift bg, full alpha, glow up
+            -- Selected state: accent border and full fidelity
             tab.selectBar:Show()
-            tab:SetBackdropBorderColor(1, 0.82, 0, 1)
-            tab:SetBackdropColor(0.15, 0.15, 0.25, 1)
+            tab:SetBackdropBorderColor(unpack(SkinningMixin:GetColor("accent")))
+            tab:SetBackdropColor(unpack(SkinningMixin:GetColor("panel")))
             tab.icon:SetAlpha(1.0)
             tab.icon:SetDesaturated(false)
-            tab.glow:SetAlpha(0.6)
-            tab.accentBar:SetVertexColor(1, 0.82, 0, 1)
+            tab.glow:SetAlpha(0.35)
+            tab.accentBar:SetVertexColor(unpack(SkinningMixin:GetColor("accent")))
         elseif item.state == Loothing.ItemState.AWARDED then
-            -- Awarded: green tint, desaturated
             tab.selectBar:Hide()
-            tab:SetBackdropBorderColor(0.2, 0.8, 0.2, 1)
-            tab:SetBackdropColor(0.05, 0.12, 0.05, 0.9)
+            tab:SetBackdropBorderColor(unpack(SkinningMixin:GetColor("success")))
+            tab:SetBackdropColor(unpack(SkinningMixin:GetColor("panelAlt")))
             tab.icon:SetAlpha(0.5)
             tab.icon:SetDesaturated(true)
-            tab.glow:SetAlpha(0.2)
-            tab.accentBar:SetVertexColor(0.2, 0.8, 0.2, 1)
+            tab.glow:SetAlpha(0.15)
+            tab.accentBar:SetVertexColor(unpack(SkinningMixin:GetColor("success")))
         elseif item.state == Loothing.ItemState.SKIPPED then
-            -- Skipped: gray, dim, desaturated
             tab.selectBar:Hide()
-            tab:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
-            tab:SetBackdropColor(0.06, 0.06, 0.06, 0.7)
+            tab:SetBackdropBorderColor(unpack(SkinningMixin:GetColor("border")))
+            tab:SetBackdropColor(unpack(SkinningMixin:GetColor("panelInset")))
             tab.icon:SetAlpha(0.35)
             tab.icon:SetDesaturated(true)
             tab.glow:SetAlpha(0.1)
-            tab.accentBar:SetVertexColor(0.4, 0.4, 0.4, 1)
+            tab.accentBar:SetVertexColor(unpack(SkinningMixin:GetColor("textSubtle")))
         elseif item.state == Loothing.ItemState.VOTING then
-            -- Voting: quality color, full alpha
             tab.selectBar:Hide()
             tab:SetBackdropBorderColor(qr, qg, qb, 1)
-            tab:SetBackdropColor(0.08, 0.08, 0.12, 0.9)
+            tab:SetBackdropColor(unpack(SkinningMixin:GetColor("panelAlt")))
             tab.icon:SetAlpha(1.0)
             tab.icon:SetDesaturated(false)
-            tab.glow:SetAlpha(0.4)
+            tab.glow:SetAlpha(0.22)
             tab.accentBar:SetVertexColor(qr, qg, qb, 1)
         else
-            -- Pending: quality at half alpha
             tab.selectBar:Hide()
-            tab:SetBackdropBorderColor(qr, qg, qb, 0.5)
-            tab:SetBackdropColor(0.08, 0.08, 0.12, 0.9)
+            tab:SetBackdropBorderColor(unpack(SkinningMixin:GetColor("borderStrong")))
+            tab:SetBackdropColor(unpack(SkinningMixin:GetColor("panelAlt")))
             tab.icon:SetAlpha(0.7)
             tab.icon:SetDesaturated(false)
-            tab.glow:SetAlpha(0.3)
+            tab.glow:SetAlpha(0.16)
             tab.accentBar:SetVertexColor(qr, qg, qb, 0.5)
         end
     end
@@ -620,14 +620,7 @@ function CouncilTableMixin:CreateCandidateList()
     local container = CreateFrame("Frame", nil, self.frame, "BackdropTemplate")
     container:SetPoint("TOPLEFT", 16, -121)
     container:SetPoint("BOTTOMRIGHT", -16, 50)
-    container:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        tile = false, edgeSize = 1,
-        insets = { left = 1, right = 1, top = 1, bottom = 1 },
-    })
-    container:SetBackdropColor(0.04, 0.04, 0.06, 0.9)
-    container:SetBackdropBorderColor(0.2, 0.2, 0.2, 1)
+    SkinningMixin:StyleSurface(container, "inset")
 
     local scrollFrame = CreateFrame("ScrollFrame", nil, container, "UIPanelScrollFrameTemplate")
     scrollFrame:SetPoint("TOPLEFT", 2, -2)
@@ -660,14 +653,7 @@ function CouncilTableMixin:CreateDetailTooltip()
     tooltip:SetPoint("BOTTOMLEFT", self.frame, "BOTTOMRIGHT", 6, 0)
     tooltip:SetFrameStrata("DIALOG")
     tooltip:SetFrameLevel(self.frame:GetFrameLevel() + 10)
-    tooltip:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        tile = false, edgeSize = 1,
-        insets = { left = 1, right = 1, top = 1, bottom = 1 },
-    })
-    tooltip:SetBackdropColor(0.06, 0.06, 0.08, 0.95)
-    tooltip:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+    SkinningMixin:StyleSurface(tooltip, "alt")
     tooltip:SetClampedToScreen(true)
     tooltip:Hide()
 
@@ -701,18 +687,20 @@ function CouncilTableMixin:CreateDetailTooltip()
     name:SetPoint("RIGHT", -6, 0)
     name:SetWordWrap(false)
     self.moreInfoName = name
+    SkinningMixin:StyleText(name, "title", "text")
 
     -- Response
     local response = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     response:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -2)
     response:SetPoint("RIGHT", -6, 0)
     self.moreInfoResponse = response
+    SkinningMixin:StyleText(response, "header", "textMuted")
 
     -- Details (ilvl, role, rank)
     local details = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     details:SetPoint("TOPLEFT", response, "BOTTOMLEFT", 0, -2)
     details:SetPoint("RIGHT", -6, 0)
-    details:SetTextColor(0.7, 0.7, 0.7)
+    SkinningMixin:StyleText(details, "bodySmall", "textMuted")
     details:SetWordWrap(true)
     self.moreInfoDetails = details
 
@@ -723,13 +711,14 @@ function CouncilTableMixin:CreateDetailTooltip()
     note:SetJustifyH("LEFT")
     note:SetWordWrap(true)
     self.moreInfoNote = note
+    SkinningMixin:StyleText(note, "highlightSmall", "text")
 
     -- Gear text
     local gear = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     gear:SetPoint("TOPLEFT", note, "BOTTOMLEFT", 0, -6)
     gear:SetPoint("RIGHT", -6, 0)
     gear:SetJustifyH("LEFT")
-    gear:SetTextColor(0.8, 0.8, 0.8)
+    SkinningMixin:StyleText(gear, "bodySmall", "textMuted")
     gear:SetWordWrap(true)
     self.moreInfoGear = gear
 
@@ -738,7 +727,7 @@ function CouncilTableMixin:CreateDetailTooltip()
     voteBreakdown:SetPoint("TOPLEFT", gear, "BOTTOMLEFT", 0, -6)
     voteBreakdown:SetPoint("RIGHT", -6, 0)
     voteBreakdown:SetJustifyH("LEFT")
-    voteBreakdown:SetTextColor(0.6, 0.8, 0.6)
+    SkinningMixin:StyleText(voteBreakdown, "bodySmall", "success")
     voteBreakdown:SetWordWrap(true)
     self.moreInfoVoteBreakdown = voteBreakdown
 
@@ -755,7 +744,7 @@ function CouncilTableMixin:CreateDetailTooltip()
     sourceInfo:SetPoint("TOPLEFT", wishlistInfo, "BOTTOMLEFT", 0, -2)
     sourceInfo:SetPoint("RIGHT", -6, 0)
     sourceInfo:SetJustifyH("LEFT")
-    sourceInfo:SetTextColor(0.6, 0.6, 0.6)
+    SkinningMixin:StyleText(sourceInfo, "bodySmall", "textSubtle")
     sourceInfo:SetWordWrap(true)
     self.moreInfoSource = sourceInfo
 
@@ -766,7 +755,7 @@ function CouncilTableMixin:CreateDetailTooltip()
     intelSep:SetPoint("TOPLEFT", sourceInfo, "BOTTOMLEFT", 0, -6)
     intelSep:SetPoint("RIGHT", -6, 0)
     intelSep:SetHeight(1)
-    intelSep:SetColorTexture(0.3, 0.3, 0.3, 0.6)
+    intelSep:SetColorTexture(unpack(SkinningMixin:GetColor("borderStrong")))
     self.moreInfoIntelSep = intelSep
 
     -- M+ Activity
@@ -774,7 +763,7 @@ function CouncilTableMixin:CreateDetailTooltip()
     mpInfo:SetPoint("TOPLEFT", intelSep, "BOTTOMLEFT", 0, -4)
     mpInfo:SetPoint("RIGHT", -6, 0)
     mpInfo:SetJustifyH("LEFT")
-    mpInfo:SetTextColor(0.4, 0.8, 1.0)
+    SkinningMixin:StyleText(mpInfo, "bodySmall", "accentCool")
     mpInfo:SetWordWrap(true)
     self.moreInfoMythicPlus = mpInfo
 
@@ -783,7 +772,7 @@ function CouncilTableMixin:CreateDetailTooltip()
     parseInfo:SetPoint("TOPLEFT", mpInfo, "BOTTOMLEFT", 0, -2)
     parseInfo:SetPoint("RIGHT", -6, 0)
     parseInfo:SetJustifyH("LEFT")
-    parseInfo:SetTextColor(1.0, 0.8, 0.4)
+    SkinningMixin:StyleText(parseInfo, "bodySmall", "warning")
     parseInfo:SetWordWrap(true)
     self.moreInfoParses = parseInfo
 
@@ -792,7 +781,7 @@ function CouncilTableMixin:CreateDetailTooltip()
     attendInfo:SetPoint("TOPLEFT", parseInfo, "BOTTOMLEFT", 0, -2)
     attendInfo:SetPoint("RIGHT", -6, 0)
     attendInfo:SetJustifyH("LEFT")
-    attendInfo:SetTextColor(0.7, 0.7, 0.7)
+    SkinningMixin:StyleText(attendInfo, "bodySmall", "textMuted")
     attendInfo:SetWordWrap(true)
     self.moreInfoAttendance = attendInfo
 
@@ -801,7 +790,7 @@ function CouncilTableMixin:CreateDetailTooltip()
     gearReady:SetPoint("TOPLEFT", attendInfo, "BOTTOMLEFT", 0, -2)
     gearReady:SetPoint("RIGHT", -6, 0)
     gearReady:SetJustifyH("LEFT")
-    gearReady:SetTextColor(0.7, 0.8, 0.7)
+    SkinningMixin:StyleText(gearReady, "bodySmall", "success")
     gearReady:SetWordWrap(true)
     self.moreInfoGearReady = gearReady
 
@@ -811,7 +800,7 @@ function CouncilTableMixin:CreateDetailTooltip()
     lootHistory:SetPoint("RIGHT", -6, 0)
     lootHistory:SetJustifyH("LEFT")
     lootHistory:SetWordWrap(true)
-    lootHistory:SetTextColor(0.8, 0.8, 0.8)
+    SkinningMixin:StyleText(lootHistory, "bodySmall", "textMuted")
     self.moreInfoLootHistory = lootHistory
 
     -- Alt Loot Summary
@@ -820,7 +809,7 @@ function CouncilTableMixin:CreateDetailTooltip()
     altLoot:SetPoint("RIGHT", -6, 0)
     altLoot:SetJustifyH("LEFT")
     altLoot:SetWordWrap(true)
-    altLoot:SetTextColor(0.7, 0.7, 0.9)
+    SkinningMixin:StyleText(altLoot, "bodySmall", "accentCool")
     self.moreInfoAltLoot = altLoot
 
     -- Staleness indicator
@@ -828,7 +817,7 @@ function CouncilTableMixin:CreateDetailTooltip()
     staleness:SetPoint("TOPLEFT", altLoot, "BOTTOMLEFT", 0, -4)
     staleness:SetPoint("RIGHT", -6, 0)
     staleness:SetJustifyH("RIGHT")
-    staleness:SetTextColor(0.5, 0.5, 0.5)
+    SkinningMixin:StyleText(staleness, "bodySmall", "textSubtle")
     self.moreInfoStaleness = staleness
 
     self.detailTooltip = tooltip
@@ -877,8 +866,13 @@ function CouncilTableMixin:CreateActionButtons()
     footer:SetPoint("BOTTOMRIGHT", -16, 12)
     footer:SetHeight(28)
 
+    local footerDivider = SkinningMixin:CreateDivider(self.frame, "horizontal", "border", 1)
+    footerDivider:SetPoint("BOTTOMLEFT", 16, 46)
+    footerDivider:SetPoint("BOTTOMRIGHT", -16, 46)
+    self.footerDivider = footerDivider
+
     -- Award button
-    self.awardButton = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
+    self.awardButton = ns.CreateThemedButton(footer)
     self.awardButton:SetSize(100, 24)
     self.awardButton:SetPoint("LEFT")
     self.awardButton:SetText(L["COUNCIL_AWARD"])
@@ -889,7 +883,7 @@ function CouncilTableMixin:CreateActionButtons()
     end)
 
     -- Revote button
-    self.revoteButton = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
+    self.revoteButton = ns.CreateThemedButton(footer)
     self.revoteButton:SetSize(80, 24)
     self.revoteButton:SetPoint("LEFT", self.awardButton, "RIGHT", 8, 0)
     self.revoteButton:SetText(L["COUNCIL_REVOTE"])
@@ -901,7 +895,7 @@ function CouncilTableMixin:CreateActionButtons()
     end)
 
     -- Skip button
-    self.skipButton = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
+    self.skipButton = ns.CreateThemedButton(footer)
     self.skipButton:SetSize(80, 24)
     self.skipButton:SetPoint("LEFT", self.revoteButton, "RIGHT", 8, 0)
     self.skipButton:SetText(L["COUNCIL_SKIP"])
@@ -912,7 +906,7 @@ function CouncilTableMixin:CreateActionButtons()
     end)
 
     -- Results button (view results panel for current item)
-    self.resultsButton = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
+    self.resultsButton = ns.CreateThemedButton(footer)
     self.resultsButton:SetSize(80, 24)
     self.resultsButton:SetPoint("RIGHT", -4, 0)
     self.resultsButton:SetText(L["RESULTS"])
@@ -923,7 +917,76 @@ function CouncilTableMixin:CreateActionButtons()
         end
     end)
 
+    SkinningMixin:StylePlainButton(self.awardButton, "primary")
+    SkinningMixin:StylePlainButton(self.revoteButton)
+    SkinningMixin:StylePlainButton(self.skipButton)
+    SkinningMixin:StylePlainButton(self.resultsButton)
+
     self.actionFooter = footer
+end
+
+function CouncilTableMixin:ApplyTheme()
+    if not self.frame then
+        return
+    end
+
+    SkinningMixin:ApplySkin(self.frame)
+    SkinningMixin:StyleText(self.titleText, "title", "text")
+    SkinningMixin:StyleText(self.emptyText, "body", "textSubtle")
+
+    if self.observerText then
+        SkinningMixin:StyleText(self.observerText, "bodySmall", "warning")
+    end
+    if self.headerDivider then
+        self.headerDivider:SetColorTexture(unpack(SkinningMixin:GetColor("borderStrong")))
+    end
+    if self.itemTabDivider then
+        self.itemTabDivider:SetColorTexture(unpack(SkinningMixin:GetColor("border")))
+    end
+    if self.footerDivider then
+        self.footerDivider:SetColorTexture(unpack(SkinningMixin:GetColor("border")))
+    end
+    if self.listContainer then
+        SkinningMixin:StyleSurface(self.listContainer, "inset")
+    end
+    if self.detailTooltip then
+        SkinningMixin:StyleSurface(self.detailTooltip, "alt")
+    end
+
+    SkinningMixin:StyleText(self.moreInfoName, "title", "text")
+    SkinningMixin:StyleText(self.moreInfoResponse, "header", "textMuted")
+    SkinningMixin:StyleText(self.moreInfoDetails, "bodySmall", "textMuted")
+    SkinningMixin:StyleText(self.moreInfoNote, "highlightSmall", "text")
+    SkinningMixin:StyleText(self.moreInfoGear, "bodySmall", "textMuted")
+    SkinningMixin:StyleText(self.moreInfoVoteBreakdown, "bodySmall", "success")
+    SkinningMixin:StyleText(self.moreInfoSource, "bodySmall", "textSubtle")
+    SkinningMixin:StyleText(self.moreInfoMythicPlus, "bodySmall", "accentCool")
+    SkinningMixin:StyleText(self.moreInfoParses, "bodySmall", "warning")
+    SkinningMixin:StyleText(self.moreInfoAttendance, "bodySmall", "textMuted")
+    SkinningMixin:StyleText(self.moreInfoGearReady, "bodySmall", "success")
+    SkinningMixin:StyleText(self.moreInfoLootHistory, "bodySmall", "textMuted")
+    SkinningMixin:StyleText(self.moreInfoAltLoot, "bodySmall", "accentCool")
+    SkinningMixin:StyleText(self.moreInfoStaleness, "bodySmall", "textSubtle")
+
+    if self.moreInfoIntelSep then
+        self.moreInfoIntelSep:SetColorTexture(unpack(SkinningMixin:GetColor("borderStrong")))
+    end
+
+    SkinningMixin:StylePlainButton(self.awardButton, "primary")
+    SkinningMixin:StylePlainButton(self.revoteButton)
+    SkinningMixin:StylePlainButton(self.skipButton)
+    SkinningMixin:StylePlainButton(self.resultsButton)
+
+    if self.items and #self.items > 0 then
+        self:RefreshItemTabs()
+        if self.currentItem then
+            self:SelectItemTab(self.currentItem.guid)
+        end
+    end
+
+    if self.RefreshCandidates then
+        self:RefreshCandidates()
+    end
 end
 
 function CouncilTableMixin:UpdateActionButtons()

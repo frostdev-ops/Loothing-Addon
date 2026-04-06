@@ -156,18 +156,20 @@ function AddItemFrameMixin:BuildFrame()
     footer:SetPoint("BOTTOMRIGHT", -8, 8)
     footer:SetHeight(30)
 
-    self.addBtn = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
+    self.addBtn = ns.CreateThemedButton(footer)
     self.addBtn:SetSize(110, 24)
     self.addBtn:SetPoint("RIGHT")
     self.addBtn:SetText(L["ADD"])
     self.addBtn:SetEnabled(false)
     self.addBtn:SetScript("OnClick", function() self:OnAddClick() end)
+    ns.SkinningMixin:StylePlainButton(self.addBtn, "primary")
 
-    local cancelBtn = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
+    local cancelBtn = ns.CreateThemedButton(footer)
     cancelBtn:SetSize(80, 24)
     cancelBtn:SetPoint("RIGHT", self.addBtn, "LEFT", -4, 0)
     cancelBtn:SetText(CANCEL or "Cancel")
     cancelBtn:SetScript("OnClick", function() self:Hide() end)
+    ns.SkinningMixin:StylePlainButton(cancelBtn)
 
     -- Build panels
     self:BuildEnterItemPanel()

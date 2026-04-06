@@ -10,6 +10,7 @@ local Utils = ns.Utils
 local L = Loothing.Locale
 local VersionCheck = ns.VersionCheck
 local C_Timer = C_Timer
+local SkinningMixin = ns.SkinningMixin
 
 --[[--------------------------------------------------------------------
     RosterPanelMixin
@@ -89,6 +90,7 @@ function RosterPanelMixin:Init(parent)
 
     self:CreateFrame()
     self:CreateElements()
+    self:ApplyTheme()
     self:RegisterDataCallbacks()
 end
 
@@ -153,7 +155,6 @@ function RosterPanelMixin:CreateHeader()
 
     self.summaryText = header:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     self.summaryText:SetPoint("LEFT")
-    self.summaryText:SetTextColor(0.7, 0.7, 0.7)
 
     self.headerFrame = header
 end
@@ -178,6 +179,7 @@ function RosterPanelMixin:CreateColumnHeaders()
     sep:SetPoint("TOPRIGHT", container, "BOTTOMRIGHT")
     sep:SetHeight(1)
     sep:SetColorTexture(0.3, 0.3, 0.3, 1)
+    self.columnSeparator = sep
 
     -- We'll position columns in LayoutColumns (called on first Refresh)
     self.columnsNeedLayout = true
@@ -331,16 +333,17 @@ function RosterPanelMixin:CreateFooter()
     footer:SetHeight(FOOTER_HEIGHT)
 
     -- Refresh button
-    local refreshBtn = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
+    local refreshBtn = ns.CreateThemedButton(footer)
     refreshBtn:SetSize(80, 26)
     refreshBtn:SetPoint("LEFT")
     refreshBtn:SetText(L["REFRESH"])
     refreshBtn:SetScript("OnClick", function()
         self:Refresh()
     end)
+    self.refreshButton = refreshBtn
 
     -- Query Versions button
-    local queryBtn = CreateFrame("Button", nil, footer, "UIPanelButtonTemplate")
+    local queryBtn = ns.CreateThemedButton(footer)
     queryBtn:SetSize(120, 26)
     queryBtn:SetPoint("RIGHT")
     queryBtn:SetText(L["ROSTER_QUERY_VERSIONS"])
@@ -360,8 +363,55 @@ function RosterPanelMixin:CreateEmptyState()
     self.emptyText = self.listContainer:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     self.emptyText:SetPoint("CENTER")
     self.emptyText:SetText(L["ROSTER_NO_GROUP"])
-    self.emptyText:SetTextColor(0.5, 0.5, 0.5)
     self.emptyText:Hide()
+end
+
+function RosterPanelMixin:ApplyTheme()
+    if not self.frame or not SkinningMixin then
+        return
+    end
+
+    local inset = SkinningMixin:GetLayoutValue("panelInset", 8)
+    local footerInset = SkinningMixin:GetLayoutValue("footerInset", 8)
+
+    if self.headerFrame then
+        self.headerFrame:ClearAllPoints()
+        self.headerFrame:SetPoint("TOPLEFT", inset, -4)
+        self.headerFrame:SetPoint("TOPRIGHT", -inset, -4)
+    end
+
+    if self.summaryText then
+        SkinningMixin:StyleText(self.summaryText, "bodySmall", "textMuted")
+    end
+
+    if self.columnContainer then
+        self.columnContainer:ClearAllPoints()
+        self.columnContainer:SetPoint("TOPLEFT", inset + 2, -(4 + HEADER_HEIGHT))
+        self.columnContainer:SetPoint("TOPRIGHT", -(inset + 22), -(4 + HEADER_HEIGHT))
+    end
+
+    if self.columnSeparator then
+        self.columnSeparator:SetColorTexture(unpack(SkinningMixin:GetColor("border")))
+    end
+
+    if self.listContainer then
+        self.listContainer:ClearAllPoints()
+        self.listContainer:SetPoint("TOPLEFT", inset, -(4 + HEADER_HEIGHT + COLUMN_HEADER_HEIGHT + 2))
+        self.listContainer:SetPoint("BOTTOMRIGHT", -inset, footerInset + FOOTER_HEIGHT)
+        SkinningMixin:StyleSurface(self.listContainer, "inset")
+    end
+
+    if self.emptyText then
+        SkinningMixin:StyleText(self.emptyText, "body", "textSubtle")
+    end
+
+    if self.refreshButton then
+        SkinningMixin:StylePlainButton(self.refreshButton)
+    end
+
+    if self.queryButton then
+        SkinningMixin:StylePlainButton(self.queryButton, "primary")
+    end
 end
 
 --[[--------------------------------------------------------------------

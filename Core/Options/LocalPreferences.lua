@@ -10,6 +10,9 @@ local Options = ns.Options or {}
 ns.Options = Options
 
 local L = ns.Locale
+local function GetSkinningMixin()
+    return ns.SkinningMixin
+end
 
 --- Returns true when a non-ML player should be locked out of ML-broadcast settings.
 local function IsSessionLocked()
@@ -41,6 +44,29 @@ local function GetChannelValues()
         PARTY = L["CHANNEL_PARTY"],
         NONE = L["CHANNEL_NONE"],
     }
+end
+
+local function BuildSelectionValues(names)
+    local values = {}
+    for _, name in ipairs(names) do
+        values[name] = name
+    end
+    return values
+end
+
+local function GetThemeValues()
+    local skinning = GetSkinningMixin()
+    return BuildSelectionValues(skinning and skinning:GetThemeNames() or { "Default" })
+end
+
+local function GetAccentValues()
+    local skinning = GetSkinningMixin()
+    return BuildSelectionValues(skinning and skinning:GetAccentNames() or { "Amber" })
+end
+
+local function GetDensityValues()
+    local skinning = GetSkinningMixin()
+    return BuildSelectionValues(skinning and skinning:GetDensityNames() or { "Comfortable" })
 end
 
 --- Generates option args for 5 configurable announcement lines.
@@ -535,11 +561,67 @@ local function GetLocalPreferencesOptions()
                 order = 5,
                 columns = 3,
                 args = {
+                    themeHeader = {
+                        type = "header",
+                        name = L["CONFIG_FRAME_THEME_HEADER"],
+                        order = 0,
+                    },
+                    skin = {
+                        type = "select",
+                        name = L["CONFIG_FRAME_THEME"],
+                        desc = L["CONFIG_FRAME_THEME_DESC"],
+                        order = 1,
+                        width = "double",
+                        values = GetThemeValues,
+                        get = function() return Loothing.Settings:Get("frame.skin", "Default") end,
+                        set = function(_, value)
+                            local skinning = GetSkinningMixin()
+                            if skinning then
+                                skinning:SetCurrentSkin(value)
+                            else
+                                Loothing.Settings:Set("frame.skin", value)
+                            end
+                        end,
+                    },
+                    accent = {
+                        type = "select",
+                        name = L["CONFIG_FRAME_ACCENT"],
+                        desc = L["CONFIG_FRAME_ACCENT_DESC"],
+                        order = 2,
+                        width = "half",
+                        values = GetAccentValues,
+                        get = function() return Loothing.Settings:Get("frame.accent", "Amber") end,
+                        set = function(_, value)
+                            local skinning = GetSkinningMixin()
+                            if skinning then
+                                skinning:SetCurrentAccent(value)
+                            else
+                                Loothing.Settings:Set("frame.accent", value)
+                            end
+                        end,
+                    },
+                    density = {
+                        type = "select",
+                        name = L["CONFIG_FRAME_DENSITY"],
+                        desc = L["CONFIG_FRAME_DENSITY_DESC"],
+                        order = 3,
+                        width = "half",
+                        values = GetDensityValues,
+                        get = function() return Loothing.Settings:Get("frame.density", "Comfortable") end,
+                        set = function(_, value)
+                            local skinning = GetSkinningMixin()
+                            if skinning then
+                                skinning:SetCurrentDensity(value)
+                            else
+                                Loothing.Settings:Set("frame.density", value)
+                            end
+                        end,
+                    },
                     autoOpen = {
                         type = "toggle",
                         name = L["CONFIG_FRAME_AUTO_OPEN"],
                         desc = L["CONFIG_FRAME_AUTO_OPEN_DESC"],
-                        order = 1,
+                        order = 10,
                         width = "half",
                         get = function() return Loothing.Settings:Get("frame.autoOpen") end,
                         set = function(_, v) Loothing.Settings:Set("frame.autoOpen", v) end,
@@ -548,7 +630,7 @@ local function GetLocalPreferencesOptions()
                         type = "toggle",
                         name = L["CONFIG_FRAME_AUTO_CLOSE"],
                         desc = L["CONFIG_FRAME_AUTO_CLOSE_DESC"],
-                        order = 2,
+                        order = 11,
                         width = "half",
                         get = function() return Loothing.Settings:Get("frame.autoClose") end,
                         set = function(_, v) Loothing.Settings:Set("frame.autoClose", v) end,
@@ -557,7 +639,7 @@ local function GetLocalPreferencesOptions()
                         type = "toggle",
                         name = L["CONFIG_FRAME_MINIMIZE_COMBAT"],
                         desc = L["CONFIG_FRAME_MINIMIZE_COMBAT_DESC"],
-                        order = 3,
+                        order = 12,
                         width = "half",
                         get = function() return Loothing.Settings:Get("frame.minimizeInCombat") end,
                         set = function(_, v) Loothing.Settings:Set("frame.minimizeInCombat", v) end,
@@ -566,7 +648,7 @@ local function GetLocalPreferencesOptions()
                         type = "toggle",
                         name = L["CONFIG_FRAME_SHOW_SPEC_ICON"],
                         desc = L["CONFIG_FRAME_SHOW_SPEC_ICON_DESC"],
-                        order = 4,
+                        order = 13,
                         width = "half",
                         get = function() return Loothing.Settings:Get("frame.showSpecIcon") end,
                         set = function(_, v) Loothing.Settings:Set("frame.showSpecIcon", v) end,
@@ -575,7 +657,7 @@ local function GetLocalPreferencesOptions()
                         type = "toggle",
                         name = L["CONFIG_FRAME_CLOSE_ESCAPE"],
                         desc = L["CONFIG_FRAME_CLOSE_ESCAPE_DESC"],
-                        order = 5,
+                        order = 14,
                         width = "half",
                         get = function() return Loothing.Settings:Get("frame.closeWithEscape") end,
                         set = function(_, v) Loothing.Settings:Set("frame.closeWithEscape", v) end,
@@ -584,7 +666,7 @@ local function GetLocalPreferencesOptions()
                         type = "toggle",
                         name = L["CONFIG_FRAME_TIMEOUT_FLASH"],
                         desc = L["CONFIG_FRAME_TIMEOUT_FLASH_DESC"],
-                        order = 6,
+                        order = 15,
                         width = "half",
                         get = function() return Loothing.Settings:Get("frame.timeoutFlash") end,
                         set = function(_, v) Loothing.Settings:Set("frame.timeoutFlash", v) end,
@@ -593,7 +675,7 @@ local function GetLocalPreferencesOptions()
                         type = "toggle",
                         name = L["CONFIG_FRAME_BLOCK_TRADES"],
                         desc = L["CONFIG_FRAME_BLOCK_TRADES_DESC"],
-                        order = 7,
+                        order = 16,
                         width = "half",
                         get = function() return Loothing.Settings:Get("frame.blockTradesDuringVoting") end,
                         set = function(_, v) Loothing.Settings:Set("frame.blockTradesDuringVoting", v) end,
@@ -602,7 +684,7 @@ local function GetLocalPreferencesOptions()
                         type = "select",
                         name = L["CONFIG_FRAME_CHAT_OUTPUT"],
                         desc = L["CONFIG_FRAME_CHAT_OUTPUT_DESC"],
-                        order = 8,
+                        order = 17,
                         values = GetChatFrameValues(),
                         get = function() return Loothing.Settings:Get("frame.chatFrameName") end,
                         set = function(_, v) Loothing.Settings:Set("frame.chatFrameName", v) end,

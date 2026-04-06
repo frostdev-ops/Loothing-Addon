@@ -8,7 +8,7 @@ local _, ns = ...
 local Loothing = ns.Addon
 
 -- Addon info
-Loothing.VERSION = "1.9.5"
+Loothing.VERSION = "2.0.0"
 Loothing.PROTOCOL_VERSION = 4
 Loothing.ADDON_PREFIX = "LOOTHING"
 
@@ -426,6 +426,9 @@ Loothing.DefaultSettings = {
     },
 
     frame = {
+        skin = "Default",          -- Base UI theme
+        accent = "Amber",          -- Accent palette
+        density = "Comfortable",   -- Layout density
         autoOpen = false,           -- Auto open frames when loot available
         autoClose = false,          -- Auto close after session ends
         minimizeInCombat = false,   -- Hide frames during combat

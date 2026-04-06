@@ -60,14 +60,16 @@ function RollFrameMixin:CreateFrame()
     accentBar:SetPoint("TOPLEFT", 0, 0)
     accentBar:SetPoint("TOPRIGHT", 0, 0)
     accentBar:SetHeight(2)
-    accentBar:SetColorTexture(1, 0.82, 0, 1)
+    accentBar:SetColorTexture(unpack(SkinningMixin:GetColor("accent")))
+    self.headerAccentBar = accentBar
 
     -- Dark header background
     local headerBg = frame:CreateTexture(nil, "BACKGROUND", nil, 1)
     headerBg:SetPoint("TOPLEFT", 0, 0)
     headerBg:SetPoint("TOPRIGHT", 0, 0)
     headerBg:SetHeight(36)
-    headerBg:SetColorTexture(0.05, 0.05, 0.05, 0.95)
+    headerBg:SetColorTexture(unpack(SkinningMixin:GetColor("header")))
+    self.headerBackground = headerBg
 
     local titleBar = CreateFrame("Frame", nil, frame)
     titleBar:SetPoint("TOPLEFT", 12, -8)
@@ -87,11 +89,12 @@ function RollFrameMixin:CreateFrame()
     titleText:SetPoint("LEFT", 5, 0)
     local L = Loothing.Locale
     titleText:SetText(L["LOOT_RESPONSE_TITLE"])
+    SkinningMixin:StyleText(titleText, "title", "text")
     self.titleText = titleText
 
     local counterText = titleBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     counterText:SetPoint("RIGHT", -25, 0)
-    counterText:SetTextColor(0.7, 0.7, 0.7)
+    SkinningMixin:StyleText(counterText, "bodySmall", "textMuted")
     self.counterText = counterText
 
     self.frame = frame
@@ -116,44 +119,52 @@ function RollFrameMixin:CreateElements()
     local submitBtn = CreateFrame("Button", nil, self.frame, "BackdropTemplate")
     submitBtn:SetSize(160, SUBMIT_BUTTON_HEIGHT)
     submitBtn:SetPoint("BOTTOM", 0, 16)
-    submitBtn:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        tile = false,
-        edgeSize = 1,
-        insets = { left = 0, right = 0, top = 0, bottom = 0 },
-    })
-    submitBtn:SetBackdropColor(0.15, 0.35, 0.15, 0.95)
-    submitBtn:SetBackdropBorderColor(0.3, 0.6, 0.3, 1)
 
     local submitLabel = submitBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     submitLabel:SetPoint("CENTER")
     submitLabel:SetText(L["SUBMIT_RESPONSE"])
-    submitLabel:SetTextColor(0.9, 1, 0.9)
+    SkinningMixin:StyleText(submitLabel, "header", "accent")
     submitBtn.label = submitLabel
-
-    submitBtn:SetScript("OnEnter", function(btn)
-        if btn:IsEnabled() then
-            btn:SetBackdropColor(0.2, 0.45, 0.2, 1)
-            btn:SetBackdropBorderColor(0.4, 0.75, 0.4, 1)
-        end
-    end)
-    submitBtn:SetScript("OnLeave", function(btn)
-        if btn:IsEnabled() then
-            btn:SetBackdropColor(0.15, 0.35, 0.15, 0.95)
-            btn:SetBackdropBorderColor(0.3, 0.6, 0.3, 1)
-        end
-    end)
     submitBtn:SetEnabled(false)
-    submitBtn:SetBackdropColor(0.12, 0.12, 0.12, 0.8)
-    submitBtn:SetBackdropBorderColor(0.2, 0.2, 0.2, 0.8)
-    submitLabel:SetTextColor(0.45, 0.45, 0.45)
+    SkinningMixin:StylePlainButton(submitBtn, "success")
     submitBtn:SetScript("OnClick", function()
         self:Submit()
     end)
     self.submitButton = submitBtn
 
     self:CreateResponseSection()
+end
+
+function RollFrameMixin:ApplyTheme()
+    if not self.frame then
+        return
+    end
+
+    SkinningMixin:ApplySkin(self.frame)
+
+    if self.headerAccentBar then
+        self.headerAccentBar:SetColorTexture(unpack(SkinningMixin:GetColor("accent")))
+    end
+    if self.headerBackground then
+        self.headerBackground:SetColorTexture(unpack(SkinningMixin:GetColor("header")))
+    end
+
+    SkinningMixin:StyleText(self.titleText, "title", "text")
+    SkinningMixin:StyleText(self.counterText, "bodySmall", "textMuted")
+
+    if self.submitButton then
+        SkinningMixin:StylePlainButton(self.submitButton, "success")
+    end
+
+    if self.UpdateSessionButtons then
+        self:UpdateSessionButtons()
+    end
+    if self.RefreshResponseButtons then
+        self:RefreshResponseButtons()
+    end
+    if self.UpdateSubmitButton then
+        self:UpdateSubmitButton()
+    end
 end
 
 --[[--------------------------------------------------------------------
@@ -195,19 +206,19 @@ function RollFrameMixin:CreateSessionButton(index, item)
             edgeSize = 1,
             insets = { left = 1, right = 1, top = 1, bottom = 1 },
         })
-        btn:SetBackdropColor(0.12, 0.12, 0.12, 0.95)
-        btn:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
+        btn:SetBackdropColor(unpack(SkinningMixin:GetColor("panelAlt")))
+        btn:SetBackdropBorderColor(unpack(SkinningMixin:GetColor("borderStrong")))
 
         btn.selectBar = btn:CreateTexture(nil, "OVERLAY", nil, 7)
         btn.selectBar:SetHeight(2)
         btn.selectBar:SetPoint("BOTTOMLEFT", 1, 1)
         btn.selectBar:SetPoint("BOTTOMRIGHT", -1, 1)
-        btn.selectBar:SetColorTexture(1, 0.82, 0, 1)
+        btn.selectBar:SetColorTexture(unpack(SkinningMixin:GetColor("accent")))
         btn.selectBar:Hide()
 
         btn.selectGlow = btn:CreateTexture(nil, "BACKGROUND", nil, -1)
         btn.selectGlow:SetAllPoints()
-        btn.selectGlow:SetColorTexture(0.3, 0.3, 0.5, 0.4)
+        btn.selectGlow:SetColorTexture(unpack(SkinningMixin:GetColor("accentSoft")))
         btn.selectGlow:Hide()
 
         btn.iconBorder = btn:CreateTexture(nil, "ARTWORK", nil, 1)

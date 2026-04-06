@@ -1447,10 +1447,11 @@ local function ShowDebugReport(ctx)
         frame.editBox = editBox
         frame.scrollFrame = scrollFrame
 
-        local selectBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+        local selectBtn = ns.CreateThemedButton(frame)
         selectBtn:SetSize(100, 24)
         selectBtn:SetPoint("BOTTOMLEFT", 12, 10)
         selectBtn:SetText("Select All")
+        ns.SkinningMixin:StylePlainButton(selectBtn)
         selectBtn:SetScript("OnClick", function()
             frame.editBox:SetFocus()
             frame.editBox:HighlightText()

@@ -544,6 +544,13 @@ L["CONFIG_AUTO_AWARD_INCLUDE_BOE_DESC"] = "Also auto-award Bind on Equip items w
 
 -- Frame Behavior Options
 L["CONFIG_FRAME_BEHAVIOR"] = "Frame Behavior"
+L["CONFIG_FRAME_THEME_HEADER"] = "Visual Theme"
+L["CONFIG_FRAME_THEME"] = "Base Theme"
+L["CONFIG_FRAME_THEME_DESC"] = "Choose the overall Loothing visual style."
+L["CONFIG_FRAME_ACCENT"] = "Accent Palette"
+L["CONFIG_FRAME_ACCENT_DESC"] = "Choose the highlight color used for active tabs, primary actions, and emphasis states."
+L["CONFIG_FRAME_DENSITY"] = "Layout Density"
+L["CONFIG_FRAME_DENSITY_DESC"] = "Adjust overall spacing and frame density without changing behavior."
 L["CONFIG_FRAME_AUTO_OPEN"] = "Auto-Open Frames"
 L["CONFIG_FRAME_AUTO_OPEN_DESC"] = "Automatically open the voting and loot frames when a loot council session starts"
 L["CONFIG_FRAME_AUTO_CLOSE"] = "Auto-Close Frames"

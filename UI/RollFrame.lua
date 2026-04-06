@@ -52,6 +52,7 @@ function RollFrameMixin:Init()
     -- Create UI
     self:CreateFrame()
     self:CreateElements()
+    self:ApplyTheme()
 
     -- Register for session events
     self:RegisterSessionEvents()
@@ -834,18 +835,8 @@ function RollFrameMixin:UpdateSubmitButton()
         end
 
         -- Update visual enabled/disabled state for custom button
-        if canSubmit then
-            self.submitButton:SetBackdropColor(0.15, 0.35, 0.15, 0.95)
-            self.submitButton:SetBackdropBorderColor(0.3, 0.6, 0.3, 1)
-            if self.submitButton.label then
-                self.submitButton.label:SetTextColor(0.9, 1, 0.9)
-            end
-        else
-            self.submitButton:SetBackdropColor(0.12, 0.12, 0.12, 0.8)
-            self.submitButton:SetBackdropBorderColor(0.2, 0.2, 0.2, 0.8)
-            if self.submitButton.label then
-                self.submitButton.label:SetTextColor(0.45, 0.45, 0.45)
-            end
+        if ns.SkinningMixin and ns.SkinningMixin.StylePlainButton then
+            ns.SkinningMixin:StylePlainButton(self.submitButton, "success")
         end
     end
 

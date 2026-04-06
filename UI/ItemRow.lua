@@ -104,8 +104,9 @@ function ItemRowMixin:CreateElements()
     self.slotText:SetTextColor(0.7, 0.7, 0.7)
 
     -- Action button (rightmost element in chain)
-    self.actionButton = CreateFrame("Button", nil, self.frame, "UIPanelButtonTemplate")
+    self.actionButton = ns.CreateThemedButton(self.frame)
     self.actionButton:SetSize(70, 22)
+    ns.SkinningMixin:StylePlainButton(self.actionButton)
 
     -- Status text (left of action button)
     self.statusText = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")

@@ -120,13 +120,14 @@ function VotePanelMixin:CreateElements()
     self:CreateNoteInput()
 
     -- Submit button
-    self.submitButton = CreateFrame("Button", nil, self.frame, "UIPanelButtonTemplate")
+    self.submitButton = ns.CreateThemedButton(self.frame)
     self.submitButton:SetSize(100, 26)
     self.submitButton:SetPoint("BOTTOM", 0, 20)
     self.submitButton:SetText(L["SUBMIT_VOTE"])
     self.submitButton:SetScript("OnClick", function()
         self:SubmitVote()
     end)
+    ns.SkinningMixin:StylePlainButton(self.submitButton, "primary")
 end
 
 --- Create note input field
@@ -415,13 +416,14 @@ function VotePanelMixin:CreateRankedDisplay()
     label:SetTextColor(0.7, 0.7, 0.7)
 
     -- Clear button
-    local clearButton = CreateFrame("Button", nil, container, "UIPanelButtonTemplate")
+    local clearButton = ns.CreateThemedButton(container)
     clearButton:SetSize(60, 20)
     clearButton:SetPoint("TOPRIGHT")
     clearButton:SetText((Loothing.Locale and Loothing.Locale["CLEAR"]) or "Clear")
     clearButton:SetScript("OnClick", function()
         self:ClearRanking()
     end)
+    ns.SkinningMixin:StylePlainButton(clearButton)
 
     -- Helper text for max/min rank messages
     self.rankHelperText = container:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")

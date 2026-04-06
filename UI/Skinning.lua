@@ -6,6 +6,38 @@
 local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
+local StyleUtil = Loolib.StyleUtil
+
+local function CopyTable(source)
+    if type(source) ~= "table" then
+        return source
+    end
+
+    local copy = {}
+    for key, value in pairs(source) do
+        copy[key] = type(value) == "table" and CopyTable(value) or value
+    end
+    return copy
+end
+
+local function MergeTable(target, source)
+    if type(target) ~= "table" or type(source) ~= "table" then
+        return target
+    end
+
+    for key, value in pairs(source) do
+        if type(value) == "table" then
+            if type(target[key]) ~= "table" then
+                target[key] = {}
+            end
+            MergeTable(target[key], value)
+        else
+            target[key] = value
+        end
+    end
+
+    return target
+end
 
 --[[--------------------------------------------------------------------
     Skin Presets
@@ -13,24 +45,116 @@ local Loothing = ns.Addon
 
 ns.SkinPresets = ns.SkinPresets or {
     Default = {
-        bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
-        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-        tile = true,
-        tileSize = 32,
-        edgeSize = 32,
-        insets = { left = 11, right = 12, top = 12, bottom = 11 },
-        bgColor = { 0.09, 0.09, 0.19, 1 },
-        borderColor = { 0.7, 0.7, 0.7, 1 },
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        tile = false,
+        tileSize = 0,
+        edgeSize = 1,
+        insets = { left = 1, right = 1, top = 1, bottom = 1 },
+        bgColor = { 0.050, 0.058, 0.074, 0.97 },
+        borderColor = { 0.180, 0.216, 0.278, 1.0 },
+        colors = {
+            frame = { 0.050, 0.058, 0.074, 0.97 },
+            header = { 0.072, 0.082, 0.108, 0.98 },
+            panel = { 0.068, 0.078, 0.104, 0.94 },
+            panelAlt = { 0.085, 0.096, 0.126, 0.92 },
+            panelInset = { 0.035, 0.041, 0.055, 0.92 },
+            border = { 0.180, 0.216, 0.278, 1.0 },
+            borderStrong = { 0.286, 0.337, 0.435, 1.0 },
+            accent = { 0.945, 0.775, 0.298, 1.0 },
+            accentSoft = { 0.945, 0.775, 0.298, 0.18 },
+            accentCool = { 0.404, 0.647, 0.929, 1.0 },
+            success = { 0.353, 0.808, 0.561, 1.0 },
+            warning = { 0.945, 0.775, 0.298, 1.0 },
+            danger = { 0.882, 0.396, 0.396, 1.0 },
+            text = { 0.965, 0.972, 0.992, 1.0 },
+            textMuted = { 0.658, 0.705, 0.792, 1.0 },
+            textSubtle = { 0.520, 0.568, 0.647, 1.0 },
+            row = { 0.082, 0.093, 0.122, 0.70 },
+            rowAlt = { 0.062, 0.071, 0.095, 0.55 },
+            rowHover = { 0.126, 0.150, 0.204, 0.72 },
+            rowSelected = { 0.150, 0.176, 0.239, 0.84 },
+        },
+        fontObjects = {
+            title = "GameFontNormalLarge",
+            titleHuge = "GameFontNormalHuge",
+            header = "GameFontNormal",
+            body = "GameFontNormal",
+            bodySmall = "GameFontNormalSmall",
+            highlight = "GameFontHighlight",
+            highlightSmall = "GameFontHighlightSmall",
+        },
+        spacing = {
+            xs = 4,
+            sm = 8,
+            md = 12,
+            lg = 16,
+            xl = 24,
+        },
+        layout = {
+            outerPadding = 16,
+            tabHeight = 32,
+            headerHeight = 42,
+            contentBottom = 16,
+            panelInset = 8,
+            footerInset = 8,
+        },
     },
     Dark = {
         bgFile = "Interface\\Buttons\\WHITE8x8",
         edgeFile = "Interface\\Buttons\\WHITE8x8",
         tile = false,
         tileSize = 0,
-        edgeSize = 2,
-        insets = { left = 2, right = 2, top = 2, bottom = 2 },
-        bgColor = { 0.06, 0.06, 0.06, 0.95 },
-        borderColor = { 0.2, 0.2, 0.2, 1 },
+        edgeSize = 1,
+        insets = { left = 1, right = 1, top = 1, bottom = 1 },
+        bgColor = { 0.035, 0.039, 0.050, 0.98 },
+        borderColor = { 0.145, 0.173, 0.220, 1.0 },
+        colors = {
+            frame = { 0.035, 0.039, 0.050, 0.98 },
+            header = { 0.048, 0.054, 0.070, 0.98 },
+            panel = { 0.050, 0.056, 0.072, 0.95 },
+            panelAlt = { 0.062, 0.070, 0.090, 0.92 },
+            panelInset = { 0.022, 0.026, 0.034, 0.94 },
+            border = { 0.145, 0.173, 0.220, 1.0 },
+            borderStrong = { 0.235, 0.274, 0.345, 1.0 },
+            accent = { 0.420, 0.640, 0.945, 1.0 },
+            accentSoft = { 0.420, 0.640, 0.945, 0.18 },
+            accentCool = { 0.420, 0.790, 0.945, 1.0 },
+            success = { 0.318, 0.706, 0.510, 1.0 },
+            warning = { 0.902, 0.700, 0.298, 1.0 },
+            danger = { 0.835, 0.349, 0.349, 1.0 },
+            text = { 0.930, 0.950, 0.985, 1.0 },
+            textMuted = { 0.612, 0.668, 0.760, 1.0 },
+            textSubtle = { 0.474, 0.529, 0.615, 1.0 },
+            row = { 0.060, 0.068, 0.088, 0.72 },
+            rowAlt = { 0.046, 0.052, 0.068, 0.58 },
+            rowHover = { 0.108, 0.126, 0.170, 0.76 },
+            rowSelected = { 0.128, 0.152, 0.208, 0.86 },
+        },
+        fontObjects = {
+            title = "GameFontNormalLarge",
+            titleHuge = "GameFontNormalHuge",
+            header = "GameFontNormal",
+            body = "GameFontNormal",
+            bodySmall = "GameFontNormalSmall",
+            highlight = "GameFontHighlight",
+            highlightSmall = "GameFontHighlightSmall",
+        },
+        spacing = {
+            xs = 4,
+            sm = 8,
+            md = 12,
+            lg = 16,
+            xl = 24,
+        },
+        layout = {
+            outerPadding = 16,
+            tabHeight = 32,
+            headerHeight = 42,
+            contentBottom = 16,
+            panelInset = 8,
+            footerInset = 8,
+        },
     },
     Minimal = {
         bgFile = "Interface\\Buttons\\WHITE8x8",
@@ -39,11 +163,134 @@ ns.SkinPresets = ns.SkinPresets or {
         tileSize = 0,
         edgeSize = 1,
         insets = { left = 1, right = 1, top = 1, bottom = 1 },
-        bgColor = { 0.05, 0.05, 0.05, 0.85 },
-        borderColor = { 0.15, 0.15, 0.15, 0.8 },
+        bgColor = { 0.046, 0.052, 0.066, 0.88 },
+        borderColor = { 0.122, 0.145, 0.188, 0.88 },
+        colors = {
+            frame = { 0.046, 0.052, 0.066, 0.90 },
+            header = { 0.052, 0.060, 0.078, 0.92 },
+            panel = { 0.056, 0.064, 0.082, 0.90 },
+            panelAlt = { 0.066, 0.075, 0.096, 0.88 },
+            panelInset = { 0.030, 0.035, 0.045, 0.92 },
+            border = { 0.122, 0.145, 0.188, 0.88 },
+            borderStrong = { 0.215, 0.250, 0.322, 0.96 },
+            accent = { 0.352, 0.705, 0.965, 1.0 },
+            accentSoft = { 0.352, 0.705, 0.965, 0.16 },
+            accentCool = { 0.490, 0.835, 0.965, 1.0 },
+            success = { 0.345, 0.790, 0.522, 1.0 },
+            warning = { 0.948, 0.760, 0.340, 1.0 },
+            danger = { 0.882, 0.402, 0.402, 1.0 },
+            text = { 0.970, 0.975, 0.985, 1.0 },
+            textMuted = { 0.700, 0.742, 0.812, 1.0 },
+            textSubtle = { 0.560, 0.602, 0.678, 1.0 },
+            row = { 0.076, 0.086, 0.110, 0.62 },
+            rowAlt = { 0.058, 0.066, 0.085, 0.50 },
+            rowHover = { 0.118, 0.142, 0.188, 0.66 },
+            rowSelected = { 0.142, 0.172, 0.224, 0.78 },
+        },
+        fontObjects = {
+            title = "GameFontNormalLarge",
+            titleHuge = "GameFontNormalHuge",
+            header = "GameFontNormal",
+            body = "GameFontNormal",
+            bodySmall = "GameFontNormalSmall",
+            highlight = "GameFontHighlight",
+            highlightSmall = "GameFontHighlightSmall",
+        },
+        spacing = {
+            xs = 3,
+            sm = 6,
+            md = 10,
+            lg = 14,
+            xl = 20,
+        },
+        layout = {
+            outerPadding = 14,
+            tabHeight = 30,
+            headerHeight = 40,
+            contentBottom = 14,
+            panelInset = 6,
+            footerInset = 6,
+        },
     },
 }
 Loothing.SkinPresets = ns.SkinPresets
+
+ns.SkinAccentPresets = ns.SkinAccentPresets or {
+    Amber = {
+        accent = { 0.945, 0.775, 0.298, 1.0 },
+        accentSoft = { 0.945, 0.775, 0.298, 0.18 },
+        accentCool = { 0.404, 0.647, 0.929, 1.0 },
+        warning = { 0.945, 0.775, 0.298, 1.0 },
+    },
+    Azure = {
+        accent = { 0.388, 0.682, 0.965, 1.0 },
+        accentSoft = { 0.388, 0.682, 0.965, 0.18 },
+        accentCool = { 0.518, 0.862, 0.988, 1.0 },
+        warning = { 0.965, 0.760, 0.352, 1.0 },
+    },
+    Emerald = {
+        accent = { 0.353, 0.808, 0.561, 1.0 },
+        accentSoft = { 0.353, 0.808, 0.561, 0.18 },
+        accentCool = { 0.404, 0.859, 0.769, 1.0 },
+        warning = { 0.945, 0.775, 0.298, 1.0 },
+    },
+    Crimson = {
+        accent = { 0.882, 0.396, 0.396, 1.0 },
+        accentSoft = { 0.882, 0.396, 0.396, 0.18 },
+        accentCool = { 0.918, 0.592, 0.592, 1.0 },
+        warning = { 0.945, 0.775, 0.298, 1.0 },
+    },
+}
+
+ns.SkinDensityPresets = ns.SkinDensityPresets or {
+    Compact = {
+        spacing = { xs = 2, sm = 6, md = 10, lg = 14, xl = 20 },
+        layout = {
+            outerPadding = 12,
+            tabHeight = 28,
+            headerHeight = 40,
+            contentBottom = 12,
+            panelInset = 6,
+            footerInset = 6,
+        },
+    },
+    Comfortable = {
+        spacing = { xs = 4, sm = 8, md = 12, lg = 16, xl = 24 },
+        layout = {
+            outerPadding = 16,
+            tabHeight = 32,
+            headerHeight = 42,
+            contentBottom = 16,
+            panelInset = 8,
+            footerInset = 8,
+        },
+    },
+    Spacious = {
+        spacing = { xs = 6, sm = 10, md = 14, lg = 20, xl = 28 },
+        layout = {
+            outerPadding = 20,
+            tabHeight = 36,
+            headerHeight = 46,
+            contentBottom = 20,
+            panelInset = 10,
+            footerInset = 10,
+        },
+    },
+}
+
+--- Create a themed button using BackdropTemplate instead of UIPanelButtonTemplate.
+-- Sets up font objects so SetText() renders immediately. Does not call
+-- StylePlainButton — callers should do that during their styling pass.
+-- @param parent Frame
+-- @param name string|nil  Optional global name for the button.
+-- @return Button
+function ns.CreateThemedButton(parent, name)
+    local btn = CreateFrame("Button", name, parent, "BackdropTemplate")
+    btn:SetNormalFontObject(GameFontNormal)
+    btn:SetHighlightFontObject(GameFontHighlight)
+    btn:SetDisabledFontObject(GameFontDisable)
+    return btn
+end
 
 --[[--------------------------------------------------------------------
     SkinningMixin
@@ -63,6 +310,461 @@ ns.SkinningMixin = SkinningMixin
 local managedFrames = {}
 local combatFrame = nil
 
+--- Registry of all buttons styled via StylePlainButton, keyed by button.
+-- Allows RefreshTheme to re-style every button when texture set or accent changes.
+local styledButtons = setmetatable({}, { __mode = "k" })
+
+local function ApplyColorToFontString(fontString, color)
+    if fontString and color and fontString.SetTextColor then
+        fontString:SetTextColor(color[1], color[2], color[3], color[4] or 1)
+    end
+end
+
+local function ApplyColorToTexture(texture, color)
+    if texture and color and texture.SetColorTexture then
+        texture:SetColorTexture(color[1], color[2], color[3], color[4] or 1)
+    end
+end
+
+function SkinningMixin:GetSkinData(skinName)
+    local resolvedSkin = skinName or self:GetCurrentSkin()
+    local resolvedAccent = self:GetCurrentAccent()
+    local resolvedDensity = self:GetCurrentDensity()
+    local cacheKey = table.concat({ resolvedSkin or "Default", resolvedAccent or "Amber", resolvedDensity or "Comfortable" }, ":")
+
+    if self._skinCacheKey == cacheKey and self._skinCache then
+        return self._skinCache
+    end
+
+    local baseSkin = Loothing.SkinPresets[resolvedSkin] or Loothing.SkinPresets.Default
+    local skin = CopyTable(baseSkin)
+    local accentPreset = ns.SkinAccentPresets[resolvedAccent]
+    local densityPreset = ns.SkinDensityPresets[resolvedDensity]
+
+    if accentPreset then
+        skin.colors = skin.colors or {}
+        MergeTable(skin.colors, accentPreset)
+    end
+
+    if densityPreset then
+        skin.spacing = skin.spacing or {}
+        skin.layout = skin.layout or {}
+        MergeTable(skin.spacing, densityPreset.spacing or {})
+        MergeTable(skin.layout, densityPreset.layout or {})
+    end
+
+    self._skinCacheKey = cacheKey
+    self._skinCache = skin
+    return skin
+end
+
+function SkinningMixin:GetColor(colorKey, fallback, skinName)
+    local skin = self:GetSkinData(skinName)
+    local colors = skin and skin.colors
+    if colors and colors[colorKey] then
+        return colors[colorKey]
+    end
+    local defaultColors = Loothing.SkinPresets.Default and Loothing.SkinPresets.Default.colors
+    if defaultColors and defaultColors[colorKey] then
+        return defaultColors[colorKey]
+    end
+    return fallback or skin.borderColor or { 1, 1, 1, 1 }
+end
+
+function SkinningMixin:GetSpacing(spacingKey, fallback, skinName)
+    local skin = self:GetSkinData(skinName)
+    local spacing = skin and skin.spacing
+    if spacing and spacing[spacingKey] then
+        return spacing[spacingKey]
+    end
+    local defaultSpacing = Loothing.SkinPresets.Default and Loothing.SkinPresets.Default.spacing
+    if defaultSpacing and defaultSpacing[spacingKey] then
+        return defaultSpacing[spacingKey]
+    end
+    return fallback or 8
+end
+
+function SkinningMixin:GetLayoutValue(layoutKey, fallback, skinName)
+    local skin = self:GetSkinData(skinName)
+    local layout = skin and skin.layout
+    if layout and layout[layoutKey] ~= nil then
+        return layout[layoutKey]
+    end
+
+    local defaultLayout = Loothing.SkinPresets.Default and Loothing.SkinPresets.Default.layout
+    if defaultLayout and defaultLayout[layoutKey] ~= nil then
+        return defaultLayout[layoutKey]
+    end
+
+    return fallback
+end
+
+function SkinningMixin:GetCurrentAccent()
+    if Loothing.Settings then
+        return Loothing.Settings:Get("frame.accent") or "Amber"
+    end
+    return "Amber"
+end
+
+function SkinningMixin:GetCurrentDensity()
+    if Loothing.Settings then
+        return Loothing.Settings:Get("frame.density") or "Comfortable"
+    end
+    return "Comfortable"
+end
+
+function SkinningMixin:GetThemeNames()
+    local names = {}
+    for name in pairs(Loothing.SkinPresets) do
+        names[#names + 1] = name
+    end
+    table.sort(names)
+    return names
+end
+
+function SkinningMixin:GetAccentNames()
+    local names = {}
+    for name in pairs(ns.SkinAccentPresets) do
+        names[#names + 1] = name
+    end
+    table.sort(names)
+    return names
+end
+
+function SkinningMixin:GetDensityNames()
+    local names = {}
+    for name in pairs(ns.SkinDensityPresets) do
+        names[#names + 1] = name
+    end
+    table.sort(names)
+    return names
+end
+
+function SkinningMixin:InvalidateSkinCache()
+    self._skinCacheKey = nil
+    self._skinCache = nil
+end
+
+function SkinningMixin:SyncLoolibTheme(themeName)
+    if not Loolib.ThemeManager or not Loolib.ThemeManager.SetActiveTheme then
+        return
+    end
+
+    local targetTheme = themeName or self:GetCurrentSkin()
+    local success = pcall(Loolib.ThemeManager.SetActiveTheme, Loolib.ThemeManager, targetTheme)
+    if not success then
+        pcall(Loolib.ThemeManager.SetActiveTheme, Loolib.ThemeManager, "Default")
+    end
+end
+
+function SkinningMixin:StyleText(fontString, fontKey, colorKey)
+    if not fontString then return end
+
+    local skin = self:GetSkinData()
+    local fontObjects = skin.fontObjects or {}
+    local fontObject = fontObjects[fontKey or "body"]
+    if not fontObject and Loothing.SkinPresets.Default and Loothing.SkinPresets.Default.fontObjects then
+        fontObject = Loothing.SkinPresets.Default.fontObjects[fontKey or "body"]
+    end
+
+    if StyleUtil then
+        StyleUtil.ApplyText(fontString, fontKey or "body", nil)
+    elseif fontObject and fontString.SetFontObject then
+        fontString:SetFontObject(fontObject)
+    end
+
+    ApplyColorToFontString(fontString, self:GetColor(colorKey or "text"))
+end
+
+function SkinningMixin:CreateDivider(parent, orientation, colorKey, thickness)
+    if not parent or not parent.CreateTexture then
+        return nil
+    end
+
+    if StyleUtil then
+        return StyleUtil.CreateDivider(parent, {
+            orientation = orientation,
+            color = self:GetColor(colorKey or "border"),
+            thickness = thickness or 1,
+        })
+    end
+
+    local divider = parent:CreateTexture(nil, "ARTWORK")
+    ApplyColorToTexture(divider, self:GetColor(colorKey or "border"))
+    if orientation == "vertical" then
+        divider:SetWidth(thickness or 1)
+    else
+        divider:SetHeight(thickness or 1)
+    end
+    return divider
+end
+
+function SkinningMixin:StyleSurface(frame, variant)
+    if not frame or not frame.SetBackdrop then return end
+
+    local bgColorKey = "panel"
+    local borderColorKey = "border"
+
+    if variant == "frame" then
+        bgColorKey = "frame"
+    elseif variant == "header" then
+        bgColorKey = "header"
+    elseif variant == "inset" then
+        bgColorKey = "panelInset"
+    elseif variant == "alt" then
+        bgColorKey = "panelAlt"
+        borderColorKey = "borderStrong"
+    end
+
+    frame:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        tile = false,
+        edgeSize = 1,
+        insets = { left = 1, right = 1, top = 1, bottom = 1 },
+    })
+    frame:SetBackdropColor(unpack(self:GetColor(bgColorKey)))
+    frame:SetBackdropBorderColor(unpack(self:GetColor(borderColorKey)))
+end
+
+local function GetButtonFontString(button)
+    if button and button.GetFontString then
+        return button:GetFontString()
+    end
+    if button then
+        return button.Text or button.text or button.label
+    end
+    return nil
+end
+
+function SkinningMixin:GetButtonVariantPalette(variant)
+    local palettes = {
+        default = {
+            bgColorKey = "accentSoft",
+            hoverBgColorKey = "accent",
+            pressedBgColorKey = "accentCool",
+            borderColorKey = "accent",
+            hoverBorderColorKey = "accent",
+            pressedBorderColorKey = "accent",
+            textColorKey = "text",
+            hoverTextColorKey = "text",
+            pressedTextColorKey = "text",
+            disabledTextColorKey = "textSubtle",
+        },
+        primary = {
+            bgColorKey = "accentSoft",
+            hoverBgColorKey = "panel",
+            pressedBgColorKey = "panelInset",
+            borderColorKey = "accent",
+            hoverBorderColorKey = "accent",
+            pressedBorderColorKey = "accent",
+            textColorKey = "text",
+            hoverTextColorKey = "text",
+            pressedTextColorKey = "text",
+            disabledTextColorKey = "textSubtle",
+        },
+        success = {
+            bgColorKey = "panelAlt",
+            hoverBgColorKey = "panel",
+            pressedBgColorKey = "panelInset",
+            borderColorKey = "success",
+            hoverBorderColorKey = "success",
+            pressedBorderColorKey = "success",
+            textColorKey = "success",
+            hoverTextColorKey = "text",
+            pressedTextColorKey = "text",
+            disabledTextColorKey = "textSubtle",
+        },
+        warning = {
+            bgColorKey = "panelAlt",
+            hoverBgColorKey = "panel",
+            pressedBgColorKey = "panelInset",
+            borderColorKey = "warning",
+            hoverBorderColorKey = "warning",
+            pressedBorderColorKey = "warning",
+            textColorKey = "warning",
+            hoverTextColorKey = "text",
+            pressedTextColorKey = "text",
+            disabledTextColorKey = "textSubtle",
+        },
+        danger = {
+            bgColorKey = "panelAlt",
+            hoverBgColorKey = "panel",
+            pressedBgColorKey = "panelInset",
+            borderColorKey = "danger",
+            hoverBorderColorKey = "danger",
+            pressedBorderColorKey = "danger",
+            textColorKey = "danger",
+            hoverTextColorKey = "text",
+            pressedTextColorKey = "text",
+            disabledTextColorKey = "textSubtle",
+        },
+        ghost = {
+            bgColorKey = "panelInset",
+            hoverBgColorKey = "panelAlt",
+            pressedBgColorKey = "panelInset",
+            borderColorKey = "border",
+            hoverBorderColorKey = "borderStrong",
+            pressedBorderColorKey = "border",
+            textColorKey = "textMuted",
+            hoverTextColorKey = "text",
+            pressedTextColorKey = "textMuted",
+            disabledTextColorKey = "textSubtle",
+        },
+    }
+
+    return palettes[variant or "default"] or palettes.default
+end
+
+function SkinningMixin:RefreshButtonVisualState(button)
+    if not button then
+        return
+    end
+
+    local palette = self:GetButtonVariantPalette(button.ltButtonVariant)
+    local disabled = button.IsEnabled and not button:IsEnabled()
+    local hovered = not disabled and button.IsMouseOver and button:IsMouseOver()
+    local pressed = not disabled and button.GetButtonState and button:GetButtonState() == "PUSHED"
+
+    local bgColorKey = disabled and "panelInset" or palette.bgColorKey
+    local borderColorKey = disabled and "border" or palette.borderColorKey
+    local textColorKey = disabled and (palette.disabledTextColorKey or "textSubtle") or palette.textColorKey
+
+    if hovered then
+        bgColorKey = palette.hoverBgColorKey or bgColorKey
+        borderColorKey = palette.hoverBorderColorKey or borderColorKey
+        textColorKey = palette.hoverTextColorKey or textColorKey
+    end
+    if pressed then
+        bgColorKey = palette.pressedBgColorKey or bgColorKey
+        borderColorKey = palette.pressedBorderColorKey or borderColorKey
+        textColorKey = palette.pressedTextColorKey or textColorKey
+    end
+
+    if button.SetBackdropColor then
+        button:SetBackdropColor(unpack(self:GetColor(bgColorKey)))
+    end
+    if button.SetBackdropBorderColor then
+        button:SetBackdropBorderColor(unpack(self:GetColor(borderColorKey)))
+    end
+
+    ApplyColorToFontString(GetButtonFontString(button), self:GetColor(textColorKey))
+end
+
+function SkinningMixin:EnsureButtonStateHooks(button)
+    if not button or button._ltButtonStateHooked or not button.HookScript then
+        return
+    end
+
+    button._ltButtonStateHooked = true
+
+    local function RefreshState(btn)
+        SkinningMixin:RefreshButtonVisualState(btn)
+    end
+
+    button:HookScript("OnEnter", RefreshState)
+    button:HookScript("OnLeave", RefreshState)
+    button:HookScript("OnMouseDown", RefreshState)
+    button:HookScript("OnMouseUp", RefreshState)
+    button:HookScript("OnEnable", RefreshState)
+    button:HookScript("OnDisable", RefreshState)
+    button:HookScript("OnShow", RefreshState)
+end
+
+function SkinningMixin:DecorateWindow(frame)
+    if not frame then return end
+
+    local headerHeight = self:GetLayoutValue("headerHeight", 42)
+
+    if not frame.ltHeader then
+        local header = frame:CreateTexture(nil, "BACKGROUND", nil, 1)
+        header:SetPoint("TOPLEFT", 1, -1)
+        header:SetPoint("TOPRIGHT", -1, -1)
+        frame.ltHeader = header
+    end
+    frame.ltHeader:SetHeight(headerHeight)
+    ApplyColorToTexture(frame.ltHeader, self:GetColor("header"))
+
+    if not frame.ltAccent then
+        local accent = frame:CreateTexture(nil, "OVERLAY", nil, 2)
+        accent:SetPoint("TOPLEFT", 1, -1)
+        accent:SetPoint("TOPRIGHT", -1, -1)
+        accent:SetHeight(2)
+        frame.ltAccent = accent
+    end
+    ApplyColorToTexture(frame.ltAccent, self:GetColor("accent"))
+
+    if not frame.ltInsetShade then
+        local shade = frame:CreateTexture(nil, "BACKGROUND", nil, -1)
+        shade:SetPoint("BOTTOMLEFT", 1, 1)
+        shade:SetPoint("BOTTOMRIGHT", -1, 1)
+        frame.ltInsetShade = shade
+    end
+    frame.ltInsetShade:ClearAllPoints()
+    frame.ltInsetShade:SetPoint("TOPLEFT", 1, -(headerHeight + 1))
+    frame.ltInsetShade:SetPoint("TOPRIGHT", -1, -(headerHeight + 1))
+    frame.ltInsetShade:SetPoint("BOTTOMLEFT", 1, 1)
+    frame.ltInsetShade:SetPoint("BOTTOMRIGHT", -1, 1)
+    ApplyColorToTexture(frame.ltInsetShade, self:GetColor("panelInset"))
+end
+
+function SkinningMixin:StylePlainButton(button, variant)
+    if not button then return end
+
+    styledButtons[button] = variant or "default"
+
+    local palette = self:GetButtonVariantPalette(variant)
+
+    -- Apply backdrop directly. Avoid StyleUtil.ApplyButton because the Loolib
+    -- theme's componentConfig.textureSet would force Blizzard panel textures
+    -- onto the button, overriding our flat appearance.
+    if button.SetBackdrop then
+        button:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Buttons\\WHITE8x8",
+            tile = false,
+            edgeSize = 1,
+            insets = { left = 1, right = 1, top = 1, bottom = 1 },
+        })
+    end
+
+    -- Strip any state textures that may have been inherited from a template.
+    local function clearTexture(getter)
+        local region = getter and getter(button)
+        if type(region) == "table" then
+            if region.SetTexture then region:SetTexture(nil) end
+            if region.Hide then region:Hide() end
+        end
+    end
+    if button.SetNormalTexture then button:SetNormalTexture("") end
+    if button.SetPushedTexture then button:SetPushedTexture("") end
+    if button.SetHighlightTexture then button:SetHighlightTexture("") end
+    if button.SetDisabledTexture then button:SetDisabledTexture("") end
+    clearTexture(button.GetNormalTexture)
+    clearTexture(button.GetPushedTexture)
+    clearTexture(button.GetHighlightTexture)
+    clearTexture(button.GetDisabledTexture)
+
+    -- Apply themed font to the button label.
+    local fontString = (button.GetFontString and button:GetFontString()) or button.Text or button.text
+    if fontString and StyleUtil then
+        StyleUtil.ApplyText(fontString, "body", palette.textColorKey)
+    end
+
+    button.ltButtonVariant = variant or "default"
+
+    self:EnsureButtonStateHooks(button)
+    self:RefreshButtonVisualState(button)
+end
+
+function SkinningMixin:RefreshStyledButtons()
+    for button, variant in pairs(styledButtons) do
+        if type(button) == "table" and button.IsObjectType then
+            self:StylePlainButton(button, variant)
+        end
+    end
+end
+
 --[[--------------------------------------------------------------------
     Skin Application
 ----------------------------------------------------------------------]]
@@ -73,11 +775,7 @@ local combatFrame = nil
 function SkinningMixin:ApplySkin(frame, skinName)
     if not frame or not frame.SetBackdrop then return end
 
-    skinName = skinName or self:GetCurrentSkin()
-    local skin = Loothing.SkinPresets[skinName]
-    if not skin then
-        skin = Loothing.SkinPresets.Default
-    end
+    local skin = self:GetSkinData(skinName)
 
     frame:SetBackdrop({
         bgFile = skin.bgFile,
@@ -90,6 +788,7 @@ function SkinningMixin:ApplySkin(frame, skinName)
 
     frame:SetBackdropColor(unpack(skin.bgColor))
     frame:SetBackdropBorderColor(unpack(skin.borderColor))
+    self:DecorateWindow(frame)
 end
 
 --- Get the current skin name
@@ -110,12 +809,52 @@ function SkinningMixin:SetCurrentSkin(skinName)
         Loothing.Settings:Set("frame.skin", skinName)
     end
 
-    -- Re-skin all managed frames
+    self:RefreshTheme()
+end
+
+function SkinningMixin:SetCurrentAccent(accentName)
+    if not ns.SkinAccentPresets[accentName] then return end
+
+    if Loothing.Settings then
+        Loothing.Settings:Set("frame.accent", accentName)
+    end
+
+    self:RefreshTheme()
+end
+
+function SkinningMixin:SetCurrentDensity(densityName)
+    if not ns.SkinDensityPresets[densityName] then return end
+
+    if Loothing.Settings then
+        Loothing.Settings:Set("frame.density", densityName)
+    end
+
+    self:RefreshTheme()
+end
+
+function SkinningMixin:RefreshTheme()
+    self:InvalidateSkinCache()
+    self:SyncLoolibTheme()
+
     for _, entry in ipairs(managedFrames) do
         if entry.frame and entry.frame:IsObjectType("Frame") then
-            self:ApplySkin(entry.frame, skinName)
+            self:ApplySkin(entry.frame)
         end
     end
+
+    if Loothing.MainFrame and type(Loothing.MainFrame.ApplyTheme) == "function" then
+        Loothing.MainFrame:ApplyTheme()
+    end
+    if Loothing.UI then
+        if Loothing.UI.CouncilTable and type(Loothing.UI.CouncilTable.ApplyTheme) == "function" then
+            Loothing.UI.CouncilTable:ApplyTheme()
+        end
+        if Loothing.UI.RollFrame and type(Loothing.UI.RollFrame.ApplyTheme) == "function" then
+            Loothing.UI.RollFrame:ApplyTheme()
+        end
+    end
+
+    self:RefreshStyledButtons()
 end
 
 --- Apply per-frame overrides (bgColor, borderColor)
@@ -373,4 +1112,16 @@ function SkinningMixin:Init()
     if Loothing.Settings and not Loothing.Settings:Get("frame.skin") then
         Loothing.Settings:Set("frame.skin", "Default")
     end
+    if Loothing.Settings and not Loothing.Settings:Get("frame.accent") then
+        Loothing.Settings:Set("frame.accent", "Amber")
+    end
+    if Loothing.Settings and not Loothing.Settings:Get("frame.density") then
+        Loothing.Settings:Set("frame.density", "Comfortable")
+    end
+
+    if Loolib.ThemeManager and Loolib.ThemeManager.RegisterMedia then
+        Loolib.ThemeManager:RegisterMedia("image", "loothing-logo", "Interface\\AddOns\\Loothing\\Media\\logo.tga")
+    end
+
+    self:SyncLoolibTheme()
 end

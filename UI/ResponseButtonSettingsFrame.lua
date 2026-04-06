@@ -182,10 +182,11 @@ function ResponseButtonSettingsMixin:BuildFrame()
     setLabel:SetPoint("LEFT")
     setLabel:SetText(L["SET_LABEL"])
 
-    local setSelectBtn = CreateFrame("Button", nil, setBar, "UIPanelButtonTemplate")
+    local setSelectBtn = ns.CreateThemedButton(setBar)
     setSelectBtn:SetSize(170, 22)
     setSelectBtn:SetPoint("LEFT", setLabel, "RIGHT", 8, 0)
     self.setSelectBtn = setSelectBtn
+    ns.SkinningMixin:StylePlainButton(setSelectBtn)
 
     setSelectBtn:SetScript("OnClick", function(btn)
         MenuUtil.CreateContextMenu(btn, function(_ownerRegion, rootDescription)
@@ -203,10 +204,11 @@ function ResponseButtonSettingsMixin:BuildFrame()
     end)
 
     -- New set button
-    local newBtn = CreateFrame("Button", nil, setBar, "UIPanelButtonTemplate")
+    local newBtn = ns.CreateThemedButton(setBar)
     newBtn:SetSize(60, 22)
     newBtn:SetPoint("LEFT", setSelectBtn, "RIGHT", 6, 0)
     newBtn:SetText(L["NEW"])
+    ns.SkinningMixin:StylePlainButton(newBtn)
     newBtn:SetScript("OnClick", function()
         local id = Loothing.Settings:AddResponseSet(L["NEW_SET"])
         Loothing.Settings:SetActiveResponseSet(id)
@@ -214,10 +216,11 @@ function ResponseButtonSettingsMixin:BuildFrame()
     end)
 
     -- Copy button
-    local copyBtn = CreateFrame("Button", nil, setBar, "UIPanelButtonTemplate")
+    local copyBtn = ns.CreateThemedButton(setBar)
     copyBtn:SetSize(60, 22)
     copyBtn:SetPoint("LEFT", newBtn, "RIGHT", 4, 0)
     copyBtn:SetText(L["COPY"])
+    ns.SkinningMixin:StylePlainButton(copyBtn)
     copyBtn:SetScript("OnClick", function()
         local id  = self:GetActiveSetId()
         local set = Loothing.Settings:GetResponseSetById(id)
@@ -229,10 +232,11 @@ function ResponseButtonSettingsMixin:BuildFrame()
     end)
 
     -- Rename button
-    local renameBtn = CreateFrame("Button", nil, setBar, "UIPanelButtonTemplate")
+    local renameBtn = ns.CreateThemedButton(setBar)
     renameBtn:SetSize(70, 22)
     renameBtn:SetPoint("LEFT", copyBtn, "RIGHT", 4, 0)
     renameBtn:SetText(L["RENAME"])
+    ns.SkinningMixin:StylePlainButton(renameBtn)
     renameBtn:SetScript("OnClick", function()
         local id  = self:GetActiveSetId()
         local set = Loothing.Settings:GetResponseSetById(id)
@@ -261,10 +265,11 @@ function ResponseButtonSettingsMixin:BuildFrame()
     end)
 
     -- Delete button
-    local deleteSetBtn = CreateFrame("Button", nil, setBar, "UIPanelButtonTemplate")
+    local deleteSetBtn = ns.CreateThemedButton(setBar)
     deleteSetBtn:SetSize(65, 22)
     deleteSetBtn:SetPoint("LEFT", renameBtn, "RIGHT", 4, 0)
     deleteSetBtn:SetText("|cffff4444" .. L["DELETE"] .. "|r")
+    ns.SkinningMixin:StylePlainButton(deleteSetBtn)
     deleteSetBtn:SetScript("OnClick", function()
         local id = self:GetActiveSetId()
         local rs = Loothing.Settings:GetResponseSets()
@@ -298,10 +303,11 @@ function ResponseButtonSettingsMixin:BuildFrame()
     bottomSep:SetPoint("BOTTOMRIGHT",-12, 42)
     bottomSep:SetColorTexture(0.5, 0.5, 0.5, 0.5)
 
-    local resetBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    local resetBtn = ns.CreateThemedButton(f)
     resetBtn:SetSize(140, 22)
     resetBtn:SetPoint("BOTTOMLEFT", 12, 10)
     resetBtn:SetText(L["RESET_RESPONSES"])
+    ns.SkinningMixin:StylePlainButton(resetBtn)
     resetBtn:SetScript("OnClick", function()
         GlobalBridge:RegisterStaticPopup("Loothing", "LOOTHING_RESET_SETS", {
             text         = L["POPUP_RESET_ALL_SETS"],
@@ -343,10 +349,11 @@ function ResponseButtonSettingsMixin:BuildFrame()
     addBtnContainer:SetPoint("BOTTOMLEFT", tcHeader, "TOPLEFT", 0, 10)
     addBtnContainer:SetPoint("BOTTOMRIGHT", tcHeader, "TOPRIGHT", 0, 10)
 
-    local addBtn = CreateFrame("Button", nil, addBtnContainer, "UIPanelButtonTemplate")
+    local addBtn = ns.CreateThemedButton(addBtnContainer)
     addBtn:SetSize(120, 22)
     addBtn:SetPoint("LEFT")
     addBtn:SetText("+ " .. L["ADD_BUTTON"])
+    ns.SkinningMixin:StylePlainButton(addBtn)
     addBtn:SetScript("OnClick", function()
         local id = self:GetActiveSetId()
         local buttons = Loothing.Settings:GetResponseButtons(id)
@@ -395,7 +402,7 @@ function ResponseButtonSettingsMixin:BuildTypeCodeMap(container)
         lbl:SetText(tc .. ":")
 
         local capturedTc = tc
-        local dd = CreateFrame("Button", nil, container, "UIPanelButtonTemplate")
+        local dd = ns.CreateThemedButton(container)
 
         dd:SetScript("OnClick", function(btn)
             MenuUtil.CreateContextMenu(btn, function(_ownerRegion, rootDescription)
@@ -423,6 +430,7 @@ function ResponseButtonSettingsMixin:BuildTypeCodeMap(container)
             end)
         end)
 
+        ns.SkinningMixin:StylePlainButton(dd)
         self.tcDropdowns[tc] = dd
         self.tcFields[i] = {
             label = lbl,
@@ -661,10 +669,11 @@ function ResponseButtonSettingsMixin:CreateRow()
     AddField(L["RESPONSE_TEXT_LABEL"], -32, respEB)
 
     -- Icon picker button
-    local iconPickBtn = CreateFrame("Button", nil, expanded, "UIPanelButtonTemplate")
+    local iconPickBtn = ns.CreateThemedButton(expanded)
     iconPickBtn:SetHeight(20)
     row.iconPickBtn = iconPickBtn
     AddField(L["ICON_LABEL"], -58, iconPickBtn)
+    ns.SkinningMixin:StylePlainButton(iconPickBtn)
 
     -- Whisper Keys EditBox
     local whisperEB = CreateFrame("EditBox", nil, expanded, "InputBoxTemplate")

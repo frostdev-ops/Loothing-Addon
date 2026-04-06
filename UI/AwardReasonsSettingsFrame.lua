@@ -230,7 +230,7 @@ function AwardReasonsSettingsMixin:BuildFrame()
     bottomSep:SetPoint("BOTTOMRIGHT",-12, 42)
     bottomSep:SetColorTexture(0.5, 0.5, 0.5, 0.5)
 
-    local resetBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    local resetBtn = ns.CreateThemedButton(f)
     resetBtn:SetSize(160, 22)
     resetBtn:SetPoint("BOTTOMLEFT", 12, 10)
     resetBtn:SetText(L["CONFIG_RESET_REASONS"])
@@ -252,6 +252,7 @@ function AwardReasonsSettingsMixin:BuildFrame()
         })
         GlobalBridge:ShowStaticPopup("Loothing", "LOOTHING_RESET_AWARD_REASONS")
     end)
+    ns.SkinningMixin:StylePlainButton(resetBtn)
 
     -- ----------------------------------------------------------------
     -- Add Reason button
@@ -261,7 +262,7 @@ function AwardReasonsSettingsMixin:BuildFrame()
     addBtnContainer:SetPoint("BOTTOMLEFT", bottomSep, "TOPLEFT", 0, 10)
     addBtnContainer:SetPoint("BOTTOMRIGHT", bottomSep, "TOPRIGHT", 0, 10)
 
-    local addBtn = CreateFrame("Button", nil, addBtnContainer, "UIPanelButtonTemplate")
+    local addBtn = ns.CreateThemedButton(addBtnContainer)
     addBtn:SetSize(140, 22)
     addBtn:SetPoint("LEFT")
     addBtn:SetText("+ " .. L["ADD_REASON"])
@@ -279,6 +280,7 @@ function AwardReasonsSettingsMixin:BuildFrame()
             Utils.BroadcastMLDBIfML()
         end
     end)
+    ns.SkinningMixin:StylePlainButton(addBtn)
     self.addBtn = addBtn
 
     -- ----------------------------------------------------------------

@@ -38,6 +38,7 @@ function MainFrameMixin:Init()
     self:CreateTabs()
     self:CreatePanels()
     self:LoadPosition()
+    self:ApplyTheme()
 end
 
 --- Create the main frame
@@ -63,15 +64,15 @@ function MainFrameMixin:CreateFrame()
 
     -- Title
     self.titleText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    self.titleText:SetPoint("TOP", 0, -16)
+    self.titleText:SetPoint("TOPLEFT", 20, -14)
     self.titleText:SetText("Loothing")
-    self.titleText:SetTextColor(1, 0.82, 0)
+    SkinningMixin:StyleText(self.titleText, "title", "text")
 
     -- Version
     self.versionText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    self.versionText:SetPoint("LEFT", self.titleText, "RIGHT", 8, 0)
+    self.versionText:SetPoint("LEFT", self.titleText, "RIGHT", 8, -1)
     self.versionText:SetText("v" .. (Loothing.VERSION or "1.0.0"))
-    self.versionText:SetTextColor(0.5, 0.5, 0.5)
+    SkinningMixin:StyleText(self.versionText, "bodySmall", "textMuted")
 
     -- Close button
     self.closeButton = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
@@ -118,6 +119,7 @@ function MainFrameMixin:CreateFrame()
     syncText:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -80, -18)
     syncText:SetTextColor(0.5, 0.5, 0.5)
     self.desktopSyncText = syncText
+    SkinningMixin:StyleText(syncText, "bodySmall", "textSubtle")
     self:UpdateDesktopSyncStatus()
 
     -- Resize grip
@@ -138,14 +140,20 @@ function MainFrameMixin:CreateFrame()
 
     -- Tab container
     self.tabContainer = CreateFrame("Frame", nil, frame)
-    self.tabContainer:SetPoint("TOPLEFT", 16, -40)
-    self.tabContainer:SetPoint("TOPRIGHT", -16, -40)
-    self.tabContainer:SetHeight(TAB_HEIGHT)
+    self.tabContainer:SetPoint("TOPLEFT", 16, -48)
+    self.tabContainer:SetPoint("TOPRIGHT", -16, -48)
+    self.tabContainer:SetHeight(TAB_HEIGHT + 6)
+
+    local tabDivider = SkinningMixin:CreateDivider(frame, "horizontal", "border", 1)
+    tabDivider:SetPoint("TOPLEFT", 16, -42)
+    tabDivider:SetPoint("TOPRIGHT", -16, -42)
+    self.tabDivider = tabDivider
 
     -- Content container
-    self.contentContainer = CreateFrame("Frame", nil, frame)
-    self.contentContainer:SetPoint("TOPLEFT", 16, -40 - TAB_HEIGHT)
+    self.contentContainer = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+    self.contentContainer:SetPoint("TOPLEFT", 16, -54 - TAB_HEIGHT)
     self.contentContainer:SetPoint("BOTTOMRIGHT", -16, 16)
+    SkinningMixin:StyleSurface(self.contentContainer, "inset")
 
     self.frame = frame
 end
@@ -181,17 +189,7 @@ function MainFrameMixin:CreateTab(id, name, xOffset)
     local tab = CreateFrame("Button", nil, self.tabContainer, "BackdropTemplate")
     tab:SetSize(100, TAB_HEIGHT - 4)
     tab:SetPoint("BOTTOMLEFT", xOffset, 0)
-
-    -- Enhanced backdrop with thicker border
-    tab:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        tile = false,
-        edgeSize = 2,
-        insets = { left = 2, right = 2, top = 2, bottom = 2 },
-    })
-    tab:SetBackdropColor(0.12, 0.12, 0.12, 0.95)
-    tab:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
+    SkinningMixin:StyleSurface(tab, "alt")
 
     -- Background (managed by backdrop now)
     tab.bg = tab
@@ -206,14 +204,14 @@ function MainFrameMixin:CreateTab(id, name, xOffset)
     selectBar:SetHeight(3)
     selectBar:SetPoint("BOTTOMLEFT", 2, 2)
     selectBar:SetPoint("BOTTOMRIGHT", -2, 2)
-    selectBar:SetColorTexture(1, 0.82, 0, 1)
+    selectBar:SetColorTexture(unpack(SkinningMixin:GetColor("accent")))
     selectBar:Hide()
     tab.selectBar = selectBar
 
     -- Selection glow background - hidden by default
     local selectGlow = tab:CreateTexture(nil, "BACKGROUND", nil, -1)
     selectGlow:SetAllPoints()
-    selectGlow:SetColorTexture(0.3, 0.3, 0.5, 0.4)
+    selectGlow:SetColorTexture(unpack(SkinningMixin:GetColor("accentSoft")))
     selectGlow:Hide()
     tab.selectGlow = selectGlow
 
@@ -221,7 +219,7 @@ function MainFrameMixin:CreateTab(id, name, xOffset)
     local text = tab:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     text:SetPoint("CENTER")
     text:SetText(name)
-    text:SetTextColor(0.6, 0.6, 0.6) -- Default dim color
+    SkinningMixin:StyleText(text, "header", "textMuted")
     tab.text = text
 
     tab.id = id
@@ -233,20 +231,97 @@ function MainFrameMixin:CreateTab(id, name, xOffset)
     -- Hover effects
     tab:SetScript("OnEnter", function(btn)
         if self.currentTab ~= id then
-            btn:SetBackdropColor(0.2, 0.2, 0.25, 0.95)
-            btn:SetBackdropBorderColor(0.4, 0.4, 0.5, 1)
-            btn.text:SetTextColor(1, 1, 1)
+            btn:SetBackdropColor(unpack(SkinningMixin:GetColor("rowHover")))
+            btn:SetBackdropBorderColor(unpack(SkinningMixin:GetColor("borderStrong")))
+            btn.text:SetTextColor(unpack(SkinningMixin:GetColor("text")))
         end
     end)
     tab:SetScript("OnLeave", function(btn)
         if self.currentTab ~= id then
-            btn:SetBackdropColor(0.12, 0.12, 0.12, 0.95)
-            btn:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
-            btn.text:SetTextColor(0.6, 0.6, 0.6)
+            btn:SetBackdropColor(unpack(SkinningMixin:GetColor("panelAlt")))
+            btn:SetBackdropBorderColor(unpack(SkinningMixin:GetColor("borderStrong")))
+            btn.text:SetTextColor(unpack(SkinningMixin:GetColor("textMuted")))
         end
     end)
 
     return tab
+end
+
+function MainFrameMixin:UpdateTabVisual(tab, isActive)
+    if not tab then
+        return
+    end
+
+    if isActive then
+        tab:SetBackdropColor(unpack(SkinningMixin:GetColor("panel")))
+        tab:SetBackdropBorderColor(unpack(SkinningMixin:GetColor("accent")))
+        if tab.selectBar then tab.selectBar:Show() end
+        if tab.selectGlow then tab.selectGlow:Show() end
+        tab.text:SetTextColor(unpack(SkinningMixin:GetColor("accent")))
+    else
+        tab:SetBackdropColor(unpack(SkinningMixin:GetColor("panelAlt")))
+        tab:SetBackdropBorderColor(unpack(SkinningMixin:GetColor("borderStrong")))
+        if tab.selectBar then tab.selectBar:Hide() end
+        if tab.selectGlow then tab.selectGlow:Hide() end
+        tab.text:SetTextColor(unpack(SkinningMixin:GetColor("textMuted")))
+    end
+end
+
+function MainFrameMixin:ApplyTheme()
+    local outerPadding = SkinningMixin:GetLayoutValue("outerPadding", 16)
+    local tabHeight = SkinningMixin:GetLayoutValue("tabHeight", TAB_HEIGHT)
+    local headerHeight = SkinningMixin:GetLayoutValue("headerHeight", 42)
+    local contentBottom = SkinningMixin:GetLayoutValue("contentBottom", 16)
+
+    if self.titleText then
+        self.titleText:ClearAllPoints()
+        self.titleText:SetPoint("TOPLEFT", outerPadding + 4, -(outerPadding - 2))
+        SkinningMixin:StyleText(self.titleText, "title", "text")
+    end
+
+    if self.versionText and self.titleText then
+        self.versionText:ClearAllPoints()
+        self.versionText:SetPoint("LEFT", self.titleText, "RIGHT", 8, -1)
+        SkinningMixin:StyleText(self.versionText, "bodySmall", "textMuted")
+    end
+
+    if self.desktopSyncText then
+        SkinningMixin:StyleText(self.desktopSyncText, "bodySmall", "textSubtle")
+    end
+
+    if self.tabContainer then
+        self.tabContainer:ClearAllPoints()
+        self.tabContainer:SetPoint("TOPLEFT", outerPadding, -(headerHeight + 6))
+        self.tabContainer:SetPoint("TOPRIGHT", -outerPadding, -(headerHeight + 6))
+        self.tabContainer:SetHeight(tabHeight + 6)
+    end
+
+    if self.tabDivider then
+        self.tabDivider:ClearAllPoints()
+        self.tabDivider:SetPoint("TOPLEFT", outerPadding, -headerHeight)
+        self.tabDivider:SetPoint("TOPRIGHT", -outerPadding, -headerHeight)
+        self.tabDivider:SetColorTexture(unpack(SkinningMixin:GetColor("border")))
+    end
+
+    if self.contentContainer then
+        self.contentContainer:ClearAllPoints()
+        self.contentContainer:SetPoint("TOPLEFT", outerPadding, -(headerHeight + tabHeight + 12))
+        self.contentContainer:SetPoint("BOTTOMRIGHT", -outerPadding, contentBottom)
+        SkinningMixin:StyleSurface(self.contentContainer, "inset")
+    end
+
+    for _, tab in pairs(self.tabs or {}) do
+        tab:SetHeight(tabHeight - 4)
+        SkinningMixin:StyleSurface(tab, "alt")
+        SkinningMixin:StyleText(tab.text, "header", "textMuted")
+        self:UpdateTabVisual(tab, self.currentTab == tab.id)
+    end
+
+    for _, panelWrapper in pairs(self.panels or {}) do
+        if panelWrapper and panelWrapper.panel and type(panelWrapper.panel.ApplyTheme) == "function" then
+            panelWrapper.panel:ApplyTheme()
+        end
+    end
 end
 
 --- Create panel contents
@@ -306,11 +381,7 @@ function MainFrameMixin:SelectTab(tabId)
     if self.currentTab then
         local prevTab = self.tabs[self.currentTab]
         if prevTab then
-            prevTab:SetBackdropColor(0.12, 0.12, 0.12, 0.95)
-            prevTab:SetBackdropBorderColor(0.25, 0.25, 0.25, 1)
-            if prevTab.selectBar then prevTab.selectBar:Hide() end
-            if prevTab.selectGlow then prevTab.selectGlow:Hide() end
-            prevTab.text:SetTextColor(0.6, 0.6, 0.6)
+            self:UpdateTabVisual(prevTab, false)
         end
 
         local prevPanel = self.panels[self.currentTab]
@@ -324,11 +395,7 @@ function MainFrameMixin:SelectTab(tabId)
 
     local tab = self.tabs[tabId]
     if tab then
-        tab:SetBackdropColor(0.2, 0.2, 0.3, 1)
-        tab:SetBackdropBorderColor(1, 0.82, 0, 1)
-        if tab.selectBar then tab.selectBar:Show() end
-        if tab.selectGlow then tab.selectGlow:Show() end
-        tab.text:SetTextColor(1, 0.82, 0)
+        self:UpdateTabVisual(tab, true)
     end
 
     local panel = self.panels[tabId]

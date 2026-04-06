@@ -595,11 +595,12 @@ function SettingsExportMixin:GetOrCreateExportFrame()
     scrollFrame:SetScrollChild(editBox)
     f.editBox = editBox
 
-    local closeBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    local closeBtn = ns.CreateThemedButton(f)
     closeBtn:SetSize(80, 24)
     closeBtn:SetPoint("BOTTOM", 0, 12)
     closeBtn:SetText(L["CLOSE"])
     closeBtn:SetScript("OnClick", function() f:Hide() end)
+    ns.SkinningMixin:StylePlainButton(closeBtn)
 
     local xBtn = CreateFrame("Button", nil, f, "UIPanelCloseButton")
     xBtn:SetPoint("TOPRIGHT", -4, -4)
@@ -664,19 +665,21 @@ function SettingsExportMixin:GetOrCreateImportFrame()
     scrollFrame:SetScrollChild(editBox)
     f.editBox = editBox
 
-    local importBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    local importBtn = ns.CreateThemedButton(f)
     importBtn:SetSize(100, 24)
     importBtn:SetPoint("BOTTOMRIGHT", -52, 12)
     importBtn:SetText(L["IMPORT_BUTTON"])
     importBtn:SetScript("OnClick", function()
         mixin:ProcessImport(editBox:GetText(), f)
     end)
+    ns.SkinningMixin:StylePlainButton(importBtn, "primary")
 
-    local cancelBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    local cancelBtn = ns.CreateThemedButton(f)
     cancelBtn:SetSize(80, 24)
     cancelBtn:SetPoint("RIGHT", importBtn, "LEFT", -8, 0)
     cancelBtn:SetText(L["CANCEL"])
     cancelBtn:SetScript("OnClick", function() f:Hide() end)
+    ns.SkinningMixin:StylePlainButton(cancelBtn)
 
     local xBtn = CreateFrame("Button", nil, f, "UIPanelCloseButton")
     xBtn:SetPoint("TOPRIGHT", -4, -4)
