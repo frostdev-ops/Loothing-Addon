@@ -94,8 +94,18 @@ function HeartbeatMixin:StopHeartbeat()
         Loothing:Debug("Heartbeat: stopped")
     end
 
-    -- Reset dirty-tracking
+    -- Cancel any pending jittered auto-sync / incremental-sync timer so it
+    -- cannot fire into the next session and request sync from a stale ML.
+    if self.pendingSyncTimer then
+        self.pendingSyncTimer:Cancel()
+        self.pendingSyncTimer = nil
+    end
+
+    -- Reset dirty-tracking and sync cooldown watermarks so the next ML
+    -- activation starts from a clean slate.
     self.lastDigest = nil
+    self.lastAutoSyncTime = 0
+    self.lastHeartbeatTime = 0
 
     -- Cancel any pending grace-period deferred start
     local CommState = Loothing.CommState

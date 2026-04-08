@@ -42,6 +42,14 @@ function ResultsPanelMixin:Init()
     -- Close panel when session ends (prevent stale UI)
     if Loothing.Session then
         Loothing.Session:RegisterCallback("OnSessionEnded", function()
+            -- Drop per-session refs so the panel cannot briefly flash
+            -- stale item/results data on the next Show().
+            self.item = nil
+            self.results = nil
+            self.selectedCandidate = nil
+            self.selectedRow = nil
+            if self.responseRows then wipe(self.responseRows) end
+            self._roundCount = nil
             self:Hide()
         end, self)
     end

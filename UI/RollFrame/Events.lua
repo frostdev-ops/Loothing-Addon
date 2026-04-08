@@ -85,7 +85,9 @@ function RollFrameMixin:RegisterSessionEvents()
 
     Loothing.Session:RegisterCallback("OnSessionEnded", function()
         -- ResponseTracker clears its own state via its own OnSessionEnded listener.
-        -- We only need to close the frame display.
+        -- Unregister the roll-capture event frame so it does not keep
+        -- listening to /roll chat messages after the session ends.
+        self:UnregisterRollCapture()
         self:Close(false)
     end, self)
 

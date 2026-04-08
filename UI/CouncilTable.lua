@@ -1252,6 +1252,7 @@ function CouncilTableMixin:Clear()
     self.items = {}
     self.currentItem = nil
     self.selectedCandidate = nil
+    self.disenchantTarget = nil
 
     for _, tab in ipairs(self.itemTabs) do
         tab:Hide()

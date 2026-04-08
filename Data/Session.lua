@@ -585,17 +585,24 @@ function SessionMixin:EndSession()
         self.consolidatedPollTimer = nil
     end
 
-    -- Flush any pending loot batch before ending
+    -- Flush any pending loot batch before ending. The comm batch
+    -- accumulator itself is drained later via Comm:ResetSessionState so
+    -- we do not duplicate that work here — nothing between this point
+    -- and the reset enqueues new batched messages.
     if self.lootBatchTimer then
         self.lootBatchTimer:Cancel()
         self.lootBatchTimer = nil
-        if Loothing.Comm then
-            Loothing.Comm:FlushAll()
-        end
     end
 
-    -- Stop post-encounter bag scanner
+    -- Stop post-encounter bag scanner and wipe its per-encounter state
+    -- so a manual/no-encounter session restart does not inherit stale
+    -- dedup entries or the previous encounter's bag snapshot. Done here
+    -- (not inside StopPostEncounterBagScan) because that function is
+    -- also called from StartPostEncounterBagScan after SnapshotBags has
+    -- already taken a fresh snapshot, and we must not destroy it.
     self:StopPostEncounterBagScan()
+    wipe(self.reportedTradeableItems)
+    wipe(self.preEncounterBagSnapshot)
 
     -- Clear trigger state
     self.receivedLootCount = 0
@@ -625,6 +632,23 @@ function SessionMixin:EndSession()
     -- Flush any pending response broadcasts before clearing session
     self:FlushResponseBroadcasts()
 
+    -- Reset module-scoped comm state (batchAccumulator, seenIDs) so pending
+    -- 100ms flush timers from this session cannot deliver stale payloads
+    -- into the next one. Must run AFTER FlushResponseBroadcasts so the
+    -- response batch it flushes is actually sent, and BEFORE sessionID is
+    -- nilled out below.
+    if Loothing.Comm and Loothing.Comm.ResetSessionState then
+        Loothing.Comm:ResetSessionState()
+    end
+
+    -- Clear MLDB on non-ML clients so the next SESSION_INIT re-snapshots
+    -- their baseline settings. The ML itself keeps its own MLDB when
+    -- ending a session it intends to restart (e.g. between encounters) —
+    -- same handleLoot guard we use for Loothing.masterLooter below.
+    if Loothing.MLDB and not Loothing.handleLoot then
+        Loothing.MLDB:Clear()
+    end
+
     -- Clear session data
     self.sessionID = nil
     self.encounterID = nil
@@ -652,6 +676,41 @@ function SessionMixin:EndSession()
     -- Clear remote council roster so local roster becomes primary again
     if Loothing.Council then
         Loothing.Council:ClearRemoteRoster()
+    end
+
+    -- Clear remote observer list. Without this, observer flags from the
+    -- previous session bleed into the next and can cause clients to see
+    -- (or miss) responses, notes, vote counts and voter identities based
+    -- on stale observer permissions.
+    if Loothing.Observer and Loothing.Observer.ClearRemoteObserverList then
+        Loothing.Observer:ClearRemoteObserverList()
+    end
+
+    -- Reset in-flight sync state so a sync that was mid-flight when this
+    -- session ended cannot block the next session's sync.
+    if Loothing.Sync and Loothing.Sync.ResetSessionState then
+        Loothing.Sync:ResetSessionState()
+    end
+
+    -- Drop any messages queued while restrictions were active. Once the
+    -- session that generated them has ended, the queued VOTE_COMMIT /
+    -- ITEM_ADD / etc. are no longer meaningful and would otherwise
+    -- replay into the next session when restrictions lift.
+    if Loothing.Restrictions and Loothing.Restrictions.ClearQueue then
+        Loothing.Restrictions:ClearQueue()
+    end
+
+    -- Drop any queued announcements (e.g. "Awarded X to Y" queued during
+    -- combat) so they do not fire into the next session with stale text.
+    if Loothing.Announcer and Loothing.Announcer.announcementQueue then
+        wipe(Loothing.Announcer.announcementQueue)
+    end
+
+    -- Clear tracked /roll results so session-1 rolls cannot be re-associated
+    -- with auto-added items in session 2 (5-min TTL is too long for rapid
+    -- back-to-back sessions).
+    if Loothing.RollTracker and Loothing.RollTracker.ClearAllRolls then
+        Loothing.RollTracker:ClearAllRolls()
     end
 
     -- Broadcast to raid (only ML should broadcast end)
@@ -2053,6 +2112,11 @@ function SessionMixin:StartPostEncounterBagScan()
 end
 
 --- Stop the post-encounter bag scanner.
+-- Only cancels the scan timer. The dedup + snapshot tables are wiped
+-- explicitly in EndSession — we cannot wipe them here because
+-- StartPostEncounterBagScan calls StopPostEncounterBagScan first, and
+-- wiping preEncounterBagSnapshot there would destroy the snapshot that
+-- OnEncounterStart just took.
 function SessionMixin:StopPostEncounterBagScan()
     if self.bagScanTimer then
         self.bagScanTimer:Cancel()

@@ -1187,6 +1187,14 @@ function RollFrameMixin:Close(submitted)
     self.pendingRollStarted = {}
     self.sessionButtonWarningShown = nil
 
+    -- Hide multi-item session buttons so stale icons/labels cannot bleed into the next session
+    if self.UpdateSessionButtons then
+        self:UpdateSessionButtons()
+    end
+    if self.sessionButtonFrame then
+        self.sessionButtonFrame:Hide()
+    end
+
     -- If unresponded items exist, notify player and schedule gentle re-show
     local tracker = Loothing.ResponseTracker
     if tracker and tracker:GetUnrespondedCount() > 0 then

@@ -187,6 +187,51 @@ function SyncMixin:CancelPendingBroadcasts()
     self.pendingSyncRequesters = nil
 end
 
+--- Fully reset in-flight sync state on session end.
+-- CancelPendingBroadcasts only cancels the coalesce timers; this also
+-- clears the syncInProgress / settingsSyncInProgress / historySyncInProgress
+-- state machines and their response tables so a sync that was in-flight
+-- when the previous session ended does not block the next session.
+function SyncMixin:ResetSessionState()
+    self:CancelPendingBroadcasts()
+
+    -- Full sync request state
+    if self.syncTimeout then
+        self.syncTimeout:Cancel()
+        self.syncTimeout = nil
+    end
+    if self.pendingSyncCheckTimer then
+        self.pendingSyncCheckTimer:Cancel()
+        self.pendingSyncCheckTimer = nil
+    end
+    self.syncInProgress = false
+    self.syncTarget = nil
+    self.pendingItems = {}
+
+    -- Settings sync state. Cancel the timeout first so a stale closure
+    -- cannot fire into the next session and clobber an unrelated sync.
+    if self.settingsSyncTimeout then
+        self.settingsSyncTimeout:Cancel()
+        self.settingsSyncTimeout = nil
+    end
+    self.settingsSyncInProgress = false
+    self.settingsSyncResponses = {}
+    self.pendingSettingsSync = nil
+
+    -- History sync state. Same rationale as settings.
+    if self.historySyncTimeout then
+        self.historySyncTimeout:Cancel()
+        self.historySyncTimeout = nil
+    end
+    self.historySyncInProgress = false
+    self.historySyncResponses = {}
+    self.pendingHistorySync = nil
+
+    -- Awaiting target acks (would block next session's sync if left set)
+    self.awaitingSettingsFrom = nil
+    self.awaitingHistoryFrom = nil
+end
+
 --- Handle received sync data
 -- @param data table - Sync data from ML
 function SyncMixin:HandleSyncData(data)
@@ -569,8 +614,16 @@ function SyncMixin:RequestSettingsSync(target)
         Loothing:Print(string.format(L["SYNC_SETTINGS_TO_PLAYER"], target))
     end
 
-    -- Timeout after 30 seconds
-    C_Timer.After(30, function()
+    -- Cancel any prior settings-sync timeout before scheduling a fresh one.
+    -- NewTimer (not After) so ResetSessionState can cancel it on session end —
+    -- otherwise a stale closure can fire in a later session and terminate an
+    -- unrelated new sync that happens to share the settingsSyncInProgress flag.
+    if self.settingsSyncTimeout then
+        self.settingsSyncTimeout:Cancel()
+        self.settingsSyncTimeout = nil
+    end
+    self.settingsSyncTimeout = C_Timer.NewTimer(30, function()
+        self.settingsSyncTimeout = nil
         if self.settingsSyncInProgress then
             self.settingsSyncInProgress = false
             local count = 0
@@ -714,8 +767,14 @@ function SyncMixin:RequestHistorySync(target, days)
         Loothing:Print(string.format(L["SYNC_HISTORY_TO_PLAYER"], days, target))
     end
 
-    -- Timeout
-    C_Timer.After(60, function()
+    -- Cancel any prior history-sync timeout before scheduling a fresh one.
+    -- NewTimer (not After) so ResetSessionState can cancel it on session end.
+    if self.historySyncTimeout then
+        self.historySyncTimeout:Cancel()
+        self.historySyncTimeout = nil
+    end
+    self.historySyncTimeout = C_Timer.NewTimer(60, function()
+        self.historySyncTimeout = nil
         if self.historySyncInProgress then
             self.historySyncInProgress = false
             local count = 0

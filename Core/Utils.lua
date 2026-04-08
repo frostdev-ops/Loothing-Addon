@@ -333,6 +333,23 @@ function Utils.GetEffectiveGroupLootMode()
     return "active"
 end
 
+--- Group loot mode for council AutoPass / RollFrame only (not native START_LOOT_ROLL).
+-- Unlike GetEffectiveGroupLootMode(), this never forces "passive" while a session is
+-- active but MLDB is momentarily nil — that conservative default is for Blizzard's
+-- group roll UI only and incorrectly suppressed AutoPass between back-to-back sessions.
+-- Authoritative order: MLDB when present, else local Settings.
+-- @return string - "active" or "passive"
+function Utils.GetEffectiveCouncilAutoPassLootMode()
+    local mldb = Loothing and Loothing.MLDB and Loothing.MLDB:Get()
+    if mldb and (mldb.groupLootMode == "active" or mldb.groupLootMode == "passive") then
+        return mldb.groupLootMode
+    end
+    if Loothing and Loothing.Settings and Loothing.Settings.GetGroupLootMode then
+        return Loothing.Settings:GetGroupLootMode()
+    end
+    return "active"
+end
+
 --- Check if player is the master looter
 -- In WoW 12.0+ Master Loot is removed; falls back to group leader check
 -- @return boolean

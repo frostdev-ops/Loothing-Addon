@@ -413,6 +413,30 @@ function CommMixin:FlushAll()
     end
 end
 
+--- Reset module-scoped comm state that should not survive session end.
+-- Drains pending batches so queued messages still get delivered with the
+-- correct session context, and belt-and-braces releases any TempTable
+-- allocations that a racing 100ms flush timer left behind.
+-- `seenIDs` is intentionally NOT wiped: it is a cross-session replay
+-- shield (bounded by the 30s sweep + 120s TTL), and wiping it would open
+-- a replay-acceptance window for all inbound comms, not just session
+-- messages. Safe to call multiple times.
+function CommMixin:ResetSessionState()
+    -- Drain batches into real sends before session identifiers are nilled.
+    self:FlushAll()
+
+    -- Paranoia: release any TempTable that somehow survived FlushAll.
+    -- Under current single-threaded semantics this loop is dead code
+    -- (FlushBatch nils its key before Send, timers cannot preempt), but
+    -- keeping it guards against a future code path that could leak.
+    for k, batch in pairs(batchAccumulator) do
+        if batch and batch.messages then
+            Loolib.TempTable:Release(batch.messages)
+        end
+        batchAccumulator[k] = nil
+    end
+end
+
 --- Send a command to the guild channel
 -- @param command string - Loothing.MsgType value
 -- @param data table|nil - Message payload

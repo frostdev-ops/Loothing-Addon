@@ -378,7 +378,10 @@ function AutoPass:ShouldAutoPass(itemLink, playerClass, classesFlag)
         return false, nil
     end
 
-    if Utils.GetEffectiveGroupLootMode() == "passive" then
+    -- Use council-specific mode: native group-loot uses GetEffectiveGroupLootMode(),
+    -- which defaults to passive when MLDB is not yet loaded mid-session (HIGH-1).
+    -- That must not disable Loothing AutoPass on the roll response window.
+    if Utils.GetEffectiveCouncilAutoPassLootMode() == "passive" then
         return false, nil
     end
 

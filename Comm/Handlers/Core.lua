@@ -650,12 +650,31 @@ function CommMixin:HandleSessionInit(data, sender, distribution)
         return
     end
 
-    -- Route each sub-payload through existing handlers
-    if data.sessionStart then
-        data.sessionStart.masterLooter = sender
-        self:TriggerEvent("OnSessionStart", data.sessionStart)
+    -- If we are still ACTIVE on a different session (e.g. the previous
+    -- SESSION_END was missed or arrived during restrictions), force-end the
+    -- stale session BEFORE the new MLDB is applied. Otherwise the
+    -- downstream HandleRemoteSessionStart below would call EndSession
+    -- AFTER OnMLDBBroadcast has applied the new settings, and EndSession's
+    -- MLDB:Clear → RestoreSettings would clobber the freshly applied MLDB
+    -- back to the previous session's baseline — leaving session 2 running
+    -- with stale votingMode, responseSets, autoPass, etc. That is the
+    -- "autopass broken / character names as buttons" class of bug.
+    if data.sessionStart and Loothing.Session and Loothing.Session.IsActive
+        and Loothing.Session:IsActive() then
+        local newSessionID = data.sessionStart.sessionID
+        local currentID = Loothing.Session.sessionID
+        if newSessionID and newSessionID ~= currentID then
+            Loothing:Debug("SESSION_INIT: force-ending stale session",
+                tostring(currentID), "for new session", tostring(newSessionID))
+            Loothing.Session:EndSession()
+        end
     end
 
+    -- Route each sub-payload through existing handlers.
+    -- Apply MLDB (and council) before session start so clients have authoritative
+    -- settings before Session state becomes ACTIVE — avoids a window where
+    -- GetEffectiveGroupLootMode() sees no MLDB yet and defaults to passive,
+    -- which breaks AutoPass and other MLDB-dependent checks on the first tick.
     if data.mldb then
         data.mldb.sender = sender
         self:TriggerEvent("OnMLDBBroadcast", data.mldb)
@@ -664,6 +683,11 @@ function CommMixin:HandleSessionInit(data, sender, distribution)
     if data.councilRoster then
         data.councilRoster.masterLooter = sender
         self:TriggerEvent("OnCouncilRoster", data.councilRoster)
+    end
+
+    if data.sessionStart then
+        data.sessionStart.masterLooter = sender
+        self:TriggerEvent("OnSessionStart", data.sessionStart)
     end
 
     if data.items and type(data.items) == "table" then

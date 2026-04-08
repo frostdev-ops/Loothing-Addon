@@ -253,24 +253,41 @@ function TooltipScan:GetContainerItemTradeTimeRemaining(bag, slot)
     tooltip:ClearLines()
     tooltip:SetBagItem(bag, slot)
 
-    local remaining = 0
+    -- Scan every line: trade-time takes priority over bound status.
+    -- Tooltips show "Soulbound" BEFORE the "You may trade…" line, so we
+    -- must not break early on a bound marker — otherwise freshly looted
+    -- raid loot always reports 0 trade-time and the bag scanner silently
+    -- drops every drop. We track `bounded` as a flag and keep scanning.
+    local tradeTime = nil
+    local bounded = false
+
     for text in IterateTooltipText(tooltip) do
         local parsed = ParseTradeTimeText(text)
         if parsed then
-            remaining = parsed
+            tradeTime = parsed
             break
         end
-        if ITEM_BIND_ON_EQUIP and text:find(ITEM_BIND_ON_EQUIP, 1, true) then
-            remaining = math.huge
-            break
-        end
-        if ITEM_SOULBOUND and text:find(ITEM_SOULBOUND, 1, true) then
-            remaining = 0
-            break
+        if text == ITEM_SOULBOUND
+            or text == ITEM_ACCOUNTBOUND
+            or text == ITEM_BNETACCOUNTBOUND
+            or text == ITEM_ACCOUNTBOUND_UNTIL_EQUIP
+        then
+            bounded = true
+            -- Do NOT break — the trade-time line may appear later.
         end
     end
 
     tooltip:Hide()
+
+    local remaining
+    if tradeTime then
+        remaining = tradeTime
+    elseif bounded then
+        remaining = 0
+    else
+        remaining = math.huge
+    end
+
     self.bagTradeTimeCache[cacheKey] = {
         identity = identity,
         remaining = remaining,

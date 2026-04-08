@@ -42,6 +42,11 @@ function VotePanelMixin:Init()
     -- Close panel when session ends (prevent stale UI)
     if Loothing.Session then
         Loothing.Session:RegisterCallback("OnSessionEnded", function()
+            -- Drop per-session refs so the next session cannot briefly
+            -- flash stale item/candidate data if Show() is called before
+            -- SetItem() repopulates the panel.
+            self.item = nil
+            if self.selectedResponses then wipe(self.selectedResponses) end
             self:Hide()
         end, self)
     end

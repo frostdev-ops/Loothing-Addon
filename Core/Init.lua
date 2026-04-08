@@ -1117,21 +1117,13 @@ local function RegisterEvents()
         end, Loothing)
     end
 
-    -- Restore non-ML settings when session ends (MLDB snapshot/restore)
-    if Loothing.Session and Loothing.MLDB then
-        Loothing.Session:RegisterCallback("OnSessionEnded", function()
-            if not Loothing.MLDB:IsML() then
-                Loothing.MLDB:Clear()
-            end
-        end, Loothing)
-    end
-
-    -- Cancel pending sync coalesce timers when session ends
-    if Loothing.Session and Loothing.Sync then
-        Loothing.Session:RegisterCallback("OnSessionEnded", function()
-            Loothing.Sync:CancelPendingBroadcasts()
-        end, Loothing)
-    end
+    -- NOTE: MLDB:Clear and Sync:CancelPendingBroadcasts used to be wired
+    -- through OnSessionEnded callbacks here. Session:EndSession now calls
+    -- them synchronously (Data/Session.lua) BEFORE firing OnSessionEnded,
+    -- so other OnSessionEnded handlers see the restored settings and the
+    -- drained sync timers. Re-adding them here would re-introduce the race
+    -- where MLDB:Clear runs after a newly-applied session-2 MLDB and
+    -- clobbers it back to the previous session's baseline.
 
     -- Wire Announcer to Session events (session start, end, item added, voting started)
     if Loothing.Session and Loothing.Announcer then

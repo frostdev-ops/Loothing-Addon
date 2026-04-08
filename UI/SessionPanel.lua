@@ -1005,6 +1005,9 @@ function SessionPanelMixin:RegisterEvents()
     end, self)
 
     Loothing.Session:RegisterCallback("OnSessionEnded", function()
+        -- Drop any selected-item refs so bulk actions cannot fire on
+        -- dangling items from the session that just ended.
+        self:ClearSelection()
         self:Refresh()
     end, self)
 
