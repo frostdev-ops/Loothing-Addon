@@ -1975,8 +1975,10 @@ end
 --- Classify the current instance into a trigger scope.
 -- @return string|nil - "raid", "dungeon", "openWorld", or nil (ineligible)
 function SessionMixin:ClassifyEncounterScope()
-    local _, instanceType = IsInInstance()
+    local instanceType, _, difficultyID = Utils.GetInstanceInfo()
     if instanceType == "raid" then
+        -- LFR (difficultyID 17) uses personal loot — never eligible
+        if difficultyID == 17 then return nil end
         return "raid"
     elseif instanceType == "party" then
         return "dungeon"

@@ -76,6 +76,13 @@ function GroupLootMixin:OnStartLootRoll(_, rollID)
         return
     end
 
+    -- Instance type gate: never auto-pass in dungeons, keystones, LFR,
+    -- PvP, scenarios, or open world — even if handleLoot somehow got set.
+    -- Without this check, players in keystones pass all loot to the ML.
+    if not Utils.IsEligibleForLootHandling() then
+        return
+    end
+
     local link = GetLootRollItemLink(rollID)
     if not link then
         return

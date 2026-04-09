@@ -473,11 +473,12 @@ local function ShouldSkipMLCheck()
     if Loothing.handleLoot or Loothing.isMasterLooter or Loothing.explicitMasterLooter then
         return false
     end
-    -- Skip if "onlyUseInRaids" is set and we're not in a raid
-    -- (allowOutOfRaid bypasses the instance-type check entirely)
+    -- Skip if "onlyUseInRaids" is set and we're not in an eligible instance
+    -- (excludes dungeons, keystones, LFR, PvP, scenarios, open world).
+    -- allowOutOfRaid bypasses the instance-type check entirely.
     if Loothing.Settings and Loothing.Settings:Get("ml.onlyUseInRaids", true) then
         if not Loothing.Settings:Get("ml.allowOutOfRaid", false) then
-            if not Utils.IsInRaidInstance() then
+            if not Utils.IsEligibleForLootHandling() then
                 return true
             end
         end
@@ -622,6 +623,20 @@ local function PerformMLCheck()
             return
         end
 
+        -- Instance type guard: if onlyUseInRaids (default true), skip ML
+        -- handling in dungeons, keystones, LFR, PvP, scenarios, and open
+        -- world. Without this check the popup would appear in keystones
+        -- and accepting it would cause every group member to auto-pass
+        -- all loot to the ML.
+        if Loothing.Settings and Loothing.Settings:Get("ml.onlyUseInRaids", true) then
+            if not Loothing.Settings:Get("ml.allowOutOfRaid", false) then
+                if not Utils.IsEligibleForLootHandling() then
+                    Loothing:Debug("ML detected but instance not eligible (onlyUseInRaids)")
+                    return
+                end
+            end
+        end
+
         -- Check guild-only restriction
         local guildOnly = Loothing.Settings and Loothing.Settings:Get("settings.autoGroupLootGuildOnly", false) or false
         if guildOnly and not Loothing.isInGuildGroup then
@@ -713,7 +728,7 @@ OnRaidEnter = function()
 
     if Loothing.Settings and Loothing.Settings:Get("ml.onlyUseInRaids", true) then
         if not (Loothing.Settings:Get("ml.allowOutOfRaid", false)) then
-            if not Utils.IsInRaidInstance() then return end
+            if not Utils.IsEligibleForLootHandling() then return end
         end
     end
 

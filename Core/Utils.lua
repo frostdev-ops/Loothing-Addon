@@ -413,11 +413,36 @@ function Utils.IsInPvPOrScenario()
     return instanceType == "pvp" or instanceType == "arena" or instanceType == "scenario"
 end
 
---- Check if currently in a raid instance
+--- Check if currently in a raid instance (any difficulty, including LFR)
 -- @return boolean
 function Utils.IsInRaidInstance()
     local instanceType = Utils.GetInstanceInfo()
     return instanceType == "raid"
+end
+
+--- Check if currently in a raid instance that is NOT LFR.
+-- LFR uses personal loot with no trading restrictions and should never
+-- trigger loot council sessions.
+-- @return boolean
+function Utils.IsInNonLFRRaid()
+    local instanceType, _, difficultyID = Utils.GetInstanceInfo()
+    if instanceType ~= "raid" then return false end
+    -- difficultyID 17 = LFR (Raid Finder)
+    return difficultyID ~= 17
+end
+
+--- Check if the current instance is eligible for Loothing loot handling.
+-- Returns true for non-LFR raid instances. Returns false for dungeons,
+-- keystones, LFR, PvP, arenas, scenarios, and open world. This is the
+-- single gate used by PerformMLCheck and GroupLootEvents to decide
+-- whether the addon should activate at all.
+-- @return boolean
+function Utils.IsEligibleForLootHandling()
+    local instanceType, _, difficultyID = Utils.GetInstanceInfo()
+    if instanceType ~= "raid" then return false end
+    -- LFR (difficultyID 17) uses personal loot — never eligible
+    if difficultyID == 17 then return false end
+    return true
 end
 
 --- Check if currently in a dungeon instance
