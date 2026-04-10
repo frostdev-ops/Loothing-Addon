@@ -794,9 +794,18 @@ function CouncilTableMixin:CreateDetailTooltip()
     gearReady:SetWordWrap(true)
     self.moreInfoGearReady = gearReady
 
+    -- Trinket Sim Rank (from bloodmallet.com via desktop sync)
+    local trinketSim = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    trinketSim:SetPoint("TOPLEFT", gearReady, "BOTTOMLEFT", 0, -2)
+    trinketSim:SetPoint("RIGHT", -6, 0)
+    trinketSim:SetJustifyH("LEFT")
+    SkinningMixin:StyleText(trinketSim, "bodySmall", "accentCool")
+    trinketSim:SetWordWrap(true)
+    self.moreInfoTrinketSim = trinketSim
+
     -- Recent Loot History
     local lootHistory = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    lootHistory:SetPoint("TOPLEFT", gearReady, "BOTTOMLEFT", 0, -4)
+    lootHistory:SetPoint("TOPLEFT", trinketSim, "BOTTOMLEFT", 0, -4)
     lootHistory:SetPoint("RIGHT", -6, 0)
     lootHistory:SetJustifyH("LEFT")
     lootHistory:SetWordWrap(true)

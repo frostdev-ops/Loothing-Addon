@@ -57,6 +57,7 @@ function VersionCheckMixin:Init()
 
     -- Test version (set to a string like "alpha1" for pre-release builds, nil for release)
     self.tVersion = nil
+    self.selfOutdatedWarned = false  -- Only warn the user once per session
     self.rosterSnapshot = nil
     self.rosterSnapshotDirty = true
     self.persistDebounceToken = 0
@@ -244,8 +245,7 @@ function VersionCheckMixin:GetOutdatedMembers(minVersion)
         else
             local unit = (i == numMembers) and "player" or ("party" .. i)
             if UnitExists(unit) then
-                local rawName = Loolib.SecretUtil.SafeUnitName(unit)
-                name = rawName
+                name = Loolib.SecretUtil.SafeUnitName(unit)
             end
         end
 
@@ -598,6 +598,15 @@ function VersionCheckMixin:HandleResponse(version, sender, tVersion, ilvl, specI
 
     self:TriggerEvent("OnVersionReceived", sender, version)
 
+    -- Check if the local user's version is outdated compared to the sender.
+    -- Only warn once per session, and skip test versions on either side.
+    if not self.selfOutdatedWarned and not self.tVersion and not tVersion then
+        if self:CompareVersions(Loothing.VERSION, version) < 0 then
+            self.selfOutdatedWarned = true
+            Loothing:Print(string.format(L["VERSION_SELF_OUTDATED"], Loothing.VERSION, version))
+        end
+    end
+
     if self.queryInProgress then
         return
     end
@@ -661,7 +670,10 @@ function VersionCheckMixin:GetRosterSnapshot()
 
     for name in pairs(rosterNames) do
         local data = self.versionCache[name] or {}
-        local version = data.version or (self.queryInProgress and nil or "Not Installed")
+        local version = data.version
+        if not version and not self.queryInProgress then
+            version = "Not Installed"
+        end
         local entry = {
             name = name,
             class = rosterClasses[name],
@@ -752,10 +764,10 @@ end
 
 local VersionCheck = ns.VersionCheck or Loolib.CreateFromMixins(VersionCheckMixin)
 ns.VersionCheck = VersionCheck
--- Defer Init() - LoadPersistedVersions() requires Loothing.Settings which is
--- not available until InitializeModules() has run. The PLAYER_LOGIN handler
--- in Init.lua calls ns.VersionCheck:Init() after Settings is ready.
--- Only set up the callback registry and basic state here.
+-- Inline initialization: LoadPersistedVersions() requires Loothing.Settings
+-- which is not available until PLAYER_LOGIN. Init.lua calls
+-- versionCheck:LoadPersistedVersions() directly after Settings is ready.
+-- Set up callback registry and basic state here at file load time.
 Loolib.CallbackRegistryMixin.OnLoad(VersionCheck)
 VersionCheck:GenerateCallbackEvents(VERSION_EVENTS)
 VersionCheck.versionCache = {}
@@ -764,6 +776,7 @@ VersionCheck.queryStartTime = nil
 VersionCheck.lastRosterCheck = 0
 VersionCheck.lastOutdatedWarn = 0
 VersionCheck.tVersion = nil
+VersionCheck.selfOutdatedWarned = false
 VersionCheck.rosterSnapshot = nil
 VersionCheck.rosterSnapshotDirty = true
 VersionCheck.persistDebounceToken = 0

@@ -231,6 +231,12 @@ local function InitializeModules()
         Loothing.PlayerIntel:Init()
     end
 
+    -- Initialize trinket sim data (desktop exchange)
+    if ns.TrinketSimsMixin then
+        Loothing.TrinketSims = CreateFromMixins(ns.TrinketSimsMixin)
+        Loothing.TrinketSims:Init()
+    end
+
     -- Initialize player cache (GUID-based player data)
     if ns.CreatePlayerCache then
         Loothing.PlayerCache = ns.CreatePlayerCache()

@@ -1029,6 +1029,7 @@ L["VERSION_RESULTS_TEST"] = "  |cff00ff00Test versions: %d|r"
 L["VERSION_RESULTS_OUTDATED"] = "  |cffff0000Outdated: %d|r"
 L["VERSION_RESULTS_NOT_INSTALLED"] = "  |cff888888Not Installed: %d|r"
 L["VERSION_RESULTS_HINT"] = "Use /lt version show to see detailed results"
+L["VERSION_SELF_OUTDATED"] = "|cffff0000Your Loothing is outdated!|r You have v%s but v%s is available. Please update."
 
 -- TradeQueue
 L["TRADE_ITEMS_PENDING"] = "You have %d item(s) to trade to %s. Click items to add them to the trade window."

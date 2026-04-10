@@ -579,6 +579,44 @@ function CouncilTableMixin:UpdateDetailTooltip(candidate)
         self:ClearPlayerIntelSection()
     end
 
+    -- Trinket Sim Rank (bloodmallet.com) — runs independently of PlayerIntel
+    if self.moreInfoTrinketSim then
+        local currentItemID = self.currentItem and self.currentItem.itemID
+        if currentItemID and Loothing.TrinketSims and Loothing.TrinketSims:HasData() then
+            local candidateClass = candidate.class
+            local candidateSpec = nil
+            -- Try intel first, then PlayerCache
+            if intel and intel.spec then
+                candidateSpec = intel.spec
+            elseif Loothing.PlayerCache then
+                local cached = Loothing.PlayerCache:Get(candidate.playerName or candidate.name)
+                if cached then
+                    candidateSpec = cached.spec
+                end
+            end
+            -- For local player, use live spec info
+            if not candidateSpec and Utils.IsSamePlayer(candidate.playerName or candidate.name, Utils.GetPlayerFullName()) then
+                local specIndex = GetSpecialization and GetSpecialization()
+                if specIndex then
+                    local getInfo = C_SpecializationInfo and C_SpecializationInfo.GetSpecializationInfo or GetSpecializationInfo
+                    if getInfo then
+                        local _, specName = getInfo(specIndex)
+                        candidateSpec = specName
+                    end
+                end
+            end
+            local rankText = candidateClass and candidateSpec and Loothing.TrinketSims:GetRankText(currentItemID, candidateClass, candidateSpec)
+            if rankText then
+                self.moreInfoTrinketSim:SetText("Sim: " .. rankText .. "  |cff888888bloodmallet.com|r")
+                self.moreInfoTrinketSim:SetTextColor(0.6, 0.9, 1.0)
+            else
+                self.moreInfoTrinketSim:SetText("")
+            end
+        else
+            self.moreInfoTrinketSim:SetText("")
+        end
+    end
+
     -- Resize tooltip to fit content
     self:ResizeDetailTooltip()
 end
@@ -782,6 +820,7 @@ function CouncilTableMixin:ClearPlayerIntelSection()
     if self.moreInfoParses then self.moreInfoParses:SetText("") end
     if self.moreInfoAttendance then self.moreInfoAttendance:SetText("") end
     if self.moreInfoGearReady then self.moreInfoGearReady:SetText("") end
+    if self.moreInfoTrinketSim then self.moreInfoTrinketSim:SetText("") end
     if self.moreInfoLootHistory then self.moreInfoLootHistory:SetText("") end
     if self.moreInfoAltLoot then self.moreInfoAltLoot:SetText("") end
     if self.moreInfoStaleness then self.moreInfoStaleness:SetText("") end

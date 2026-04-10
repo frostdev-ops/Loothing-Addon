@@ -186,6 +186,7 @@ function CommMixin:HandleStopHandleLoot(_data, sender)
 end
 
 function CommMixin:HandleSessionEnd(data, sender)
+    if not validateHandler("HandleSessionEnd", data) then return end
     -- Accept from current ML or from the previous ML (same ML transfer race as above)
     if not isMasterLooter(sender)
         and not (Loothing.MLDB and Loothing.MLDB:WasPreviousMLSender(sender)) then
@@ -194,7 +195,7 @@ function CommMixin:HandleSessionEnd(data, sender)
     end
     self:TriggerEvent("OnSessionEnd", {
         masterLooter = sender,
-        sessionID = data and data.sessionID or nil,
+        sessionID = data.sessionID,
     })
 end
 
