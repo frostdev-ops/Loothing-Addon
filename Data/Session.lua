@@ -375,6 +375,16 @@ function SessionMixin:HandleTradable(data)
         end
     elseif Loothing.handleLoot then
         -- No active session: buffer item and trigger session start
+        -- Dedup: OnLootReceived, bag scanner, and TradeQueue can all buffer the same item
+        local alreadyBuffered = false
+        for _, entry in ipairs(self.lootBuffer) do
+            if entry.itemLink == itemLink and entry.playerName == playerName then
+                alreadyBuffered = true
+                break
+            end
+        end
+        if alreadyBuffered then return end
+
         Loothing:Debug("HandleTradable: buffering item from", playerName, ":", itemLink)
         table.insert(self.lootBuffer, {
             itemLink = itemLink,
@@ -2168,12 +2178,29 @@ function SessionMixin:ScanBagsForTradeableItems()
                                 -- Find the bag/slot to check trade time
                                 local tradeTime = self:FindTradeTimeForItem(itemLink, TradeQueue)
                                 if tradeTime and tradeTime > 0 then
-                                    self.reportedTradeableItems[itemLink] = true
-                                    Loothing:Debug("BagScan: new tradeable item:", itemLink)
-                                    Loothing.Comm:Send(Loothing.MsgType.TRADABLE, {
-                                        itemLink = itemLink,
-                                        timeRemaining = tradeTime,
-                                    })
+                                    local isML = self:IsMasterLooter()
+                                        or (Loothing.handleLoot and Loothing.isMasterLooter)
+
+                                    if isML then
+                                        -- ML self-loopback: process locally, bypass comm layer.
+                                        -- HandleTradable is idempotent (matches existing items
+                                        -- before adding new ones).
+                                        self:HandleTradable({
+                                            itemLink = itemLink,
+                                            timeRemaining = tradeTime,
+                                            playerName = Utils.GetPlayerFullName(),
+                                        })
+                                        self.reportedTradeableItems[itemLink] = true
+                                        Loothing:Debug("BagScan: ML self-loopback for:", itemLink)
+                                    else
+                                        -- Non-ML: broadcast to group for ML to receive.
+                                        Loothing:Debug("BagScan: new tradeable item:", itemLink)
+                                        Loothing.Comm:Send(Loothing.MsgType.TRADABLE, {
+                                            itemLink = itemLink,
+                                            timeRemaining = tradeTime,
+                                        })
+                                        self.reportedTradeableItems[itemLink] = true
+                                    end
                                 end
                             end
                         end
@@ -2308,13 +2335,23 @@ function SessionMixin:OnLootReceived(encounterID, _itemID, itemLink, _quantity, 
             if Loothing.ItemFilter and Loothing.ItemFilter:ShouldIgnoreItem(itemLink) then
                 Loothing:Debug("Item filtered (buffer):", itemLink)
             else
-                table.insert(self.lootBuffer, {
-                    itemLink = itemLink,
-                    playerName = playerName,
-                    encounterID = encounterID,
-                    timestamp = time(),
-                })
-                Loothing:Debug("Buffered loot item:", itemLink, "from", playerName, "encounter", encounterID)
+                -- Dedup: bag scanner and HandleTradable can also buffer the same item
+                local alreadyBuffered = false
+                for _, entry in ipairs(self.lootBuffer) do
+                    if entry.itemLink == itemLink and entry.playerName == playerName then
+                        alreadyBuffered = true
+                        break
+                    end
+                end
+                if not alreadyBuffered then
+                    table.insert(self.lootBuffer, {
+                        itemLink = itemLink,
+                        playerName = playerName,
+                        encounterID = encounterID,
+                        timestamp = time(),
+                    })
+                    Loothing:Debug("Buffered loot item:", itemLink, "from", playerName, "encounter", encounterID)
+                end
                 if Utils.IsSamePlayer(playerName, Utils.GetPlayerFullName()) and Loothing.TradeQueue then
                     Loothing.TradeQueue:UpdateAndSendRecentTradableItem(itemLink)
                 end

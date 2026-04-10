@@ -104,8 +104,19 @@ local function ParseTradeTimeText(text)
             if anchorStart then
                 local timeText = text:sub(anchorEnd + 1)
                 local first, second = timeText:match("(%d+).-(%d+)")
-                local hours = tonumber(first) or tonumber(timeText:match("(%d+)")) or 0
-                local minutes = tonumber(second) or 0
+                local hours, minutes
+                if first and second then
+                    hours = tonumber(first) or 0
+                    minutes = tonumber(second) or 0
+                else
+                    -- Single value: use keyword to determine unit
+                    hours = tonumber(timeText:match("(%d+)%s*h")) or 0
+                    minutes = tonumber(timeText:match("(%d+)%s*m")) or 0
+                    if hours == 0 and minutes == 0 then
+                        -- Bare number fallback: assume minutes
+                        minutes = tonumber(timeText:match("(%d+)")) or 0
+                    end
+                end
                 local remaining = (hours * 3600) + (minutes * 60)
                 return remaining > 0 and remaining or 60
             end

@@ -81,6 +81,8 @@ local CRITICAL_COMMANDS = {
     [Loothing.MsgType.BATCH]               = true,
     [Loothing.MsgType.SESSION_INIT]        = true,
     [Loothing.MsgType.RESPONSE_BATCH]      = true,
+    [Loothing.MsgType.TRADABLE]            = true,
+    [Loothing.MsgType.NON_TRADABLE]        = true,
 }
 
 --[[--------------------------------------------------------------------
