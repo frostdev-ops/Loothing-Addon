@@ -322,6 +322,15 @@ end
 
 --- Print a warning about outdated group members
 function VersionCheckMixin:WarnOutdatedMembers()
+    -- Only the Master Looter needs to see "X group member(s) have outdated
+    -- Loothing" in chat.  For everybody else it's noise.  Outdated users are
+    -- still informed individually via VERSION_SELF_OUTDATED in HandleResponse
+    -- (which fires any time a user receives a version newer than their own),
+    -- so nobody loses their upgrade nudge.
+    if not Loothing.isMasterLooter and not Loothing.handleLoot then
+        return
+    end
+
     local rosterNames = self:GetCurrentRosterNames()
     local outdatedCount = 0
     local outdatedNames = {}

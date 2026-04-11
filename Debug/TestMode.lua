@@ -733,7 +733,11 @@ function TestMode:ShowRollFrame()
     local timeout = Loothing.Settings and Loothing.Settings:GetVotingTimeout()
                     or Loothing.Timing.DEFAULT_VOTE_TIMEOUT
     fakeItem.voteTimeout = timeout
-    fakeItem.voteEndTime = GetTime() + timeout
+    if timeout == Loothing.Timing.NO_TIMEOUT then
+        fakeItem.voteEndTime = math.huge
+    else
+        fakeItem.voteEndTime = GetTime() + timeout
+    end
 
     Loothing.UI.RollFrame:SetItem(fakeItem)
     Loothing.UI.RollFrame:Show()

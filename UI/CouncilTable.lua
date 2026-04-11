@@ -803,9 +803,18 @@ function CouncilTableMixin:CreateDetailTooltip()
     trinketSim:SetWordWrap(true)
     self.moreInfoTrinketSim = trinketSim
 
+    -- Droptimizer DPS Upgrade (from Raidbots Droptimizer via desktop sync)
+    local droptimizerSim = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    droptimizerSim:SetPoint("TOPLEFT", trinketSim, "BOTTOMLEFT", 0, -2)
+    droptimizerSim:SetPoint("RIGHT", -6, 0)
+    droptimizerSim:SetJustifyH("LEFT")
+    SkinningMixin:StyleText(droptimizerSim, "bodySmall", "accentWarm")
+    droptimizerSim:SetWordWrap(true)
+    self.moreInfoDroptimizer = droptimizerSim
+
     -- Recent Loot History
     local lootHistory = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    lootHistory:SetPoint("TOPLEFT", trinketSim, "BOTTOMLEFT", 0, -4)
+    lootHistory:SetPoint("TOPLEFT", droptimizerSim, "BOTTOMLEFT", 0, -4)
     lootHistory:SetPoint("RIGHT", -6, 0)
     lootHistory:SetJustifyH("LEFT")
     lootHistory:SetWordWrap(true)

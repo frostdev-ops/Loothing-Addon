@@ -868,7 +868,9 @@ end
 --- Get auto-pass enabled setting
 -- @return boolean
 function SettingsMixin:GetAutoPassEnabled()
-    return self:Get("autoPass.enabled") ~= false
+    local value = self:Get("autoPass.enabled")
+    if value == nil then return false end
+    return value
 end
 
 --- Set auto-pass enabled
@@ -880,7 +882,9 @@ end
 --- Get auto-pass weapons setting
 -- @return boolean
 function SettingsMixin:GetAutoPassWeapons()
-    return self:Get("autoPass.weapons") ~= false
+    local value = self:Get("autoPass.weapons")
+    if value == nil then return false end
+    return value
 end
 
 --- Set auto-pass weapons
@@ -2570,7 +2574,7 @@ end
 -- @return boolean
 function SettingsMixin:GetRollFrameTimeoutEnabled()
     local value = self:Get("rollFrame.timeoutEnabled")
-    if value == nil then return true end
+    if value == nil then return false end
     return value
 end
 

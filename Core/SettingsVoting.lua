@@ -20,7 +20,7 @@ function SettingsMixin:SetVotingMode(mode)
 end
 
 function SettingsMixin:GetVotingTimeout()
-    return self:Get("settings.votingTimeout", Loothing.Timing.DEFAULT_VOTE_TIMEOUT)
+    return self:Get("settings.votingTimeout", Loothing.Timing.NO_TIMEOUT)
 end
 
 function SettingsMixin:SetVotingTimeout(seconds)

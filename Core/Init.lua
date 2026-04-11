@@ -237,6 +237,12 @@ local function InitializeModules()
         Loothing.TrinketSims:Init()
     end
 
+    -- Initialize droptimizer data (desktop exchange)
+    if ns.DroptimizerMixin then
+        Loothing.Droptimizer = CreateFromMixins(ns.DroptimizerMixin)
+        Loothing.Droptimizer:Init()
+    end
+
     -- Initialize player cache (GUID-based player data)
     if ns.CreatePlayerCache then
         Loothing.PlayerCache = ns.CreatePlayerCache()
@@ -471,17 +477,39 @@ local function ShouldSkipMLCheck()
     if Utils.IsInPvPOrScenario() then
         return true
     end
+
+    -- Force-cleanup when the player transitions into a *competing*
+    -- instance type — a dungeon/keystone, LFR raid, PvP, arena, or
+    -- scenario.  Competing means "a raid ML session should be torn
+    -- down here".  Open world ("none") is NOT competing so that brief
+    -- repair trips between raid pulls don't end an active session.
+    --
+    -- This MUST run before the active-ML bypass below.  Otherwise a
+    -- raid ML who carries handleLoot=true into a M+ dungeon never
+    -- gets torn down: the bypass lets PerformMLCheck run, but
+    -- PerformMLCheck early-returns when ml/isNowML/handleLoot all
+    -- look unchanged.  Returning true here lets the cleanup block in
+    -- PerformMLCheck call StopHandleLoot, which ends the session and
+    -- broadcasts SESSION_END to the group.
+    if Loothing.Settings and Loothing.Settings:Get("ml.onlyUseInRaids", true)
+        and not Loothing.Settings:Get("ml.allowOutOfRaid", false) then
+        if Utils.IsInCompetingInstance() then
+            return true
+        end
+    end
+
     -- Never skip when there is active ML state that needs re-evaluation.
-    -- The "only in raids" restriction gates initial ML *activation*; it must
-    -- not block handoffs, loss detection, or cleanup for an already-active ML.
+    -- The "only in raids" restriction gates initial ML *activation*; it
+    -- must not block handoffs or loss detection for an already-active ML
+    -- who is still in an eligible or neutral (openWorld) instance.
     --   handleLoot / isMasterLooter: old ML must detect loss and stop
     --   explicitMasterLooter:        new ML must detect gain and start
     if Loothing.handleLoot or Loothing.isMasterLooter or Loothing.explicitMasterLooter then
         return false
     end
-    -- Skip if "onlyUseInRaids" is set and we're not in an eligible instance
-    -- (excludes dungeons, keystones, LFR, PvP, scenarios, open world).
-    -- allowOutOfRaid bypasses the instance-type check entirely.
+
+    -- Fresh activation: only allow the ML usage prompt / detection to
+    -- run inside an eligible raid instance.
     if Loothing.Settings and Loothing.Settings:Get("ml.onlyUseInRaids", true) then
         if not Loothing.Settings:Get("ml.allowOutOfRaid", false) then
             if not Utils.IsEligibleForLootHandling() then
@@ -489,6 +517,7 @@ local function ShouldSkipMLCheck()
             end
         end
     end
+
     return false
 end
 
@@ -542,11 +571,35 @@ local function PerformMLCheck()
         if Loothing.handleLoot or Loothing.isMasterLooter then
             Loothing:Debug("ML check skipped but clearing stale ML state")
             if Loothing.handleLoot then
+                -- ML path: ends the local session AND broadcasts SESSION_END.
                 Loothing:StopHandleLoot()
             end
             Loothing.isMasterLooter = false
             Loothing.masterLooter = nil
         end
+
+        -- Non-ML defensive cleanup: a remote session from the previous
+        -- instance can persist if the SESSION_END broadcast from the ML
+        -- races with this client's zone transition, arrives during a
+        -- comm-restricted window, or is lost entirely.  When the local
+        -- instance is a *competing* type (dungeon, scenario, PvP, LFR),
+        -- drop the stale view locally.  EndSession is idempotent so a
+        -- later SESSION_END is a no-op.
+        --
+        -- Gated on Utils.IsInCompetingInstance() (NOT just any ineligible
+        -- instance) for symmetry with the ML cleanup path above: a brief
+        -- openWorld trip — flight master, repair NPC in the raid portal
+        -- room — should not tear down the local view for non-ML clients
+        -- either, because the ML's session is still legitimately running
+        -- and the user will rejoin in seconds.
+        if Loothing.Session and Loothing.Session.IsActive
+            and Loothing.Session:IsActive()
+            and not Loothing.handleLoot
+            and Utils.IsInCompetingInstance() then
+            Loothing:Debug("ML check skipped — clearing stale remote session state")
+            Loothing.Session:EndSession()
+        end
+
         return
     end
 
@@ -2226,6 +2279,11 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
         if isReload and Loothing.initialized then
             -- UI reload - attempt to restore cached state
             Loothing:RestoreFromCache()
+            -- Detect and restore an orphaned MLDB snapshot from a session
+            -- that died across the reload (no SESSION_END ever arrived).
+            if Loothing.MLDB and Loothing.MLDB.RecoverIfOrphaned then
+                Loothing.MLDB:RecoverIfOrphaned()
+            end
             -- If cache didn't restore handleLoot, re-check like login path
             if IsInGroup() and not Loothing.handleLoot then
                 ScheduleRaidEnter(3)
@@ -2233,10 +2291,21 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
         elseif isLogin and Loothing.initialized then
             -- Try to restore cached session (e.g., disconnect/reconnect within 15 min)
             Loothing:RestoreFromCache()
+            -- Detect and restore an orphaned MLDB snapshot from a session
+            -- that died across the disconnect (no SESSION_END ever arrived).
+            if Loothing.MLDB and Loothing.MLDB.RecoverIfOrphaned then
+                Loothing.MLDB:RecoverIfOrphaned()
+            end
             -- If no session was restored, check for raid entry prompt
             if IsInGroup() and not Loothing.handleLoot then
                 ScheduleRaidEnter(3)
             end
+        elseif Loothing.initialized then
+            -- Normal zone transition (not login, not reload).  Re-run the
+            -- ML check so that a raid ML who zoned into a M+ dungeon,
+            -- scenario, or PvP instance correctly triggers the cleanup
+            -- block in PerformMLCheck (via the reordered ShouldSkipMLCheck).
+            ScheduleMLCheck()
         end
     elseif event == "PLAYER_LOGOUT" then
         -- Cache state for reconnect (captures MLDB for session resume)

@@ -2014,9 +2014,53 @@ function SessionMixin:IsScopeEnabled(scope)
 end
 
 --- Apply the configured action (manual/prompt/auto) for an eligible encounter.
+--
+-- This is the single convergence point for every *auto* session-trigger
+-- path: OnEncounterEnd (sync), HandleTradable's pendingLootTimer debounce,
+-- and OnLootReceived's afterLoot debounce all funnel through here.  The
+-- scope gate lives here (not in StartSession) so that:
+--
+--   (a) the async debounces cannot bypass it by calling StartSession
+--       directly with a cached lastEligibleEncounter from an earlier
+--       eligible encounter, and
+--   (b) explicit manual-start paths (UI Add Item, UI Session button,
+--       /lt add slash command) can still call StartSession directly to
+--       override the scope toggle with a deliberate user action.
+--
 -- @param encounterID number
 -- @param encounterName string
 function SessionMixin:ApplyTriggerAction(encounterID, encounterName)
+    -- Scope gate: refuse to auto-trigger (or prompt-to-trigger) a session
+    -- in an instance type the user has disabled.  Without this, a raid-ML
+    -- who carries handleLoot=true into a M+ dungeon will start a session
+    -- labeled with the dungeon boss as soon as a tradeable item drops.
+    if not IsTestModeEnabled() then
+        local scope = self:ClassifyEncounterScope()
+        if not scope or not self:IsScopeEnabled(scope) then
+            Loothing:Debug("ApplyTriggerAction: refusing — scope not enabled:",
+                tostring(scope), "encounter:", tostring(encounterName))
+            -- Fully clear the encounter cache and in-flight trigger state
+            -- so the next HandleTradable / OnLootReceived call cannot retry
+            -- the same refusal using stale fallback data (lastEncounterID
+            -- is read at Session.lua line ~410 when lastEligibleEncounter
+            -- is nil).
+            self.lastEligibleEncounter = nil
+            self.lastEncounterID = nil
+            self.lastEncounterName = nil
+            self.receivedLootCount = 0
+            if self.pendingLootTimer then
+                self.pendingLootTimer:Cancel()
+                self.pendingLootTimer = nil
+            end
+            -- Hide any prompt that was mid-queue from a stale encounter.
+            local Popups = GetPopups()
+            if Popups then
+                Popups:Hide("LOOTHING_CONFIRM_START_SESSION")
+            end
+            return
+        end
+    end
+
     local action = Loothing.Settings:GetSessionTriggerAction()
     if action == "auto" then
         self:StartSession(encounterID, encounterName)
@@ -2045,15 +2089,14 @@ function SessionMixin:OnEncounterEnd(encounterID, encounterName, _difficultyID, 
     if success ~= 1 then return end
     if not IsInGroup() and not IsTestModeEnabled() then return end
 
-    -- Cache encounter info (used by bag scanner and session start)
-    self.lastEligibleEncounter = { id = encounterID, name = encounterName }
-    self.lastEncounterID = encounterID
-    self.lastEncounterName = encounterName
-
     -- Distributed item collection: ALL clients scan bags for tradeable items
     -- after a boss kill and report them to the ML via TRADABLE comm.  This is
     -- the primary item detection path and does not depend on
     -- ENCOUNTER_LOOT_RECEIVED (which is unreliable with group loot in 12.0).
+    -- Runs unconditionally (before the ML/scope gates) because non-ML clients
+    -- don't yet know the ML's session-trigger preferences and need to report
+    -- their bag contents either way; the ML's ApplyTriggerAction gate decides
+    -- whether to act on the resulting TRADABLE messages.
     self:StartPostEncounterBagScan()
 
     -- Session auto-start gates (ML-only)
@@ -2062,17 +2105,31 @@ function SessionMixin:OnEncounterEnd(encounterID, encounterName, _difficultyID, 
         return
     end
 
-    if self.state ~= Loothing.SessionState.INACTIVE then
-        Loothing:Debug("OnEncounterEnd: skipping session trigger — session already active")
-        return
-    end
-
+    -- Scope gate.  Runs BEFORE the lastEligibleEncounter cache so a
+    -- dungeon-boss kill in a raid-only-configured ML never pollutes the
+    -- cache with stale data that an async debounce in HandleTradable or
+    -- OnLootReceived could later read and feed into ApplyTriggerAction.
+    -- (ApplyTriggerAction has its own scope gate as defense in depth, but
+    -- preventing the pollution at source is cleaner.)
     if not IsTestModeEnabled() then
         local scope = self:ClassifyEncounterScope()
         if not scope or not self:IsScopeEnabled(scope) then
             Loothing:Debug("OnEncounterEnd: skipping session trigger — scope not enabled:", scope or "nil")
             return
         end
+    end
+
+    -- Cache encounter info (only for eligible-scope encounters now).
+    -- HandleTradable's lootBuffer entries reference lastEncounterID as a
+    -- replay-tag, and HandleTradable's pendingLootTimer fallback at line
+    -- ~410 reads lastEncounterID/Name when lastEligibleEncounter is nil.
+    self.lastEligibleEncounter = { id = encounterID, name = encounterName }
+    self.lastEncounterID = encounterID
+    self.lastEncounterName = encounterName
+
+    if self.state ~= Loothing.SessionState.INACTIVE then
+        Loothing:Debug("OnEncounterEnd: skipping session trigger — session already active")
+        return
     end
 
     local timing = Loothing.Settings:GetSessionTriggerTiming()

@@ -735,9 +735,9 @@ TestRunner:Describe("Settings - Session Trigger Accessors", function()
 end)
 
 TestRunner:Describe("Settings - RollFrame Timeout Accessors", function()
-    TestRunner:It("GetRollFrameTimeoutEnabled should default to true", function()
-        local defaultValue = true
-        Assert.IsTrue(defaultValue, "Default should be enabled")
+    TestRunner:It("GetRollFrameTimeoutEnabled should default to false", function()
+        local defaultValue = false
+        Assert.IsFalse(defaultValue, "Default should be disabled")
     end, { category = "unit" })
 
     TestRunner:It("GetRollFrameTimeoutDuration should default to 30", function()

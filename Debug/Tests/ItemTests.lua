@@ -217,8 +217,8 @@ local function RunItemTests()
 
     local timerItem = CreateItem(testItemLink, testLooter, testEncounterID)
 
-    -- Start voting with default timeout
-    local startResult = timerItem:StartVoting()
+    -- Start voting with explicit timeout (default is NO_TIMEOUT / 0)
+    local startResult = timerItem:StartVoting(30)
     assert(startResult, "StartVoting returns true")
     assert(timerItem:IsVoting(), "StartVoting changes state to VOTING")
     assertNotNil(timerItem.voteStartTime, "voteStartTime set")

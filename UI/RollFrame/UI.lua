@@ -53,6 +53,11 @@ function RollFrameMixin:CreateFrame()
         ctrlScroll = true,
         escapeClose = false, -- RollFrame should not close with Escape during voting
     })
+    frame:HookScript("OnHide", function()
+        if self.HandleUnexpectedHide then
+            self:HandleUnexpectedHide()
+        end
+    end)
     ns.RollFrameFrame = frame
 
     -- Gold accent bar at top
@@ -106,7 +111,7 @@ function RollFrameMixin:CreateElements()
     self.closeButton = CreateFrame("Button", nil, self.frame, "UIPanelCloseButton")
     self.closeButton:SetPoint("TOPRIGHT", -5, -5)
     self.closeButton:SetScript("OnClick", function()
-        self:Close(false)
+        self:Close(false, "user")
     end)
 
     self:CreateSessionButtonFrame()
@@ -149,8 +154,12 @@ function RollFrameMixin:ApplyTheme()
         self.headerBackground:SetColorTexture(unpack(SkinningMixin:GetColor("header")))
     end
 
-    SkinningMixin:StyleText(self.titleText, "title", "text")
-    SkinningMixin:StyleText(self.counterText, "bodySmall", "textMuted")
+    if self.titleText then
+        SkinningMixin:StyleText(self.titleText, "title", "text")
+    end
+    if self.counterText then
+        SkinningMixin:StyleText(self.counterText, "bodySmall", "textMuted")
+    end
 
     if self.submitButton then
         SkinningMixin:StylePlainButton(self.submitButton, "success")
@@ -282,7 +291,7 @@ function RollFrameMixin:CreateSessionButton(index, item)
     btn.iconBorder:SetColorTexture(r, g, b, 1)
 
     -- Update ilvl badge
-    if btn.ilvlText then
+    if btn.ilvlText and btn.ilvlBadge then
         local ilvl = item.ilvl or 0
         if ilvl and ilvl > 0 then
             btn.ilvlText:SetText(tostring(ilvl))
@@ -952,7 +961,7 @@ function RollFrameMixin:CreateRollButtonSection()
 
     rollBtn:SetScript("OnClick", function()
         rollSelected:Show()
-        self.rollPassSelected:Hide()
+        if self.rollPassSelected then self.rollPassSelected:Hide() end
         self.selectedResponse = "ROLL"
         self:UpdateSubmitButton()
     end)

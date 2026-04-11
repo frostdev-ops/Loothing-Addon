@@ -3,7 +3,7 @@
 ## Title: Loothing (Dev)
 ## Notes: Development build with test harness and debug tooling
 ## Author: James Kueller
-## Version: 2.0.4
+## Version: 2.0.6
 ## SavedVariables: LoolibDB
 ## Dependencies: Loolib
 ## IconTexture: Interface\AddOns\Loothing\Media\logo
@@ -79,6 +79,7 @@ Data\Wishlist.lua
 Data\Roster.lua
 Data\PlayerIntel.lua
 Data\TrinketSims.lua
+Data\Droptimizer.lua
 
 # Loot Handling
 Loot\GroupLoot.lua

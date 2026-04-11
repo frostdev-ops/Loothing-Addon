@@ -18,6 +18,9 @@ function RollFrameMixin:RegisterSessionEvents()
     Loothing.Session:RegisterCallback("OnVotingStarted", function(_, item, timeout)
         self.responseTimeout = timeout or Loothing.Timing.DEFAULT_VOTE_TIMEOUT or 30
 
+        -- Ensure roll capture is active (re-registers if unregistered by prior session end)
+        self:RegisterRollCapture()
+
         -- AutoPass: check if item should be auto-passed before showing to player
         -- Skip if already responded (double-fire guard for re-broadcasts)
         local existingResp = self:GetItemResponse(item.guid)
@@ -29,6 +32,8 @@ function RollFrameMixin:RegisterSessionEvents()
             end
         end
 
+        -- Find existing item by GUID, update or add, then switch to it
+        self.items = self.items or {}
         local foundIndex = nil
         for i, existingItem in ipairs(self.items) do
             if existingItem.guid == item.guid then
@@ -39,18 +44,12 @@ function RollFrameMixin:RegisterSessionEvents()
 
         if foundIndex then
             self.items[foundIndex] = item
-            if foundIndex == self.currentItemIndex then
-                self:DisplayItem(item)
-            end
+            -- SwitchToItem calls DisplayItem + UpdateSessionButtons
+            self:SwitchToItem(foundIndex)
         else
             self:AddItem(item)
-        end
-
-        for i, existingItem in ipairs(self.items) do
-            if existingItem.guid == item.guid then
-                self:SwitchToItem(i)
-                break
-            end
+            -- AddItem appends to self.items, so the new item is at the end
+            self:SwitchToItem(#self.items)
         end
 
         -- Deferred AutoPass: if item info wasn't cached, retry when it loads
@@ -79,8 +78,11 @@ function RollFrameMixin:RegisterSessionEvents()
         end
     end, self)
 
-    Loothing.Session:RegisterCallback("OnVotingEnded", function(_, _item, _results)
+    Loothing.Session:RegisterCallback("OnVotingEnded", function(_, item, _results)
         self:UpdateSessionButtons()
+        if item and item.guid then
+            self:OnVotingEnded(item.guid)
+        end
     end, self)
 
     Loothing.Session:RegisterCallback("OnSessionEnded", function()
@@ -88,7 +90,7 @@ function RollFrameMixin:RegisterSessionEvents()
         -- Unregister the roll-capture event frame so it does not keep
         -- listening to /roll chat messages after the session ends.
         self:UnregisterRollCapture()
-        self:Close(false)
+        self:Close(false, "session_ended")
     end, self)
 
     -- Response recovery: ResponseTracker handles resend logic directly.
@@ -111,13 +113,14 @@ end
 function RollFrameMixin:RegisterRollCapture()
     if not self.eventFrame then
         self.eventFrame = CreateFrame("Frame")
-        self.eventFrame:RegisterEvent("CHAT_MSG_SYSTEM")
         self.eventFrame:SetScript("OnEvent", function(_, event, text)
             if event == "CHAT_MSG_SYSTEM" then
                 self:OnChatMessage(text)
             end
         end)
     end
+    -- Always (re-)register — UnregisterRollCapture unregisters the event but keeps the frame
+    self.eventFrame:RegisterEvent("CHAT_MSG_SYSTEM")
 end
 
 function RollFrameMixin:UnregisterRollCapture()
@@ -217,13 +220,19 @@ function RollFrameMixin:AutoPassItem(item)
     for i, existingItem in ipairs(self.items) do
         if existingItem.guid == item.guid then
             table.remove(self.items, i)
+            -- Adjust currentItemIndex after removal to keep it pointing at the correct item
+            if i < self.currentItemIndex then
+                self.currentItemIndex = self.currentItemIndex - 1
+            elseif i == self.currentItemIndex then
+                self.currentItemIndex = math.min(self.currentItemIndex, math.max(1, #self.items))
+            end
             break
         end
     end
     self:UpdateSessionButtons()
     if self.item and self.item.guid == item.guid then
         if not self:SwitchToNextUnrespondedItem() then
-            self:Close(true)
+            self:Close(true, "autopass")
         end
     end
 end

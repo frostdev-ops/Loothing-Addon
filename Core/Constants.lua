@@ -8,7 +8,7 @@ local _, ns = ...
 local Loothing = ns.Addon
 
 -- Addon info
-Loothing.VERSION = "2.0.4"
+Loothing.VERSION = "2.0.6"
 Loothing.PROTOCOL_VERSION = 4
 Loothing.ADDON_PREFIX = "LOOTHING"
 
@@ -271,7 +271,7 @@ Loothing.DefaultSettings = {
 
     settings = {
         votingMode = Loothing.VotingMode.SIMPLE,
-        votingTimeout = 30,
+        votingTimeout = 0,  -- NO_TIMEOUT: ML must manually end voting (0 = no auto-close)
         sessionTriggerMode = "prompt",   -- Legacy (migration source; not used at runtime)
         sessionTriggerAction = "prompt",
         sessionTriggerTiming = "encounterEnd",
@@ -347,8 +347,8 @@ Loothing.DefaultSettings = {
     },
 
     autoPass = {
-        enabled = true,
-        weapons = true,
+        enabled = false,
+        weapons = false,
         boe = false,
         transmog = false,
         trinkets = false,           -- Auto pass trinkets
@@ -547,8 +547,8 @@ Loothing.DefaultSettings = {
         rollRange = { min = 1, max = 100 },  -- Roll range
         showGearComparison = true, -- Show equipped gear comparison
         position = nil,            -- Saved position { point, x, y }
-        timeoutEnabled = true,     -- Enable/disable timeout timer
-        timeoutDuration = 30,      -- Timeout duration in seconds (0-200)
+        timeoutEnabled = false,    -- Enable/disable timeout timer (off by default)
+        timeoutDuration = 30,      -- Timeout duration in seconds (0-200), only used when enabled
     },
 
     -- CouncilTable settings (table view of candidates for ML/council)

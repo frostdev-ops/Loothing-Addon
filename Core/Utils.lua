@@ -445,6 +445,31 @@ function Utils.IsEligibleForLootHandling()
     return true
 end
 
+--- Check if the current instance is "competing" with a raid loot-council
+-- session — i.e. one that should force-end an active raid ML session when
+-- the player transitions into it.
+--
+-- Returns true for dungeons/keystones, LFR raids, PvP battlegrounds,
+-- arenas, and scenarios.  Returns FALSE for eligible raids AND for the
+-- open world (instanceType == "none"):
+--
+--   * Eligible raid: the ML should stay active.
+--   * Open world:    covers brief trips to a flight master / portal room
+--                    for repair between pulls.  Tearing down the session
+--                    every time a player walks out of the raid portal
+--                    would be unacceptably noisy.
+--
+-- @return boolean
+function Utils.IsInCompetingInstance()
+    local instanceType, _, difficultyID = Utils.GetInstanceInfo()
+    if instanceType == "party" then return true end
+    if instanceType == "pvp" or instanceType == "arena" or instanceType == "scenario" then
+        return true
+    end
+    if instanceType == "raid" and difficultyID == 17 then return true end  -- LFR
+    return false
+end
+
 --- Check if currently in a dungeon instance
 -- @return boolean
 function Utils.IsInDungeonInstance()

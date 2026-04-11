@@ -617,6 +617,25 @@ function CouncilTableMixin:UpdateDetailTooltip(candidate)
         end
     end
 
+    -- Droptimizer DPS Upgrade (Raidbots) -- runs independently of PlayerIntel and TrinketSims
+    if self.moreInfoDroptimizer then
+        local currentItemID = self.currentItem and self.currentItem.itemID
+        if currentItemID and Loothing.Droptimizer and Loothing.Droptimizer:HasData() then
+            local candidateName = candidate.playerName or candidate.name
+            local upgradeText = Loothing.Droptimizer:GetUpgradeText(candidateName, currentItemID)
+            if upgradeText then
+                local isStale = Loothing.Droptimizer:IsCharStale(candidateName)
+                local staleTag = isStale and "  |cffFF6600[stale]|r" or ""
+                self.moreInfoDroptimizer:SetText("Droptimizer: " .. upgradeText .. staleTag .. "  |cff888888raidbots.com|r")
+                self.moreInfoDroptimizer:SetTextColor(0.3, 0.9, 0.3)
+            else
+                self.moreInfoDroptimizer:SetText("")
+            end
+        else
+            self.moreInfoDroptimizer:SetText("")
+        end
+    end
+
     -- Resize tooltip to fit content
     self:ResizeDetailTooltip()
 end
@@ -821,6 +840,7 @@ function CouncilTableMixin:ClearPlayerIntelSection()
     if self.moreInfoAttendance then self.moreInfoAttendance:SetText("") end
     if self.moreInfoGearReady then self.moreInfoGearReady:SetText("") end
     if self.moreInfoTrinketSim then self.moreInfoTrinketSim:SetText("") end
+    if self.moreInfoDroptimizer then self.moreInfoDroptimizer:SetText("") end
     if self.moreInfoLootHistory then self.moreInfoLootHistory:SetText("") end
     if self.moreInfoAltLoot then self.moreInfoAltLoot:SetText("") end
     if self.moreInfoStaleness then self.moreInfoStaleness:SetText("") end

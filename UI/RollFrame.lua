@@ -590,7 +590,7 @@ function RollFrameMixin:StartTimer()
     end
 
     -- Check if timeout is enabled
-    local timeoutEnabled = true
+    local timeoutEnabled = false
     if Loothing.Settings then
         timeoutEnabled = Loothing.Settings:GetRollFrameTimeoutEnabled()
     end
@@ -627,25 +627,29 @@ function RollFrameMixin:StopTimer()
         self.ticker:Cancel()
         self.ticker = nil
     end
+    if self.autoCloseTimer then
+        self.autoCloseTimer:Cancel()
+        self.autoCloseTimer = nil
+    end
     self:StopTimerFlash()
 end
 
 --- Update timer display
 function RollFrameMixin:UpdateTimer()
     if not self.item then
-        self.timerText:SetText("")
+        if self.timerText then self.timerText:SetText("") end
         return
     end
 
     -- Check if timeout is enabled
-    local timeoutEnabled = true
+    local timeoutEnabled = false
     if Loothing.Settings then
         timeoutEnabled = Loothing.Settings:GetRollFrameTimeoutEnabled()
     end
 
     if not timeoutEnabled then
         -- Timer disabled - no auto-close behavior
-        self.timerContainer:Hide()
+        if self.timerContainer then self.timerContainer:Hide() end
         return
     end
 
@@ -658,32 +662,33 @@ function RollFrameMixin:UpdateTimer()
 
     -- No-timeout mode: hide timer, never auto-close
     if remaining == math.huge then
-        self.timerContainer:Hide()
+        if self.timerContainer then self.timerContainer:Hide() end
         return
     end
 
     if remaining <= 0 then
         if isVoting then
-            self.timerText:SetText(L["TIME_EXPIRED"])
-            self.timerBar:SetValue(0)
-            self.timerBar:SetStatusBarColor(0.6, 0.2, 0.2, 1)
+            if self.timerText then self.timerText:SetText(L["TIME_EXPIRED"]) end
+            if self.timerBar then
+                self.timerBar:SetValue(0)
+                self.timerBar:SetStatusBarColor(0.6, 0.2, 0.2, 1)
+            end
 
             -- Auto-close after a delay (deduplicated: only one pending timer at a time)
             if not self.autoCloseTimer then
                 self.autoCloseTimer = C_Timer.NewTimer(1.5, function()
                     self.autoCloseTimer = nil
-                    local itemRemaining = self.frame:IsShown() and self.item and
-                        self.item.GetTimeRemaining and self.item:GetTimeRemaining() or 0
-                    if itemRemaining ~= math.huge and (itemRemaining or 0) <= 0 then
-                        self:Close(false)
+                    if not self.frame or not self.frame:IsShown() then return end
+                    if not self.item or not self.item.GetTimeRemaining then return end
+                    local itemRemaining = self.item:GetTimeRemaining() or 0
+                    if itemRemaining ~= math.huge and itemRemaining <= 0 then
+                        self:Close(false, "timeout")
                     end
                 end)
             end
         else
-            self.timerText:SetText("")
-            if self.timerBar then
-                self.timerBar:SetValue(0)
-            end
+            if self.timerText then self.timerText:SetText("") end
+            if self.timerBar then self.timerBar:SetValue(0) end
         end
         return
     end
@@ -696,32 +701,36 @@ function RollFrameMixin:UpdateTimer()
     local progress = (timeout > 0) and (remaining / timeout) or 1
 
     -- Update StatusBar value (0-1 range)
-    self.timerBar:SetValue(math.max(0, math.min(1, progress)))
+    if self.timerBar then
+        self.timerBar:SetValue(math.max(0, math.min(1, progress)))
 
-    -- Color and flash based on time remaining
-    if remaining <= 5 then
-        self.timerBar:SetStatusBarColor(0.8, 0.2, 0.2, 1)  -- Red
+        -- Color and flash based on time remaining
+        if remaining <= 5 then
+            self.timerBar:SetStatusBarColor(0.8, 0.2, 0.2, 1)  -- Red
 
-        -- Flash effect at <5s
-        if not self.timerFlashing then
-            self.timerFlashing = true
-            self:StartTimerFlash()
+            -- Flash effect at <5s
+            if not self.timerFlashing then
+                self.timerFlashing = true
+                self:StartTimerFlash()
 
-            -- Flash the entire frame if the setting is enabled
-            if Loothing.Settings and Loothing.Settings:Get("frame.timeoutFlash") and self.frame then
-                UIFrameFlash(self.frame, 0.5, 0.5, remaining, false, 0, 0)
+                -- Flash the entire frame if the setting is enabled
+                if Loothing.Settings and Loothing.Settings:Get("frame.timeoutFlash") and self.frame then
+                    UIFrameFlash(self.frame, 0.5, 0.5, remaining, false, 0, 0)
+                end
             end
+        elseif remaining <= 10 then
+            self.timerBar:SetStatusBarColor(0.8, 0.6, 0.2, 1)  -- Yellow
+            self:StopTimerFlash()
+        else
+            self.timerBar:SetStatusBarColor(0.2, 0.6, 0.2, 1)  -- Green
+            self:StopTimerFlash()
         end
-    elseif remaining <= 10 then
-        self.timerBar:SetStatusBarColor(0.8, 0.6, 0.2, 1)  -- Yellow
-        self:StopTimerFlash()
-    else
-        self.timerBar:SetStatusBarColor(0.2, 0.6, 0.2, 1)  -- Green
-        self:StopTimerFlash()
     end
 
     -- Update text
-    self.timerText:SetText(string.format("%d", math.ceil(remaining)))
+    if self.timerText then
+        self.timerText:SetText(string.format("%d", math.ceil(remaining)))
+    end
 end
 
 --- Start flashing the timer bar when <5s remaining
@@ -944,15 +953,18 @@ function RollFrameMixin:SendResponse(note)
     -- Mark as submitted immediately (fire-and-forget; RESPONSE_POLL handles recovery)
     self:SetItemResponse(itemGUID, response, note, true)
 
+    -- Capture item reference before advancing — Close()/SwitchToNext clears self.item
+    local submittedItem = self.item
+
     -- Immediately advance to next unresponded item (optimistic UX)
     if self.item and self.item.guid == itemGUID then
         if not self:SwitchToNextUnrespondedItem() then
-            self:Close(true)
+            self:Close(true, "submitted")
         end
     end
 
-    self:TriggerEvent("OnResponseSubmitted", self.item, response, note, roll)
-    self:PrintResponseToChat(self.item, response, note)
+    self:TriggerEvent("OnResponseSubmitted", submittedItem, response, note, roll)
+    self:PrintResponseToChat(submittedItem, response, note)
     self:UpdateSessionButtons()
 end
 
@@ -1079,7 +1091,7 @@ function RollFrameMixin:SwitchToNextPendingItem()
     if not self:SwitchToNextItem(function(item)
         return item.state ~= Loothing.ItemState.AWARDED
     end) then
-        self:Close(false)
+        self:Close(false, "item_awarded")
     end
 end
 
@@ -1103,7 +1115,7 @@ end
 -- @param itemGUID string
 function RollFrameMixin:OnVotingEnded(itemGUID)
     if self.item and self.item.guid == itemGUID then
-        self:Close(false)
+        self:Close(false, "voting_ended")
     end
 end
 
@@ -1111,8 +1123,36 @@ end
     Visibility Control
 ----------------------------------------------------------------------]]
 
+function RollFrameMixin:ScheduleImmediateReshow(reason)
+    local tracker = Loothing.ResponseTracker
+    if not tracker or tracker:GetUnrespondedCount() == 0 then return end
+    if not Loothing.Session or not Loothing.Session:IsActive() then return end
+
+    Loothing:Debug("RollFrame hidden unexpectedly during active voting; re-showing immediately. Reason:", reason or "unknown")
+    if self.immediateReshowTimer then
+        self.immediateReshowTimer:Cancel()
+    end
+    self.immediateReshowTimer = C_Timer.NewTimer(0.5, function()
+        self.immediateReshowTimer = nil
+        if not Loothing.Session or not Loothing.Session:IsActive() then return end
+        if self.frame and self.frame:IsShown() then return end
+        tracker:CheckAndReshowFrame()
+    end)
+end
+
+function RollFrameMixin:HandleUnexpectedHide()
+    if self._suppressUnexpectedHide then return end
+    -- Combat minimize is intentional — SkinningMixin restores the frame on combat end
+    if InCombatLockdown() then return end
+    self:ScheduleImmediateReshow("frame_hidden")
+end
+
 --- Show the frame
 function RollFrameMixin:Show()
+    if self.immediateReshowTimer then
+        self.immediateReshowTimer:Cancel()
+        self.immediateReshowTimer = nil
+    end
     self:RestorePosition()
     self.frame:Show()
 end
@@ -1121,7 +1161,9 @@ end
 function RollFrameMixin:Hide()
     self:StopTimer()
     self:UnregisterRollCapture()
+    self._suppressUnexpectedHide = true
     self.frame:Hide()
+    self._suppressUnexpectedHide = false
 end
 
 --- Toggle visibility
@@ -1166,13 +1208,24 @@ end
 
 --- Close the frame
 -- @param submitted boolean - True if response was submitted
-function RollFrameMixin:Close(submitted)
+-- @param reason string|nil - Close reason for reshow policy
+function RollFrameMixin:Close(submitted, reason)
+    reason = reason or "unknown"
+
+    -- Cancel any pending immediate-reshow from a prior close/hide
+    if self.immediateReshowTimer then
+        self.immediateReshowTimer:Cancel()
+        self.immediateReshowTimer = nil
+    end
+
     -- Flush any buffered responses before closing
     self:FlushResponseBatch()
 
     self:StopTimer()
     self:SavePosition()
+    self._suppressUnexpectedHide = true
     self.frame:Hide()
+    self._suppressUnexpectedHide = false
 
     if not submitted then
         self:TriggerEvent("OnFrameClosed", self.item)
@@ -1185,6 +1238,7 @@ function RollFrameMixin:Close(submitted)
     self.items = {}
     self.currentItemIndex = 1
     self.pendingRollStarted = {}
+    self.pendingRollGUID = nil
     self.sessionButtonWarningShown = nil
 
     -- Hide multi-item session buttons so stale icons/labels cannot bleed into the next session
@@ -1195,11 +1249,25 @@ function RollFrameMixin:Close(submitted)
         self.sessionButtonFrame:Hide()
     end
 
-    -- If unresponded items exist, notify player and schedule gentle re-show
+    -- If unresponded items exist and session is still active, schedule re-show
     local tracker = Loothing.ResponseTracker
-    if tracker and tracker:GetUnrespondedCount() > 0 then
-        Loothing:Print("You have " .. tracker:GetUnrespondedCount() .. " items awaiting response. Type /lt roll to reopen.")
-        tracker:ScheduleReshow()
+    local sessionActive = Loothing.Session and Loothing.Session:IsActive()
+    if tracker and sessionActive and tracker:GetUnrespondedCount() > 0 then
+        local shouldImmediateReshow =
+            not submitted
+            and reason ~= "user"
+            and reason ~= "session_ended"
+            and reason ~= "voting_ended"
+            and reason ~= "timeout"
+            and reason ~= "item_awarded"
+
+        if shouldImmediateReshow then
+            self:ScheduleImmediateReshow(reason)
+        else
+            -- Only print the manual-reopen hint when we are NOT about to auto-reshow
+            Loothing:Print("You have " .. tracker:GetUnrespondedCount() .. " items awaiting response. Type /lt roll to reopen.")
+            tracker:ScheduleReshow()
+        end
     end
 end
 

@@ -177,12 +177,47 @@ function MLDBMixin:Init()
     self.preSessionSnapshot = nil  -- Settings snapshot for non-ML restore
     self.recentMLDBSenders = {}   -- Recent MLDB broadcasters for farewell message auth
 
+    -- Recover any preSessionSnapshot persisted across /reload or
+    -- disconnect.  If the user reloaded mid-session, this restores the
+    -- snapshot to memory so the eventual SESSION_END / MLDB:Clear can
+    -- correctly roll back the MLDB-applied overrides.  If the session
+    -- died across the reload, RecoverIfOrphaned() (called from PEW
+    -- after RestoreFromCache) will detect the orphan and restore
+    -- immediately.
+    if Loothing.Settings then
+        local persisted = Loothing.Settings:Get("__mldbPreSessionSnapshot", nil)
+        if type(persisted) == "table" and next(persisted) ~= nil then
+            self.preSessionSnapshot = persisted
+            Loothing:Debug("MLDB: recovered persisted preSessionSnapshot from SavedVariables")
+        end
+    end
+
     -- Register for communication events
     if Loothing.Comm then
         Loothing.Comm:RegisterCallback("OnMLDBBroadcast", function(_, data)
             self:OnMLDBBroadcast(data)
         end, self)
     end
+end
+
+--- Detect and restore an orphaned preSessionSnapshot.
+-- Called from PEW after RestoreFromCache.  If we have a persisted
+-- snapshot but neither an active restored session nor any group at all,
+-- the session that wrote the snapshot is dead — restore the user's
+-- pre-session settings immediately so they aren't silently stuck on the
+-- previous ML's configuration (e.g. sessionTriggerDungeon=true that
+-- overrode their original false).
+function MLDBMixin:RecoverIfOrphaned()
+    if not self.preSessionSnapshot then return end
+    if Loothing.Session and Loothing.Session.IsActive
+        and Loothing.Session:IsActive() then
+        return  -- session restored from cache; snapshot still needed
+    end
+    if IsInGroup() then
+        return  -- still grouped; ML may yet broadcast SESSION_END
+    end
+    Loothing:Debug("MLDB: orphaned preSessionSnapshot detected — restoring settings")
+    self:Clear()
 end
 
 --[[--------------------------------------------------------------------
@@ -278,8 +313,8 @@ function MLDBMixin:GatherSettings()
 
     -- AutoPass settings
     settings.autoPass = {
-        enabled       = Loothing.Settings:Get("autoPass.enabled") ~= false,
-        weapons       = Loothing.Settings:Get("autoPass.weapons") ~= false,
+        enabled       = Loothing.Settings:GetAutoPassEnabled(),
+        weapons       = Loothing.Settings:GetAutoPassWeapons(),
         boe           = Loothing.Settings:Get("autoPass.boe") == true,
         transmog      = Loothing.Settings:Get("autoPass.transmog") == true,
         trinkets      = Loothing.Settings:Get("autoPass.trinkets") == true,
@@ -741,6 +776,17 @@ function MLDBMixin:SnapshotSettings()
     snap.explicitMasterLooter = Loothing.explicitMasterLooter
 
     self.preSessionSnapshot = snap
+
+    -- Persist the snapshot to the active profile in SavedVariables so a
+    -- /reload or crash mid-session does not silently strand the user on
+    -- the ML's session-trigger / autoPass / response settings.  Init
+    -- recovers it on next load, and RecoverIfOrphaned restores when
+    -- appropriate.  Profile-scoped (not char-scoped): if the user
+    -- switches profiles between snapshot-write and recovery the snapshot
+    -- stays with the original profile, which is the correct semantic
+    -- since the snapshot describes that profile's pre-session state.
+    Loothing.Settings:Set("__mldbPreSessionSnapshot", snap)
+
     Loothing:Debug("Snapshot local settings before MLDB apply")
 end
 
@@ -758,6 +804,12 @@ function MLDBMixin:RestoreSettings()
     if not Loothing.Settings then
         return
     end
+
+    -- Drop the persisted copy too — the in-memory snapshot we're about
+    -- to apply IS the canonical pre-session state.  Done before the
+    -- restore writes so a re-entrant Settings:Set chain can't repopulate
+    -- the persisted slot from a half-applied state.
+    Loothing.Settings:Set("__mldbPreSessionSnapshot", nil)
 
     Loothing:Debug("Restoring local settings from pre-session snapshot")
 

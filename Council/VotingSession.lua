@@ -133,7 +133,7 @@ function VotingSessionMixin:Start(timeout)
     end
 
     -- Set timeout
-    self.timeout = timeout or Loothing.Settings:GetVotingTimeout() or Loothing.Timing.DEFAULT_VOTE_TIMEOUT
+    self.timeout = timeout or Loothing.Settings:GetVotingTimeout()
     self.startTime = GetTime()
     if self.timeout == Loothing.Timing.NO_TIMEOUT then
         self.endTime = math.huge
