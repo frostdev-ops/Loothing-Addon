@@ -491,31 +491,38 @@ local function ShouldSkipMLCheck()
     -- look unchanged.  Returning true here lets the cleanup block in
     -- PerformMLCheck call StopHandleLoot, which ends the session and
     -- broadcasts SESSION_END to the group.
-    if Loothing.Settings and Loothing.Settings:Get("ml.onlyUseInRaids", true)
-        and not Loothing.Settings:Get("ml.allowOutOfRaid", false) then
-        if Utils.IsInCompetingInstance() then
-            return true
-        end
+    -- Resolve ML scope once. The tri-state replaces the legacy
+    -- onlyUseInRaids + allowOutOfRaid pair.
+    --   "raids_only"          - raids only (default)
+    --   "raids_and_dungeons"  - raids + 5-mans
+    --   "anywhere"            - any group, including world groups
+    local mlScope = (Loothing.Settings and Loothing.Settings:Get("ml.scope", "raids_only")) or "raids_only"
+
+    -- Force-tear-down when the player transitions into an instance that
+    -- competes with the configured scope. This MUST run before the
+    -- active-ML bypass below — otherwise an active ML who walks into a
+    -- M+ keystone (with raids_only) or a battleground (with any scope)
+    -- never gets cleaned up.  openWorld is intentionally NOT competing
+    -- under any scope: brief flight master / repair trips between pulls
+    -- should not tear down a raid session.
+    if Utils.IsInCompetingInstanceForScope(mlScope) then
+        return true
     end
 
     -- Never skip when there is active ML state that needs re-evaluation.
-    -- The "only in raids" restriction gates initial ML *activation*; it
-    -- must not block handoffs or loss detection for an already-active ML
-    -- who is still in an eligible or neutral (openWorld) instance.
+    -- The scope restriction gates initial ML *activation*; it must not
+    -- block handoffs or loss detection for an already-active ML who is
+    -- still in an eligible or neutral (openWorld) instance.
     --   handleLoot / isMasterLooter: old ML must detect loss and stop
     --   explicitMasterLooter:        new ML must detect gain and start
     if Loothing.handleLoot or Loothing.isMasterLooter or Loothing.explicitMasterLooter then
         return false
     end
 
-    -- Fresh activation: only allow the ML usage prompt / detection to
-    -- run inside an eligible raid instance.
-    if Loothing.Settings and Loothing.Settings:Get("ml.onlyUseInRaids", true) then
-        if not Loothing.Settings:Get("ml.allowOutOfRaid", false) then
-            if not Utils.IsEligibleForLootHandling() then
-                return true
-            end
-        end
+    -- Fresh activation: gate the ML usage prompt / detection on whether
+    -- the current instance type is eligible for the configured scope.
+    if not Utils.IsEligibleForMLScope(mlScope) then
+        return true
     end
 
     return false
@@ -682,22 +689,19 @@ local function PerformMLCheck()
             return
         end
 
-        -- Instance type guard: if onlyUseInRaids (default true), skip ML
-        -- handling in dungeons, keystones, LFR, PvP, scenarios, and open
-        -- world. Without this check the popup would appear in keystones
-        -- and accepting it would cause every group member to auto-pass
-        -- all loot to the ML.
-        if Loothing.Settings and Loothing.Settings:Get("ml.onlyUseInRaids", true) then
-            if not Loothing.Settings:Get("ml.allowOutOfRaid", false) then
-                if not Utils.IsEligibleForLootHandling() then
-                    Loothing:Debug("ML detected but instance not eligible (onlyUseInRaids)")
-                    return
-                end
-            end
+        -- Instance type guard: skip ML handling in instances that the
+        -- configured scope doesn't allow. Without this check the popup
+        -- would appear in keystones (with raids_only) and accepting it
+        -- would cause every group member to auto-pass all loot to the
+        -- ML in an instance where loot council doesn't make sense.
+        local mlScope = Loothing.Settings and Loothing.Settings:Get("ml.scope", "raids_only") or "raids_only"
+        if not Utils.IsEligibleForMLScope(mlScope) then
+            Loothing:Debug("ML detected but instance not eligible for ml.scope =", mlScope)
+            return
         end
 
         -- Check guild-only restriction
-        local guildOnly = Loothing.Settings and Loothing.Settings:Get("settings.autoGroupLootGuildOnly", false) or false
+        local guildOnly = Loothing.Settings and Loothing.Settings:Get("session.groupLootGuildOnly", false) or false
         if guildOnly and not Loothing.isInGuildGroup then
             Loothing:Debug("ML detected but not in guild group (guild-only mode)")
             return
@@ -785,10 +789,9 @@ OnRaidEnter = function()
     if usageMode == "never" then return end
     if Utils.IsInPvPOrScenario() then return end
 
-    if Loothing.Settings and Loothing.Settings:Get("ml.onlyUseInRaids", true) then
-        if not (Loothing.Settings:Get("ml.allowOutOfRaid", false)) then
-            if not Utils.IsEligibleForLootHandling() then return end
-        end
+    local mlScope = Loothing.Settings and Loothing.Settings:Get("ml.scope", "raids_only") or "raids_only"
+    if not Utils.IsEligibleForMLScope(mlScope) then
+        return
     end
 
     if Loothing.handleLoot then return end
@@ -797,7 +800,7 @@ OnRaidEnter = function()
         return
     end
 
-    local guildOnly = Loothing.Settings and Loothing.Settings:Get("settings.autoGroupLootGuildOnly", false) or false
+    local guildOnly = Loothing.Settings and Loothing.Settings:Get("session.groupLootGuildOnly", false) or false
     if guildOnly and not Utils.IsGuildGroup() then return end
 
     GetPopups():Hide("LOOTHING_ML_USAGE_PROMPT")
@@ -1047,7 +1050,7 @@ local function RegisterEvents()
     -- Personal loot tracking (logs items received outside of council sessions)
     Events.Registry:RegisterEventCallback("CHAT_MSG_LOOT", function(_, msg, _, _, _, playerName2)
         -- Only proceed if setting is enabled
-        if not (Loothing.Settings and Loothing.Settings:Get("historySettings.savePersonalLoot", false)) then
+        if not (Loothing.Settings and Loothing.Settings:Get("history.savePersonalLoot", false)) then
             return
         end
 
@@ -1173,7 +1176,7 @@ local function RegisterEvents()
     -- Trade tab takes priority over web export when items are pending.
     if Loothing.Session then
         Loothing.Session:RegisterCallback("OnSessionEnded", function()
-            if Loothing.Settings:Get("historySettings.autoExportWeb")
+            if Loothing.Settings:Get("history.autoExportWeb")
                 and Loothing.History
                 and Loothing.History:GetFilteredCount() > 0
                 and Loothing.MainFrame then
@@ -1387,8 +1390,8 @@ local function RegisterSlashCommands()
         ScheduleMLCheck(0.5)  -- Fast check for explicit handoff
         printLine(string.format(L["ML_ASSIGNED"], argText))
 
-        -- Warn if assigning ML outside a raid with raids-only setting active
-        if Loothing.Settings:Get("ml.onlyUseInRaids", true) and not Utils.IsInRaidInstance() then
+        -- Warn if assigning ML outside a raid with raids-only scope active
+        if Loothing.Settings:Get("ml.scope", "raids_only") == "raids_only" and not Utils.IsInRaidInstance() then
             printLine(L["ML_ASSIGNED_OUTSIDE_RAID_WARNING"])
         end
     end
@@ -2175,6 +2178,15 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
 
             -- Register slash commands
             RegisterSlashCommands()
+
+            -- Register Loothing's Loolib ConfigDialog theme so the
+            -- /lt config window matches the rest of the addon's UI.
+            -- Hooks SkinningMixin:RefreshTheme so it stays in sync when
+            -- the user switches accent / skin.
+            if ns.LoothingDialogTheme then
+                ns.LoothingDialogTheme:Register()
+                ns.LoothingDialogTheme:HookSkinningRefresh()
+            end
 
             if Loothing.Diagnostics then
                 Loothing.Diagnostics:MarkRuntimeReady()

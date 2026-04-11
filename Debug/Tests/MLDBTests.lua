@@ -84,14 +84,18 @@ local function RunMLDBTests()
     ----------------------------------------------------------------------]]
     printGroup("Basic Compression Round-Trip")
 
+    -- Note: anonymousVoting / hideVotes / observe were collapsed into
+    -- voting.privacy in v2.0.7, but their wire-format codes are kept
+    -- so v2.0.6 receivers can still parse a v2.0.7 broadcast (we send
+    -- both forms — see MLDB:GatherSettings).  This test exercises
+    -- BOTH the legacy fields and the new `privacy` field.
     local input = {
         selfVote = true,
         multiVote = false,
-        anonymousVoting = false,
-        hideVotes = true,
+        privacy = "hide_counts",       -- v2.0.7 canonical
+        anonymousVoting = false,        -- v2.0.6 compat
+        hideVotes = true,               -- v2.0.6 compat
         votingTimeout = 45,
-        observe = true,
-        numButtons = 5,
         mlSeesVotes = false,
         requireNotes = true,
         autoAddRolls = true,
@@ -105,10 +109,9 @@ local function RunMLDBTests()
     assertNil(compressed.selfVote, "selfVote key removed after compression")
     assertEqual(compressed.sv, true, "sv preserves value true")
     assertEqual(compressed.mv, false, "mv preserves value false")
-    assertEqual(compressed.hv, true, "hv preserves value true")
+    assertEqual(compressed.pri, "hide_counts", "pri (privacy) preserves value")
+    assertEqual(compressed.hv, true, "hv preserves value true (v2.0.6 compat)")
     assertEqual(compressed.vt, 45, "vt preserves number 45")
-    assertEqual(compressed.ob, true, "ob preserves value true")
-    assertEqual(compressed.nb, 5, "nb preserves number 5")
 
     -- Decompress
     local decompressed = mldb:DecompressFromTransmit(compressed)
@@ -117,11 +120,10 @@ local function RunMLDBTests()
     -- Verify round-trip
     assertEqual(decompressed.selfVote, true, "Round-trip: selfVote == true")
     assertEqual(decompressed.multiVote, false, "Round-trip: multiVote == false")
-    assertEqual(decompressed.anonymousVoting, false, "Round-trip: anonymousVoting == false")
-    assertEqual(decompressed.hideVotes, true, "Round-trip: hideVotes == true")
+    assertEqual(decompressed.privacy, "hide_counts", "Round-trip: privacy preserved")
+    assertEqual(decompressed.anonymousVoting, false, "Round-trip: anonymousVoting (legacy compat)")
+    assertEqual(decompressed.hideVotes, true, "Round-trip: hideVotes (legacy compat)")
     assertEqual(decompressed.votingTimeout, 45, "Round-trip: votingTimeout == 45")
-    assertEqual(decompressed.observe, true, "Round-trip: observe == true")
-    assertEqual(decompressed.numButtons, 5, "Round-trip: numButtons == 5")
     assertEqual(decompressed.mlSeesVotes, false, "Round-trip: mlSeesVotes == false")
     assertEqual(decompressed.requireNotes, true, "Round-trip: requireNotes == true")
     assertEqual(decompressed.autoAddRolls, true, "Round-trip: autoAddRolls == true")

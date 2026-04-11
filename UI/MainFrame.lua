@@ -482,7 +482,7 @@ end
 function MainFrameMixin:LoadPosition()
     if not Loothing.Settings then return end
 
-    local pos = Loothing.Settings:Get("settings.mainFramePosition")
+    local pos = Loothing.Settings:Get("frame.position")
     if pos then
         self.frame:ClearAllPoints()
         self.frame:SetPoint(pos.point or "CENTER", UIParent, pos.relativePoint or "CENTER", pos.x or 0, pos.y or 0)
@@ -502,7 +502,7 @@ function MainFrameMixin:SavePosition()
     local point, _, relativePoint, x, y = self.frame:GetPoint()
     local width, height = self.frame:GetSize()
 
-    Loothing.Settings:Set("settings.mainFramePosition", {
+    Loothing.Settings:Set("frame.position", {
         point = point,
         relativePoint = relativePoint,
         x = x,
@@ -516,7 +516,7 @@ end
 function MainFrameMixin:UpdateScale()
     if not Loothing.Settings then return end
 
-    local scale = Loothing.Settings:Get("settings.uiScale") or 1.0
+    local scale = Loothing.Settings:Get("frame.uiScale") or 1.0
     self.frame:SetScale(scale)
 end
 

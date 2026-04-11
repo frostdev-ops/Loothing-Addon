@@ -8,7 +8,7 @@ local _, ns = ...
 local Loothing = ns.Addon
 
 -- Addon info
-Loothing.VERSION = "2.0.6"
+Loothing.VERSION = "2.0.7"
 Loothing.PROTOCOL_VERSION = 4
 Loothing.ADDON_PREFIX = "LOOTHING"
 
@@ -261,44 +261,47 @@ Loothing.MsgType = {
 ----------------------------------------------------------------------]]
 
 Loothing.DefaultSettings = {
-    version = 1,
+    -- Schema version. Bumped when DefaultSettings shape changes; the
+    -- Migrations module reads this to decide which migration steps to
+    -- run on existing user profiles.
+    --   v1 = pre-2.0.7 shape
+    --   v2 = 2.0.7 settings cleanup (settings.* namespace removed,
+    --        ml.scope/voting.privacy/history.share collapsed merges,
+    --        legacy announcement / buttonSets keys deleted)
+    schemaVersion = 2,
 
     council = {
         members = {},
         autoIncludeOfficers = true,
         autoIncludeRaidLeader = true,
+        minRank = 0,                -- Minimum guild rank index allowed on council (0 = no restriction)
     },
 
-    settings = {
-        votingMode = Loothing.VotingMode.SIMPLE,
-        votingTimeout = 0,  -- NO_TIMEOUT: ML must manually end voting (0 = no auto-close)
-        sessionTriggerMode = "prompt",   -- Legacy (migration source; not used at runtime)
-        sessionTriggerAction = "prompt",
-        sessionTriggerTiming = "encounterEnd",
-        sessionTriggerRaid = true,
-        sessionTriggerDungeon = false,
-        sessionTriggerOpenWorld = false,
+    -- Session triggering & voting policy. These are broadcast by the
+    -- Master Looter via MLDB and shared with all clients during a session.
+    session = {
+        triggerAction = "prompt",        -- "manual" | "prompt" | "auto"
+        triggerTiming = "encounterEnd",  -- "encounterEnd" | "afterLoot"
+        scope = {
+            raid = true,                 -- Auto-trigger on raid encounters
+            dungeon = false,             -- Auto-trigger on dungeon encounters
+            openWorld = false,           -- Auto-trigger on world group encounters
+        },
         groupLootMode = "active",        -- "active" = Loothing auto-rolls, "passive" = Blizzard rolls
-        showMinimapButton = true,
-        uiScale = 1.0,
-        mainFramePosition = nil,
-        autoTrade = true,
-        -- appendRealmNames removed (never read at runtime)
-        -- printResponses removed (superseded by rollFrame.printResponseToChat)
-        autoGroupLootGuildOnly = false, -- Only use in guild groups
+        groupLootGuildOnly = false,      -- Only use group-loot integration in guild groups
     },
 
     voting = {
+        mode = Loothing.VotingMode.SIMPLE,  -- "SIMPLE" | "RANKED_CHOICE"
+        timeout = 0,                -- 0 = no auto-close, >0 = seconds
         selfVote = false,           -- Allow council members to vote for themselves
         multiVote = false,          -- Allow voting for multiple candidates per item
-        anonymousVoting = false,    -- Hide who voted for whom until award
-        hideVotes = false,          -- Hide vote counts until all votes are in
-        observe = false,            -- Show voting frame but don't allow voting
+        privacy = "open",           -- "open" | "hide_counts" | "anonymous"
+        mlSeesVotes = false,        -- ML can see votes even when privacy ~= "open"
         autoAddRolls = true,        -- Automatically add /roll results to candidates
         requireNotes = false,       -- Require voters to add a note with their vote
-        mlSeesVotes = false,        -- ML sees votes even when anonymous
-        maxRanks = 0,               -- 0 = unlimited (rank all buttons)
-        minRanks = 1,               -- Minimum rankings required to submit
+        maxRanks = 0,               -- RCV: 0 = unlimited (rank all buttons)
+        minRanks = 1,               -- RCV: minimum rankings required to submit
         maxRevotes = 2,             -- Maximum re-votes per item
         allowResponseChange = false, -- Allow players to change their response after submission
     },
@@ -337,13 +340,6 @@ Loothing.DefaultSettings = {
         sessionStartText = "Loot council session started for {session}",
         sessionEndChannel = "RAID",
         sessionEndText = "Loot council session ended",
-
-        -- Legacy fields for backward compatibility (used if awardLines not present)
-        awardChannel = "RAID",
-        awardChannelSecondary = "NONE",
-        awardText = "{item} awarded to {winner} for {reason}",
-        itemChannel = "RAID",
-        itemText = "Now accepting rolls for {item}",
     },
 
     autoPass = {
@@ -373,7 +369,6 @@ Loothing.DefaultSettings = {
         lowerThreshold = 2,      -- Uncommon
         upperThreshold = 4,      -- Epic (items between lower and upper will be auto-awarded)
         awardTo = "",            -- Player name or "disenchanter"
-        reason = "Auto Award",   -- Legacy free-text reason (migration source; not actively read)
         reasonId = nil,          -- Structured reason ID (references awardReasons.reasons[].id)
         includeBoE = false,      -- Include Bind on Equip items
     },
@@ -426,70 +421,47 @@ Loothing.DefaultSettings = {
     },
 
     frame = {
-        skin = "Default",          -- Base UI theme
-        accent = "Amber",          -- Accent palette
-        density = "Comfortable",   -- Layout density
-        autoOpen = false,           -- Auto open frames when loot available
-        autoClose = false,          -- Auto close after session ends
-        minimizeInCombat = false,   -- Hide frames during combat
-        showSpecIcon = false,       -- Show spec icons instead of class
-        closeWithEscape = false,    -- Allow ESC to close frames
-        timeoutFlash = false,       -- Flash on voting timeout
+        skin = "Default",                -- Base UI theme
+        accent = "Amber",                -- Accent palette
+        density = "Comfortable",         -- Layout density
+        autoOpen = false,                -- Auto open frames when loot available
+        autoClose = false,               -- Auto close after session ends
+        minimizeInCombat = false,        -- Hide frames during combat
+        showSpecIcon = false,            -- Show spec icons instead of class
+        closeWithEscape = false,         -- Allow ESC to close frames
+        timeoutFlash = false,            -- Flash on voting timeout
         blockTradesDuringVoting = false, -- Block trades while voting
         chatFrameName = "ChatFrame1",    -- Output chat frame
-        autoReshow = true,          -- Gently re-show frame after 30s if unresponded items exist
+        autoReshow = true,               -- Gently re-show frame after 30s if unresponded items exist
+        uiScale = 1.0,                   -- Global UI scale (was settings.uiScale)
+        position = nil,                  -- Saved main frame position { point, x, y } (was settings.mainFramePosition)
+        showMinimapButton = true,        -- Show the minimap button (was settings.showMinimapButton / ui.showMinimapButton)
+        minimapButtonAngle = nil,        -- Saved minimap button angle (was ui.minimapButtonAngle)
     },
 
     ml = {
-        usageMode = "ask_gl",       -- "never", "gl" (group loot), "ask_gl"
-        onlyUseInRaids = true,      -- Disable in dungeons
-        allowOutOfRaid = false,     -- Allow when out of instance
-        skipSessionFrame = true,    -- Auto-start without session frame
-        sortItems = false,          -- Auto-sort items
-        autoAddBoEs = false,        -- Include BoE in auto-add
-        -- autoAddPets removed (never read at runtime)
-        printCompletedTrades = false, -- Print trade confirmations
-        rejectTrade = false,        -- Reject invalid trades
-        awardLater = false,         -- Allow awarding to ML for later
+        usageMode = "ask_gl",            -- "never", "gl" (group loot), "ask_gl"
+        scope = "raids_only",            -- "raids_only" | "raids_and_dungeons" | "anywhere"
+                                         -- Replaces onlyUseInRaids + allowOutOfRaid.
+        skipSessionFrame = true,         -- Auto-start without session frame
+        sortItems = false,               -- Auto-sort items
+        autoAddBoEs = false,             -- Include BoE in auto-add
+        printCompletedTrades = false,    -- Print trade confirmations
+        rejectTrade = false,             -- Reject invalid trades
+        awardLater = false,              -- Allow awarding to ML for later
+        autoTrade = true,                -- Auto-initiate trades after award (was settings.autoTrade)
     },
 
-    historySettings = {
+    -- History settings (profile-scoped). The actual history entries
+    -- live in the global scope under the SavedVariables `history` key
+    -- so they survive profile switches; that table is initialized
+    -- lazily by Settings:GetHistoryRef().
+    history = {
         enabled = true,             -- Enable loot history
-        sendHistory = false,        -- Send to group members
-        sendToGuild = false,        -- Send to guild instead
+        share = "off",              -- "off" | "group" | "guild"  (replaces sendHistory + sendToGuild)
         savePersonalLoot = false,   -- Log personal loot items
         maxEntries = 500,           -- Hard cap for the shared history table
         autoExportWeb = false,      -- Show Web export dialog when session ends
-    },
-
-    history = {},  -- Actual history data (array of entries)
-
-    buttonSets = {
-        activeSet = 1,              -- Currently active button set
-        sets = {
-            [1] = {
-                name = "Default",
-                buttons = {
-                    { id = 1, text = "Need", color = { 0.0, 1.0, 0.0, 1.0 }, sort = 1 },
-                    { id = 2, text = "Greed", color = { 1.0, 1.0, 0.0, 1.0 }, sort = 2 },
-                    { id = 3, text = "Offspec", color = { 1.0, 0.5, 0.0, 1.0 }, sort = 3 },
-                    { id = 4, text = "Transmog", color = { 1.0, 0.0, 1.0, 1.0 }, sort = 4 },
-                    { id = 5, text = "Pass", color = { 0.5, 0.5, 0.5, 1.0 }, sort = 5 },
-                },
-                whisperKey = "!need",  -- Key players whisper to respond
-            },
-            [2] = {
-                name = "Gear Priority",
-                buttons = {
-                    { id = 1, text = "BIS", color = { 1.0, 0.0, 0.0, 1.0 }, sort = 1 },
-                    { id = 2, text = "Major Upgrade", color = { 0.0, 1.0, 0.0, 1.0 }, sort = 2 },
-                    { id = 3, text = "Minor Upgrade", color = { 1.0, 1.0, 0.0, 1.0 }, sort = 3 },
-                    { id = 4, text = "Sidegrade", color = { 1.0, 0.5, 0.0, 1.0 }, sort = 4 },
-                    { id = 5, text = "Pass", color = { 0.5, 0.5, 0.5, 1.0 }, sort = 5 },
-                },
-                whisperKey = "!bis",
-            },
-        },
     },
 
     -- Unified response sets (replaces separate responses + buttonSets)
@@ -577,7 +549,8 @@ Loothing.DefaultSettings = {
         mode = "ML_CONFIRM",       -- "HIGHEST_VOTES", "ML_CONFIRM", "AUTO_HIGHEST_CONFIRM"
         tieBreaker = "ROLL",       -- "ROLL", "ML_CHOICE", "REVOTE"
         autoAwardOnUnanimous = false,
-        requireConfirmation = true,
+        -- requireConfirmation removed: redundant with `mode`. ML_CONFIRM
+        -- and AUTO_HIGHEST_CONFIRM imply confirmation; HIGHEST_VOTES does not.
     },
 
     observers = {

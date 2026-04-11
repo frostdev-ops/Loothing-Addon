@@ -110,12 +110,19 @@ function Migration:RegisterMigrations()
             end
         end
 
-        -- Ensure new settings fields exist
+        -- v2.0.7: the `settings.*` namespace was deleted by SchemaMigration
+        -- before this older version-string migration runs.  The
+        -- autoGroupLootGuildOnly bootstrap below is now a no-op for any
+        -- profile that survived SchemaMigration.  We keep the block for
+        -- defensive purposes in case some legacy profile somehow still
+        -- carries `settings`, and we mirror the canonical session.* key.
         if profileDB.settings then
-            -- appendRealmNames and printResponses removed in 1.3.2 (dead settings)
             if profileDB.settings.autoGroupLootGuildOnly == nil then
                 profileDB.settings.autoGroupLootGuildOnly = false
             end
+        end
+        if profileDB.session and profileDB.session.groupLootGuildOnly == nil then
+            profileDB.session.groupLootGuildOnly = false
         end
 
         -- Ensure new autoPass fields exist

@@ -571,10 +571,18 @@ L["CONFIG_ML_USAGE_MODE_DESC"] = "Controls when Loothing activates. Never: disab
 L["CONFIG_ML_USAGE_NEVER"] = "Never"
 L["CONFIG_ML_USAGE_GL"] = "Group Loot"
 L["CONFIG_ML_USAGE_ASK_GL"] = "Ask on Group Loot"
+-- v2.0.7: Replaced with the unified ml.scope select below.
 L["CONFIG_ML_RAIDS_ONLY"] = "Raids Only"
 L["CONFIG_ML_RAIDS_ONLY_DESC"] = "Only activate loot council features in raid groups. Disables ML functionality in dungeons and parties."
 L["CONFIG_ML_ALLOW_OUTSIDE"] = "Allow Outside Raids"
 L["CONFIG_ML_ALLOW_OUTSIDE_DESC"] = "Allow loot council sessions to start even when not inside a raid instance"
+
+-- v2.0.7 ml.scope select
+L["CONFIG_ML_SCOPE"] = "Use Loothing in"
+L["CONFIG_ML_SCOPE_DESC"] = "Which group instance types Loothing should activate the Master Looter prompt in. PvP, arenas, scenarios, and LFR are always blocked regardless of this setting."
+L["CONFIG_ML_SCOPE_RAIDS_ONLY"] = "Raids only"
+L["CONFIG_ML_SCOPE_RAIDS_DUNGEONS"] = "Raids and dungeons"
+L["CONFIG_ML_SCOPE_ANYWHERE"] = "Anywhere"
 L["CONFIG_ML_SKIP_SESSION"] = "Skip Session Frame"
 L["CONFIG_ML_SKIP_SESSION_DESC"] = "Skip the session setup frame and start sessions immediately with all detected loot items"
 L["CONFIG_ML_SORT_ITEMS"] = "Sort Items"
@@ -590,9 +598,24 @@ L["CONFIG_ML_AWARD_LATER_DESC"] = "Keep awarded items visible in the session fra
 
 -- History Options
 L["CONFIG_HISTORY_ENABLED_DESC"] = "Record all loot council awards in a persistent history log that you can browse and export"
+-- v2.0.7: replaced with unified history.share select below.
 L["CONFIG_HISTORY_SEND_DESC"] = "Broadcast your loot history to other Loothing users in the raid so they can sync records"
 L["CONFIG_HISTORY_SEND_GUILD"] = "Send to Guild"
 L["CONFIG_HISTORY_SEND_GUILD_DESC"] = "Also send loot history entries over the guild channel so members not in the raid can sync"
+
+-- v2.0.7 history.share select
+L["CONFIG_HISTORY_SHARE"] = "Share history with"
+L["CONFIG_HISTORY_SHARE_DESC"] = "Where to broadcast new loot history entries when a session ends. Local-only keeps everything on your client."
+L["CONFIG_HISTORY_SHARE_OFF"] = "Nobody (local only)"
+L["CONFIG_HISTORY_SHARE_GROUP"] = "Current group"
+L["CONFIG_HISTORY_SHARE_GUILD"] = "Guild"
+
+-- v2.0.7 voting.privacy select
+L["CONFIG_VOTING_PRIVACY"] = "Vote privacy"
+L["CONFIG_VOTING_PRIVACY_DESC"] = "Whether voters and vote counts are visible during voting. Open: everyone sees everything. Hide counts: counts hidden until session end. Anonymous voters: counts visible but voter identities hidden."
+L["CONFIG_VOTING_PRIVACY_OPEN"] = "Open (everyone sees votes and voters)"
+L["CONFIG_VOTING_PRIVACY_HIDE"] = "Hide counts until session end"
+L["CONFIG_VOTING_PRIVACY_ANONYMOUS"] = "Anonymous voters"
 L["CONFIG_HISTORY_SAVE_PL"] = "Save Personal Loot"
 L["CONFIG_HISTORY_SAVE_PL_DESC"] = "Record items received via personal loot (not council-awarded) in your history log"
 

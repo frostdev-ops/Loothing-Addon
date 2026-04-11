@@ -12,117 +12,86 @@ ns.SettingsMixin = SettingsMixin
 
 -- Voting mode and timing
 function SettingsMixin:GetVotingMode()
-    return self:Get("settings.votingMode", Loothing.VotingMode.SIMPLE)
+    return self:Get("voting.mode", Loothing.VotingMode.SIMPLE)
 end
 
 function SettingsMixin:SetVotingMode(mode)
-    self:Set("settings.votingMode", mode)
+    self:Set("voting.mode", mode)
 end
 
 function SettingsMixin:GetVotingTimeout()
-    return self:Get("settings.votingTimeout", Loothing.Timing.NO_TIMEOUT)
+    return self:Get("voting.timeout", Loothing.Timing.NO_TIMEOUT)
 end
 
 function SettingsMixin:SetVotingTimeout(seconds)
     if seconds == Loothing.Timing.NO_TIMEOUT then
-        self:Set("settings.votingTimeout", 0)
+        self:Set("voting.timeout", 0)
     else
         seconds = math.max(Loothing.Timing.MIN_VOTE_TIMEOUT, math.min(Loothing.Timing.MAX_VOTE_TIMEOUT, seconds))
-        self:Set("settings.votingTimeout", seconds)
+        self:Set("voting.timeout", seconds)
     end
 end
 
 --[[--------------------------------------------------------------------
-    Session Trigger Policy (split model — source of truth)
+    Session Trigger Policy
+
+    The split (action / timing / scope) is the canonical model. The
+    pre-2.0.7 lazy migration of `settings.sessionTriggerMode` was moved
+    into Loothing/Core/Migrations.lua, which runs once at Settings:Init.
 ----------------------------------------------------------------------]]
-
---- Lazy migration: if the new split keys are absent, derive them from
---- the legacy sessionTriggerMode field.  Called once per accessor family.
-function SettingsMixin:MigrateSessionTriggerIfNeeded()
-    -- If new keys already exist, nothing to do (handles fresh installs and
-    -- already-migrated profiles; re-checked every call so profile switches
-    -- are safe without an instance flag).
-    if self:Get("settings.sessionTriggerAction") then return end
-
-    local legacy = self:Get("settings.sessionTriggerMode")
-    if not legacy then return end
-
-    local actionMap = {
-        manual     = "manual",
-        auto       = "auto",
-        prompt     = "prompt",
-        afterRolls = "prompt",
-    }
-    local timingMap = {
-        manual     = "encounterEnd",
-        auto       = "encounterEnd",
-        prompt     = "encounterEnd",
-        afterRolls = "afterLoot",
-    }
-    self:Set("settings.sessionTriggerAction",    actionMap[legacy] or "prompt")
-    self:Set("settings.sessionTriggerTiming",    timingMap[legacy] or "encounterEnd")
-    self:Set("settings.sessionTriggerRaid",      true)
-    self:Set("settings.sessionTriggerDungeon",   false)
-    self:Set("settings.sessionTriggerOpenWorld",  false)
-end
 
 -- Action: manual | prompt | auto
 function SettingsMixin:GetSessionTriggerAction()
-    self:MigrateSessionTriggerIfNeeded()
-    return self:Get("settings.sessionTriggerAction", "prompt")
+    return self:Get("session.triggerAction", "prompt")
 end
 
 function SettingsMixin:SetSessionTriggerAction(action)
     local valid = { manual = true, prompt = true, auto = true }
     if valid[action] then
-        self:Set("settings.sessionTriggerAction", action)
+        self:Set("session.triggerAction", action)
     end
 end
 
 -- Timing: encounterEnd | afterLoot
 function SettingsMixin:GetSessionTriggerTiming()
-    self:MigrateSessionTriggerIfNeeded()
-    return self:Get("settings.sessionTriggerTiming", "encounterEnd")
+    return self:Get("session.triggerTiming", "encounterEnd")
 end
 
 function SettingsMixin:SetSessionTriggerTiming(timing)
     local valid = { encounterEnd = true, afterLoot = true }
     if valid[timing] then
-        self:Set("settings.sessionTriggerTiming", timing)
+        self:Set("session.triggerTiming", timing)
     end
 end
 
 -- Scope toggles
 function SettingsMixin:GetSessionTriggerRaid()
-    self:MigrateSessionTriggerIfNeeded()
-    return self:Get("settings.sessionTriggerRaid", true)
+    return self:Get("session.scope.raid", true)
 end
 
 function SettingsMixin:SetSessionTriggerRaid(v)
-    self:Set("settings.sessionTriggerRaid", v == true)
+    self:Set("session.scope.raid", v == true)
 end
 
 function SettingsMixin:GetSessionTriggerDungeon()
-    self:MigrateSessionTriggerIfNeeded()
-    return self:Get("settings.sessionTriggerDungeon", false)
+    return self:Get("session.scope.dungeon", false)
 end
 
 function SettingsMixin:SetSessionTriggerDungeon(v)
-    self:Set("settings.sessionTriggerDungeon", v == true)
+    self:Set("session.scope.dungeon", v == true)
 end
 
 function SettingsMixin:GetSessionTriggerOpenWorld()
-    self:MigrateSessionTriggerIfNeeded()
-    return self:Get("settings.sessionTriggerOpenWorld", false)
+    return self:Get("session.scope.openWorld", false)
 end
 
 function SettingsMixin:SetSessionTriggerOpenWorld(v)
-    self:Set("settings.sessionTriggerOpenWorld", v == true)
+    self:Set("session.scope.openWorld", v == true)
 end
 
 -- Group loot handling during active Loothing sessions
 function SettingsMixin:GetGroupLootMode()
-    local mode = self:Get("settings.groupLootMode", "active")
+    local mode = self:Get("session.groupLootMode", "active")
     if mode ~= "active" and mode ~= "passive" then
         return "active"
     end
@@ -131,43 +100,12 @@ end
 
 function SettingsMixin:SetGroupLootMode(mode)
     if mode == "active" or mode == "passive" then
-        self:Set("settings.groupLootMode", mode)
+        self:Set("session.groupLootMode", mode)
     end
 end
 
 function SettingsMixin:IsPassiveGroupLootMode()
     return self:GetGroupLootMode() == "passive"
-end
-
---[[--------------------------------------------------------------------
-    Legacy Compatibility Shims
-----------------------------------------------------------------------]]
-
---- Legacy getter — maps split fields back to old enum.
-function SettingsMixin:GetSessionTriggerMode()
-    local action = self:GetSessionTriggerAction()
-    local timing = self:GetSessionTriggerTiming()
-    if action == "manual" then return "manual" end
-    if action == "auto"   then return "auto"   end
-    -- action == "prompt"
-    if timing == "afterLoot" then return "afterRolls" end
-    return "prompt"
-end
-
---- Legacy setter — maps old enum to split fields.
-function SettingsMixin:SetSessionTriggerMode(mode)
-    local map = {
-        manual     = { action = "manual", timing = "encounterEnd" },
-        auto       = { action = "auto",   timing = "encounterEnd" },
-        prompt     = { action = "prompt",  timing = "encounterEnd" },
-        afterRolls = { action = "prompt",  timing = "afterLoot" },
-    }
-    local entry = map[mode]
-    if entry then
-        self:Set("settings.sessionTriggerAction", entry.action)
-        self:Set("settings.sessionTriggerTiming", entry.timing)
-        self:Set("settings.sessionTriggerMode", mode) -- keep legacy field in sync
-    end
 end
 
 function SettingsMixin:GetAutoStartSession()
@@ -281,4 +219,59 @@ end
 
 function SettingsMixin:SetMlSeesVotes(v)
     self:Set("voting.mlSeesVotes", v == true)
+end
+
+--[[--------------------------------------------------------------------
+    Voting privacy (collapsed merge of hideVotes + anonymousVoting)
+
+    privacy = "open"        -- everyone sees votes + voters
+            | "hide_counts" -- counts hidden until session end
+            | "anonymous"   -- counts visible but voters anonymized
+
+    The legacy GetAnonymousVoting / GetHideVotes accessors below remain
+    as derived projections so older read-sites keep working without an
+    audit.
+----------------------------------------------------------------------]]
+
+function SettingsMixin:GetVotingPrivacy()
+    local p = self:Get("voting.privacy", "open")
+    if p ~= "open" and p ~= "hide_counts" and p ~= "anonymous" then
+        return "open"
+    end
+    return p
+end
+
+function SettingsMixin:SetVotingPrivacy(p)
+    if p == "open" or p == "hide_counts" or p == "anonymous" then
+        self:Set("voting.privacy", p)
+    end
+end
+
+--- Derived: voters anonymized?
+function SettingsMixin:GetAnonymousVoting()
+    return self:GetVotingPrivacy() == "anonymous"
+end
+
+--- Derived: vote counts hidden until session end?
+function SettingsMixin:GetHideVotes()
+    return self:GetVotingPrivacy() == "hide_counts"
+end
+
+--- Convenience setter mapping the old boolean toggle onto the merged
+--- privacy field. Setting either flag to true mirrors the pre-2.0.7
+--- semantics; setting to false reverts to "open".
+function SettingsMixin:SetAnonymousVoting(enabled)
+    if enabled then
+        self:SetVotingPrivacy("anonymous")
+    else
+        self:SetVotingPrivacy("open")
+    end
+end
+
+function SettingsMixin:SetHideVotes(enabled)
+    if enabled then
+        self:SetVotingPrivacy("hide_counts")
+    else
+        self:SetVotingPrivacy("open")
+    end
 end

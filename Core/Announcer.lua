@@ -141,28 +141,16 @@ function AnnouncerMixin:AnnounceAward(itemLink, winner, reason, extraParams)
         ml = extraParams.ml,
     })
 
-    -- Get award lines configuration
+    -- Multi-line award announcements. The legacy single-line fallback
+    -- (awardChannel / awardChannelSecondary / awardText) was removed
+    -- in v2.0.7; awardLines is the only model.
     local awardLines = Loothing.Settings:GetAwardLines()
-
-    if awardLines and #awardLines > 0 then
-        -- New multi-line system
+    if awardLines then
         for _, line in ipairs(awardLines) do
             if line and line.enabled and line.channel ~= "NONE" and line.text and line.text ~= "" then
                 local message = self:FormatText(line.text, replacements)
                 self:SendToChannel(message, line.channel)
             end
-        end
-    else
-        -- Legacy fallback
-        local template = Loothing.Settings:GetAwardText()
-        local message = self:FormatText(template, replacements)
-
-        local primaryChannel = Loothing.Settings:GetAwardChannel()
-        self:SendToChannel(message, primaryChannel)
-
-        local secondaryChannel = Loothing.Settings:GetAwardChannelSecondary()
-        if secondaryChannel ~= "NONE" and secondaryChannel ~= primaryChannel then
-            self:SendToChannel(message, secondaryChannel)
         end
     end
 end
@@ -186,23 +174,17 @@ function AnnouncerMixin:AnnounceItem(itemLink, extraParams)
         ml = extraParams.ml,
     })
 
-    -- Get item lines configuration
+    -- Multi-line item announcements. The legacy single-line fallback
+    -- (itemChannel / itemText) was removed in v2.0.7; itemLines is the
+    -- only model.
     local itemLines = Loothing.Settings:GetItemLines()
-
-    if itemLines and #itemLines > 0 then
-        -- New multi-line system
+    if itemLines then
         for _, line in ipairs(itemLines) do
             if line and line.enabled and line.channel ~= "NONE" and line.text and line.text ~= "" then
                 local message = self:FormatText(line.text, replacements)
                 self:SendToChannel(message, line.channel)
             end
         end
-    else
-        -- Legacy fallback
-        local template = Loothing.Settings:GetItemText()
-        local message = self:FormatText(template, replacements)
-        local channel = Loothing.Settings:GetItemChannel()
-        self:SendToChannel(message, channel)
     end
 end
 

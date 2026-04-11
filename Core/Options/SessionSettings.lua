@@ -248,27 +248,24 @@ local function GetSessionSettingsOptions()
                             BroadcastMLDBIfNeeded()
                         end,
                     },
-                    anonymousVoting = {
-                        type = "toggle",
-                        name = L["ANONYMOUS_VOTING"],
-                        desc = L["ANONYMOUS_VOTING_DESC"],
+                    -- anonymousVoting + hideVotes collapsed into a single
+                    -- tri-state privacy select in v2.0.7. mlSeesVotes
+                    -- below is now only meaningful when privacy ~= "open".
+                    privacy = {
+                        type = "select",
+                        name = L["CONFIG_VOTING_PRIVACY"] or "Vote privacy",
+                        desc = L["CONFIG_VOTING_PRIVACY_DESC"] or "Whether voters and vote counts are visible during voting.",
                         order = 13,
-                        width = "half",
-                        get = function() return Loothing.Settings:GetAnonymousVoting() end,
+                        width = "full",
+                        values = {
+                            open        = L["CONFIG_VOTING_PRIVACY_OPEN"]      or "Open (everyone sees votes and voters)",
+                            hide_counts = L["CONFIG_VOTING_PRIVACY_HIDE"]      or "Hide counts until session end",
+                            anonymous   = L["CONFIG_VOTING_PRIVACY_ANONYMOUS"] or "Anonymous voters",
+                        },
+                        sorting = { "open", "hide_counts", "anonymous" },
+                        get = function() return Loothing.Settings:GetVotingPrivacy() end,
                         set = function(_, v)
-                            Loothing.Settings:SetAnonymousVoting(v)
-                            BroadcastMLDBIfNeeded()
-                        end,
-                    },
-                    hideVotes = {
-                        type = "toggle",
-                        name = L["HIDE_VOTES"],
-                        desc = L["HIDE_VOTES_DESC"],
-                        order = 14,
-                        width = "half",
-                        get = function() return Loothing.Settings:GetHideVotes() end,
-                        set = function(_, v)
-                            Loothing.Settings:SetHideVotes(v)
+                            Loothing.Settings:SetVotingPrivacy(v)
                             BroadcastMLDBIfNeeded()
                         end,
                     },
@@ -480,17 +477,11 @@ local function GetSessionSettingsOptions()
                             BroadcastMLDBIfNeeded()
                         end,
                     },
-                    requireConfirmation = {
-                        type = "toggle",
-                        name = L["WINNER_REQUIRE_CONFIRMATION"],
-                        desc = L["WINNER_REQUIRE_CONFIRMATION_DESC"],
-                        order = 4,
-                        get = function() return Loothing.Settings:GetRequireConfirmation() end,
-                        set = function(_, v)
-                            Loothing.Settings:Set("winnerDetermination.requireConfirmation", v)
-                            BroadcastMLDBIfNeeded()
-                        end,
-                    },
+                    -- requireConfirmation toggle removed in v2.0.7. The
+                    -- value is now derived from `mode`: ML_CONFIRM and
+                    -- AUTO_HIGHEST_CONFIRM imply confirmation, while
+                    -- HIGHEST_VOTES does not. Editing it independently
+                    -- would just create a contradiction with the mode.
                     maxRevotes = {
                         type = "range",
                         name = L["MAX_REVOTES"],

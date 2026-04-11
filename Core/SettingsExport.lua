@@ -50,13 +50,14 @@ function SettingsExportMixin:SanitizeProfileData(data)
     if not data then return {} end
 
     if data.frame then
+        -- v2.0.7: frame.position is the canonical key (was settings.mainFramePosition pre-2.0.7).
+        -- The SchemaMigration moves the value across; here we just strip
+        -- positional state from the export so users don't import each
+        -- other's screen layouts.
         data.frame.position = nil
     end
     if data.rollFrame then
         data.rollFrame.position = nil
-    end
-    if data.settings then
-        data.settings.mainFramePosition = nil
     end
 
     -- History belongs in global scope, not profile exports

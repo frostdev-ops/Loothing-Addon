@@ -470,6 +470,83 @@ function Utils.IsInCompetingInstance()
     return false
 end
 
+--- Scope-aware version of IsInCompetingInstance.  Returns true when the
+--- current instance is incompatible with the given ml.scope and an
+--- active ML state should be torn down.
+---
+--- "raids_only"          - party/pvp/arena/scenario/LFR are competing
+--- "raids_and_dungeons"  - pvp/arena/scenario/LFR are competing; party (5-man) is OK
+--- "anywhere"            - only pvp/arena/LFR compete; party/openWorld are OK
+---
+--- @param scope string - "raids_only" | "raids_and_dungeons" | "anywhere"
+--- @return boolean
+function Utils.IsInCompetingInstanceForScope(scope)
+    local instanceType, _, difficultyID = Utils.GetInstanceInfo()
+
+    -- LFR is always competing — its built-in personal loot bypasses ML.
+    if instanceType == "raid" and difficultyID == 17 then
+        return true
+    end
+
+    -- pvp/arena always competing.
+    if instanceType == "pvp" or instanceType == "arena" then
+        return true
+    end
+
+    if scope == "anywhere" then
+        -- party and scenario are OK; openWorld is OK.
+        return false
+    end
+
+    if scope == "raids_and_dungeons" then
+        -- party (dungeon) is OK; openWorld is OK; scenario is competing.
+        if instanceType == "scenario" then return true end
+        return false
+    end
+
+    -- Default: raids_only
+    if instanceType == "party" or instanceType == "scenario" then
+        return true
+    end
+    return false
+end
+
+--- Returns true if fresh ML activation is allowed in the current
+--- instance under the given ml.scope. Used for the "should we prompt
+--- the user to become ML?" decision (as opposed to the cleanup decision
+--- which uses IsInCompetingInstanceForScope).
+---
+--- "raids_only"          - raid only (excluding LFR)
+--- "raids_and_dungeons"  - raid (excluding LFR) or party (5-man)
+--- "anywhere"            - any group, including openWorld
+---
+--- @param scope string - "raids_only" | "raids_and_dungeons" | "anywhere"
+--- @return boolean
+function Utils.IsEligibleForMLScope(scope)
+    if not IsInGroup() then return false end
+
+    local instanceType, _, difficultyID = Utils.GetInstanceInfo()
+
+    -- LFR never allows ML
+    if instanceType == "raid" and difficultyID == 17 then return false end
+
+    -- pvp/arena/scenario blocked unconditionally
+    if instanceType == "pvp" or instanceType == "arena" or instanceType == "scenario" then
+        return false
+    end
+
+    if scope == "anywhere" then
+        return true
+    end
+
+    if scope == "raids_and_dungeons" then
+        return instanceType == "raid" or instanceType == "party"
+    end
+
+    -- Default: raids_only
+    return instanceType == "raid"
+end
+
 --- Check if currently in a dungeon instance
 -- @return boolean
 function Utils.IsInDungeonInstance()

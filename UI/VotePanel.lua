@@ -704,7 +704,7 @@ end
 function VotePanelMixin:ApplyObserveMode()
     if not Loothing.Settings then return end
 
-    local observeMode = Loothing.Settings:GetObserveMode()
+    local observeMode = Loothing.Settings:GetOpenObservation()
 
     -- Disable submit button in observe mode
     if self.submitButton then
@@ -839,7 +839,7 @@ function VotePanelMixin:SubmitVote()
     end
 
     -- Check for observe mode
-    if Loothing.Settings and Loothing.Settings:GetObserveMode() then
+    if Loothing.Settings and Loothing.Settings:GetOpenObservation() then
         Loothing:Print(Loothing.Locale["OBSERVE_MODE_MSG"])
         return
     end

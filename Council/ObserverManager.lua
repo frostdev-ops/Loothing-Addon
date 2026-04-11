@@ -266,7 +266,6 @@ function ObserverMixin:SetRemoteObserverList(data)
     end
     if data.openObservation ~= nil and Loothing.Settings then
         Loothing.Settings:Set("observers.openObservation", data.openObservation)
-        Loothing.Settings:Set("voting.observe", data.openObservation)
     end
     if data.mlIsObserver ~= nil and Loothing.Settings then
         Loothing.Settings:Set("observers.mlIsObserver", data.mlIsObserver)

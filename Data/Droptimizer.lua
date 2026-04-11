@@ -84,6 +84,17 @@ local function FormatNumber(n)
     return formatted
 end
 
+--- Look up an item entry from a desktop-synced item map.
+-- Desktop sync writes numeric Lua keys for item IDs, but older payloads may
+-- still use string keys. Support both to stay backward-compatible.
+-- @param itemMap table|nil
+-- @param itemID number|string
+-- @return table|nil
+local function GetItemEntry(itemMap, itemID)
+    if type(itemMap) ~= "table" or itemID == nil then return nil end
+    return itemMap[itemID] or itemMap[tostring(itemID)]
+end
+
 --[[--------------------------------------------------------------------
     Queries
 ----------------------------------------------------------------------]]
@@ -104,7 +115,7 @@ function DroptimizerMixin:GetUpgrade(playerName, itemID)
     local charData = self.characters[playerName]
     if not charData or not charData.upgrades then return nil end
 
-    return charData.upgrades[tostring(itemID)]
+    return GetItemEntry(charData.upgrades, itemID)
 end
 
 --- Get a formatted upgrade string for display in the council table

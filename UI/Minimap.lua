@@ -238,7 +238,7 @@ function MinimapButtonMixin:ShowContextMenu()
         rootDescription:CreateButton(L["HIDE_MINIMAP_BUTTON"], function()
             self:Hide()
             if Loothing.Settings then
-                Loothing.Settings:Set("ui.showMinimapButton", false)
+                Loothing.Settings:Set("frame.showMinimapButton", false)
             end
         end)
     end)
@@ -370,7 +370,7 @@ end
 function MinimapButtonMixin:UpdateVisibility()
     local show = true
     if Loothing.Settings then
-        show = Loothing.Settings:Get("ui.showMinimapButton")
+        show = Loothing.Settings:Get("frame.showMinimapButton")
         if show == nil then
             show = true
         end
@@ -390,7 +390,7 @@ end
 function MinimapButtonMixin:LoadPosition()
     if not Loothing.Settings then return end
 
-    local angle = Loothing.Settings:Get("ui.minimapButtonAngle")
+    local angle = Loothing.Settings:Get("frame.minimapButtonAngle")
     if angle then
         self.angle = angle
     end
@@ -399,7 +399,7 @@ end
 function MinimapButtonMixin:SavePosition()
     if not Loothing.Settings then return end
 
-    Loothing.Settings:Set("ui.minimapButtonAngle", self.angle)
+    Loothing.Settings:Set("frame.minimapButtonAngle", self.angle)
 end
 
 --[[--------------------------------------------------------------------

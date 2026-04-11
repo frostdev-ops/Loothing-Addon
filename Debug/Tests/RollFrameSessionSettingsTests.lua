@@ -564,19 +564,8 @@ TestRunner:Describe("Session Trigger Policy - Legacy Mode Migration", function()
         Assert.Equals("afterLoot", entry.timing)
     end, { category = "unit" })
 
-    TestRunner:It("legacy GetSessionTriggerMode round-trips correctly", function()
-        -- Simulate: action=prompt, timing=encounterEnd → should return "prompt"
-        local function legacyMode(action, timing)
-            if action == "manual" then return "manual" end
-            if action == "auto"   then return "auto"   end
-            if timing == "afterLoot" then return "afterRolls" end
-            return "prompt"
-        end
-        Assert.Equals("manual",     legacyMode("manual", "encounterEnd"))
-        Assert.Equals("auto",       legacyMode("auto",   "encounterEnd"))
-        Assert.Equals("prompt",     legacyMode("prompt",  "encounterEnd"))
-        Assert.Equals("afterRolls", legacyMode("prompt",  "afterLoot"))
-    end, { category = "unit" })
+    -- Legacy GetSessionTriggerMode round-trip test removed in v2.0.7;
+    -- the legacy single-field model has been deleted from Settings.lua.
 end)
 
 --[[--------------------------------------------------------------------
@@ -649,13 +638,7 @@ end)
 ----------------------------------------------------------------------]]
 
 TestRunner:Describe("Settings - Session Trigger Accessors", function()
-    TestRunner:It("GetSessionTriggerMode legacy shim returns valid mode", function()
-        if Loothing and Loothing.Settings then
-            local mode = Loothing.Settings:GetSessionTriggerMode()
-            local valid = { manual = true, auto = true, prompt = true, afterRolls = true }
-            Assert.IsTrue(valid[mode] or false, "Mode should be valid: " .. tostring(mode))
-        end
-    end, { category = "integration" })
+    -- GetSessionTriggerMode legacy-shim test removed in v2.0.7.
 
     TestRunner:It("GetSessionTriggerAction should return valid action", function()
         if Loothing and Loothing.Settings then
@@ -833,17 +816,8 @@ TestRunner:Describe("Settings Integration", function()
         end
     end)
 
-    TestRunner:It("should have GetSessionTriggerMode method (legacy)", function()
-        if Loothing and Loothing.Settings then
-            Assert.NotNil(Loothing.Settings.GetSessionTriggerMode, "GetSessionTriggerMode should exist")
-        end
-    end, { category = "integration" })
-
-    TestRunner:It("should have SetSessionTriggerMode method (legacy)", function()
-        if Loothing and Loothing.Settings then
-            Assert.NotNil(Loothing.Settings.SetSessionTriggerMode, "SetSessionTriggerMode should exist")
-        end
-    end, { category = "integration" })
+    -- Legacy GetSessionTriggerMode / SetSessionTriggerMode existence
+    -- tests removed in v2.0.7; the methods themselves no longer exist.
 
     TestRunner:It("should have split trigger accessors", function()
         if Loothing and Loothing.Settings then

@@ -61,7 +61,7 @@ end
 -- @param entry table - History entry table (see complete schema in Loothing docs)
 function HistoryMixin:AddEntry(entry)
     -- Guard: skip if history is disabled
-    if Loothing.Settings and not Loothing.Settings:Get("historySettings.enabled", true) then
+    if Loothing.Settings and not Loothing.Settings:Get("history.enabled", true) then
         return
     end
 

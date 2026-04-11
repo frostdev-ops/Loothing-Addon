@@ -1839,12 +1839,12 @@ function SessionMixin:AwardItem(guid, winner, response, awardReasonId, awardReas
         }
         Loothing.History:AddEntry(historyEntry)
 
-        -- Broadcast history entry to group/guild if enabled
-        if Loothing.Settings:Get("historySettings.sendHistory") and Loothing.Comm then
-            Loothing.Comm:Send(Loothing.MsgType.HISTORY_ENTRY, historyEntry)
-        end
-        if Loothing.Settings:Get("historySettings.sendToGuild") and Loothing.Comm then
+        -- Broadcast history entry based on the merged history.share setting.
+        local share = Loothing.Settings:Get("history.share", "off")
+        if share == "guild" and Loothing.Comm then
             Loothing.Comm:SendGuild(Loothing.MsgType.HISTORY_ENTRY, historyEntry)
+        elseif share == "group" and Loothing.Comm then
+            Loothing.Comm:Send(Loothing.MsgType.HISTORY_ENTRY, historyEntry)
         end
     end
 

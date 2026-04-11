@@ -60,27 +60,33 @@ local function CopyDefaults(src)
 end
 
 local PROFILE_DEFAULTS = {
-    version = 1,
+    -- schemaVersion is mirrored from DefaultSettings so the
+    -- SchemaMigration system can detect fresh installs (which are
+    -- already at the current version) vs. legacy profiles.
+    schemaVersion = Loothing.DefaultSettings.schemaVersion,
+    version = 1,  -- legacy version field (used by Migration.lua, not SchemaMigration)
 
-    council = CopyDefaults(Loothing.DefaultSettings.council),
-    observers = CopyDefaults(Loothing.DefaultSettings.observers),
-    settings = CopyDefaults(Loothing.DefaultSettings.settings),
-    announcements = CopyDefaults(Loothing.DefaultSettings.announcements),
-    autoPass = CopyDefaults(Loothing.DefaultSettings.autoPass),
-    autoAward = CopyDefaults(Loothing.DefaultSettings.autoAward),
-    ignoreItems = CopyDefaults(Loothing.DefaultSettings.ignoreItems),
-    voting = CopyDefaults(Loothing.DefaultSettings.voting),
-    responses = CopyDefaults(Loothing.DefaultSettings.responses),
-    awardReasons = CopyDefaults(Loothing.DefaultSettings.awardReasons),
-    frame = CopyDefaults(Loothing.DefaultSettings.frame),
-    ml = CopyDefaults(Loothing.DefaultSettings.ml),
-    historySettings = CopyDefaults(Loothing.DefaultSettings.historySettings),
-    buttonSets = CopyDefaults(Loothing.DefaultSettings.buttonSets),
-    responseSets = CopyDefaults(Loothing.DefaultSettings.responseSets),
-    filters = CopyDefaults(Loothing.DefaultSettings.filters),
-    groupLoot = CopyDefaults(Loothing.DefaultSettings.groupLoot),
-    rollFrame = CopyDefaults(Loothing.DefaultSettings.rollFrame),
-    councilTable = CopyDefaults(Loothing.DefaultSettings.councilTable),
+    council             = CopyDefaults(Loothing.DefaultSettings.council),
+    observers           = CopyDefaults(Loothing.DefaultSettings.observers),
+    -- v2.0.7: `settings.*`, `historySettings.*`, and `buttonSets.*`
+    -- namespaces removed. Their contents now live under category
+    -- namespaces (frame.*, voting.*, session.*, ml.*, history.*).
+    session             = CopyDefaults(Loothing.DefaultSettings.session),
+    announcements       = CopyDefaults(Loothing.DefaultSettings.announcements),
+    autoPass            = CopyDefaults(Loothing.DefaultSettings.autoPass),
+    autoAward           = CopyDefaults(Loothing.DefaultSettings.autoAward),
+    ignoreItems         = CopyDefaults(Loothing.DefaultSettings.ignoreItems),
+    voting              = CopyDefaults(Loothing.DefaultSettings.voting),
+    responses           = CopyDefaults(Loothing.DefaultSettings.responses),
+    awardReasons        = CopyDefaults(Loothing.DefaultSettings.awardReasons),
+    frame               = CopyDefaults(Loothing.DefaultSettings.frame),
+    ml                  = CopyDefaults(Loothing.DefaultSettings.ml),
+    history             = CopyDefaults(Loothing.DefaultSettings.history),
+    responseSets        = CopyDefaults(Loothing.DefaultSettings.responseSets),
+    filters             = CopyDefaults(Loothing.DefaultSettings.filters),
+    groupLoot           = CopyDefaults(Loothing.DefaultSettings.groupLoot),
+    rollFrame           = CopyDefaults(Loothing.DefaultSettings.rollFrame),
+    councilTable        = CopyDefaults(Loothing.DefaultSettings.councilTable),
     winnerDetermination = CopyDefaults(Loothing.DefaultSettings.winnerDetermination),
 }
 
@@ -120,6 +126,15 @@ end
 function SettingsMixin:Init()
     -- Create Loolib SavedVariables database with profile + global scopes
     self.sv = SavedVariables.CreateAddonStore("Loothing", SV_DEFAULTS, "Default")
+
+    -- Run forward-only schema migrations BEFORE any code reads from
+    -- self.sv.profile. Each migration is keyed by the schemaVersion it
+    -- produces; see Loothing/Core/SchemaMigration.lua for the full chain.
+    -- Distinct from Core/Migration.lua, which runs AFTER Settings init
+    -- for version-string-keyed data fixups.
+    if ns.SchemaMigration and ns.SchemaMigration.Run then
+        ns.SchemaMigration:Run(self.sv)
+    end
 
     -- self.db is a metatable proxy that always reads from self.sv.profile.
     -- This prevents stale references: even if other code captures self.db,
@@ -377,20 +392,20 @@ end
 --- Get UI scale
 -- @return number
 function SettingsMixin:GetUIScale()
-    return self:Get("settings.uiScale", 1.0)
+    return self:Get("frame.uiScale", 1.0)
 end
 
 --- Set UI scale
 -- @param scale number
 function SettingsMixin:SetUIScale(scale)
     scale = math.max(0.5, math.min(2.0, scale))
-    self:Set("settings.uiScale", scale)
+    self:Set("frame.uiScale", scale)
 end
 
 --- Get main frame position
 -- @return table|nil - { point, x, y }
 function SettingsMixin:GetMainFramePosition()
-    return self:Get("settings.mainFramePosition", nil)
+    return self:Get("frame.position", nil)
 end
 
 --- Save main frame position
@@ -398,19 +413,19 @@ end
 -- @param x number - X offset
 -- @param y number - Y offset
 function SettingsMixin:SetMainFramePosition(point, x, y)
-    self:Set("settings.mainFramePosition", { point = point, x = x, y = y })
+    self:Set("frame.position", { point = point, x = x, y = y })
 end
 
 --- Get minimap button visibility
 -- @return boolean
 function SettingsMixin:GetShowMinimapButton()
-    return self:Get("settings.showMinimapButton", true)
+    return self:Get("frame.showMinimapButton", true)
 end
 
 --- Set minimap button visibility
 -- @param show boolean
 function SettingsMixin:SetShowMinimapButton(show)
-    self:Set("settings.showMinimapButton", show)
+    self:Set("frame.showMinimapButton", show)
 end
 
 --[[--------------------------------------------------------------------
@@ -516,65 +531,14 @@ function SettingsMixin:SetAnnounceBossKill(announce)
     self:Set("announcements.announceBossKill", announce)
 end
 
---- Get award channel
--- @return string - "RAID", "RAID_WARNING", "OFFICER", "GUILD", "PARTY", "NONE"
-function SettingsMixin:GetAwardChannel()
-    return self:Get("announcements.awardChannel", "RAID")
-end
-
---- Set award channel
--- @param channel string
-function SettingsMixin:SetAwardChannel(channel)
-    self:Set("announcements.awardChannel", channel)
-end
-
---- Get award channel secondary
--- @return string - "RAID", "RAID_WARNING", "OFFICER", "GUILD", "PARTY", "NONE"
-function SettingsMixin:GetAwardChannelSecondary()
-    return self:Get("announcements.awardChannelSecondary", "NONE")
-end
-
---- Set award channel secondary
--- @param channel string
-function SettingsMixin:SetAwardChannelSecondary(channel)
-    self:Set("announcements.awardChannelSecondary", channel)
-end
-
---- Get award text template
--- @return string
-function SettingsMixin:GetAwardText()
-    return self:Get("announcements.awardText", "{item} awarded to {winner} for {reason}")
-end
-
---- Set award text template
--- @param text string
-function SettingsMixin:SetAwardText(text)
-    self:Set("announcements.awardText", text)
-end
-
---- Get item channel
--- @return string
-function SettingsMixin:GetItemChannel()
-    return self:Get("announcements.itemChannel", "RAID")
-end
-
---- Set item channel
--- @param channel string
-function SettingsMixin:SetItemChannel(channel)
-    self:Set("announcements.itemChannel", channel)
-end
-
---- Get item text template
--- @return string
-function SettingsMixin:GetItemText()
-    return self:Get("announcements.itemText", "Now accepting rolls for {item}")
-end
-
---- Set item text template
--- @param text string
-function SettingsMixin:SetItemText(text)
-    self:Set("announcements.itemText", text)
-end
+-- Single-line legacy fields removed in v2.0.7:
+--   GetAwardChannel / SetAwardChannel
+--   GetAwardChannelSecondary / SetAwardChannelSecondary
+--   GetAwardText / SetAwardText
+--   GetItemChannel / SetItemChannel
+--   GetItemText / SetItemText
+-- All superseded by the awardLines / itemLines arrays accessed via
+-- GetAwardLine / GetItemLine.
 
 --- Get session start text
 -- @return string
@@ -734,18 +698,9 @@ function SettingsMixin:SetSessionEndChannel(channel)
     self:Set("announcements.sessionEndChannel", channel)
 end
 
--- Legacy compatibility - kept for backward compatibility
---- Get announce channel (deprecated - use GetAwardChannel)
--- @return string
-function SettingsMixin:GetAnnounceChannel()
-    return self:GetAwardChannel()
-end
-
---- Set announce channel (deprecated - use SetAwardChannel)
--- @param channel string
-function SettingsMixin:SetAnnounceChannel(channel)
-    self:SetAwardChannel(channel)
-end
+-- GetAnnounceChannel / SetAnnounceChannel removed in v2.0.7. They were
+-- already deprecated wrappers around GetAwardChannel/SetAwardChannel,
+-- which were themselves removed in favor of the awardLines array model.
 
 --[[--------------------------------------------------------------------
     History Access
@@ -833,7 +788,7 @@ end
 --- Get the configured shared history cap.
 -- @return number
 function SettingsMixin:GetHistoryMaxEntries()
-    return tonumber(self:Get("historySettings.maxEntries", Loothing.DefaultSettings.historySettings.maxEntries)) or 500
+    return tonumber(self:Get("history.maxEntries", Loothing.DefaultSettings.history.maxEntries)) or 500
 end
 
 --- Prune oldest history entries to fit the configured cap.
@@ -924,13 +879,13 @@ end
 --- Get auto-trade enabled setting
 -- @return boolean
 function SettingsMixin:GetAutoTrade()
-    return self:Get("settings.autoTrade") ~= false
+    return self:Get("ml.autoTrade") ~= false
 end
 
 --- Set auto-trade enabled
 -- @param enabled boolean
 function SettingsMixin:SetAutoTrade(enabled)
-    self:Set("settings.autoTrade", enabled)
+    self:Set("ml.autoTrade", enabled)
 end
 
 --[[--------------------------------------------------------------------
@@ -1018,17 +973,10 @@ function SettingsMixin:SetAutoAwardTo(name)
     self:Set("autoAward.awardTo", name)
 end
 
---- Get auto-award reason
--- @return string
-function SettingsMixin:GetAutoAwardReason()
-    return self:Get("autoAward.reason", "Auto Award")
-end
-
---- Set auto-award reason
--- @param reason string
-function SettingsMixin:SetAutoAwardReason(reason)
-    self:Set("autoAward.reason", reason)
-end
+-- Removed in v2.0.7:
+--   GetAutoAwardReason / SetAutoAwardReason
+-- Legacy free-text reason superseded by autoAward.reasonId which
+-- references the structured awardReasons.reasons table.
 
 --- Get auto-award include BoE setting
 -- @return boolean
@@ -1178,29 +1126,9 @@ function SettingsMixin:SetMultiVote(enabled)
     self:Set("voting.multiVote", enabled)
 end
 
---- Get anonymous voting setting
--- @return boolean
-function SettingsMixin:GetAnonymousVoting()
-    return self:Get("voting.anonymousVoting", false)
-end
-
---- Set anonymous voting setting
--- @param enabled boolean
-function SettingsMixin:SetAnonymousVoting(enabled)
-    self:Set("voting.anonymousVoting", enabled)
-end
-
---- Get hide votes setting
--- @return boolean
-function SettingsMixin:GetHideVotes()
-    return self:Get("voting.hideVotes", false)
-end
-
---- Set hide votes setting
--- @param enabled boolean
-function SettingsMixin:SetHideVotes(enabled)
-    self:Set("voting.hideVotes", enabled)
-end
+-- AnonymousVoting / HideVotes accessors moved to SettingsVoting.lua
+-- in v2.0.7. Both are now derived projections of the merged
+-- voting.privacy field; see GetVotingPrivacy / SetVotingPrivacy there.
 
 --- Get allow response change setting
 -- @return boolean
@@ -1214,17 +1142,10 @@ function SettingsMixin:SetAllowResponseChange(enabled)
     self:Set("voting.allowResponseChange", enabled)
 end
 
---- Get observe mode setting (DEPRECATED - redirects to GetOpenObservation)
--- @return boolean
-function SettingsMixin:GetObserveMode()
-    return self:GetOpenObservation()
-end
-
---- Set observe mode setting (DEPRECATED - redirects to SetOpenObservation)
--- @param enabled boolean
-function SettingsMixin:SetObserveMode(enabled)
-    self:SetOpenObservation(enabled)
-end
+-- Removed in v2.0.7: GetObserveMode / SetObserveMode
+-- The voting.observe key was redundant with observers.openObservation;
+-- the migration drops voting.observe and the observers.openObservation
+-- accessors are the canonical surface.
 
 -- Observer settings
 function SettingsMixin:GetObserverList()
@@ -1239,8 +1160,6 @@ function SettingsMixin:GetOpenObservation()
 end
 function SettingsMixin:SetOpenObservation(enabled)
     self:Set("observers.openObservation", enabled == true)
-    -- Keep old voting.observe in sync for backward compat
-    self:Set("voting.observe", enabled == true)
 end
 
 function SettingsMixin:GetMLIsObserver()
@@ -1623,234 +1542,13 @@ function SettingsMixin:ResetAwardReasonsToDefaults()
 end
 
 --[[--------------------------------------------------------------------
-    Button Sets Settings
+    Button Sets Settings (REMOVED in v2.0.7)
+
+    The legacy buttonSets.* table was superseded by responseSets.* in
+    earlier versions. The migration in Migrations.lua deletes the dead
+    profile data; the entire accessor surface is removed here. Use
+    GetResponseSet / SetResponseSet / etc. below instead.
 ----------------------------------------------------------------------]]
-
---- Get active button set ID
--- @return number - Active set ID
-function SettingsMixin:GetActiveButtonSet()
-    return self:Get("buttonSets.activeSet", 1)
-end
-
---- Set active button set
--- @param setId number - Button set ID
-function SettingsMixin:SetActiveButtonSet(setId)
-    local sets = self:GetButtonSets()
-    if sets[setId] then
-        self:Set("buttonSets.activeSet", setId)
-    end
-end
-
---- Get all button sets
--- @return table - Table of button sets indexed by ID (copy)
-function SettingsMixin:GetButtonSets()
-    local defaults = Loothing.DefaultSettings.buttonSets.sets
-    local sets = self:Get("buttonSets.sets", defaults)
-    return Utils.DeepCopy(sets)
-end
-
---- Get specific button set by ID
--- @param setId number - Button set ID
--- @return table|nil - Button set data
-function SettingsMixin:GetButtonSet(setId)
-    local sets = self:GetButtonSets()
-    return sets[setId]
-end
-
---- Add a new button set
--- @param name string - Set name
--- @return number - New set ID
-function SettingsMixin:AddButtonSet(name)
-    local sets = self:GetButtonSets()
-
-    -- Find next available ID
-    local maxId = 0
-    for id, _ in pairs(sets) do
-        if id > maxId then
-            maxId = id
-        end
-    end
-
-    local newId = maxId + 1
-    sets[newId] = {
-        name = name,
-        buttons = {
-            { id = 1, text = "Need", color = { 0.0, 1.0, 0.0, 1.0 }, sort = 1 },
-            { id = 2, text = "Pass", color = { 0.5, 0.5, 0.5, 1.0 }, sort = 2 },
-        },
-        whisperKey = "!vote",
-    }
-
-    self:Set("buttonSets.sets", sets)
-    return newId
-end
-
---- Remove a button set
--- @param setId number - Button set ID to remove
--- @return boolean - True if removed
-function SettingsMixin:RemoveButtonSet(setId)
-    if setId == 1 then
-        return false  -- Cannot remove default set
-    end
-
-    local sets = self:GetButtonSets()
-    if sets[setId] then
-        sets[setId] = nil
-        self:Set("buttonSets.sets", sets)
-
-        -- If this was the active set, switch to default
-        if self:GetActiveButtonSet() == setId then
-            self:SetActiveButtonSet(1)
-        end
-
-        return true
-    end
-
-    return false
-end
-
---- Update button set data
--- @param setId number - Button set ID
--- @param data table - Updated set data
--- @return boolean - True if updated
-function SettingsMixin:UpdateButtonSet(setId, data)
-    local sets = self:GetButtonSets()
-    if sets[setId] then
-        for key, value in pairs(data) do
-            sets[setId][key] = value
-        end
-        self:Set("buttonSets.sets", sets)
-        return true
-    end
-    return false
-end
-
---- Get buttons from active set
--- @return table - Array of button data (copy)
-function SettingsMixin:GetButtons()
-    local activeSet = self:GetActiveButtonSet()
-    local set = self:GetButtonSet(activeSet)
-    if set and set.buttons then
-        return Utils.DeepCopy(set.buttons)
-    end
-    return {}
-end
-
---- Add a button to a set
--- @param setId number - Button set ID
--- @param text string - Button text
--- @param color table - Color as { r, g, b, a }
--- @return number|nil - New button ID
-function SettingsMixin:AddButton(setId, text, color)
-    local set = self:GetButtonSet(setId)
-    if not set then return nil end
-
-    local buttons = set.buttons or {}
-
-    -- Check max buttons
-    if #buttons >= 10 then
-        return nil
-    end
-
-    -- Find next available ID
-    local maxId = 0
-    for _, button in ipairs(buttons) do
-        if button.id > maxId then
-            maxId = button.id
-        end
-    end
-
-    local newButton = {
-        id = maxId + 1,
-        text = text,
-        color = color or { 1.0, 1.0, 1.0, 1.0 },
-        sort = #buttons + 1,
-    }
-
-    buttons[#buttons + 1] = newButton
-    set.buttons = buttons
-
-    self:UpdateButtonSet(setId, set)
-    return newButton.id
-end
-
---- Remove a button from a set
--- @param setId number - Button set ID
--- @param buttonId number - Button ID to remove
--- @return boolean - True if removed
-function SettingsMixin:RemoveButton(setId, buttonId)
-    local set = self:GetButtonSet(setId)
-    if not set then return false end
-
-    local buttons = set.buttons or {}
-
-    -- Require at least 1 button
-    if #buttons <= 1 then
-        return false
-    end
-
-    for i, button in ipairs(buttons) do
-        if button.id == buttonId then
-            table.remove(buttons, i)
-            -- Re-sort remaining buttons
-            for j, btn in ipairs(buttons) do
-                btn.sort = j
-            end
-            set.buttons = buttons
-            self:UpdateButtonSet(setId, set)
-            return true
-        end
-    end
-
-    return false
-end
-
---- Update button data
--- @param setId number - Button set ID
--- @param buttonId number - Button ID
--- @param data table - Updated button data
--- @return boolean - True if updated
-function SettingsMixin:UpdateButton(setId, buttonId, data)
-    local set = self:GetButtonSet(setId)
-    if not set then return false end
-
-    local buttons = set.buttons or {}
-
-    for _, button in ipairs(buttons) do
-        if button.id == buttonId then
-            for key, value in pairs(data) do
-                button[key] = value
-            end
-            set.buttons = buttons
-            self:UpdateButtonSet(setId, set)
-            return true
-        end
-    end
-
-    return false
-end
-
---- Get whisper key for a set
--- @param setId number - Button set ID
--- @return string - Whisper key
-function SettingsMixin:GetWhisperKey(setId)
-    local set = self:GetButtonSet(setId)
-    if set then
-        return set.whisperKey or "!vote"
-    end
-    return "!vote"
-end
-
---- Set whisper key for a set
--- @param setId number - Button set ID
--- @param key string - Whisper key
-function SettingsMixin:SetWhisperKey(setId, key)
-    local set = self:GetButtonSet(setId)
-    if set then
-        set.whisperKey = key
-        self:UpdateButtonSet(setId, set)
-    end
-end
 
 --[[--------------------------------------------------------------------
     Response Sets Settings (unified model)
@@ -2663,16 +2361,12 @@ function SettingsMixin:SetAutoAwardOnUnanimous(value)
     self:Set("winnerDetermination.autoAwardOnUnanimous", value)
 end
 
---- Get whether to require confirmation before awarding
--- @return boolean
+-- Removed in v2.0.7: GetRequireConfirmation / SetRequireConfirmation
+-- The toggle was redundant with `winnerDetermination.mode`. ML_CONFIRM
+-- and AUTO_HIGHEST_CONFIRM imply confirmation; HIGHEST_VOTES does not.
+-- Code that needs to know whether confirmation is required should check
+-- the mode field directly.
 function SettingsMixin:GetRequireConfirmation()
-    local value = self:Get("winnerDetermination.requireConfirmation")
-    if value == nil then return true end
-    return value
-end
-
---- Set whether to require confirmation before awarding
--- @param value boolean
-function SettingsMixin:SetRequireConfirmation(value)
-    self:Set("winnerDetermination.requireConfirmation", value)
+    local mode = self:Get("winnerDetermination.mode", "ML_CONFIRM")
+    return mode == "ML_CONFIRM" or mode == "AUTO_HIGHEST_CONFIRM"
 end

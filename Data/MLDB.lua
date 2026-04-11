@@ -32,11 +32,16 @@ local COMPRESSION_KEYS = {
     -- Forward mapping (key -> code)
     ["selfVote"] = "sv",
     ["multiVote"] = "mv",
+    -- v2.0.7 voting privacy. `privacy` is the canonical wire field
+    -- ("open" | "hide_counts" | "anonymous"). The legacy
+    -- anonymousVoting/hideVotes/observe codes remain so v2.0.6 receivers
+    -- can still parse the broadcast (we send all three on the wire).
+    ["privacy"] = "pri",
     ["anonymousVoting"] = "av",
     ["hideVotes"] = "hv",
+    ["observe"] = "ob",  -- legacy; receivers ignore but slot reserved
     ["votingTimeout"] = "vt",
     ["sortOrder"] = "so",
-    ["observe"] = "ob",
     ["mlSeesVotes"] = "msv",
     ["requireNotes"] = "rn",
     ["autoAddRolls"] = "aar",
@@ -114,7 +119,8 @@ local COMPRESSION_KEYS = {
     ["mode"] = "m",
     ["tieBreaker"] = "tb",
     ["autoAwardOnUnanimous"] = "aau",
-    ["requireConfirmation"] = "rc",
+    -- requireConfirmation removed in v2.0.7 (derived from `mode`); the
+    -- "rc" short code remains reserved to avoid collision with future fields.
 
     -- Announcements
     ["announcements"] = "an",
@@ -275,9 +281,18 @@ function MLDBMixin:GatherSettings()
     local votingSettings = Loothing.Settings:Get("voting", {})
     settings.selfVote       = votingSettings.selfVote or false
     settings.multiVote      = votingSettings.multiVote or false
-    settings.anonymousVoting = votingSettings.anonymousVoting or false
-    settings.hideVotes      = votingSettings.hideVotes or false
-    settings.observe        = votingSettings.observe or false
+
+    -- v2.0.7: voting.privacy is the canonical field. We also broadcast
+    -- the legacy anonymousVoting/hideVotes flags derived from it so
+    -- v2.0.6-and-earlier clients still receive the privacy intent.
+    -- Receivers running v2.0.7+ prefer `privacy` and ignore the legacy
+    -- flags; receivers on v2.0.6 read the legacy flags and miss the
+    -- "open" vs "hide_counts" distinction (default to open).
+    local privacy = votingSettings.privacy or "open"
+    settings.privacy        = privacy
+    settings.anonymousVoting = privacy == "anonymous"
+    settings.hideVotes      = privacy == "hide_counts"
+
     settings.mlSeesVotes    = votingSettings.mlSeesVotes or false
     settings.requireNotes   = votingSettings.requireNotes or false
     settings.autoAddRolls   = votingSettings.autoAddRolls ~= false  -- default true
@@ -292,8 +307,8 @@ function MLDBMixin:GatherSettings()
     settings.observerPermissions = Loothing.Settings:GetObserverPermissions()
 
     -- Session settings
-    settings.votingTimeout = Loothing.Settings:Get("settings.votingTimeout", 30)
-    settings.votingMode = Loothing.Settings:Get("settings.votingMode", "SIMPLE")
+    settings.votingTimeout = Loothing.Settings:Get("voting.timeout", 30)
+    settings.votingMode = Loothing.Settings:Get("voting.mode", "SIMPLE")
 
     -- Session trigger policy
     settings.sessionTriggerAction   = Loothing.Settings:GetSessionTriggerAction()
@@ -322,13 +337,12 @@ function MLDBMixin:GatherSettings()
         silent        = Loothing.Settings:Get("autoPass.silent") == true,
     }
 
-    -- AutoAward settings
+    -- AutoAward settings (legacy `reason` free-text removed in v2.0.7)
     settings.autoAward = {
         enabled        = Loothing.Settings:Get("autoAward.enabled") == true,
         lowerThreshold = Loothing.Settings:Get("autoAward.lowerThreshold", 2),
         upperThreshold = Loothing.Settings:Get("autoAward.upperThreshold", 4),
         awardTo        = Loothing.Settings:Get("autoAward.awardTo", ""),
-        reason         = Loothing.Settings:Get("autoAward.reason", "Auto Award"),
         reasonId       = Loothing.Settings:GetAutoAwardReasonId(),
         includeBoE     = Loothing.Settings:Get("autoAward.includeBoE") == true,
     }
@@ -341,11 +355,11 @@ function MLDBMixin:GatherSettings()
     }
 
     -- Winner determination
+    -- requireConfirmation removed in v2.0.7; receivers derive it from `mode`.
     settings.winnerDetermination = {
         mode                 = Loothing.Settings:Get("winnerDetermination.mode", "ML_CONFIRM"),
         tieBreaker           = Loothing.Settings:Get("winnerDetermination.tieBreaker", "ROLL"),
         autoAwardOnUnanimous = Loothing.Settings:Get("winnerDetermination.autoAwardOnUnanimous") == true,
-        requireConfirmation  = Loothing.Settings:Get("winnerDetermination.requireConfirmation") ~= false,
     }
 
     -- Announcements (full structure)
@@ -555,15 +569,25 @@ function MLDBMixin:ApplyFromML(settings, sender)
         if settings.multiVote ~= nil then
             votingSettings.multiVote = settings.multiVote
         end
-        if settings.anonymousVoting ~= nil then
-            votingSettings.anonymousVoting = settings.anonymousVoting
+
+        -- v2.0.7 voting privacy. Prefer the new explicit `privacy` field
+        -- if present (v2.0.7+ ML), otherwise reconstruct from legacy
+        -- anonymousVoting/hideVotes flags broadcast by a v2.0.6 ML.
+        if settings.privacy ~= nil then
+            votingSettings.privacy = settings.privacy
+        elseif settings.anonymousVoting ~= nil or settings.hideVotes ~= nil then
+            if settings.anonymousVoting == true then
+                votingSettings.privacy = "anonymous"
+            elseif settings.hideVotes == true then
+                votingSettings.privacy = "hide_counts"
+            else
+                votingSettings.privacy = "open"
+            end
         end
-        if settings.hideVotes ~= nil then
-            votingSettings.hideVotes = settings.hideVotes
-        end
-        if settings.observe ~= nil then
-            votingSettings.observe = settings.observe
-        end
+        -- Never write the legacy anonymousVoting/hideVotes/observe keys
+        -- back to local storage; the migration removed them and they
+        -- would just accumulate as orphans.
+
         if settings.mlSeesVotes ~= nil then
             votingSettings.mlSeesVotes = settings.mlSeesVotes
         end
@@ -590,10 +614,10 @@ function MLDBMixin:ApplyFromML(settings, sender)
 
         -- Apply session settings
         if settings.votingTimeout then
-            Loothing.Settings:Set("settings.votingTimeout", settings.votingTimeout)
+            Loothing.Settings:Set("voting.timeout", settings.votingTimeout)
         end
         if settings.votingMode then
-            Loothing.Settings:Set("settings.votingMode", settings.votingMode)
+            Loothing.Settings:Set("voting.mode", settings.votingMode)
         end
 
         -- Apply session trigger policy
@@ -646,7 +670,6 @@ function MLDBMixin:ApplyFromML(settings, sender)
         end
         if settings.openObservation ~= nil then
             Loothing.Settings:Set("observers.openObservation", settings.openObservation)
-            Loothing.Settings:Set("voting.observe", settings.openObservation)
         end
         if settings.observerPermissions then
             Loothing.Settings:Set("observers.permissions", settings.observerPermissions)
@@ -740,8 +763,8 @@ function MLDBMixin:SnapshotSettings()
     snap.voting = Utils.DeepCopy(Loothing.Settings:Get("voting", {}))
 
     -- Session settings
-    snap.votingTimeout = Loothing.Settings:Get("settings.votingTimeout")
-    snap.votingMode    = Loothing.Settings:Get("settings.votingMode")
+    snap.votingTimeout = Loothing.Settings:Get("voting.timeout")
+    snap.votingMode    = Loothing.Settings:Get("voting.mode")
 
     -- Session trigger policy
     snap.sessionTriggerAction   = Loothing.Settings:GetSessionTriggerAction()
@@ -820,10 +843,10 @@ function MLDBMixin:RestoreSettings()
 
     -- Session settings
     if snap.votingTimeout ~= nil then
-        Loothing.Settings:Set("settings.votingTimeout", snap.votingTimeout)
+        Loothing.Settings:Set("voting.timeout", snap.votingTimeout)
     end
     if snap.votingMode ~= nil then
-        Loothing.Settings:Set("settings.votingMode", snap.votingMode)
+        Loothing.Settings:Set("voting.mode", snap.votingMode)
     end
 
     -- Session trigger policy (use ~= nil consistently for all fields)
@@ -857,7 +880,6 @@ function MLDBMixin:RestoreSettings()
     end
     if snap.openObservation ~= nil then
         Loothing.Settings:Set("observers.openObservation", snap.openObservation)
-        Loothing.Settings:Set("voting.observe", snap.openObservation)
     end
     if snap.observerPermissions then
         Loothing.Settings:Set("observers.permissions", snap.observerPermissions)

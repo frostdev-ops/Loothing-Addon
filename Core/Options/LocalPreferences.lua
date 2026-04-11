@@ -719,23 +719,24 @@ local function GetLocalPreferencesOptions()
                         get = function() return Loothing.Settings:Get("ml.usageMode") end,
                         set = function(_, v) Loothing.Settings:Set("ml.usageMode", v) end,
                     },
-                    onlyUseInRaids = {
-                        type = "toggle",
-                        name = L["CONFIG_ML_RAIDS_ONLY"],
-                        desc = L["CONFIG_ML_RAIDS_ONLY_DESC"],
+                    -- onlyUseInRaids + allowOutOfRaid collapsed into a single
+                    -- tri-state ml.scope select in v2.0.7. The new control
+                    -- replaces both toggles cleanly while preserving every
+                    -- combination of user intent.
+                    scope = {
+                        type = "select",
+                        name = L["CONFIG_ML_SCOPE"] or "Use Loothing in",
+                        desc = L["CONFIG_ML_SCOPE_DESC"] or "Which group instance types Loothing should activate the Master Looter prompt in.",
                         order = 2,
-                        width = "half",
-                        get = function() return Loothing.Settings:Get("ml.onlyUseInRaids") end,
-                        set = function(_, v) Loothing.Settings:Set("ml.onlyUseInRaids", v) end,
-                    },
-                    allowOutOfRaid = {
-                        type = "toggle",
-                        name = L["CONFIG_ML_ALLOW_OUTSIDE"],
-                        desc = L["CONFIG_ML_ALLOW_OUTSIDE_DESC"],
-                        order = 3,
-                        width = "half",
-                        get = function() return Loothing.Settings:Get("ml.allowOutOfRaid") end,
-                        set = function(_, v) Loothing.Settings:Set("ml.allowOutOfRaid", v) end,
+                        width = "full",
+                        values = {
+                            raids_only         = L["CONFIG_ML_SCOPE_RAIDS_ONLY"]    or "Raids only",
+                            raids_and_dungeons = L["CONFIG_ML_SCOPE_RAIDS_DUNGEONS"] or "Raids and dungeons",
+                            anywhere           = L["CONFIG_ML_SCOPE_ANYWHERE"]      or "Anywhere",
+                        },
+                        sorting = { "raids_only", "raids_and_dungeons", "anywhere" },
+                        get = function() return Loothing.Settings:Get("ml.scope", "raids_only") end,
+                        set = function(_, v) Loothing.Settings:Set("ml.scope", v) end,
                     },
                     skipSessionFrame = {
                         type = "toggle",
@@ -797,8 +798,8 @@ local function GetLocalPreferencesOptions()
                         desc = L["CONFIG_ML_GUILD_ONLY_DESC"],
                         order = 10,
                         width = "half",
-                        get = function() return Loothing.Settings:Get("settings.autoGroupLootGuildOnly", false) end,
-                        set = function(_, v) Loothing.Settings:Set("settings.autoGroupLootGuildOnly", v) end,
+                        get = function() return Loothing.Settings:Get("session.groupLootGuildOnly", false) end,
+                        set = function(_, v) Loothing.Settings:Set("session.groupLootGuildOnly", v) end,
                     },
                 },
             },
@@ -817,8 +818,8 @@ local function GetLocalPreferencesOptions()
                         desc = L["CONFIG_HISTORY_ENABLED_DESC"],
                         order = 1,
                         width = "half",
-                        get = function() return Loothing.Settings:Get("historySettings.enabled", true) end,
-                        set = function(_, v) Loothing.Settings:Set("historySettings.enabled", v) end,
+                        get = function() return Loothing.Settings:Get("history.enabled", true) end,
+                        set = function(_, v) Loothing.Settings:Set("history.enabled", v) end,
                     },
                     clearAll = {
                         type = "execute",
@@ -837,23 +838,22 @@ local function GetLocalPreferencesOptions()
                             return L["CONFIG_HISTORY_CLEARALL_CONFIRM"]
                         end,
                     },
-                    sendHistory = {
-                        type = "toggle",
-                        name = L["CONFIG_HISTORY_SEND"],
-                        desc = L["CONFIG_HISTORY_SEND_DESC"],
+                    -- sendHistory + sendToGuild collapsed into a single
+                    -- tri-state share select in v2.0.7.
+                    share = {
+                        type = "select",
+                        name = L["CONFIG_HISTORY_SHARE"] or "Share history with",
+                        desc = L["CONFIG_HISTORY_SHARE_DESC"] or "Where to broadcast new loot history entries.",
                         order = 3,
-                        width = "half",
-                        get = function() return Loothing.Settings:Get("historySettings.sendHistory") end,
-                        set = function(_, v) Loothing.Settings:Set("historySettings.sendHistory", v) end,
-                    },
-                    sendToGuild = {
-                        type = "toggle",
-                        name = L["CONFIG_HISTORY_SEND_GUILD"],
-                        desc = L["CONFIG_HISTORY_SEND_GUILD_DESC"],
-                        order = 4,
-                        width = "half",
-                        get = function() return Loothing.Settings:Get("historySettings.sendToGuild") end,
-                        set = function(_, v) Loothing.Settings:Set("historySettings.sendToGuild", v) end,
+                        width = "full",
+                        values = {
+                            off   = L["CONFIG_HISTORY_SHARE_OFF"]   or "Nobody (local only)",
+                            group = L["CONFIG_HISTORY_SHARE_GROUP"] or "Current group",
+                            guild = L["CONFIG_HISTORY_SHARE_GUILD"] or "Guild",
+                        },
+                        sorting = { "off", "group", "guild" },
+                        get = function() return Loothing.Settings:Get("history.share", "off") end,
+                        set = function(_, v) Loothing.Settings:Set("history.share", v) end,
                     },
                     savePersonalLoot = {
                         type = "toggle",
@@ -861,8 +861,8 @@ local function GetLocalPreferencesOptions()
                         desc = L["CONFIG_HISTORY_SAVE_PL_DESC"],
                         order = 5,
                         width = "half",
-                        get = function() return Loothing.Settings:Get("historySettings.savePersonalLoot") end,
-                        set = function(_, v) Loothing.Settings:Set("historySettings.savePersonalLoot", v) end,
+                        get = function() return Loothing.Settings:Get("history.savePersonalLoot") end,
+                        set = function(_, v) Loothing.Settings:Set("history.savePersonalLoot", v) end,
                     },
                     autoExportWeb = {
                         type = "toggle",
@@ -870,8 +870,8 @@ local function GetLocalPreferencesOptions()
                         desc = L["CONFIG_HISTORY_AUTO_EXPORT_WEB_DESC"],
                         order = 6,
                         width = "full",
-                        get = function() return Loothing.Settings:Get("historySettings.autoExportWeb") end,
-                        set = function(_, v) Loothing.Settings:Set("historySettings.autoExportWeb", v) end,
+                        get = function() return Loothing.Settings:Get("history.autoExportWeb") end,
+                        set = function(_, v) Loothing.Settings:Set("history.autoExportWeb", v) end,
                     },
                     maxEntries = {
                         type = "range",
@@ -879,8 +879,8 @@ local function GetLocalPreferencesOptions()
                         desc = L["CONFIG_HISTORY_MAX_ENTRIES_DESC"],
                         order = 7,
                         min = 50, max = 2000, step = 50,
-                        get = function() return Loothing.Settings:Get("historySettings.maxEntries", 500) end,
-                        set = function(_, v) Loothing.Settings:Set("historySettings.maxEntries", v) end,
+                        get = function() return Loothing.Settings:Get("history.maxEntries", 500) end,
+                        set = function(_, v) Loothing.Settings:Set("history.maxEntries", v) end,
                     },
                 },
             },

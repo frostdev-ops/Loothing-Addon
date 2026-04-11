@@ -40,8 +40,8 @@ local SCROLL_STEP = 124  -- ITEM_TAB_WIDTH + ITEM_TAB_SPACING
 local REFRESH_THROTTLE = 0.15
 
 --- Check if the current player is an observer (not council, not ML)
--- Observers can see the table when voting.observe is enabled, but cannot
--- perform ML actions or cast votes.
+-- Observers can see the table when observers.openObservation is enabled,
+-- but cannot perform ML actions or cast votes.
 local function IsObserverOnly()
     local isCouncil = Loothing.Council and Loothing.Council:IsPlayerCouncilMember()
     local isML = Loothing.Session and Loothing.Session:IsMasterLooter()

@@ -173,6 +173,17 @@ local function BuildSlug(class, spec)
     return classSlug .. "_" .. specSlug
 end
 
+--- Look up an item entry from a desktop-synced item map.
+-- Desktop sync writes numeric Lua keys for item IDs, but older payloads may
+-- still use string keys. Support both to stay backward-compatible.
+-- @param itemMap table|nil
+-- @param itemID number|string
+-- @return table|nil
+local function GetItemEntry(itemMap, itemID)
+    if type(itemMap) ~= "table" or itemID == nil then return nil end
+    return itemMap[itemID] or itemMap[tostring(itemID)]
+end
+
 --[[--------------------------------------------------------------------
     Queries
 ----------------------------------------------------------------------]]
@@ -194,7 +205,7 @@ function TrinketSimsMixin:GetRank(itemID, class, spec)
     local slug = BuildSlug(class, spec)
     if not slug then return nil end
 
-    local entry = self.trinkets[tostring(itemID)]
+    local entry = GetItemEntry(self.trinkets, itemID)
     if not entry then return nil end
 
     return entry[slug]
