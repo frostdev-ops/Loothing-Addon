@@ -125,16 +125,6 @@ function RollFrameMixin:UpdateRollDisplay()
     end
 end
 
---- Trigger auto-roll for the current item if settings allow it
-function RollFrameMixin:TriggerAutoRoll()
-    local autoRoll = Loothing.Settings and Loothing.Settings:Get("rollFrame.autoRollOnSubmit")
-    if not autoRoll then return end
-    if not self.item then return end
-    local existing = self:GetItemRoll(self.item.guid)
-    if existing then return end -- already rolled
-    self:DoRoll()
-end
-
 --- Execute a /roll command for the current item
 function RollFrameMixin:DoRoll()
     if not self.item then return end
@@ -267,9 +257,6 @@ function RollFrameMixin:DisplayItem(item)
 
     -- Start timer
     self:StartTimer()
-
-    -- Auto-roll if rolls are enabled (roll happens immediately when frame shows)
-    self:TriggerAutoRoll()
 
     -- Guarantee layout is correct regardless of RefreshResponseButtons path
     self:UpdateLayout()

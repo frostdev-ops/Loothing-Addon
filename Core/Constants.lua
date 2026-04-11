@@ -8,7 +8,7 @@ local _, ns = ...
 local Loothing = ns.Addon
 
 -- Addon info
-Loothing.VERSION = "2.0.7"
+Loothing.VERSION = "2.0.8"
 Loothing.PROTOCOL_VERSION = 4
 Loothing.ADDON_PREFIX = "LOOTHING"
 
@@ -268,7 +268,11 @@ Loothing.DefaultSettings = {
     --   v2 = 2.0.7 settings cleanup (settings.* namespace removed,
     --        ml.scope/voting.privacy/history.share collapsed merges,
     --        legacy announcement / buttonSets keys deleted)
-    schemaVersion = 2,
+    --   v3 = 2.0.8 dead-weight cleanup (rollFrame.autoRollOnSubmit,
+    --        councilTable.rowHeight, voting.numButtons,
+    --        winnerDetermination.requireConfirmation, legacy
+    --        `responses` definitions table)
+    schemaVersion = 3,
 
     council = {
         members = {},
@@ -373,38 +377,11 @@ Loothing.DefaultSettings = {
         includeBoE = false,      -- Include Bind on Equip items
     },
 
-    responses = {
-        [Loothing.Response.NEED] = {
-            name = "NEED",
-            color = { 0.0, 1.0, 0.0, 1.0 },
-            icon = "Interface\\Buttons\\UI-GroupLoot-Dice-Up",
-            sort = 1,
-        },
-        [Loothing.Response.GREED] = {
-            name = "GREED",
-            color = { 1.0, 1.0, 0.0, 1.0 },
-            icon = "Interface\\Buttons\\UI-GroupLoot-Coin-Up",
-            sort = 2,
-        },
-        [Loothing.Response.OFFSPEC] = {
-            name = "OFFSPEC",
-            color = { 1.0, 0.5, 0.0, 1.0 },
-            icon = "Interface\\Icons\\Ability_DualWield",
-            sort = 3,
-        },
-        [Loothing.Response.TRANSMOG] = {
-            name = "TRANSMOG",
-            color = { 1.0, 0.0, 1.0, 1.0 },
-            icon = "Interface\\Icons\\INV_Arcane_Orb",
-            sort = 4,
-        },
-        [Loothing.Response.PASS] = {
-            name = "PASS",
-            color = { 0.5, 0.5, 0.5, 1.0 },
-            icon = "Interface\\Buttons\\UI-GroupLoot-Pass-Up",
-            sort = 5,
-        },
-    },
+    -- v2.0.8: legacy `responses` definitions table removed. The
+    -- response IDs themselves (Loothing.Response.NEED/GREED/etc., the
+    -- numeric constants at the top of this file) are still alive, but
+    -- the per-response display metadata (color/icon/sort/name) lives
+    -- in `responseSets` which is the canonical model.
 
     awardReasons = {
         enabled = true,
@@ -515,7 +492,6 @@ Loothing.DefaultSettings = {
     -- RollFrame settings (popup for raid members to respond to loot)
     rollFrame = {
         autoShow = true,           -- Auto-popup when voting starts
-        autoRollOnSubmit = false,  -- Auto-trigger /roll when submitting response
         rollRange = { min = 1, max = 100 },  -- Roll range
         showGearComparison = true, -- Show equipped gear comparison
         position = nil,            -- Saved position { point, x, y }
@@ -541,7 +517,8 @@ Loothing.DefaultSettings = {
         },
         sortColumn = "response",
         sortAscending = true,
-        rowHeight = 24,
+        -- v2.0.8: rowHeight removed. Was only ever read by an orphaned
+        -- accessor; renderers all use a hardcoded row height.
     },
 
     -- Winner determination settings

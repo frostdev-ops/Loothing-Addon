@@ -424,7 +424,12 @@ function RollFrameMixin:UpdateLayout()
         showRolls = Loothing.Settings:GetAutoAddRolls()
         numButtons = #self.responseButtonsArray
         if numButtons == 0 then
-            numButtons = Loothing.Settings:GetNumButtons() or 5
+            -- v2.0.8: was Loothing.Settings:GetNumButtons() or 5. The
+            -- voting.numButtons setting had no UI surface, no setter
+            -- caller, and only this single fallback reader — it was
+            -- effectively a constant. Inlined here to delete the
+            -- accessor pair.
+            numButtons = 5
         end
     end
 

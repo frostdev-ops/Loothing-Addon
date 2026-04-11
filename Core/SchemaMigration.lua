@@ -216,9 +216,39 @@ local function migrateV2(profile)
     end
 end
 
+--[[--------------------------------------------------------------------
+    Schema v3 — Loothing 2.0.8 dead-weight cleanup
+
+    Drops settings that were registered but had no consumer or were
+    wired to the wrong call site:
+      rollFrame.autoRollOnSubmit -> deleted (was the misnamed setting
+        that pre-rolled on every item display instead of on submit)
+      councilTable.rowHeight     -> deleted (only reader was an
+        orphaned getter; renderers all used a hardcoded row height)
+      voting.numButtons          -> deleted (had no UI surface, no
+        setter caller; the single fallback reader was inlined as 5)
+      profile.responses          -> deleted (legacy display-metadata
+        table, fully superseded by responseSets in earlier versions)
+
+    Idempotent: nilling an already-nil field is a no-op.
+----------------------------------------------------------------------]]
+local function migrateV3(profile)
+    if type(profile.rollFrame) == "table" then
+        profile.rollFrame.autoRollOnSubmit = nil
+    end
+    if type(profile.councilTable) == "table" then
+        profile.councilTable.rowHeight = nil
+    end
+    if type(profile.voting) == "table" then
+        profile.voting.numButtons = nil
+    end
+    profile.responses = nil
+end
+
 --- All migration functions, indexed by the target schemaVersion.
 local migrations = {
     [2] = migrateV2,
+    [3] = migrateV3,
 }
 
 --- Run all pending migrations on a SavedVariables store.

@@ -193,15 +193,12 @@ local function GetLocalPreferencesOptions()
                         get = function() return Loothing.Settings:Get("rollFrame.autoShow", true) ~= false end,
                         set = function(_, v) Loothing.Settings:Set("rollFrame.autoShow", v) end,
                     },
-                    autoRollOnSubmit = {
-                        type = "toggle",
-                        name = L["CONFIG_ROLLFRAME_AUTO_ROLL"],
-                        desc = L["CONFIG_ROLLFRAME_AUTO_ROLL_DESC"],
-                        order = 2,
-                        width = "half",
-                        get = function() return Loothing.Settings:Get("rollFrame.autoRollOnSubmit", false) end,
-                        set = function(_, v) Loothing.Settings:Set("rollFrame.autoRollOnSubmit", v) end,
-                    },
+                    -- autoRollOnSubmit removed in v2.0.8: the setting was
+                    -- wired to DisplayItem, not Submit, and rolled on
+                    -- every item display before the user had decided on
+                    -- a response. See voting.autoAddRolls for the
+                    -- genuine "auto-add /roll results to candidates"
+                    -- behavior.
                     showGearComparison = {
                         type = "toggle",
                         name = L["CONFIG_ROLLFRAME_GEAR_COMPARE"],

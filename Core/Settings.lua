@@ -77,7 +77,8 @@ local PROFILE_DEFAULTS = {
     autoAward           = CopyDefaults(Loothing.DefaultSettings.autoAward),
     ignoreItems         = CopyDefaults(Loothing.DefaultSettings.ignoreItems),
     voting              = CopyDefaults(Loothing.DefaultSettings.voting),
-    responses           = CopyDefaults(Loothing.DefaultSettings.responses),
+    -- v2.0.8: legacy `responses` definitions table removed (was
+    -- superseded by `responseSets` in earlier versions; no consumers).
     awardReasons        = CopyDefaults(Loothing.DefaultSettings.awardReasons),
     frame               = CopyDefaults(Loothing.DefaultSettings.frame),
     ml                  = CopyDefaults(Loothing.DefaultSettings.ml),
@@ -1207,19 +1208,10 @@ function SettingsMixin:SetRequireNotes(enabled)
     self:Set("voting.requireNotes", enabled)
 end
 
---- Get number of buttons setting
--- @return number
-function SettingsMixin:GetNumButtons()
-    local num = self:Get("voting.numButtons", 5)
-    return math.max(1, math.min(10, num))
-end
-
---- Set number of buttons setting
--- @param num number (1-10)
-function SettingsMixin:SetNumButtons(num)
-    num = math.max(1, math.min(10, num))
-    self:Set("voting.numButtons", num)
-end
+-- Removed in v2.0.8: GetNumButtons / SetNumButtons.
+-- The `voting.numButtons` setting had no UI surface and no setter
+-- caller — it was a fallback constant read in exactly one branch in
+-- RollFrame/UI.lua, where it has been inlined as the literal 5.
 
 --[[--------------------------------------------------------------------
     Award Reasons Settings
@@ -2184,43 +2176,26 @@ function SettingsMixin:SetCouncilTableSort(columnId, ascending)
     self:Set("councilTable.sortAscending", ascending)
 end
 
---- Get council table row height
--- @return number
-function SettingsMixin:GetCouncilTableRowHeight()
-    return self:Get("councilTable.rowHeight") or 24
-end
+-- Removed in v2.0.8: GetCouncilTableRowHeight
+-- The accessor had zero callers — every council table renderer used
+-- a hardcoded row height. The `councilTable.rowHeight` setting itself
+-- has been deleted from DefaultSettings.
 
 --[[--------------------------------------------------------------------
     Roll Frame Settings (rollFrame.*)
 ----------------------------------------------------------------------]]
 
---- Get whether RollFrame should auto-show when voting starts
--- @return boolean
-function SettingsMixin:GetRollFrameAutoShow()
-    local value = self:Get("rollFrame.autoShow")
-    if value == nil then return true end
-    return value
-end
+-- Removed in v2.0.8: GetRollFrameAutoShow / SetRollFrameAutoShow
+-- Consumers (LocalPreferences.lua) use direct
+-- Loothing.Settings:Get("rollFrame.autoShow") instead.
 
---- Set whether RollFrame should auto-show when voting starts
--- @param value boolean
-function SettingsMixin:SetRollFrameAutoShow(value)
-    self:Set("rollFrame.autoShow", value)
-end
-
---- Get whether to auto-roll when submitting response
--- @return boolean
-function SettingsMixin:GetAutoRollOnSubmit()
-    local value = self:Get("rollFrame.autoRollOnSubmit")
-    if value == nil then return false end
-    return value
-end
-
---- Set whether to auto-roll when submitting response
--- @param value boolean
-function SettingsMixin:SetAutoRollOnSubmit(value)
-    self:Set("rollFrame.autoRollOnSubmit", value)
-end
+-- Removed in v2.0.8: GetAutoRollOnSubmit / SetAutoRollOnSubmit
+-- The setting was wired to the wrong call site (DisplayItem, not
+-- response submit) and harmful in practice — it pre-rolled on every
+-- item display before the user had decided on a response, leaking
+-- the roll value to the council before their response and spamming
+-- the roll channel. The genuine "tiebreaker roll" use case is already
+-- covered by voting.autoAddRolls.
 
 --- Get the roll range
 -- @return table { min, max } (copy)
@@ -2229,40 +2204,16 @@ function SettingsMixin:GetRollRange()
     return { min = range.min, max = range.max }
 end
 
---- Set the roll range
--- @param min number
--- @param max number
-function SettingsMixin:SetRollRange(min, max)
-    self:Set("rollFrame.rollRange", { min = min, max = max })
-end
+-- Removed in v2.0.8: SetRollRange (Get is still alive — read in
+-- RollFrame.lua's DoRoll). The roll range is hardcoded {1,100} in
+-- DefaultSettings and there is no UI surface to change it.
 
---- Get whether to show gear comparison in RollFrame
--- @return boolean
-function SettingsMixin:GetShowGearComparison()
-    local value = self:Get("rollFrame.showGearComparison")
-    if value == nil then return true end
-    return value
-end
+-- Removed in v2.0.8: GetShowGearComparison / SetShowGearComparison
+-- Consumers use direct Loothing.Settings:Get("rollFrame.showGearComparison")
+-- instead — see RollFrame.lua and RollFrame/UI.lua.
 
---- Set whether to show gear comparison in RollFrame
--- @param value boolean
-function SettingsMixin:SetShowGearComparison(value)
-    self:Set("rollFrame.showGearComparison", value)
-end
-
---- Get RollFrame saved position
--- @return table|nil { point, x, y }
-function SettingsMixin:GetRollFramePosition()
-    return self:Get("rollFrame.position")
-end
-
---- Set RollFrame saved position
--- @param point string
--- @param x number
--- @param y number
-function SettingsMixin:SetRollFramePosition(point, x, y)
-    self:Set("rollFrame.position", { point = point, x = x, y = y })
-end
+-- Removed in v2.0.8: GetRollFramePosition / SetRollFramePosition
+-- Position save/restore is done elsewhere via direct Get/Set.
 
 --[[--------------------------------------------------------------------
     RollFrame Timeout Settings
@@ -2311,23 +2262,9 @@ end
     Winner Determination Settings (winnerDetermination.*)
 ----------------------------------------------------------------------]]
 
---- Get winner determination mode
--- @return string "HIGHEST_VOTES", "ML_CONFIRM", or "AUTO_HIGHEST_CONFIRM"
-function SettingsMixin:GetWinnerMode()
-    local value = self:Get("winnerDetermination.mode")
-    if value == nil then return "ML_CONFIRM" end
-    return value
-end
-
---- Set winner determination mode
--- @param mode string
-function SettingsMixin:SetWinnerMode(mode)
-    local valid = { HIGHEST_VOTES = true, ML_CONFIRM = true, AUTO_HIGHEST_CONFIRM = true }
-    if not valid[mode] then
-        mode = "ML_CONFIRM"
-    end
-    self:Set("winnerDetermination.mode", mode)
-end
+-- Removed in v2.0.8: GetWinnerMode / SetWinnerMode
+-- Consumers use direct Loothing.Settings:Get/Set("winnerDetermination.mode")
+-- instead.
 
 --- Get tie breaker mode
 -- @return string "ROLL", "ML_CHOICE", or "REVOTE"
@@ -2337,15 +2274,9 @@ function SettingsMixin:GetTieBreakerMode()
     return value
 end
 
---- Set tie breaker mode
--- @param mode string
-function SettingsMixin:SetTieBreakerMode(mode)
-    local valid = { ROLL = true, ML_CHOICE = true, REVOTE = true }
-    if not valid[mode] then
-        mode = "ROLL"
-    end
-    self:Set("winnerDetermination.tieBreaker", mode)
-end
+-- Removed in v2.0.8: SetTieBreakerMode (Get is still alive — read in
+-- VotingSession.lua and the options table). The setter had no callers;
+-- writes go through direct Loothing.Settings:Set("winnerDetermination.tieBreaker").
 
 --- Get whether to auto-award on unanimous vote
 -- @return boolean
@@ -2364,9 +2295,6 @@ end
 -- Removed in v2.0.7: GetRequireConfirmation / SetRequireConfirmation
 -- The toggle was redundant with `winnerDetermination.mode`. ML_CONFIRM
 -- and AUTO_HIGHEST_CONFIRM imply confirmation; HIGHEST_VOTES does not.
--- Code that needs to know whether confirmation is required should check
--- the mode field directly.
-function SettingsMixin:GetRequireConfirmation()
-    local mode = self:Get("winnerDetermination.mode", "ML_CONFIRM")
-    return mode == "ML_CONFIRM" or mode == "AUTO_HIGHEST_CONFIRM"
-end
+-- The derived projection that lived here through v2.0.7 was itself
+-- removed in v2.0.8 — it had zero callers, so any code that needs to
+-- know whether confirmation is required should check `mode` directly.

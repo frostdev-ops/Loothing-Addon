@@ -236,8 +236,9 @@ L["PERSONAL_PREFERENCES"] = "Personal Preferences"
 L["CONFIG_LOOT_RESPONSE"] = "Loot Response"
 L["CONFIG_ROLLFRAME_AUTO_SHOW"] = "Auto-Show Response Frame"
 L["CONFIG_ROLLFRAME_AUTO_SHOW_DESC"] = "Automatically show the response frame when voting starts"
-L["CONFIG_ROLLFRAME_AUTO_ROLL"] = "Auto-Roll on Submit"
-L["CONFIG_ROLLFRAME_AUTO_ROLL_DESC"] = "Automatically trigger /roll when submitting a response"
+-- CONFIG_ROLLFRAME_AUTO_ROLL / _DESC removed in v2.0.8 along with the
+-- broken autoRollOnSubmit setting. See LocalPreferences.lua / Settings.lua
+-- for the rationale.
 L["CONFIG_ROLLFRAME_GEAR_COMPARE"] = "Show Gear Comparison"
 L["CONFIG_ROLLFRAME_GEAR_COMPARE_DESC"] = "Show your currently equipped items for comparison"
 L["CONFIG_ROLLFRAME_REQUIRE_NOTE"] = "Require Note"
