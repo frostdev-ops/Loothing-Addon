@@ -473,6 +473,18 @@ function IntelShareMixin:MergeIntel(transferID)
             Loothing:Print(string.format(L["INTEL_RECEIVE_COMPLETE"],
                 Ambiguate(sender, "short"), mergedCount, pending.expectedCount))
             self.pendingReceive[transferID] = nil
+
+            -- Prompt user to reload UI if any data was actually merged
+            if mergedCount > 0 then
+                local Popups = ns.Popups
+                if Popups then
+                    Popups:Show("LOOTHING_INTEL_SHARE_RELOAD", {
+                        player = Ambiguate(sender, "short"),
+                        merged = mergedCount,
+                        total = pending.expectedCount,
+                    })
+                end
+            end
             return
         end
 

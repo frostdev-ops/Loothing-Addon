@@ -27,6 +27,8 @@ Popups.dialogs = Popups.dialogs or {}
 Popups.activeDialogs = Popups.activeDialogs or {}
 ns.Popups = Popups
 
+local SkinningMixin = ns.SkinningMixin
+
 --[[--------------------------------------------------------------------
     Helper Functions
 ----------------------------------------------------------------------]]
@@ -75,6 +77,67 @@ local function GetItemIcon(itemLink)
 end
 
 --[[--------------------------------------------------------------------
+    Dialog Theming
+----------------------------------------------------------------------]]
+
+--- Apply Loothing's skin to a Loolib.UI.Dialog after creation.
+-- Styles the backdrop, title, message, and buttons to match the addon palette.
+local function ThemeDialog(dialog)
+    if not SkinningMixin then
+        SkinningMixin = ns.SkinningMixin
+    end
+    if not SkinningMixin or not dialog then return end
+
+    -- Backdrop: dark panel with subtle border
+    if dialog.SetBackdrop then
+        dialog:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Buttons\\WHITE8x8",
+            tile = false,
+            edgeSize = 1,
+            insets = { left = 1, right = 1, top = 1, bottom = 1 },
+        })
+        dialog:SetBackdropColor(unpack(SkinningMixin:GetColor("frame")))
+        dialog:SetBackdropBorderColor(unpack(SkinningMixin:GetColor("border")))
+    end
+
+    -- Title: accent color
+    if dialog.Title then
+        local color = SkinningMixin:GetColor("accent")
+        dialog.Title:SetTextColor(color[1], color[2], color[3], color[4] or 1)
+    end
+
+    -- Message: standard text color
+    if dialog.Message then
+        local color = SkinningMixin:GetColor("text")
+        dialog.Message:SetTextColor(color[1], color[2], color[3], color[4] or 1)
+    end
+
+    -- Close button: soften the default Blizz X
+    if dialog.CloseButton then
+        dialog.CloseButton:SetAlpha(0.6)
+    end
+end
+
+--- Skin dialog buttons after they are laid out.
+-- Called via a deferred timer since LayoutButtons runs during Show().
+local function ThemeDialogButtons(dialog)
+    if not SkinningMixin then
+        SkinningMixin = ns.SkinningMixin
+    end
+    if not SkinningMixin or not dialog then return end
+
+    local pool = dialog.buttonPool
+    if not pool or not pool.buttons then return end
+
+    for _, button in ipairs(pool.buttons) do
+        if button.__loolibActive then
+            SkinningMixin:StylePlainButton(button)
+        end
+    end
+end
+
+--[[--------------------------------------------------------------------
     Dialog Registration
 ----------------------------------------------------------------------]]
 
@@ -100,6 +163,9 @@ function Popups:Show(name, data, onAccept, onCancel)
 
     -- Create dialog
     local dialog = Loolib.UI.Dialog.Create()
+
+    -- Apply Loothing theme to the dialog frame
+    ThemeDialog(dialog)
 
     -- Set title
     local title = config.title or "Loothing"
@@ -179,6 +245,11 @@ function Popups:Show(name, data, onAccept, onCancel)
 
     -- Show dialog
     dialog:Show()
+
+    -- Theme buttons after layout (LayoutButtons runs during Show)
+    C_Timer.After(0, function()
+        ThemeDialogButtons(dialog)
+    end)
 
     -- Track active dialog
     self.activeDialogs[name] = dialog
@@ -507,6 +578,34 @@ Popups:Register("LOOTHING_INTEL_SHARE_REQUEST", {
                     data.onCancel()
                 end
             end,
+        },
+    },
+})
+
+-- 7c. Intel Share Complete - "Reload UI for changes to take effect"
+Popups:Register("LOOTHING_INTEL_SHARE_RELOAD", {
+    title = L["POPUP_INTEL_SHARE_TITLE"],
+    text = L["POPUP_INTEL_SHARE_RELOAD"],
+    modal = false,
+    hide_on_escape = true,
+    show_while_dead = true,
+    on_show = function(_dialog, data)
+        if data then
+            return string.format(L["POPUP_INTEL_SHARE_RELOAD_FMT"],
+                data.player or "", data.merged or 0, data.total or 0)
+        end
+        return nil
+    end,
+    buttons = {
+        {
+            text = L["RELOAD_UI"],
+            on_click = function()
+                ReloadUI()
+            end,
+        },
+        {
+            text = L["LATER"],
+            on_click = function() end,  -- just dismiss
         },
     },
 })
