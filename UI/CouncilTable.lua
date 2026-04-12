@@ -644,7 +644,7 @@ end
     Detail Tooltip (floating panel, anchored to right edge of frame)
 ----------------------------------------------------------------------]]
 
-local DETAIL_TOOLTIP_WIDTH = 220
+local DETAIL_TOOLTIP_WIDTH = 280
 
 function CouncilTableMixin:CreateDetailTooltip()
     local tooltip = CreateFrame("Frame", nil, self.frame, "BackdropTemplate")
@@ -713,9 +713,17 @@ function CouncilTableMixin:CreateDetailTooltip()
     self.moreInfoNote = note
     SkinningMixin:StyleText(note, "highlightSmall", "text")
 
+    -- Separator: identity block -> gear
+    local gearSep = content:CreateTexture(nil, "ARTWORK")
+    gearSep:SetPoint("TOPLEFT", note, "BOTTOMLEFT", 0, -6)
+    gearSep:SetPoint("RIGHT", -6, 0)
+    gearSep:SetHeight(1)
+    gearSep:SetColorTexture(unpack(SkinningMixin:GetColor("border")))
+    self.moreInfoGearSep = gearSep
+
     -- Gear text
     local gear = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    gear:SetPoint("TOPLEFT", note, "BOTTOMLEFT", 0, -6)
+    gear:SetPoint("TOPLEFT", gearSep, "BOTTOMLEFT", 0, -4)
     gear:SetPoint("RIGHT", -6, 0)
     gear:SetJustifyH("LEFT")
     SkinningMixin:StyleText(gear, "bodySmall", "textMuted")
@@ -724,7 +732,7 @@ function CouncilTableMixin:CreateDetailTooltip()
 
     -- Vote breakdown
     local voteBreakdown = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    voteBreakdown:SetPoint("TOPLEFT", gear, "BOTTOMLEFT", 0, -6)
+    voteBreakdown:SetPoint("TOPLEFT", gear, "BOTTOMLEFT", 0, -4)
     voteBreakdown:SetPoint("RIGHT", -6, 0)
     voteBreakdown:SetJustifyH("LEFT")
     SkinningMixin:StyleText(voteBreakdown, "bodySmall", "success")
@@ -812,9 +820,17 @@ function CouncilTableMixin:CreateDetailTooltip()
     droptimizerSim:SetWordWrap(true)
     self.moreInfoDroptimizer = droptimizerSim
 
+    -- Separator: sim data -> loot history
+    local lootSep = content:CreateTexture(nil, "ARTWORK")
+    lootSep:SetPoint("TOPLEFT", droptimizerSim, "BOTTOMLEFT", 0, -6)
+    lootSep:SetPoint("RIGHT", -6, 0)
+    lootSep:SetHeight(1)
+    lootSep:SetColorTexture(unpack(SkinningMixin:GetColor("border")))
+    self.moreInfoLootSep = lootSep
+
     -- Recent Loot History
     local lootHistory = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    lootHistory:SetPoint("TOPLEFT", droptimizerSim, "BOTTOMLEFT", 0, -4)
+    lootHistory:SetPoint("TOPLEFT", lootSep, "BOTTOMLEFT", 0, -4)
     lootHistory:SetPoint("RIGHT", -6, 0)
     lootHistory:SetJustifyH("LEFT")
     lootHistory:SetWordWrap(true)

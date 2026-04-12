@@ -466,18 +466,12 @@ function CouncilTableMixin:UpdateDetailTooltip(candidate)
     -- Item level & role
     local infoLines = {}
     if candidate.equippedIlvl and candidate.equippedIlvl > 0 then
-        infoLines[#infoLines + 1] = string.format("iLvl: %d", candidate.equippedIlvl)
+        infoLines[#infoLines + 1] = string.format("iLvl: |cffffffff%d|r", candidate.equippedIlvl)
     end
     if candidate.role and candidate.role ~= "NONE" then
-        infoLines[#infoLines + 1] = string.format("Role: %s", candidate.role)
+        infoLines[#infoLines + 1] = string.format("Role: |cffffffff%s|r", candidate.role)
     end
-    if candidate.rank then
-        infoLines[#infoLines + 1] = string.format("Rank: %s", candidate.rank)
-    end
-    if candidate.enchanter then
-        infoLines[#infoLines + 1] = "Enchanter"
-    end
-    self.moreInfoDetails:SetText(table.concat(infoLines, "  |  "))
+    self.moreInfoDetails:SetText(table.concat(infoLines, "  \194\183  "))
 
     -- Gear comparison
     local gearLines = {}
@@ -517,7 +511,7 @@ function CouncilTableMixin:UpdateDetailTooltip(candidate)
         end
 
         if #breakdownParts > 0 then
-            self.moreInfoVoteBreakdown:SetText(table.concat(breakdownParts, "  |  "))
+            self.moreInfoVoteBreakdown:SetText(table.concat(breakdownParts, "  \194\183  "))
         else
             self.moreInfoVoteBreakdown:SetText("")
         end
@@ -532,13 +526,13 @@ function CouncilTableMixin:UpdateDetailTooltip(candidate)
             local c = nlInfo and nlInfo.color or { r = 1, g = 1, b = 1 }
 
             local wishParts = {}
-            wishParts[#wishParts + 1] = string.format("Wishlist: %s \194\183 Priority %d", label, wishEntry.priority or 0)
+            wishParts[#wishParts + 1] = string.format("Wishlist: %s  \194\183  Priority %d", label, wishEntry.priority or 0)
 
             -- Character progress
             local charInfo = Loothing.Wishlist and Loothing.Wishlist:GetCharacterInfo(candidate.playerName)
             if charInfo and charInfo.totalItems and charInfo.totalItems > 0 then
                 local fulfilled = charInfo.fulfilledItems or 0
-                wishParts[#wishParts + 1] = string.format("  |  Progress: %d/%d", fulfilled, charInfo.totalItems)
+                wishParts[#wishParts + 1] = string.format("  \194\183  Progress: %d/%d", fulfilled, charInfo.totalItems)
             end
 
             -- Notes from wishlist entry
@@ -607,7 +601,7 @@ function CouncilTableMixin:UpdateDetailTooltip(candidate)
             end
             local rankText = candidateClass and candidateSpec and Loothing.TrinketSims:GetRankText(currentItemID, candidateClass, candidateSpec)
             if rankText then
-                self.moreInfoTrinketSim:SetText("Sim: " .. rankText .. "  |cff888888bloodmallet.com|r")
+                self.moreInfoTrinketSim:SetText("Sim  " .. rankText .. "\n  |cff666666bloodmallet.com|r")
                 self.moreInfoTrinketSim:SetTextColor(0.6, 0.9, 1.0)
             else
                 self.moreInfoTrinketSim:SetText("")
@@ -626,7 +620,7 @@ function CouncilTableMixin:UpdateDetailTooltip(candidate)
             if upgradeText then
                 local isStale = Loothing.Droptimizer:IsCharStale(candidateName)
                 local staleTag = isStale and "  |cffFF6600[stale]|r" or ""
-                self.moreInfoDroptimizer:SetText("Droptimizer: " .. upgradeText .. staleTag .. "  |cff888888raidbots.com|r")
+                self.moreInfoDroptimizer:SetText("Droptimizer  " .. upgradeText .. staleTag .. "\n  |cff666666raidbots.com|r")
                 self.moreInfoDroptimizer:SetTextColor(0.3, 0.9, 0.3)
             else
                 self.moreInfoDroptimizer:SetText("")
@@ -645,84 +639,87 @@ end
 ----------------------------------------------------------------------]]
 
 function CouncilTableMixin:UpdatePlayerIntelSection(intel)
-    -- Show separator
+    -- Show separators
     if self.moreInfoIntelSep then
         self.moreInfoIntelSep:Show()
+    end
+    if self.moreInfoLootSep then
+        self.moreInfoLootSep:Show()
     end
 
     -- M+ Activity
     if self.moreInfoMythicPlus then
         local parts = {}
-        if intel.mpWeek then
-            if intel.mpWeek.count and intel.mpWeek.count > 0 then
-                parts[#parts + 1] = string.format("%d keys this week", intel.mpWeek.count)
-            end
-            if intel.mpWeek.highest and intel.mpWeek.highest > 0 then
-                parts[#parts + 1] = string.format("Highest: +%d", intel.mpWeek.highest)
-            end
+        if intel.mpWeek and intel.mpWeek.count and intel.mpWeek.count > 0 then
+            parts[#parts + 1] = string.format("%d keys", intel.mpWeek.count)
+        end
+        if intel.mpWeek and intel.mpWeek.highest and intel.mpWeek.highest > 0 then
+            parts[#parts + 1] = string.format("+%d best", intel.mpWeek.highest)
         end
         if intel.mpScore and intel.mpScore > 0 then
-            parts[#parts + 1] = string.format("Score: %.0f", intel.mpScore)
+            parts[#parts + 1] = string.format("%.0f score", intel.mpScore)
         end
         if #parts > 0 then
-            self.moreInfoMythicPlus:SetText("M+: " .. table.concat(parts, "  |  "))
-            self.moreInfoMythicPlus:SetTextColor(0.4, 0.8, 1.0)
+            self.moreInfoMythicPlus:SetText("|cff66ccffM+|r  " .. table.concat(parts, "  \194\183  "))
+            self.moreInfoMythicPlus:SetTextColor(0.6, 0.85, 1.0)
         else
-            self.moreInfoMythicPlus:SetText("M+: No data")
+            self.moreInfoMythicPlus:SetText("|cff666666M+  No data|r")
             self.moreInfoMythicPlus:SetTextColor(0.5, 0.5, 0.5)
         end
     end
 
     -- Parse Performance
     if self.moreInfoParses then
-        local parts = {}
+        local hasData = false
+        local line1Parts = {}
         if intel.parseAvg then
-            parts[#parts + 1] = string.format("Avg: %.0f", intel.parseAvg)
+            line1Parts[#line1Parts + 1] = string.format("Avg |cffffffff%.0f|r", intel.parseAvg)
+            hasData = true
         end
         if intel.parseBest then
-            local bestText = string.format("Best: %.0f", intel.parseBest)
-            if intel.parseBestBoss then
-                bestText = bestText .. " (" .. intel.parseBestBoss .. ")"
-            end
-            parts[#parts + 1] = bestText
+            line1Parts[#line1Parts + 1] = string.format("Best |cffffffff%.0f|r", intel.parseBest)
+            hasData = true
         end
-
-        -- Trend indicator
+        -- Trend indicator inline with scores
         if intel.parseTrend == "up" then
-            parts[#parts + 1] = "|cff33ee33\226\150\178|r"  -- green ▲
+            line1Parts[#line1Parts + 1] = "|cff33ee33\226\150\178|r"
         elseif intel.parseTrend == "down" then
-            parts[#parts + 1] = "|cffee3333\226\150\188|r"  -- red ▼
+            line1Parts[#line1Parts + 1] = "|cffee3333\226\150\188|r"
         elseif intel.parseTrend == "stable" then
-            parts[#parts + 1] = "|cff999999\226\151\134|r"  -- gray ◆
+            line1Parts[#line1Parts + 1] = "|cff999999\226\151\134|r"
         end
 
-        if #parts > 0 then
-            self.moreInfoParses:SetText("Parses: " .. table.concat(parts, "  |  "))
-            self.moreInfoParses:SetTextColor(1.0, 0.8, 0.4)
+        if hasData then
+            local text = "|cffffcc66Parses|r  " .. table.concat(line1Parts, "  \194\183  ")
+            -- Boss name on its own line if present (these can be very long)
+            if intel.parseBestBoss then
+                text = text .. "\n  |cff888888" .. intel.parseBestBoss .. "|r"
+            end
+            self.moreInfoParses:SetText(text)
+            self.moreInfoParses:SetTextColor(1.0, 0.85, 0.5)
         else
-            self.moreInfoParses:SetText("Parses: No data")
+            self.moreInfoParses:SetText("|cff666666Parses  No data|r")
             self.moreInfoParses:SetTextColor(0.5, 0.5, 0.5)
         end
     end
 
-    -- Attendance (prefer event-based data, fall back to roster member percentage)
+    -- Attendance
     if self.moreInfoAttendance then
         local parts = {}
         if intel.eventAttendPct then
-            -- Event-based attendance from the events system
-            parts[#parts + 1] = string.format("%.0f%%", intel.eventAttendPct)
+            parts[#parts + 1] = string.format("|cffffffff%.0f%%|r", intel.eventAttendPct)
             if intel.eventAttended and intel.eventEligible then
                 parts[#parts + 1] = string.format("%d/%d events", intel.eventAttended, intel.eventEligible)
             end
         elseif intel.attendance then
-            -- Fallback to roster member attendance percentage
-            parts[#parts + 1] = string.format("%.0f%%", intel.attendance * 100)
+            parts[#parts + 1] = string.format("|cffffffff%.0f%%|r", intel.attendance * 100)
         end
         if intel.raidCount and intel.raidCount > 0 then
-            parts[#parts + 1] = string.format("%d raid dates", intel.raidCount)
+            local label = intel.raidCount == 1 and "raid date" or "raid dates"
+            parts[#parts + 1] = string.format("%d %s", intel.raidCount, label)
         end
         if #parts > 0 then
-            self.moreInfoAttendance:SetText("Attendance: " .. table.concat(parts, "  |  "))
+            self.moreInfoAttendance:SetText("Attendance  " .. table.concat(parts, "  \194\183  "))
         else
             self.moreInfoAttendance:SetText("")
         end
@@ -730,7 +727,8 @@ function CouncilTableMixin:UpdatePlayerIntelSection(intel)
 
     -- Gear Readiness (from audit data merged into intel)
     if self.moreInfoGearReady then
-        local parts = {}
+        local line1 = {}  -- tier + enchants + gems
+        local line2 = {}  -- vault + raid progression
         -- Tier set
         if intel.tierCount then
             local tierText = string.format("%dpc", intel.tierCount)
@@ -739,34 +737,37 @@ function CouncilTableMixin:UpdatePlayerIntelSection(intel)
             elseif intel.has2pc then
                 tierText = "|cff0070dd" .. tierText .. "|r"
             end
-            parts[#parts + 1] = "Tier: " .. tierText
+            line1[#line1 + 1] = tierText
         end
         -- Enchants
         if intel.enchMissing then
             if intel.enchMissing == 0 then
-                parts[#parts + 1] = "|cff33ee33Enchanted|r"
+                line1[#line1 + 1] = "|cff33ee33Enchanted|r"
             else
-                parts[#parts + 1] = string.format("|cffee3333%d missing enchants|r", intel.enchMissing)
+                line1[#line1 + 1] = string.format("|cffee3333%d missing enchants|r", intel.enchMissing)
             end
         end
         -- Gems
         if intel.gemMissing then
             if intel.gemMissing == 0 then
-                parts[#parts + 1] = "|cff33ee33Gemmed|r"
+                line1[#line1 + 1] = "|cff33ee33Gemmed|r"
             else
-                parts[#parts + 1] = string.format("|cffee3333%d missing gems|r", intel.gemMissing)
+                line1[#line1 + 1] = string.format("|cffee3333%d missing gems|r", intel.gemMissing)
             end
         end
         -- Vault
         if intel.vaultSlots then
-            parts[#parts + 1] = string.format("Vault: %d/9", intel.vaultSlots)
+            line2[#line2 + 1] = string.format("Vault %d/9", intel.vaultSlots)
         end
         -- Raid progression
         if intel.raidProg and intel.raidProg ~= "" then
-            parts[#parts + 1] = intel.raidProg
+            line2[#line2 + 1] = intel.raidProg
         end
-        if #parts > 0 then
-            self.moreInfoGearReady:SetText(table.concat(parts, "  |  "))
+        local lines = {}
+        if #line1 > 0 then lines[#lines + 1] = table.concat(line1, "  \194\183  ") end
+        if #line2 > 0 then lines[#lines + 1] = table.concat(line2, "  \194\183  ") end
+        if #lines > 0 then
+            self.moreInfoGearReady:SetText(table.concat(lines, "\n"))
             self.moreInfoGearReady:SetTextColor(0.7, 0.8, 0.7)
         else
             self.moreInfoGearReady:SetText("")
@@ -776,20 +777,28 @@ function CouncilTableMixin:UpdatePlayerIntelSection(intel)
     -- Recent Loot History (compact, last 3 items)
     if self.moreInfoLootHistory then
         if intel.loot and #intel.loot > 0 then
-            local lines = {}
+            local lines = { "|cffbbbbbbRecent Loot|r" }
             local maxShow = math.min(#intel.loot, 3)
             for i = 1, maxShow do
                 local item = intel.loot[i]
-                local text = string.format("[%s] %s (%s)", item.date or "?", item.name or "?", item.resp or "?")
-                lines[#lines + 1] = text
+                -- Shorten date: "2026-04-07" -> "Apr 07"
+                local dateStr = item.date or "?"
+                local y, m, d = dateStr:match("(%d+)-(%d+)-(%d+)")
+                if m and d then
+                    local monthNames = { "Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec" }
+                    local mi = tonumber(m)
+                    dateStr = (monthNames[mi] or m) .. " " .. d
+                end
+                lines[#lines + 1] = string.format("  |cff888888%s|r  %s |cff888888(%s)|r",
+                    dateStr, item.name or "?", item.resp or "?")
             end
             if #intel.loot > maxShow then
-                lines[#lines + 1] = string.format("  ...and %d more", #intel.loot - maxShow)
+                lines[#lines + 1] = string.format("  |cff666666...and %d more|r", #intel.loot - maxShow)
             end
-            self.moreInfoLootHistory:SetText("Recent Loot: " .. table.concat(lines, "\n"))
+            self.moreInfoLootHistory:SetText(table.concat(lines, "\n"))
             self.moreInfoLootHistory:SetTextColor(0.8, 0.8, 0.8)
         else
-            self.moreInfoLootHistory:SetText("Recent Loot: None this tier")
+            self.moreInfoLootHistory:SetText("|cff666666Recent Loot  None this tier|r")
             self.moreInfoLootHistory:SetTextColor(0.5, 0.5, 0.5)
         end
     end
@@ -805,7 +814,7 @@ function CouncilTableMixin:UpdatePlayerIntelSection(intel)
                 local shortName = dashIdx and altName:sub(1, dashIdx - 1) or altName
                 parts[#parts + 1] = string.format("%s (%s): %d items", shortName, alt.cls or "?", alt.count or 0)
             end
-            self.moreInfoAltLoot:SetText("Alt Loot: " .. table.concat(parts, "  |  "))
+            self.moreInfoAltLoot:SetText("|cff66ccffAlt Loot|r  " .. table.concat(parts, "  \194\183  "))
         else
             self.moreInfoAltLoot:SetText("")
         end
@@ -824,9 +833,12 @@ function CouncilTableMixin:UpdatePlayerIntelSection(intel)
 end
 
 function CouncilTableMixin:ClearPlayerIntelSection()
-    -- Hide separator
+    -- Hide separators
     if self.moreInfoIntelSep then
         self.moreInfoIntelSep:Hide()
+    end
+    if self.moreInfoLootSep then
+        self.moreInfoLootSep:Hide()
     end
 
     local noDataMsg = Loothing.PlayerIntel and not Loothing.PlayerIntel:HasData()
