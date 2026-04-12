@@ -125,6 +125,17 @@ local SCHEMAS = {
         { "scope", "string", false },
         { "sessionID", "string", false },
     },
+    INTEL_SHARE_MANIFEST = {
+        { "transferID", "string", true },
+        { "sender",     "string", true },
+        { "version",    "string", false },
+        { "datasets",   "table",  true },
+    },
+    INTEL_SHARE = {
+        { "transferID", "string", true },
+        { "type",       "string", true },
+        { "data",       "table",  true },
+    },
 }
 
 --- Validate data against a schema and log on failure.
@@ -767,5 +778,23 @@ function CommMixin:HandleProfileExportShare(data, sender, distribution)
             scope = scope,
             sessionID = data.sessionID,
         })
+    end
+end
+
+--[[--------------------------------------------------------------------
+    Desktop Intel Share Handlers
+----------------------------------------------------------------------]]
+
+function CommMixin:HandleIntelShareManifest(data, sender, distribution)
+    if not validateHandler("HandleIntelShareManifest", data, SCHEMAS.INTEL_SHARE_MANIFEST) then return end
+    if Loothing.IntelShare then
+        Loothing.IntelShare:HandleManifest(data, sender, distribution)
+    end
+end
+
+function CommMixin:HandleIntelShareData(data, sender, distribution)
+    if not validateHandler("HandleIntelShareData", data, SCHEMAS.INTEL_SHARE) then return end
+    if Loothing.IntelShare then
+        Loothing.IntelShare:HandleDataset(data, sender, distribution)
     end
 end

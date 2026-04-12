@@ -88,12 +88,11 @@ TestRunner:Describe("Desktop Exchange Item Lookup", function()
         end, { category = "unit" })
     end)
 
-    TestRunner:Describe("Trinket Sims", function()
+    TestRunner:Describe("Trinket Sims v1 (backward compat)", function()
         TestRunner:It("reads ranks from numeric item keys", function()
             InstallDesktopExchange({
                 trinketSims = {
                     generatedAt = 1775943224,
-                    fightStyle = "castingpatchwerk",
                     source = "bloodmallet.com",
                     version = 1,
                     trinkets = {
@@ -115,7 +114,6 @@ TestRunner:Describe("Desktop Exchange Item Lookup", function()
             InstallDesktopExchange({
                 trinketSims = {
                     generatedAt = 1775943224,
-                    fightStyle = "castingpatchwerk",
                     source = "bloodmallet.com",
                     version = 1,
                     trinkets = {
@@ -131,6 +129,173 @@ TestRunner:Describe("Desktop Exchange Item Lookup", function()
 
             Assert.Equals(12, reader:GetRank(151310, "PRIEST", "Shadow"))
             Assert.Truthy(reader:GetRankText(151310, "PRIEST", "Shadow"):find("#12 for", 1, true) ~= nil)
+        end, { category = "unit" })
+
+        TestRunner:It("GetSimText falls back to rank for v1 data", function()
+            InstallDesktopExchange({
+                trinketSims = {
+                    generatedAt = 1775943224,
+                    source = "bloodmallet.com",
+                    version = 1,
+                    trinkets = {
+                        [151310] = {
+                            priest_shadow = 5,
+                        },
+                    },
+                },
+            })
+
+            local reader = CreateFromMixins(ns.TrinketSimsMixin)
+            reader:Init()
+
+            Assert.Equals("#5", reader:GetSimText(151310, "PRIEST", "Shadow"))
+        end, { category = "unit" })
+    end)
+
+    TestRunner:Describe("Trinket Sims v2 (multi-target + DPS gain)", function()
+        TestRunner:It("reads rank and DPS gain from v2 numeric keys", function()
+            InstallDesktopExchange({
+                trinketSims = {
+                    generatedAt = 1775943224,
+                    source = "bloodmallet.com",
+                    version = 2,
+                    trinkets = {
+                        [151310] = {
+                            priest_shadow = {
+                                r = 3, g = 12500,
+                                r3 = 7, g3 = 8200,
+                                r5 = 12, g5 = 4100,
+                            },
+                        },
+                    },
+                },
+            })
+
+            local reader = CreateFromMixins(ns.TrinketSimsMixin)
+            reader:Init()
+
+            -- Rank queries (1T)
+            Assert.Equals(3, reader:GetRank(151310, "PRIEST", "Shadow"))
+
+            -- DPS gain queries per target count
+            Assert.Equals(12500, reader:GetDpsGain(151310, "PRIEST", "Shadow", "1T"))
+            Assert.Equals(8200, reader:GetDpsGain(151310, "PRIEST", "Shadow", "3T"))
+            Assert.Equals(4100, reader:GetDpsGain(151310, "PRIEST", "Shadow", "5T"))
+
+            -- Default target count is 1T
+            Assert.Equals(12500, reader:GetDpsGain(151310, "PRIEST", "Shadow"))
+        end, { category = "unit" })
+
+        TestRunner:It("reads v2 data from string item keys", function()
+            InstallDesktopExchange({
+                trinketSims = {
+                    generatedAt = 1775943224,
+                    source = "bloodmallet.com",
+                    version = 2,
+                    trinkets = {
+                        ["151310"] = {
+                            mage_fire = {
+                                r = 1, g = 18700,
+                                r3 = 2, g3 = 15300,
+                                r5 = 5, g5 = 9800,
+                            },
+                        },
+                    },
+                },
+            })
+
+            local reader = CreateFromMixins(ns.TrinketSimsMixin)
+            reader:Init()
+
+            Assert.Equals(1, reader:GetRank(151310, "MAGE", "Fire"))
+            Assert.Equals(18700, reader:GetDpsGain(151310, "MAGE", "Fire", "1T"))
+            Assert.Equals(15300, reader:GetDpsGain(151310, "MAGE", "Fire", "3T"))
+        end, { category = "unit" })
+
+        TestRunner:It("GetSimText formats DPS gains across all targets", function()
+            InstallDesktopExchange({
+                trinketSims = {
+                    generatedAt = 1775943224,
+                    source = "bloodmallet.com",
+                    version = 2,
+                    trinkets = {
+                        [151310] = {
+                            priest_shadow = {
+                                r = 3, g = 12500,
+                                r3 = 7, g3 = 8200,
+                                r5 = 12, g5 = 4100,
+                            },
+                        },
+                    },
+                },
+            })
+
+            local reader = CreateFromMixins(ns.TrinketSimsMixin)
+            reader:Init()
+
+            local simText = reader:GetSimText(151310, "PRIEST", "Shadow")
+            -- Should contain all three target counts with rank + DPS gains
+            -- Labels are color-escaped so check for the key content
+            Assert.Truthy(simText:find("1T", 1, true) ~= nil)
+            Assert.Truthy(simText:find("#3 +12.5k", 1, true) ~= nil)
+            Assert.Truthy(simText:find("3T", 1, true) ~= nil)
+            Assert.Truthy(simText:find("#7 +8.2k", 1, true) ~= nil)
+            Assert.Truthy(simText:find("5T", 1, true) ~= nil)
+            Assert.Truthy(simText:find("#12 +4.1k", 1, true) ~= nil)
+            -- Dividers present
+            Assert.Truthy(simText:find("|||r", 1, true) ~= nil)
+        end, { category = "unit" })
+
+        TestRunner:It("GetSimText handles partial fight style data", function()
+            InstallDesktopExchange({
+                trinketSims = {
+                    generatedAt = 1775943224,
+                    source = "bloodmallet.com",
+                    version = 2,
+                    trinkets = {
+                        [151310] = {
+                            priest_shadow = {
+                                r = 3, g = 12500,
+                                -- No 3T or 5T data (e.g. healer spec)
+                            },
+                        },
+                    },
+                },
+            })
+
+            local reader = CreateFromMixins(ns.TrinketSimsMixin)
+            reader:Init()
+
+            local simText = reader:GetSimText(151310, "PRIEST", "Shadow")
+            Assert.Truthy(simText:find("1T", 1, true) ~= nil)
+            Assert.Truthy(simText:find("#3 +12.5k", 1, true) ~= nil)
+            -- Should NOT contain 3T or 5T
+            Assert.Falsy(simText:find("3T", 1, true))
+            Assert.Falsy(simText:find("5T", 1, true))
+            -- No dividers when there's only one section
+            Assert.Falsy(simText:find("|||r", 1, true))
+        end, { category = "unit" })
+
+        TestRunner:It("returns nil for unknown spec", function()
+            InstallDesktopExchange({
+                trinketSims = {
+                    generatedAt = 1775943224,
+                    source = "bloodmallet.com",
+                    version = 2,
+                    trinkets = {
+                        [151310] = {
+                            priest_shadow = { r = 3, g = 12500 },
+                        },
+                    },
+                },
+            })
+
+            local reader = CreateFromMixins(ns.TrinketSimsMixin)
+            reader:Init()
+
+            Assert.IsNil(reader:GetRank(151310, "MAGE", "Fire"))
+            Assert.IsNil(reader:GetDpsGain(151310, "MAGE", "Fire"))
+            Assert.IsNil(reader:GetSimText(151310, "MAGE", "Fire"))
         end, { category = "unit" })
     end)
 end)

@@ -802,27 +802,70 @@ function CouncilTableMixin:CreateDetailTooltip()
     gearReady:SetWordWrap(true)
     self.moreInfoGearReady = gearReady
 
-    -- Trinket Sim Rank (from bloodmallet.com via desktop sync)
-    local trinketSim = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    trinketSim:SetPoint("TOPLEFT", gearReady, "BOTTOMLEFT", 0, -2)
-    trinketSim:SetPoint("RIGHT", -6, 0)
+    -- ===== Simulations Card (trinket sims + droptimizer) =====
+    local simCard = CreateFrame("Frame", nil, content, "BackdropTemplate")
+    simCard:SetPoint("TOPLEFT", gearReady, "BOTTOMLEFT", -4, -8)
+    simCard:SetPoint("RIGHT", -2, 0)
+    simCard:SetHeight(1) -- resized dynamically
+    if simCard.SetBackdrop then
+        simCard:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Buttons\\WHITE8x8",
+            tile = false,
+            edgeSize = 1,
+            insets = { left = 1, right = 1, top = 1, bottom = 1 },
+        })
+        simCard:SetBackdropColor(unpack(SkinningMixin:GetColor("panelInset")))
+        simCard:SetBackdropBorderColor(unpack(SkinningMixin:GetColor("border")))
+    end
+    self.simCard = simCard
+
+    -- Left accent bar
+    local simAccent = simCard:CreateTexture(nil, "ARTWORK", nil, 2)
+    simAccent:SetPoint("TOPLEFT", 0, 0)
+    simAccent:SetPoint("BOTTOMLEFT", 0, 0)
+    simAccent:SetWidth(2)
+    simAccent:SetColorTexture(unpack(SkinningMixin:GetColor("accentCool")))
+    self.simCardAccent = simAccent
+
+    -- Section label
+    local simLabel = simCard:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    simLabel:SetPoint("TOPLEFT", 10, -6)
+    simLabel:SetPoint("RIGHT", -8, 0)
+    simLabel:SetJustifyH("LEFT")
+    SkinningMixin:StyleText(simLabel, "bodySmall", "textSubtle")
+    simLabel:SetText("SIMULATIONS")
+    self.simCardLabel = simLabel
+
+    -- Trinket Sim (bloodmallet.com via desktop sync)
+    local trinketSim = simCard:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    trinketSim:SetPoint("TOPLEFT", simLabel, "BOTTOMLEFT", 0, -4)
+    trinketSim:SetPoint("RIGHT", -8, 0)
     trinketSim:SetJustifyH("LEFT")
     SkinningMixin:StyleText(trinketSim, "bodySmall", "accentCool")
     trinketSim:SetWordWrap(true)
     self.moreInfoTrinketSim = trinketSim
 
-    -- Droptimizer DPS Upgrade (from Raidbots Droptimizer via desktop sync)
-    local droptimizerSim = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    droptimizerSim:SetPoint("TOPLEFT", trinketSim, "BOTTOMLEFT", 0, -2)
-    droptimizerSim:SetPoint("RIGHT", -6, 0)
+    -- Inner divider between trinket sims and droptimizer
+    local simInnerSep = simCard:CreateTexture(nil, "ARTWORK")
+    simInnerSep:SetPoint("TOPLEFT", trinketSim, "BOTTOMLEFT", -2, -4)
+    simInnerSep:SetPoint("RIGHT", -8, 0)
+    simInnerSep:SetHeight(1)
+    simInnerSep:SetColorTexture(unpack(SkinningMixin:GetColor("border")))
+    self.simCardInnerSep = simInnerSep
+
+    -- Droptimizer DPS Upgrade (Raidbots via desktop sync)
+    local droptimizerSim = simCard:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    droptimizerSim:SetPoint("TOPLEFT", simInnerSep, "BOTTOMLEFT", 2, -4)
+    droptimizerSim:SetPoint("RIGHT", -8, 0)
     droptimizerSim:SetJustifyH("LEFT")
     SkinningMixin:StyleText(droptimizerSim, "bodySmall", "accentWarm")
     droptimizerSim:SetWordWrap(true)
     self.moreInfoDroptimizer = droptimizerSim
 
-    -- Separator: sim data -> loot history
+    -- Separator: sim card -> loot history
     local lootSep = content:CreateTexture(nil, "ARTWORK")
-    lootSep:SetPoint("TOPLEFT", droptimizerSim, "BOTTOMLEFT", 0, -6)
+    lootSep:SetPoint("TOPLEFT", simCard, "BOTTOMLEFT", 4, -6)
     lootSep:SetPoint("RIGHT", -6, 0)
     lootSep:SetHeight(1)
     lootSep:SetColorTexture(unpack(SkinningMixin:GetColor("border")))
@@ -858,6 +901,59 @@ function CouncilTableMixin:CreateDetailTooltip()
     self.tooltipPinned = false
 end
 
+--- Resize the simulations card to fit its content, or collapse it
+--- when neither trinket sims nor droptimizer have data.
+--- Called from within ResizeDetailTooltip's deferred callback so that
+--- font string layouts are finalized and the card height is set before
+--- the overall content height is computed.
+function CouncilTableMixin:ResizeSimCard()
+    if not self.simCard then return end
+
+    local hasTrinket = self.moreInfoTrinketSim
+        and self.moreInfoTrinketSim:GetText()
+        and self.moreInfoTrinketSim:GetText() ~= ""
+    local hasDroptimizer = self.moreInfoDroptimizer
+        and self.moreInfoDroptimizer:GetText()
+        and self.moreInfoDroptimizer:GetText() ~= ""
+    local hasAny = hasTrinket or hasDroptimizer
+
+    -- Toggle visual elements
+    self.simCardLabel:SetShown(hasAny)
+    self.simCardAccent:SetShown(hasAny)
+    self.simCardInnerSep:SetShown(hasTrinket and hasDroptimizer)
+
+    -- Toggle backdrop visibility
+    if self.simCard.SetBackdropColor then
+        if hasAny then
+            self.simCard:SetBackdropColor(unpack(SkinningMixin:GetColor("panelInset")))
+            self.simCard:SetBackdropBorderColor(unpack(SkinningMixin:GetColor("border")))
+        else
+            self.simCard:SetBackdropColor(0, 0, 0, 0)
+            self.simCard:SetBackdropBorderColor(0, 0, 0, 0)
+        end
+    end
+
+    if not hasAny then
+        self.simCard:SetHeight(1)
+        return
+    end
+
+    -- Compute height from content (this is called deferred, so layouts are ready)
+    local top = self.simCardLabel:GetTop()
+    local bottom
+    if hasDroptimizer then
+        bottom = self.moreInfoDroptimizer:GetBottom()
+    elseif hasTrinket then
+        bottom = self.moreInfoTrinketSim:GetBottom()
+    end
+    if top and bottom then
+        self.simCard:SetHeight(top - bottom + 12) -- 6px padding top + 6px bottom
+    else
+        -- Layout not ready yet — collapse to minimum; next resize pass will correct
+        self.simCard:SetHeight(1)
+    end
+end
+
 --- Recalculate the scroll content height so the scroll frame
 --- can accommodate all visible text. Deferred one frame so
 --- font string layouts are finalized.
@@ -866,6 +962,9 @@ function CouncilTableMixin:ResizeDetailTooltip()
 
     C_Timer.After(0, function()
         if not self.detailTooltip:IsShown() then return end
+
+        -- Resize sim card first — its height affects downstream anchors
+        self:ResizeSimCard()
 
         local contentTop = self.detailContent:GetTop()
         local lastBottom = self.moreInfoStaleness and self.moreInfoStaleness:GetBottom()

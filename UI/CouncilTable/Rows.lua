@@ -573,7 +573,7 @@ function CouncilTableMixin:UpdateDetailTooltip(candidate)
         self:ClearPlayerIntelSection()
     end
 
-    -- Trinket Sim Rank (bloodmallet.com) — runs independently of PlayerIntel
+    -- Trinket Sim DPS Gain (bloodmallet.com) — runs independently of PlayerIntel
     if self.moreInfoTrinketSim then
         local currentItemID = self.currentItem and self.currentItem.itemID
         if currentItemID and Loothing.TrinketSims and Loothing.TrinketSims:HasData() then
@@ -599,9 +599,13 @@ function CouncilTableMixin:UpdateDetailTooltip(candidate)
                     end
                 end
             end
-            local rankText = candidateClass and candidateSpec and Loothing.TrinketSims:GetRankText(currentItemID, candidateClass, candidateSpec)
-            if rankText then
-                self.moreInfoTrinketSim:SetText("Sim  " .. rankText .. "\n  |cff666666bloodmallet.com|r")
+            local simText = candidateClass and candidateSpec and Loothing.TrinketSims:GetSimText(currentItemID, candidateClass, candidateSpec)
+            if simText then
+                local specLabel = Loothing.TrinketSims:GetColoredSpecLabel(candidateClass, candidateSpec)
+                self.moreInfoTrinketSim:SetText(
+                    "|cffAAAAAABloodmallet|r  " .. simText
+                    .. "\n" .. specLabel
+                )
                 self.moreInfoTrinketSim:SetTextColor(0.6, 0.9, 1.0)
             else
                 self.moreInfoTrinketSim:SetText("")
@@ -611,7 +615,7 @@ function CouncilTableMixin:UpdateDetailTooltip(candidate)
         end
     end
 
-    -- Droptimizer DPS Upgrade (Raidbots) -- runs independently of PlayerIntel and TrinketSims
+    -- Droptimizer DPS Upgrade (Raidbots) — runs independently of PlayerIntel and TrinketSims
     if self.moreInfoDroptimizer then
         local currentItemID = self.currentItem and self.currentItem.itemID
         if currentItemID and Loothing.Droptimizer and Loothing.Droptimizer:HasData() then
@@ -620,7 +624,9 @@ function CouncilTableMixin:UpdateDetailTooltip(candidate)
             if upgradeText then
                 local isStale = Loothing.Droptimizer:IsCharStale(candidateName)
                 local staleTag = isStale and "  |cffFF6600[stale]|r" or ""
-                self.moreInfoDroptimizer:SetText("Droptimizer  " .. upgradeText .. staleTag .. "\n  |cff666666raidbots.com|r")
+                self.moreInfoDroptimizer:SetText(
+                    "|cffAAAAAADroptimizer|r  " .. upgradeText .. staleTag
+                )
                 self.moreInfoDroptimizer:SetTextColor(0.3, 0.9, 0.3)
             else
                 self.moreInfoDroptimizer:SetText("")

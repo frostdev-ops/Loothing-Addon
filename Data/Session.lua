@@ -1735,8 +1735,11 @@ function SessionMixin:AwardItem(guid, winner, response, awardReasonId, awardReas
         awardReason = awardReasonText
     end
 
-    -- Add to history
-    if Loothing.History then
+    -- Skip history, broadcast, and announcements in test mode
+    local isTestMode = ns.TestMode and ns.TestMode:IsEnabled()
+
+    -- Add to history (never during test mode)
+    if Loothing.History and not isTestMode then
         -- Winner candidate snapshot
         local winnerCandidate = item.candidateManager and item.candidateManager:GetCandidate(winner)
 

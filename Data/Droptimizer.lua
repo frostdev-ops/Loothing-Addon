@@ -61,8 +61,23 @@ function DroptimizerMixin:LoadFromSaved()
     self.generatedAt = dt.generatedAt
     self.source = dt.source
     self.version = dt.version
+    self.sharedBy = dt.sharedBy     -- nil if from own desktop app
+    self.sharedAt = dt.sharedAt     -- nil if from own desktop app
 
     self:TriggerEvent("OnDroptimizerLoaded")
+end
+
+--- Check if data was received via intel share (not from own desktop app)
+-- @return boolean
+function DroptimizerMixin:IsSharedData()
+    return self.sharedBy ~= nil
+end
+
+--- Get sharing metadata
+-- @return string|nil sharedBy - Player name who shared
+-- @return number|nil sharedAt - Epoch timestamp when shared
+function DroptimizerMixin:GetSharedInfo()
+    return self.sharedBy, self.sharedAt
 end
 
 --[[--------------------------------------------------------------------

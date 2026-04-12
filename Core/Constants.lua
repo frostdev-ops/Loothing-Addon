@@ -8,7 +8,7 @@ local _, ns = ...
 local Loothing = ns.Addon
 
 -- Addon info
-Loothing.VERSION = "2.0.9"
+Loothing.VERSION = "2.0.11"
 Loothing.PROTOCOL_VERSION = 4
 Loothing.ADDON_PREFIX = "LOOTHING"
 
@@ -254,6 +254,10 @@ Loothing.MsgType = {
 
     -- History sharing
     HISTORY_ENTRY = "HE",           -- ML -> Group/Guild: Broadcast history entry after award
+
+    -- Desktop Intel Share (manual broadcast of desktop-app-synced data)
+    INTEL_SHARE_MANIFEST = "ISM",   -- Sender -> Group/Guild: Transfer metadata
+    INTEL_SHARE          = "IS",    -- Sender -> Group/Guild: Dataset payload
 }
 
 --[[--------------------------------------------------------------------

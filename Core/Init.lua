@@ -67,6 +67,7 @@ Loothing.Observer = nil
 ---@type CommMixin?
 Loothing.Comm = nil
 Loothing.Sync = nil
+Loothing.IntelShare = nil
 Loothing.Heartbeat = nil
 Loothing.Restrictions = nil
 Loothing.MLDB = nil
@@ -311,6 +312,12 @@ local function InitializeModules()
     -- Initialize whisper command handler
     if ns.CreateWhisperHandler then
         Loothing.WhisperHandler = ns.CreateWhisperHandler()
+    end
+
+    -- Initialize intel share (desktop data broadcast)
+    if ns.IntelShareMixin then
+        Loothing.IntelShare = CreateFromMixins(ns.IntelShareMixin)
+        Loothing.IntelShare:Init()
     end
 
     -- Initialize error handler and structured logging
@@ -1460,6 +1467,50 @@ local function RegisterSlashCommands()
         end
     end
 
+    local function handleShare(argText)
+        local subCmd, target = argText:match("^(%S*)%s*(%S*)$")
+        subCmd = subCmd and subCmd:lower() or ""
+        target = target and target:lower() or ""
+
+        if subCmd == "intel" then
+            if not Loothing.IntelShare then
+                printError(L["INTEL_SHARE_NO_DATA"])
+                return
+            end
+            if target == "" then
+                target = "group"
+            end
+            local ok, err = Loothing.IntelShare:StartShare(target)
+            if not ok then
+                printError(err)
+            end
+            return
+        end
+
+        if subCmd == "purge" then
+            if Loothing.IntelShare then
+                Loothing.IntelShare:PurgeSharedData()
+            else
+                printError(L["INTEL_PURGE_NOTHING"])
+            end
+            return
+        end
+
+        if subCmd == "status" then
+            if Loothing.IntelShare then
+                Loothing.IntelShare:PrintStatus()
+            else
+                printError(L["INTEL_SHARE_NO_DATA"])
+            end
+            return
+        end
+
+        printLine("Share commands:")
+        printLine("  /lt share intel [group|guild] - Share desktop intel")
+        printLine("  /lt share purge - Remove received shared intel")
+        printLine("  /lt share status - Show desktop intel status")
+    end
+
     local function requireDebug(commandName)
         if isDebugEnabled() then
             return true
@@ -1897,6 +1948,14 @@ local function RegisterSlashCommands()
             usage = { "/lt sync settings [guild|player]", "/lt sync history [guild|player] [days]" },
             handler = function(args)
                 handleSync(args or "")
+            end,
+        },
+        {
+            key = "share",
+            description = L["SLASH_DESC_SHARE"],
+            usage = { "/lt share intel [group|guild]", "/lt share purge", "/lt share status" },
+            handler = function(args)
+                handleShare(args or "")
             end,
         },
         {

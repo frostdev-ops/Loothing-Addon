@@ -48,8 +48,23 @@ function RosterMixin:LoadFromSaved()
     self.members = r.members or {}
     self.rosterName = r.rosterName
     self.updatedAt = r.updatedAt
+    self.sharedBy = r.sharedBy     -- nil if from own desktop app
+    self.sharedAt = r.sharedAt     -- nil if from own desktop app
 
     self:TriggerEvent("OnRosterLoaded")
+end
+
+--- Check if data was received via intel share (not from own desktop app)
+-- @return boolean
+function RosterMixin:IsSharedData()
+    return self.sharedBy ~= nil
+end
+
+--- Get sharing metadata
+-- @return string|nil sharedBy - Player name who shared
+-- @return number|nil sharedAt - Epoch timestamp when shared
+function RosterMixin:GetSharedInfo()
+    return self.sharedBy, self.sharedAt
 end
 
 --[[--------------------------------------------------------------------

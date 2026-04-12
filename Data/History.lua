@@ -65,6 +65,11 @@ function HistoryMixin:AddEntry(entry)
         return
     end
 
+    -- Guard: never persist test mode data to history
+    if ns.TestMode and ns.TestMode:IsEnabled() then
+        return
+    end
+
     -- Ensure required fields
     entry.timestamp = entry.timestamp or time()
     entry.guid = entry.guid or Utils.GenerateGUID()

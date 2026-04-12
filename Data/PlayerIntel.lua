@@ -57,8 +57,23 @@ function PlayerIntelMixin:LoadFromSaved()
     self.generatedAt = pi.generatedAt
     self.raidTier = pi.raidTier
     self.version = pi.version
+    self.sharedBy = pi.sharedBy     -- nil if from own desktop app
+    self.sharedAt = pi.sharedAt     -- nil if from own desktop app
 
     self:TriggerEvent("OnPlayerIntelLoaded")
+end
+
+--- Check if data was received via intel share (not from own desktop app)
+-- @return boolean
+function PlayerIntelMixin:IsSharedData()
+    return self.sharedBy ~= nil
+end
+
+--- Get sharing metadata
+-- @return string|nil sharedBy - Player name who shared
+-- @return number|nil sharedAt - Epoch timestamp when shared
+function PlayerIntelMixin:GetSharedInfo()
+    return self.sharedBy, self.sharedAt
 end
 
 --[[--------------------------------------------------------------------

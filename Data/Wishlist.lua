@@ -50,8 +50,23 @@ function WishlistMixin:LoadFromSaved()
     self.characters = wl.characters or {}
     self.itemDetails = wl.itemDetails or {}
     self.updatedAt = wl.updatedAt
+    self.sharedBy = wl.sharedBy     -- nil if from own desktop app
+    self.sharedAt = wl.sharedAt     -- nil if from own desktop app
 
     self:TriggerEvent("OnWishlistLoaded")
+end
+
+--- Check if data was received via intel share (not from own desktop app)
+-- @return boolean
+function WishlistMixin:IsSharedData()
+    return self.sharedBy ~= nil
+end
+
+--- Get sharing metadata
+-- @return string|nil sharedBy - Player name who shared
+-- @return number|nil sharedAt - Epoch timestamp when shared
+function WishlistMixin:GetSharedInfo()
+    return self.sharedBy, self.sharedAt
 end
 
 --[[--------------------------------------------------------------------

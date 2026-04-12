@@ -3,7 +3,7 @@
 ## Title: Loothing (Dev)
 ## Notes: Development build with test harness and debug tooling
 ## Author: James Kueller
-## Version: 2.0.9
+## Version: 2.0.11
 ## SavedVariables: LoolibDB
 ## Dependencies: Loolib
 ## IconTexture: Interface\AddOns\Loothing\Media\logo
@@ -105,6 +105,7 @@ Comm\CommState.lua
 Comm\Sync.lua
 Comm\Heartbeat.lua
 Comm\WhisperHandler.lua
+Comm\IntelShare.lua
 
 # UI Implementation
 UI\IconList.lua

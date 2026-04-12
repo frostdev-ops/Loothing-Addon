@@ -169,6 +169,9 @@ local HANDLERS = {
     [Loothing.MsgType.SESSION_INIT]            = "HandleSessionInit",
     -- Batched responses
     [Loothing.MsgType.RESPONSE_BATCH]          = "HandleResponseBatch",
+    -- Desktop Intel Share
+    [Loothing.MsgType.INTEL_SHARE_MANIFEST]    = "HandleIntelShareManifest",
+    [Loothing.MsgType.INTEL_SHARE]             = "HandleIntelShareData",
 }
 
 --- Initialize communication handler

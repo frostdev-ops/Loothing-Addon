@@ -126,8 +126,8 @@ end
 --- Create sync type toggle buttons
 function SyncPanelMixin:CreateSyncTypeButtons()
     self.settingsBtn = ns.CreateThemedButton(self.frame)
-    self.settingsBtn:SetSize(120, 24)
-    self.settingsBtn:SetPoint("TOPLEFT", 30, -50)
+    self.settingsBtn:SetSize(100, 24)
+    self.settingsBtn:SetPoint("TOPLEFT", 20, -50)
     self.settingsBtn:SetText(L["SETTINGS"])
     ns.SkinningMixin:StylePlainButton(self.settingsBtn)
     self.settingsBtn:SetScript("OnClick", function()
@@ -136,12 +136,24 @@ function SyncPanelMixin:CreateSyncTypeButtons()
     end)
 
     self.historyBtn = ns.CreateThemedButton(self.frame)
-    self.historyBtn:SetSize(120, 24)
-    self.historyBtn:SetPoint("LEFT", self.settingsBtn, "RIGHT", 10, 0)
+    self.historyBtn:SetSize(100, 24)
+    self.historyBtn:SetPoint("LEFT", self.settingsBtn, "RIGHT", 8, 0)
     self.historyBtn:SetText(L["HISTORY"])
     ns.SkinningMixin:StylePlainButton(self.historyBtn)
     self.historyBtn:SetScript("OnClick", function()
         self.syncType = "history"
+        self:UpdateUI()
+    end)
+
+    self.intelBtn = ns.CreateThemedButton(self.frame)
+    self.intelBtn:SetSize(100, 24)
+    self.intelBtn:SetPoint("LEFT", self.historyBtn, "RIGHT", 8, 0)
+    self.intelBtn:SetText(L["INTEL_SHARE"])
+    ns.SkinningMixin:StylePlainButton(self.intelBtn)
+    self.intelBtn:SetScript("OnClick", function()
+        self.syncType = "intel"
+        self.targetPlayer = nil
+        self.targetBtn:SetText(L["SELECT_TARGET"])
         self:UpdateUI()
     end)
 end
@@ -164,10 +176,24 @@ end
 
 --- Show target selection context menu
 function SyncPanelMixin:ShowTargetMenu()
-    local members = self:GetOnlineMembers()
+    local isIntel = self.syncType == "intel"
+    local members = not isIntel and self:GetOnlineMembers() or {}
 
     MenuUtil.CreateContextMenu(self.targetBtn, function(_ownerRegion, rootDescription)
         rootDescription:CreateTitle(L["SELECT_TARGET"])
+
+        -- Intel share: only Group and Guild options (no individual players)
+        if isIntel then
+            rootDescription:CreateButton(L["INTEL_SHARE_GROUP"], function()
+                self.targetPlayer = "group"
+                self.targetBtn:SetText(L["INTEL_SHARE_GROUP"])
+            end)
+            rootDescription:CreateButton(L["INTEL_SHARE_GUILD"], function()
+                self.targetPlayer = "guild"
+                self.targetBtn:SetText(L["INTEL_SHARE_GUILD"])
+            end)
+            return
+        end
 
         -- Guild option
         rootDescription:CreateButton(L["GUILD"], function()
@@ -261,16 +287,23 @@ end
 --- Update UI based on current sync type selection
 function SyncPanelMixin:UpdateUI()
     local isHistory = self.syncType == "history"
+    local isIntel = self.syncType == "intel"
     self.dateLabel:SetShown(isHistory)
     self.dateBtn:SetShown(isHistory)
 
     -- Highlight active button via text color
-    if isHistory then
-        self.settingsBtn:GetFontString():SetTextColor(0.6, 0.6, 0.6)
-        self.historyBtn:GetFontString():SetTextColor(1, 1, 1)
-    else
-        self.settingsBtn:GetFontString():SetTextColor(1, 1, 1)
-        self.historyBtn:GetFontString():SetTextColor(0.6, 0.6, 0.6)
+    local activeColor = { 1, 1, 1 }
+    local dimColor = { 0.6, 0.6, 0.6 }
+    self.settingsBtn:GetFontString():SetTextColor(unpack(self.syncType == "settings" and activeColor or dimColor))
+    self.historyBtn:GetFontString():SetTextColor(unpack(isHistory and activeColor or dimColor))
+    self.intelBtn:GetFontString():SetTextColor(unpack(isIntel and activeColor or dimColor))
+
+    -- Intel-specific: show dataset info, update send button label
+    if self.intelStatusText then
+        self.intelStatusText:SetShown(isIntel)
+    end
+    if isIntel then
+        self:UpdateIntelStatus()
     end
 end
 
@@ -341,6 +374,25 @@ function SyncPanelMixin:StartSync()
         if Loothing.Sync then
             Loothing.Sync:RequestHistorySync(self.targetPlayer, days)
         end
+    elseif self.syncType == "intel" then
+        if Loothing.IntelShare then
+            local target = self.targetPlayer == "guild" and "guild" or "group"
+            local ok, err = Loothing.IntelShare:StartShare(target)
+            if not ok then
+                self.statusText:SetText("|cffff0000" .. (err or "") .. "|r")
+                self.progressBg:Hide()
+                self.sendBtn:Enable()
+                return
+            end
+            -- Drive progress bar from IntelShare callbacks
+            self:RegisterIntelShareCallbacks()
+            return  -- Don't auto-complete; callbacks handle progress
+        end
+        -- IntelShare module not loaded
+        self.statusText:SetText("|cffff0000" .. L["INTEL_SHARE_NO_DATA"] .. "|r")
+        self.progressBg:Hide()
+        self.sendBtn:Enable()
+        return
     end
 
     -- Set progress to full after initiating (actual callbacks from Sync module drive real progress)
@@ -388,6 +440,61 @@ end
 
 function SyncPanelMixin:IsShown()
     return self.frame:IsShown()
+end
+
+--[[--------------------------------------------------------------------
+    Intel Share Integration
+----------------------------------------------------------------------]]
+
+--- Update the intel status text showing available datasets
+function SyncPanelMixin:UpdateIntelStatus()
+    if not self.intelStatusText then
+        self.intelStatusText = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        self.intelStatusText:SetPoint("TOPLEFT", 30, -118)
+        self.intelStatusText:SetWidth(290)
+        self.intelStatusText:SetJustifyH("LEFT")
+        self.intelStatusText:SetWordWrap(true)
+    end
+
+    if not Loothing.IntelShare then
+        self.intelStatusText:SetText("|cffff0000" .. L["INTEL_SHARE_NO_DATA"] .. "|r")
+        self.sendBtn:Disable()
+        return
+    end
+
+    local _, count = Loothing.IntelShare:GetAvailableDatasets()
+    if count == 0 then
+        self.intelStatusText:SetText("|cffff0000" .. L["INTEL_SHARE_NO_DATA"] .. "|r")
+        self.sendBtn:Disable()
+    else
+        self.intelStatusText:SetText("|cff33ff99" .. string.format(L["INTEL_SHARE_DATASETS_READY"], count) .. "|r")
+        self.sendBtn:Enable()
+    end
+end
+
+--- Register callbacks for intel share progress tracking
+function SyncPanelMixin:RegisterIntelShareCallbacks()
+    if not Loothing.IntelShare or self.intelCallbacksRegistered then return end
+    self.intelCallbacksRegistered = true
+
+    Loothing.IntelShare:RegisterCallback("OnIntelShareProgress", function(_, transferID, index, name)
+        if not self.frame:IsShown() then return end
+        local _, total = Loothing.IntelShare:GetSendProgress()
+        total = total or 5
+        self:SetProgress(index / total)
+    end, self)
+
+    Loothing.IntelShare:RegisterCallback("OnIntelShareComplete", function()
+        if not self.frame:IsShown() then return end
+        self:SetProgress(1.0)
+        self:TriggerEvent("OnSyncComplete", "intel", self.targetPlayer)
+    end, self)
+
+    Loothing.IntelShare:RegisterCallback("OnIntelShareFailed", function(_, transferID, reason)
+        if not self.frame:IsShown() then return end
+        self.statusText:SetText("|cffff0000" .. (reason or "Share failed") .. "|r")
+        self.sendBtn:Enable()
+    end, self)
 end
 
 --[[--------------------------------------------------------------------
