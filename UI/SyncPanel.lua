@@ -327,7 +327,7 @@ function SyncPanelMixin:GetOnlineMembers()
     if IsInGuild() then
         local numGuild = GetNumGuildMembers()
         for i = 1, numGuild do
-            local name, _, _, _, _, _, _, _, online = Loothing.GetGuildRosterInfo(i)
+            local name, _, _, _, _, _, _, _, online = GetGuildRosterInfo(i)
             if online and name and not seen[name] then
                 -- Strip realm from guild roster names
                 local shortName = Ambiguate(name, "short")
