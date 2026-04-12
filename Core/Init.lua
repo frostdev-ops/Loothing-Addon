@@ -1434,9 +1434,14 @@ local function RegisterSlashCommands()
             return
         end
 
-        printLine("Sync commands:")
-        printLine("  /lt sync settings [guild|player] - Sync settings")
-        printLine("  /lt sync history [guild|player] [days] - Sync history")
+        -- No sub-command: open the Sync Panel dialog
+        if Loothing.UI and Loothing.UI.SyncPanel then
+            Loothing.UI.SyncPanel:Show()
+        else
+            printLine("Sync commands:")
+            printLine("  /lt sync settings [guild|player] - Sync settings")
+            printLine("  /lt sync history [guild|player] [days] - Sync history")
+        end
     end
 
     local function handleImport(argText)
@@ -1505,10 +1510,17 @@ local function RegisterSlashCommands()
             return
         end
 
-        printLine("Share commands:")
-        printLine("  /lt share intel [group|guild] - Share desktop intel")
-        printLine("  /lt share purge - Remove received shared intel")
-        printLine("  /lt share status - Show desktop intel status")
+        -- No sub-command: open the Sync Panel on the Intel tab
+        if Loothing.UI and Loothing.UI.SyncPanel then
+            Loothing.UI.SyncPanel.syncType = "intel"
+            Loothing.UI.SyncPanel:UpdateUI()
+            Loothing.UI.SyncPanel:Show()
+        else
+            printLine("Share commands:")
+            printLine("  /lt share intel [group|guild] - Share desktop intel")
+            printLine("  /lt share purge - Remove received shared intel")
+            printLine("  /lt share status - Show desktop intel status")
+        end
     end
 
     local function requireDebug(commandName)
