@@ -477,6 +477,40 @@ Popups:Register("LOOTHING_SYNC_REQUEST", {
     },
 })
 
+-- 7b. Intel Share Request - "PlayerX wants to share desktop intel (5 datasets)"
+Popups:Register("LOOTHING_INTEL_SHARE_REQUEST", {
+    title = L["POPUP_INTEL_SHARE_TITLE"],
+    text = L["POPUP_INTEL_SHARE_REQUEST"],
+    modal = false,
+    hide_on_escape = true,
+    show_while_dead = true,
+    on_show = function(_dialog, data)
+        if data then
+            return string.format(L["POPUP_INTEL_SHARE_FMT"],
+                data.player or L["UNKNOWN"], data.count or 0)
+        end
+        return nil
+    end,
+    buttons = {
+        {
+            text = L["ACCEPT"],
+            on_click = function(_dialog, data)
+                if data and data.onAccept then
+                    data.onAccept()
+                end
+            end,
+        },
+        {
+            text = L["DECLINE"],
+            on_click = function(_dialog, data)
+                if data and data.onCancel then
+                    data.onCancel()
+                end
+            end,
+        },
+    },
+})
+
 -- 8. Import Overwrite - "Import will overwrite {count} entries"
 Popups:Register("LOOTHING_IMPORT_OVERWRITE", {
     title = L["HISTORY"],

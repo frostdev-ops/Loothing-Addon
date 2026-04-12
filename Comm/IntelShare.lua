@@ -331,7 +331,7 @@ function IntelShareMixin:HandleManifest(data, sender, distribution)
 
     if expectedCount == 0 then return end
 
-    -- Create pending entry
+    -- Create pending entry (not yet accepted — datasets buffer until user confirms)
     self.pendingReceive[transferID] = {
         sender = sender,
         manifest = data,
@@ -339,6 +339,7 @@ function IntelShareMixin:HandleManifest(data, sender, distribution)
         receivedCount = 0,
         expectedCount = expectedCount,
         receivedAt = GetTime(),
+        accepted = false,
     }
 
     -- Start timeout timer (NewTimer returns a cancellable handle; After does not)
@@ -347,7 +348,53 @@ function IntelShareMixin:HandleManifest(data, sender, distribution)
     end)
 
     self:TriggerEvent("OnIntelReceiveStarted", transferID, sender)
-    Loothing:Print(string.format(L["INTEL_RECEIVE_STARTED"], Ambiguate(sender, "short")))
+
+    -- Show confirmation popup — datasets arriving in the meantime are buffered
+    local Popups = ns.Popups
+    if Popups then
+        Popups:Show("LOOTHING_INTEL_SHARE_REQUEST", {
+            player = Ambiguate(sender, "short"),
+            count = expectedCount,
+            onAccept = function()
+                self:AcceptTransfer(transferID)
+            end,
+            onCancel = function()
+                self:DeclineTransfer(transferID)
+            end,
+        })
+    else
+        -- Fallback: auto-accept if popup system unavailable
+        self:AcceptTransfer(transferID)
+    end
+end
+
+--- Accept a pending intel transfer and merge any buffered datasets
+-- @param transferID string
+function IntelShareMixin:AcceptTransfer(transferID)
+    local pending = self.pendingReceive[transferID]
+    if not pending then return end
+
+    pending.accepted = true
+    Loothing:Print(string.format(L["INTEL_RECEIVE_STARTED"], Ambiguate(pending.sender, "short")))
+
+    -- If all datasets already arrived while waiting for confirmation, merge now
+    if pending.receivedCount >= pending.expectedCount then
+        self:MergeIntel(transferID)
+    end
+end
+
+--- Decline a pending intel transfer and discard all buffered data
+-- @param transferID string
+function IntelShareMixin:DeclineTransfer(transferID)
+    local pending = self.pendingReceive[transferID]
+    if not pending then return end
+
+    if pending.timer then
+        pending.timer:Cancel()
+    end
+
+    Loothing:Print(string.format(L["INTEL_RECEIVE_DECLINED"], Ambiguate(pending.sender, "short")))
+    self.pendingReceive[transferID] = nil
 end
 
 --[[--------------------------------------------------------------------
@@ -378,15 +425,19 @@ function IntelShareMixin:HandleDataset(data, sender, distribution)
     pending.datasets[datasetType] = data.data
     pending.receivedCount = pending.receivedCount + 1
 
-    self:TriggerEvent("OnIntelReceiveProgress", transferID, sender,
-        pending.receivedCount, pending.expectedCount)
-    Loothing:Print(string.format(L["INTEL_RECEIVE_PROGRESS"],
-        Ambiguate(sender, "short"), pending.receivedCount, pending.expectedCount))
+    -- Only show progress and trigger merge if the user has accepted
+    if pending.accepted then
+        self:TriggerEvent("OnIntelReceiveProgress", transferID, sender,
+            pending.receivedCount, pending.expectedCount)
+        Loothing:Print(string.format(L["INTEL_RECEIVE_PROGRESS"],
+            Ambiguate(sender, "short"), pending.receivedCount, pending.expectedCount))
 
-    -- Check if all datasets received
-    if pending.receivedCount >= pending.expectedCount then
-        self:MergeIntel(transferID)
+        -- Check if all datasets received
+        if pending.receivedCount >= pending.expectedCount then
+            self:MergeIntel(transferID)
+        end
     end
+    -- If not yet accepted, datasets just buffer silently
 end
 
 --[[--------------------------------------------------------------------
@@ -481,6 +532,12 @@ end
 function IntelShareMixin:OnReceiveTimeout(transferID)
     local pending = self.pendingReceive[transferID]
     if not pending then return end
+
+    -- If user never accepted, silently discard
+    if not pending.accepted then
+        self.pendingReceive[transferID] = nil
+        return
+    end
 
     -- Merge whatever we did receive
     if pending.receivedCount > 0 then
