@@ -3,7 +3,7 @@
 ## Title: Loothing
 ## Notes: Loot council addon for WoW 12.0+ — syncs to loothing.xyz. Discord: discord.gg/nNRfxQApEB
 ## Author: James Kueller
-## Version: 2.0.13
+## Version: 2.0.14
 ## SavedVariables: LoolibDB
 ## Dependencies: Loolib
 ## IconTexture: Interface\AddOns\Loothing\Media\logo
@@ -91,6 +91,7 @@ Data\Roster.lua
 Data\PlayerIntel.lua
 Data\TrinketSims.lua
 Data\Droptimizer.lua
+Data\CraftingRecipes.lua
 
 # Loot Handling
 Loot\GroupLoot.lua

@@ -244,6 +244,12 @@ local function InitializeModules()
         Loothing.Droptimizer:Init()
     end
 
+    -- Initialize crafting recipe scanner (desktop exchange)
+    if ns.CraftingRecipesMixin then
+        Loothing.CraftingRecipes = CreateFromMixins(ns.CraftingRecipesMixin)
+        Loothing.CraftingRecipes:Init()
+    end
+
     -- Initialize player cache (GUID-based player data)
     if ns.CreatePlayerCache then
         Loothing.PlayerCache = ns.CreatePlayerCache()
