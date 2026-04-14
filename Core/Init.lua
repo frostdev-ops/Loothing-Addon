@@ -1893,8 +1893,19 @@ local function RegisterSlashCommands()
         {
             key = "export",
             description = L["SLASH_DESC_EXPORT"],
-            usage = { "/lt export" },
-            handler = function()
+            usage = { "/lt export", "/lt export crafting" },
+            handler = function(args)
+                local sub = strtrim(args or ""):lower()
+
+                if sub == "crafting" then
+                    if Loothing.CraftingRecipes then
+                        Loothing.CraftingRecipes:ScanCurrentProfession()
+                    else
+                        printError("Crafting recipe scanner not available.")
+                    end
+                    return
+                end
+
                 if Loothing.SettingsExport then
                     Loothing.SettingsExport:ShowExportDialog()
                 else

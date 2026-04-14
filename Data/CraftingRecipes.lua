@@ -2,7 +2,7 @@
     Loothing - Loot Council Addon for WoW 12.0+
     CraftingRecipes - Scans profession recipes for reagent quantities
     Exports via desktopExchange for the Tauri desktop app to upload
-    to the server. Fixes missing BNet API slot reagent quantities.
+    to the server. Triggered manually via /lt export crafting.
 ----------------------------------------------------------------------]]
 
 local _, ns = ...
@@ -10,6 +10,7 @@ local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local time = time
 local format = string.format
+local print = print
 
 --[[--------------------------------------------------------------------
     CraftingRecipesMixin
@@ -27,9 +28,6 @@ local REAGENT_TYPE_BASIC = Enum.CraftingReagentType and Enum.CraftingReagentType
 local REAGENT_TYPE_MODIFYING = Enum.CraftingReagentType and Enum.CraftingReagentType.Modifying or 2
 local REAGENT_TYPE_FINISHING = Enum.CraftingReagentType and Enum.CraftingReagentType.Finishing or 3
 
---- Minimum interval between scans of the same profession (seconds)
-local SCAN_COOLDOWN = 300
-
 --[[--------------------------------------------------------------------
     Initialization
 ----------------------------------------------------------------------]]
@@ -37,50 +35,35 @@ local SCAN_COOLDOWN = 300
 function CraftingRecipesMixin:Init()
     Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(CRAFTING_RECIPES_EVENTS)
-
-    self.scannedProfessions = {} -- { [professionName] = lastScanTime }
-
-    self:RegisterEvents()
-end
-
---[[--------------------------------------------------------------------
-    Event Registration
-----------------------------------------------------------------------]]
-
-function CraftingRecipesMixin:RegisterEvents()
-    local frame = CreateFrame("Frame")
-    frame:RegisterEvent("TRADE_SKILL_SHOW")
-    frame:SetScript("OnEvent", function(_, event)
-        if event == "TRADE_SKILL_SHOW" then
-            -- Delay to let the profession window fully populate
-            C_Timer.After(1.5, function()
-                self:ScanCurrentProfession()
-            end)
-        end
-    end)
 end
 
 --[[--------------------------------------------------------------------
     Scanning
 ----------------------------------------------------------------------]]
 
---- Scan all recipes in the currently open profession window
+--- Scan all recipes in the currently open profession window.
+--- Must be called while a profession window is open.
+--- @return boolean success
 function CraftingRecipesMixin:ScanCurrentProfession()
-    if not C_TradeSkillUI or not C_TradeSkillUI.GetAllRecipeIDs then return end
-    if not C_TradeSkillUI.GetRecipeSchematic then return end
+    if not C_TradeSkillUI or not C_TradeSkillUI.GetAllRecipeIDs then
+        print("|cffff4444[Loothing]|r Crafting APIs not available.")
+        return false
+    end
 
     -- Get profession info
     local profInfo = C_TradeSkillUI.GetBaseProfessionInfo()
-    if not profInfo or not profInfo.professionName then return end
+    if not profInfo or not profInfo.professionName then
+        print("|cffff4444[Loothing]|r Open a profession window first, then run this command.")
+        return false
+    end
 
     local profName = profInfo.professionName
 
-    -- Cooldown check — don't re-scan the same profession too frequently
-    local lastScan = self.scannedProfessions[profName]
-    if lastScan and (time() - lastScan) < SCAN_COOLDOWN then return end
-
     local recipeIDs = C_TradeSkillUI.GetAllRecipeIDs()
-    if not recipeIDs or #recipeIDs == 0 then return end
+    if not recipeIDs or #recipeIDs == 0 then
+        print(format("|cffff4444[Loothing]|r No recipes found for %s.", profName))
+        return false
+    end
 
     local recipes = {}
     local count = 0
@@ -89,7 +72,6 @@ function CraftingRecipesMixin:ScanCurrentProfession()
         local schematic = C_TradeSkillUI.GetRecipeSchematic(recipeID, false)
         if schematic and schematic.reagentSlotSchematics and #schematic.reagentSlotSchematics > 0 then
             local reagentList = {}
-            local hasSlotReagent = false
 
             for _, slot in ipairs(schematic.reagentSlotSchematics) do
                 local entry = {
@@ -99,7 +81,6 @@ function CraftingRecipesMixin:ScanCurrentProfession()
                 if slot.reagentType == REAGENT_TYPE_MODIFYING or slot.reagentType == REAGENT_TYPE_FINISHING then
                     -- Slot reagent (quality-selectable or finishing)
                     entry.reagentType = 2
-                    hasSlotReagent = true
 
                     if slot.slotInfo then
                         entry.slotTypeId = slot.slotInfo.mcrSlotID
@@ -125,28 +106,26 @@ function CraftingRecipesMixin:ScanCurrentProfession()
                 end
             end
 
-            -- Only store recipes that have at least one slot reagent
-            -- (basic-only recipes already have correct quantities from BNet)
-            if hasSlotReagent then
-                recipes[recipeID] = {
-                    name = schematic.name or "",
-                    reagents = reagentList,
-                }
-                count = count + 1
-            end
+            recipes[recipeID] = {
+                name = schematic.name or "",
+                reagents = reagentList,
+            }
+            count = count + 1
         end
     end
 
-    if count == 0 then return end
+    if count == 0 then
+        print(format("|cffff4444[Loothing]|r No recipes with reagents found for %s.", profName))
+        return false
+    end
 
     -- Save to desktopExchange
     self:SaveProfessionData(profName, recipes)
-    self.scannedProfessions[profName] = time()
 
-    -- Feedback
-    print(format("|cff00ccff[Loothing]|r Scanned %d %s recipes with slot reagents", count, profName))
+    print(format("|cff00ccff[Loothing]|r Exported %d %s recipes to desktop exchange.", count, profName))
 
     self:TriggerEvent("OnCraftingRecipesScanned", profName, count)
+    return true
 end
 
 --[[--------------------------------------------------------------------
