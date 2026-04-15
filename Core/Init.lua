@@ -1215,13 +1215,18 @@ local function RegisterEvents()
     -- where MLDB:Clear runs after a newly-applied session-2 MLDB and
     -- clobbers it back to the previous session's baseline.
 
-    -- Wire Announcer to Session events (session start, end, item added, voting started)
+    -- Wire Announcer to Session events (session start, end, item added, voting started).
+    -- Broadcast-to-raid announcements must fire on the ML only — OnSessionStarted /
+    -- OnSessionEnded fire on every candidate too via HandleRemoteSessionStart /
+    -- HandleRemoteSessionEnd, which would otherwise produce N duplicate raid messages.
     if Loothing.Session and Loothing.Announcer then
         Loothing.Session:RegisterCallback("OnSessionStarted", function(_, _sessionID, _encounterID, encounterName)
+            if not Loothing.Session:IsMasterLooter() then return end
             Loothing.Announcer:AnnounceSessionStart(encounterName)
         end, Loothing)
 
         Loothing.Session:RegisterCallback("OnSessionEnded", function()
+            if not Loothing.Session:IsMasterLooter() then return end
             Loothing.Announcer:AnnounceSessionEnd()
         end, Loothing)
 

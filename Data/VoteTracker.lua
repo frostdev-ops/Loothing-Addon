@@ -236,9 +236,15 @@ function VoteTrackerMixin:CheckAndReshowVotePanel()
 end
 
 --- Open VotePanel for a specific item if it is still in voting state.
+-- VotePanel is the RANKED_CHOICE-only council voting modal. In SIMPLE mode
+-- the council votes through CouncilTable and no popup is needed, so this
+-- reshow path is a no-op outside ranked-choice voting.
 -- @param guid string
 function VoteTrackerMixin:ReshowVotePanelForItem(guid)
     if InCombatLockdown() then return end
+
+    local votingMode = Loothing.Settings and Loothing.Settings:GetVotingMode()
+    if votingMode ~= Loothing.VotingMode.RANKED_CHOICE then return end
 
     local votePanel = Loothing.VotePanel
     if not votePanel then return end

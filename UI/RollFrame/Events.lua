@@ -21,8 +21,8 @@ function RollFrameMixin:RegisterSessionEvents()
         -- Ensure roll capture is active (re-registers if unregistered by prior session end)
         self:RegisterRollCapture()
 
-        -- AutoPass: check if item should be auto-passed before showing to player
-        -- Skip if already responded (double-fire guard for re-broadcasts)
+        -- AutoPass: check if item should be auto-passed before showing to player.
+        -- Skip if already responded (double-fire guard for re-broadcasts).
         local existingResp = self:GetItemResponse(item.guid)
         if not (existingResp and existingResp.submitted) then
             local AutoPass = ns.AutoPass
@@ -52,21 +52,40 @@ function RollFrameMixin:RegisterSessionEvents()
             self:SwitchToItem(#self.items)
         end
 
-        -- Deferred AutoPass: if item info wasn't cached, retry when it loads
-        if item.IsItemInfoLoaded and not item:IsItemInfoLoaded() then
+        -- Deferred AutoPass: C_Item.GetItemInfo has its own cache separate from
+        -- LoothingItem's loaded flag. For session-2+ items (batched arrival via
+        -- SESSION_INIT, immediate VOTE_REQUEST) the server cache may be cold even
+        -- when LoothingItem reports loaded — AutoPass.ShouldAutoPass silently
+        -- returns false in that case, breaking the autopass funnel. Retry via
+        -- OnItemInfoLoaded AND a short unconditional timer so neither path alone
+        -- can strand us.
+        if item.itemLink and not C_Item.GetItemInfo(item.itemLink) then
             local AutoPass = ns.AutoPass
             if AutoPass then
-                item:RegisterCallback("OnItemInfoLoaded", function()
-                    item:UnregisterCallback("OnItemInfoLoaded", self)
-                    -- Bail if session ended while item info was loading
+                local retry = function(reason)
                     if not Loothing.Session or not Loothing.Session:IsActive() then return end
-                    -- Only retry if player hasn't already responded
                     local resp = self:GetItemResponse(item.guid)
                     if resp and resp.submitted then return end
                     if AutoPass:CheckItem(item) then
+                        Loothing:Debug("AutoPass: deferred fire (", reason, ") guid=", tostring(item.guid))
                         self:AutoPassItem(item)
                     end
-                end, self)
+                end
+
+                if item.RegisterCallback then
+                    item:RegisterCallback("OnItemInfoLoaded", function()
+                        item:UnregisterCallback("OnItemInfoLoaded", self)
+                        retry("OnItemInfoLoaded")
+                    end, self)
+                end
+
+                -- Timer fallbacks: even if OnItemInfoLoaded already fired before we
+                -- registered, the C_Item cache warms within ~300ms of first access.
+                -- The 800ms second pass covers slow tooltip scanners (classesFlag
+                -- comes from a separate async tooltip scan, not from C_Item) on
+                -- cold-cache items batched into SESSION_INIT.
+                C_Timer.After(0.3, function() retry("timer-fast") end)
+                C_Timer.After(0.8, function() retry("timer-slow") end)
             end
         end
     end, self)

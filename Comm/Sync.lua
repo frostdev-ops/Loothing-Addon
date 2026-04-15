@@ -265,6 +265,19 @@ end
 --- Apply sync data to current session
 -- @param data table
 function SyncMixin:ApplySyncData(data)
+    -- Short-circuit INACTIVE responses BEFORE applying mldb/council/observer.
+    -- An INACTIVE rescue payload should never re-apply stale ML state — its
+    -- purpose is to tell the stranded client to clean up. Any future change to
+    -- GatherSyncData that hoists mldb/council attachment above the INACTIVE
+    -- branch must not be allowed to leak that state into the receiver.
+    if Loothing.Session and data.state == Loothing.SessionState.INACTIVE then
+        if Loothing.Session:IsActive() then
+            Loothing:Debug("Sync reports INACTIVE but local session is active, ending stale session")
+            Loothing.Session:EndSession()
+        end
+        return
+    end
+
     -- Restore MLDB from sync packet (before session, so candidates see correct config)
     if data.mldb and Loothing.MLDB then
         Loothing.MLDB:ApplyFromML(data.mldb, data.masterLooter or "")
@@ -281,16 +294,6 @@ function SyncMixin:ApplySyncData(data)
     end
 
     if not Loothing.Session then return end
-
-    -- Check if there's an active session
-    if data.state == Loothing.SessionState.INACTIVE then
-        -- If the local client still has an active session, clean it up
-        if Loothing.Session:IsActive() then
-            Loothing:Debug("Sync reports INACTIVE but local session is active, ending stale session")
-            Loothing.Session:EndSession()
-        end
-        return
-    end
 
     -- Create/update session
     Loothing.Session:SyncFromData({
@@ -318,12 +321,12 @@ function SyncMixin:HandleSyncRequest(data)
         return
     end
 
-    -- Don't respond when session is inactive — there's nothing useful to send.
-    -- Clients will receive SESSION_INIT when a session actually starts.
-    if Loothing.Session:GetState() == Loothing.SessionState.INACTIVE then
-        Loothing:Debug("Sync request ignored (no active session) from:", data.requester)
-        return
-    end
+    -- Respond even when INACTIVE. The response carries state=INACTIVE, and the
+    -- requester's ApplySyncData (Sync.lua:286-293) uses that to force-end its
+    -- stale local session and clear MLDB. Dropping the request strands clients
+    -- that missed SESSION_END (e.g. broadcast lost to encounter restrictions or
+    -- disconnect) with session-1 MLDB/settings still applied — which breaks
+    -- autopass and other MLDB-gated behavior on the next session.
 
     local requester = data.requester
 
