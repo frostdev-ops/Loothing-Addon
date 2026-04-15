@@ -60,6 +60,16 @@ function RollFrameMixin:RegisterSessionEvents()
         -- OnItemInfoLoaded AND a short unconditional timer so neither path alone
         -- can strand us.
         if item.itemLink and not C_Item.GetItemInfo(item.itemLink) then
+            -- Cancel any deferred retries from a prior voting item in the same
+            -- session. Two voting items back-to-back without a session-end
+            -- between would otherwise grow `deferredAutoPassTimers` unbounded.
+            if self.deferredAutoPassTimers then
+                for _, t in ipairs(self.deferredAutoPassTimers) do
+                    if t and t.Cancel then t:Cancel() end
+                end
+                self.deferredAutoPassTimers = nil
+            end
+
             local AutoPass = ns.AutoPass
             if AutoPass then
                 local retry = function(reason)
@@ -83,9 +93,14 @@ function RollFrameMixin:RegisterSessionEvents()
                 -- registered, the C_Item cache warms within ~300ms of first access.
                 -- The 800ms second pass covers slow tooltip scanners (classesFlag
                 -- comes from a separate async tooltip scan, not from C_Item) on
-                -- cold-cache items batched into SESSION_INIT.
-                C_Timer.After(0.3, function() retry("timer-fast") end)
-                C_Timer.After(0.8, function() retry("timer-slow") end)
+                -- cold-cache items batched into SESSION_INIT. Use NewTimer so the
+                -- session-end teardown below can cancel pending retries against
+                -- items from the prior session.
+                self.deferredAutoPassTimers = self.deferredAutoPassTimers or {}
+                table.insert(self.deferredAutoPassTimers,
+                    C_Timer.NewTimer(0.3, function() retry("timer-fast") end))
+                table.insert(self.deferredAutoPassTimers,
+                    C_Timer.NewTimer(0.8, function() retry("timer-slow") end))
             end
         end
     end, self)
@@ -109,6 +124,16 @@ function RollFrameMixin:RegisterSessionEvents()
         -- Unregister the roll-capture event frame so it does not keep
         -- listening to /roll chat messages after the session ends.
         self:UnregisterRollCapture()
+        -- Cancel any deferred autopass retries queued by the active session.
+        -- Closures capture the old session's `item`; letting them fire after
+        -- the session flushes would enqueue an AUTOPASS for a guid that no
+        -- longer exists in the new session.
+        if self.deferredAutoPassTimers then
+            for _, t in ipairs(self.deferredAutoPassTimers) do
+                if t and t.Cancel then t:Cancel() end
+            end
+            self.deferredAutoPassTimers = nil
+        end
         self:Close(false, "session_ended")
     end, self)
 

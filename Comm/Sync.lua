@@ -322,11 +322,12 @@ function SyncMixin:HandleSyncRequest(data)
     end
 
     -- Respond even when INACTIVE. The response carries state=INACTIVE, and the
-    -- requester's ApplySyncData (Sync.lua:286-293) uses that to force-end its
-    -- stale local session and clear MLDB. Dropping the request strands clients
-    -- that missed SESSION_END (e.g. broadcast lost to encounter restrictions or
-    -- disconnect) with session-1 MLDB/settings still applied — which breaks
-    -- autopass and other MLDB-gated behavior on the next session.
+    -- requester's ApplySyncData (see the INACTIVE guard at the top of
+    -- ApplySyncData) uses that to force-end its stale local session and clear
+    -- MLDB. Dropping the request strands clients that missed SESSION_END (e.g.
+    -- broadcast lost to encounter restrictions or disconnect) with session-1
+    -- MLDB/settings still applied — which breaks autopass and other
+    -- MLDB-gated behavior on the next session.
 
     local requester = data.requester
 

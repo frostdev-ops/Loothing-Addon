@@ -91,45 +91,93 @@ local function IterateTooltipText(tooltip)
     end
 end
 
-local function ParseTradeTimeText(text)
-    if not text then
-        return nil
-    end
+-- Escape Lua pattern magic characters so a localized string with e.g. `(...)`
+-- or `.` doesn't become an active pattern when we turn it into a capture.
+-- `%` is escaped first because its replacement introduces new `%` chars.
+local PATTERN_MAGIC = { "%%", "%*", "%+", "%-", "%?", "%(", "%)", "%[", "%]", "%$", "%^" }
+local PATTERN_ESC   = { "%%%%", "%%%*", "%%%+", "%%%-", "%%%?", "%%%(", "%%%)", "%%%[", "%%%]", "%%%$", "%%%^" }
 
-    local tradePattern = BIND_TRADE_TIME_REMAINING
-    if tradePattern then
-        local anchor = tradePattern:match("^(.-)%%s")
-        if anchor and anchor ~= "" then
-            local anchorStart, anchorEnd = text:find(anchor, 1, true)
-            if anchorStart then
-                local timeText = text:sub(anchorEnd + 1)
-                local first, second = timeText:match("(%d+).-(%d+)")
-                local hours, minutes
-                if first and second then
-                    hours = tonumber(first) or 0
-                    minutes = tonumber(second) or 0
-                else
-                    -- Single value: use keyword to determine unit
-                    hours = tonumber(timeText:match("(%d+)%s*h")) or 0
-                    minutes = tonumber(timeText:match("(%d+)%s*m")) or 0
-                    if hours == 0 and minutes == 0 then
-                        -- Bare number fallback: assume minutes
-                        minutes = tonumber(timeText:match("(%d+)")) or 0
-                    end
+local function EscapePatternSymbols(text)
+    for i = 1, #PATTERN_MAGIC do
+        text = text:gsub(PATTERN_MAGIC[i], PATTERN_ESC[i])
+    end
+    return text
+end
+
+-- Cache the compiled pattern once per session. BIND_TRADE_TIME_REMAINING is
+-- set by the client at load, never mutates.
+local cachedTradePattern = nil
+local function GetTradePattern()
+    if cachedTradePattern then return cachedTradePattern end
+    local raw = BIND_TRADE_TIME_REMAINING
+    if not raw then return nil end
+    cachedTradePattern = EscapePatternSymbols(raw)
+        :gsub("1%%%$", "")      -- strip "%1$s" artifact from some locales (ruRU)
+        :gsub("%%%%s", "(.+)")  -- %s → capture group
+    return cachedTradePattern
+end
+
+-- RCLC-style locale-safe trade-time parser. Extracts the %s segment from the
+-- BIND_TRADE_TIME_REMAINING line, then reconstructs candidate duration strings
+-- via CompleteFormatSimpleStringWithPluralRule (Blizzard's own formatter) and
+-- matches them exactly. Handles pluralization, locale-specific separators,
+-- and sub-minute windows without relying on "%d+ h / %d+ m" keyword hints.
+local function ParseTradeTimeText(text)
+    if not text then return nil end
+    local tradePattern = GetTradePattern()
+    if not tradePattern then return nil end
+
+    local timeText = text:match(tradePattern)
+    if not timeText then return nil end
+
+    local CompleteFormat = _G.CompleteFormatSimpleStringWithPluralRule
+    local delimiter = _G.TIME_UNIT_DELIMITER or " "
+
+    if CompleteFormat and _G.INT_SPELL_DURATION_HOURS and _G.INT_SPELL_DURATION_MIN then
+        -- time >= 60s candidates: "1 hour", "1 hour 59 min", "59 min", "1 min"
+        for hour = 4, 0, -1 do
+            local hourText = ""
+            if hour > 0 then
+                hourText = CompleteFormat(_G.INT_SPELL_DURATION_HOURS, hour)
+            end
+            for minute = 59, 0, -1 do
+                local candidate = hourText
+                if minute > 0 then
+                    if candidate ~= "" then candidate = candidate .. delimiter end
+                    candidate = candidate .. CompleteFormat(_G.INT_SPELL_DURATION_MIN, minute)
                 end
-                local remaining = (hours * 3600) + (minutes * 60)
-                return remaining > 0 and remaining or 60
+                if candidate == timeText then
+                    return hour * 3600 + minute * 60
+                end
             end
         end
+        -- time < 60s candidates: "59 s", "1 s"
+        if _G.INT_SPELL_DURATION_SEC then
+            for second = 59, 1, -1 do
+                if CompleteFormat(_G.INT_SPELL_DURATION_SEC, second) == timeText then
+                    return second
+                end
+            end
+        end
+        -- Matched the tradePattern but not any candidate — stale or unrecognized
+        -- locale format. Return a pessimistic 2h so the item is still seen as
+        -- "tradable right now" and the bag scanner forwards it to the ML,
+        -- rather than silently dropping it.
+        return 7200
     end
 
-    local hours = tonumber(text:match("(%d+)%s*hour")) or tonumber(text:match("(%d+)%s*hr"))
-    local minutes = tonumber(text:match("(%d+)%s*min"))
-    if hours or minutes then
-        return (hours or 0) * 3600 + (minutes or 0) * 60
+    -- Fallback for clients lacking the formatter globals: best-effort digit parse.
+    local first, second = timeText:match("(%d+).-(%d+)")
+    if first and second then
+        return (tonumber(first) or 0) * 3600 + (tonumber(second) or 0) * 60
     end
-
-    return nil
+    local hours = tonumber(timeText:match("(%d+)%s*h"))
+    local minutes = tonumber(timeText:match("(%d+)%s*m"))
+    local seconds = tonumber(timeText:match("(%d+)%s*s"))
+    if hours or minutes or seconds then
+        return (hours or 0) * 3600 + (minutes or 0) * 60 + (seconds or 0)
+    end
+    return 7200
 end
 
 local function GetBagIdentity(bag, slot)

@@ -46,6 +46,10 @@ Loothing.handleLoot = false         -- Is Loothing actively handling loot?
 Loothing.isInGuildGroup = false     -- Is group leader in our guild?
 Loothing.lootMethod = nil           -- Current loot method from GetLootMethod()
 
+-- Reusable GameTooltip for /lt tooltipscan. Frames cannot be garbage-collected
+-- in WoW, so creating one per command invocation would leak a frame each time.
+local scanTooltip = nil
+
 -- ML check state (module-private via upvalues)
 local mlCheckTimer = nil            -- Pending NewMLCheck timer handle
 local mlRetryCount = 0              -- Number of ML retry attempts
@@ -1225,8 +1229,11 @@ local function RegisterEvents()
             Loothing.Announcer:AnnounceSessionStart(encounterName)
         end, Loothing)
 
-        Loothing.Session:RegisterCallback("OnSessionEnded", function()
-            if not Loothing.Session:IsMasterLooter() then return end
+        Loothing.Session:RegisterCallback("OnSessionEnded", function(_, _sessionID, wasML)
+            -- wasML is captured before the ML identity is cleared in EndSession;
+            -- IsMasterLooter() at this point falls back to canonical-ML (raid
+            -- leader) which misidentifies ML-not-leader setups.
+            if not wasML then return end
             Loothing.Announcer:AnnounceSessionEnd()
         end, Loothing)
 
@@ -2060,6 +2067,127 @@ local function RegisterSlashCommands()
                 else
                     printLine("Diagnostics panel not available.")
                 end
+            end,
+        },
+        {
+            key = "lootdiag",
+            description = "Print loot-detection state snapshot",
+            usage = { "/lt lootdiag" },
+            handler = function()
+                local function yn(b) return b and "true" or "false" end
+                local Session = Loothing.Session
+                local Settings = Loothing.Settings
+                local state = Session and Session:GetState() or nil
+                local stateName = "nil"
+                if state == Loothing.SessionState.INACTIVE then stateName = "INACTIVE"
+                elseif state == Loothing.SessionState.ACTIVE then stateName = "ACTIVE"
+                elseif state == Loothing.SessionState.CLOSED then stateName = "CLOSED"
+                end
+                local function countKeys(t)
+                    if type(t) ~= "table" then return 0 end
+                    local n = 0
+                    for _ in pairs(t) do n = n + 1 end
+                    return n
+                end
+                local instName, instType, difficultyID = GetInstanceInfo()
+
+                printLine("=== Loothing Loot Detection Diagnostics ===")
+                printLine("handleLoot:            " .. yn(Loothing.handleLoot))
+                printLine("isMasterLooter:        " .. yn(Loothing.isMasterLooter))
+                printLine("masterLooter:          " .. tostring(Loothing.masterLooter))
+                printLine("canonicalML:           " .. tostring(Loothing:GetCanonicalML()))
+                printLine("IsCanonicalML():       " .. yn(Loothing:IsCanonicalML()))
+                printLine("IsInGroup:             " .. yn(IsInGroup()))
+                printLine("IsInRaid:              " .. yn(IsInRaid()))
+                printLine("UnitIsGroupLeader:     " .. yn(UnitIsGroupLeader("player")))
+                printLine("Session state:         " .. stateName
+                    .. " (id=" .. tostring(Session and Session.sessionID) .. ")")
+                if Settings then
+                    printLine("ml.usageMode:          " .. tostring(Settings:Get("ml.usageMode", "ask_gl")))
+                    printLine("ml.scope:              " .. tostring(Settings:Get("ml.scope", "raids_only")))
+                    printLine("ml.autoAddBoEs:        " .. yn(Settings:Get("ml.autoAddBoEs", false)))
+                    printLine("session.triggerAction: " .. tostring(Settings:Get("session.triggerAction", "prompt")))
+                    printLine("session.triggerTiming: " .. tostring(Settings:Get("session.triggerTiming", "encounterEnd")))
+                    printLine("session.scope.raid:    " .. yn(Settings:Get("session.scope.raid", true)))
+                    printLine("session.scope.dungeon: " .. yn(Settings:Get("session.scope.dungeon", false)))
+                    printLine("session.scope.openW:   " .. yn(Settings:Get("session.scope.openWorld", false)))
+                end
+                printLine("MinQuality:            " .. tostring(Loothing.MinQuality))
+                if Session then
+                    printLine("preEncounterBagSnapshot size: " .. countKeys(Session.preEncounterBagSnapshot))
+                    printLine("reportedTradeableItems size:  " .. countKeys(Session.reportedTradeableItems))
+                    printLine("Bag scan running:      " .. yn(Session.bagScanTimer ~= nil))
+                    printLine("Last encounter:        " .. tostring(Session.lastEncounterID)
+                        .. " \"" .. tostring(Session.lastEncounterName) .. "\"")
+                    printLine("lootBuffer size:       " .. (Session.lootBuffer and #Session.lootBuffer or 0))
+                end
+                printLine("Instance:              " .. tostring(instName)
+                    .. " (" .. tostring(instType) .. ", diff=" .. tostring(difficultyID) .. ")")
+                printLine("BIND_TRADE_TIME_REMAINING:")
+                printLine("  " .. tostring(BIND_TRADE_TIME_REMAINING))
+            end,
+        },
+        {
+            key = "tooltipscan",
+            description = "Dump tooltip text + trade-time parse for a bag slot",
+            usage = { "/lt tooltipscan <bag> <slot>" },
+            handler = function(args)
+                -- Accept leading/trailing whitespace; reject anything else.
+                local bagStr, slotStr = (args or ""):match("^%s*(%S+)%s+(%S+)%s*$")
+                local bag = tonumber(bagStr)
+                local slot = tonumber(slotStr)
+                if not bag or not slot then
+                    printError("Usage: /lt tooltipscan <bag> <slot>   (bag 0 = backpack)")
+                    return
+                end
+                local link = C_Container.GetContainerItemLink(bag, slot)
+                if not link then
+                    printError("No item at bag " .. bag .. " slot " .. slot)
+                    return
+                end
+                printLine("=== Tooltip Scan: bag " .. bag .. " slot " .. slot .. " ===")
+                printLine("Link: " .. link)
+
+                -- Lazy-init reusable tooltip; see `local scanTooltip` declaration.
+                if not scanTooltip then
+                    scanTooltip = CreateFrame("GameTooltip", nil, UIParent, "GameTooltipTemplate")
+                end
+                scanTooltip:SetOwner(UIParent, "ANCHOR_NONE")
+                scanTooltip:ClearLines()
+                scanTooltip:SetBagItem(bag, slot)
+
+                local lineIdx = 0
+                local regions = { scanTooltip:GetRegions() }
+                for _, region in ipairs(regions) do
+                    if region.GetObjectType and region:GetObjectType() == "FontString" then
+                        local text = region:GetText()
+                        if text and text ~= "" then
+                            lineIdx = lineIdx + 1
+                            printLine(string.format("  [%2d] %s", lineIdx, text))
+                        end
+                    end
+                end
+                scanTooltip:Hide()
+
+                local TradeQueue = Loothing.TradeQueue
+                if TradeQueue and TradeQueue.GetContainerItemTradeTimeRemaining then
+                    local t = TradeQueue:GetContainerItemTradeTimeRemaining(bag, slot)
+                    local readable
+                    if t == math.huge then
+                        readable = "math.huge (no bound marker, no trade line)"
+                    elseif not t then
+                        readable = "nil"
+                    elseif t == 0 then
+                        readable = "0 (bound, no trade window)"
+                    else
+                        readable = tostring(t) .. "s (" .. math.floor(t / 60) .. "m " .. (t % 60) .. "s)"
+                    end
+                    printLine("GetContainerItemTradeTimeRemaining: " .. readable)
+                end
+
+                local _, _, quality, ilvl, _, _, _, _, _, _, _, _, _, bindType = C_Item.GetItemInfo(link)
+                printLine("quality=" .. tostring(quality) .. " ilvl=" .. tostring(ilvl)
+                    .. " bindType=" .. tostring(bindType) .. " (2=BoE,1=BoP)")
             end,
         },
         {

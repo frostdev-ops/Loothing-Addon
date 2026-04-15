@@ -58,6 +58,14 @@ local function IsItemBoE(itemLink)
     return bindType == 2  -- Enum.ItemBind.OnEquip
 end
 
+-- Unified loot-detection trace. Gated on Loothing.debug; all sites use
+-- the shared "LootDetect:" prefix so users can grep a single boss-kill
+-- trace to pinpoint which filter dropped each item.
+local function TraceLoot(reason, itemLink, extra)
+    if not Loothing.debug then return end
+    Loothing:Debug("LootDetect:", reason, itemLink or "", extra or "")
+end
+
 local function GetPopups()
     return ns.Popups
 end
@@ -331,47 +339,67 @@ function SessionMixin:HandleTradable(data)
     end
 
     -- No matching item — ML adds it to the session (distributed item collection)
-    if not isML then return end
+    if not isML then
+        TraceLoot("handleT:not-ml", itemLink,
+            "masterLooter=" .. tostring(self.masterLooter))
+        return
+    end
 
     -- Quality check
     local quality = Utils.GetItemQuality(itemLink)
-    if not quality or quality < Loothing.MinQuality then return end
+    if not quality or quality < Loothing.MinQuality then
+        TraceLoot("handleT:quality-low", itemLink,
+            "got=" .. tostring(quality) .. " min=" .. tostring(Loothing.MinQuality))
+        return
+    end
 
     -- Item class blacklist (consumables, reagents, quest items, etc.)
-    if IsItemClassBlacklisted(itemLink) then return end
+    if IsItemClassBlacklisted(itemLink) then
+        TraceLoot("handleT:class-blacklisted", itemLink)
+        return
+    end
 
     -- BoE check (skip unless setting enables BoE collection)
     local boe = IsItemBoE(itemLink)
-    if boe and not (Loothing.Settings and Loothing.Settings:Get("ml.autoAddBoEs", false)) then return end
+    if boe and not (Loothing.Settings and Loothing.Settings:Get("ml.autoAddBoEs", false)) then
+        TraceLoot("handleT:boe-excluded", itemLink)
+        return
+    end
 
     -- User ignore list
-    if Loothing.ItemFilter and Loothing.ItemFilter:ShouldIgnoreItem(itemLink) then return end
+    if Loothing.ItemFilter and Loothing.ItemFilter:ShouldIgnoreItem(itemLink) then
+        TraceLoot("handleT:in-ignore-list", itemLink)
+        return
+    end
 
     if self:IsActive() then
         -- Active session: add item and broadcast
-        Loothing:Debug("HandleTradable: adding item from", playerName, ":", itemLink)
         local item = self:AddItem(itemLink, playerName, nil, nil, true)
-        if item then
-            item.isTradable = true
-            item.tradeTimeRemaining = data.timeRemaining
-            if Loothing.Comm then
-                Loothing.Comm:QueueForBatch(Loothing.MsgType.ITEM_ADD, {
-                    itemLink  = itemLink,
-                    guid      = item.guid,
-                    looter    = playerName,
-                    sessionID = self.sessionID,
-                }, nil, "NORMAL")
-                -- Debounced flush (coalesces rapid item arrivals)
-                if self.lootBatchTimer then
-                    self.lootBatchTimer:Cancel()
-                end
-                self.lootBatchTimer = C_Timer.NewTimer(0.5, function()
-                    self.lootBatchTimer = nil
-                    if Loothing.Comm then
-                        Loothing.Comm:FlushAll()
-                    end
-                end)
+        if not item then
+            TraceLoot("handleT:add-returned-nil", itemLink,
+                "looter=" .. tostring(playerName))
+            return
+        end
+        TraceLoot("handleT:add-ok", itemLink, "looter=" .. tostring(playerName))
+        item.isTradable = true
+        item.tradeTimeRemaining = data.timeRemaining
+        if Loothing.Comm then
+            Loothing.Comm:QueueForBatch(Loothing.MsgType.ITEM_ADD, {
+                itemLink  = itemLink,
+                guid      = item.guid,
+                looter    = playerName,
+                sessionID = self.sessionID,
+            }, nil, "NORMAL")
+            -- Debounced flush (coalesces rapid item arrivals)
+            if self.lootBatchTimer then
+                self.lootBatchTimer:Cancel()
             end
+            self.lootBatchTimer = C_Timer.NewTimer(0.5, function()
+                self.lootBatchTimer = nil
+                if Loothing.Comm then
+                    Loothing.Comm:FlushAll()
+                end
+            end)
         end
     elseif Loothing.handleLoot then
         -- No active session: buffer item and trigger session start
@@ -383,9 +411,12 @@ function SessionMixin:HandleTradable(data)
                 break
             end
         end
-        if alreadyBuffered then return end
+        if alreadyBuffered then
+            TraceLoot("handleT:already-buffered", itemLink)
+            return
+        end
 
-        Loothing:Debug("HandleTradable: buffering item from", playerName, ":", itemLink)
+        TraceLoot("handleT:buffered", itemLink, "looter=" .. tostring(playerName))
         table.insert(self.lootBuffer, {
             itemLink = itemLink,
             playerName = playerName,
@@ -651,12 +682,19 @@ function SessionMixin:EndSession()
         Loothing.Comm:ResetSessionState()
     end
 
-    -- Clear MLDB on non-ML clients so the next SESSION_INIT re-snapshots
-    -- their baseline settings. The ML itself keeps its own MLDB when
-    -- ending a session it intends to restart (e.g. between encounters) —
-    -- same handleLoot guard we use for Loothing.masterLooter below.
+    -- Clear MLDB on non-ML clients ONLY when the ML has stopped handling loot
+    -- entirely. As long as `mldb.handleLoot == true`, the ML is still funnelling
+    -- group loot through Loothing between sessions (trash drops, encounters
+    -- without an active session, etc.) — clearing MLDB here would silence the
+    -- group-loot auto-pass funnel (Loot/GroupLootEvents.lua:67-77 reads
+    -- mldb.handleLoot to decide whether to PASS for the ML) until the next
+    -- SESSION_INIT applies a new MLDB. STOP_HANDLE_LOOT explicitly handles the
+    -- "ML stopped handling loot" case and clears MLDB then.
     if Loothing.MLDB and not Loothing.handleLoot then
-        Loothing.MLDB:Clear()
+        local mldb = Loothing.MLDB:Get()
+        if not (mldb and mldb.handleLoot == true) then
+            Loothing.MLDB:Clear()
+        end
     end
 
     -- Clear session data
@@ -728,7 +766,11 @@ function SessionMixin:EndSession()
         Loothing.Comm:BroadcastSessionEnd(sessionID)
     end
 
-    self:TriggerEvent("OnSessionEnded", sessionID)
+    -- Pass wasML captured *before* self.masterLooter and the global ML state
+     -- were cleared above. Listeners that check IsMasterLooter() post-clear will
+     -- fall through to IsCanonicalML() → raid-leader fallback, which gives the
+     -- wrong answer when the ML is not the raid leader.
+    self:TriggerEvent("OnSessionEnded", sessionID, wasML)
     Loothing:Print(Loothing.Locale["SESSION_ENDED"])
 
     if Loothing.Settings:Get("frame.autoClose") and Loothing.MainFrame then
@@ -839,11 +881,12 @@ end
 -- @return table|nil - The item, or nil if failed
 function SessionMixin:AddItem(itemLink, looter, guid, force, skipBroadcast)
     if self.state == Loothing.SessionState.INACTIVE then
+        TraceLoot("add:state-inactive", itemLink)
         return nil
     end
 
     if self.state == Loothing.SessionState.CLOSED then
-        Loothing:Debug("Cannot add items to a closed session")
+        TraceLoot("add:state-closed", itemLink)
         return nil
     end
 
@@ -851,14 +894,15 @@ function SessionMixin:AddItem(itemLink, looter, guid, force, skipBroadcast)
     if not force then
         local quality = Utils.GetItemQuality(itemLink)
         if quality < Loothing.MinQuality then
-            Loothing:Debug("Item below quality threshold:", itemLink)
+            TraceLoot("add:quality-low", itemLink,
+                "got=" .. tostring(quality) .. " min=" .. tostring(Loothing.MinQuality))
             return nil
         end
     end
 
     -- Filter check
     if not force and Loothing.ItemFilter and Loothing.ItemFilter:ShouldIgnoreItem(itemLink) then
-        Loothing:Debug("Item filtered:", itemLink)
+        TraceLoot("add:in-ignore-list", itemLink)
         return nil
     end
 
@@ -866,7 +910,7 @@ function SessionMixin:AddItem(itemLink, looter, guid, force, skipBroadcast)
     if not force then
         local _, _, _, _, _, _, _, _, _, _, _, _, _, bindType = C_Item.GetItemInfo(itemLink)
         if bindType == 2 and not Loothing.Settings:Get("ml.autoAddBoEs", false) then
-            Loothing:Debug("BoE item skipped (ml.autoAddBoEs disabled):", itemLink)
+            TraceLoot("add:boe-excluded", itemLink, "bindType=" .. tostring(bindType))
             return nil
         end
     end
@@ -2217,52 +2261,60 @@ function SessionMixin:ScanBagsForTradeableItems()
         end
     end
 
-    -- Find items that are NEW since the pre-encounter snapshot
+    -- Find items that are NEW since the pre-encounter snapshot.
+    -- Each filter rejection emits a TraceLoot line so the failing gate is
+    -- visible in /lt debug output — silent drops are the primary debug
+    -- blocker for "items never auto-add" bug reports.
     local snapshot = self.preEncounterBagSnapshot
     for itemLink, currentCount in pairs(currentBags) do
         local preCount = snapshot[itemLink] or 0
-        if currentCount > preCount then
-            -- This item is new (more copies than before the encounter)
-            if not self.reportedTradeableItems[itemLink] then
-                -- Quality check
-                local quality = Utils.GetItemQuality(itemLink)
-                if quality and quality >= Loothing.MinQuality then
-                    -- Item class blacklist (consumables, reagents, quest items, etc.)
-                    if not IsItemClassBlacklisted(itemLink) then
-                        -- BoE check (skip unless setting enables BoE collection)
-                        local boe = IsItemBoE(itemLink)
-                        local autoAddBoEs = Loothing.Settings and Loothing.Settings:Get("ml.autoAddBoEs", false)
-                        if not boe or autoAddBoEs then
-                            -- User ignore list
-                            if not (Loothing.ItemFilter and Loothing.ItemFilter:ShouldIgnoreItem(itemLink)) then
-                                -- Find the bag/slot to check trade time
-                                local tradeTime = self:FindTradeTimeForItem(itemLink, TradeQueue)
-                                if tradeTime and tradeTime > 0 then
-                                    local isML = self:IsMasterLooter()
-                                        or (Loothing.handleLoot and Loothing.isMasterLooter)
+        if currentCount <= preCount then
+            -- Pre-existing item — not a new drop. Skipped silently (too
+            -- noisy to trace every non-new bag entry per 2s tick).
+        elseif self.reportedTradeableItems[itemLink] then
+            TraceLoot("already-reported", itemLink)
+        else
+            local quality = Utils.GetItemQuality(itemLink)
+            if not quality or quality < Loothing.MinQuality then
+                TraceLoot("quality-low", itemLink,
+                    "got=" .. tostring(quality) .. " min=" .. tostring(Loothing.MinQuality))
+            elseif IsItemClassBlacklisted(itemLink) then
+                local _, _, _, _, _, classID, subClassID = C_Item.GetItemInfoInstant(itemLink)
+                TraceLoot("class-blacklisted", itemLink,
+                    "class=" .. tostring(classID) .. " sub=" .. tostring(subClassID))
+            else
+                local boe = IsItemBoE(itemLink)
+                local autoAddBoEs = Loothing.Settings and Loothing.Settings:Get("ml.autoAddBoEs", false)
+                if boe and not autoAddBoEs then
+                    TraceLoot("boe-excluded", itemLink, "autoAddBoEs=false")
+                elseif Loothing.ItemFilter and Loothing.ItemFilter:ShouldIgnoreItem(itemLink) then
+                    TraceLoot("in-ignore-list", itemLink)
+                else
+                    local tradeTime = self:FindTradeTimeForItem(itemLink, TradeQueue)
+                    if not tradeTime or tradeTime <= 0 then
+                        TraceLoot("no-trade-time", itemLink,
+                            "returned=" .. tostring(tradeTime))
+                    else
+                        local isML = self:IsMasterLooter()
+                            or (Loothing.handleLoot and Loothing.isMasterLooter)
+                        TraceLoot("candidate", itemLink, "isML=" .. tostring(isML))
 
-                                    if isML then
-                                        -- ML self-loopback: process locally, bypass comm layer.
-                                        -- HandleTradable is idempotent (matches existing items
-                                        -- before adding new ones).
-                                        self:HandleTradable({
-                                            itemLink = itemLink,
-                                            timeRemaining = tradeTime,
-                                            playerName = Utils.GetPlayerFullName(),
-                                        })
-                                        self.reportedTradeableItems[itemLink] = true
-                                        Loothing:Debug("BagScan: ML self-loopback for:", itemLink)
-                                    else
-                                        -- Non-ML: broadcast to group for ML to receive.
-                                        Loothing:Debug("BagScan: new tradeable item:", itemLink)
-                                        Loothing.Comm:Send(Loothing.MsgType.TRADABLE, {
-                                            itemLink = itemLink,
-                                            timeRemaining = tradeTime,
-                                        })
-                                        self.reportedTradeableItems[itemLink] = true
-                                    end
-                                end
-                            end
+                        if isML then
+                            -- ML self-loopback: process locally, bypass comm layer.
+                            -- HandleTradable is idempotent (matches existing items
+                            -- before adding new ones).
+                            self:HandleTradable({
+                                itemLink = itemLink,
+                                timeRemaining = tradeTime,
+                                playerName = Utils.GetPlayerFullName(),
+                            })
+                            self.reportedTradeableItems[itemLink] = true
+                        else
+                            Loothing.Comm:Send(Loothing.MsgType.TRADABLE, {
+                                itemLink = itemLink,
+                                timeRemaining = tradeTime,
+                            })
+                            self.reportedTradeableItems[itemLink] = true
                         end
                     end
                 end
@@ -2276,17 +2328,34 @@ end
 -- @param TradeQueue table
 -- @return number|nil
 function SessionMixin:FindTradeTimeForItem(itemLink, TradeQueue)
+    local sawMatch = false
+    local sawInfinite = false
+    local sawZero = false
     for bag = 0, NUM_BAG_SLOTS do
         local numSlots = C_Container.GetContainerNumSlots(bag)
         for slot = 1, numSlots or 0 do
             local slotLink = C_Container.GetContainerItemLink(bag, slot)
             if slotLink == itemLink then
+                sawMatch = true
                 local t = TradeQueue:GetContainerItemTradeTimeRemaining(bag, slot)
-                if t and t > 0 and t ~= math.huge then
+                if t == math.huge then
+                    sawInfinite = true
+                elseif not t or t <= 0 then
+                    sawZero = true
+                else
                     return t
                 end
             end
         end
+    end
+    if not sawMatch then
+        TraceLoot("findTrade:no-bag-slot-matches", itemLink)
+    elseif sawInfinite then
+        TraceLoot("findTrade:all-infinite", itemLink,
+            "tooltip reports no trade line; item is untradable or parse failed")
+    elseif sawZero then
+        TraceLoot("findTrade:all-bound-or-zero", itemLink,
+            "tooltip reports soulbound without trade window")
     end
     return nil
 end
