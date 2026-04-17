@@ -336,9 +336,14 @@ function CommMixin:HandleSyncData(data, sender)
         Loothing:Debug("Rejected SYNC_DATA from non-ML/leader:", sender)
         return
     end
-    -- If we already have a known ML from local detection, validate sender matches
-    if Loothing.masterLooter and Loothing.masterLooter ~= "" and sender ~= Loothing.masterLooter then
-        Loothing:Debug("Rejected SYNC_DATA from %s - local ML is %s", sender, Loothing.masterLooter)
+    -- If we already have a known ML from local detection, validate sender
+    -- matches. Use IsSamePlayer: Loothing.masterLooter may be stored in a
+    -- roster-API casing that differs from the post-NormalizeName sender.
+    -- Loothing:Debug is a print wrapper, not a format function, so pass
+    -- args positionally rather than via a "%s" format string.
+    if Loothing.masterLooter and Loothing.masterLooter ~= ""
+        and not Utils.IsSamePlayer(sender, Loothing.masterLooter) then
+        Loothing:Debug("Rejected SYNC_DATA from", sender, "- local ML is", Loothing.masterLooter)
         return
     end
     data.masterLooter = sender
@@ -574,6 +579,15 @@ end
 -- @param sender string
 function CommMixin:HandleHeartbeat(data, sender, _distribution)
     if not validateHandler("HandleHeartbeat", data) then return end
+    -- Self-filter at the dispatch layer: RAID broadcasts loop back to the
+    -- sender, and subscribers to OnHeartbeat should never see a heartbeat
+    -- purportedly describing remote state when that state is actually the
+    -- local player. Heartbeat.lua already guards its own handler, but this
+    -- ensures any OnHeartbeat subscriber gets a filtered stream by default.
+    local localName = Utils.GetPlayerFullName()
+    if localName and Utils.IsSamePlayer(sender, localName) then
+        return
+    end
     -- Heartbeat handles the comparison and potential auto-sync trigger
     if Loothing.Heartbeat then
         Loothing.Heartbeat:HandleHeartbeat(data, sender)
@@ -750,6 +764,21 @@ function CommMixin:HandleResponseBatch(data, sender)
     local isTestMode = TestMode and TestMode:IsEnabled()
     if not isGroupMember(sender) and not isTestMode then
         Loothing:Debug("Rejected RESPONSE_BATCH from non-group member:", sender)
+        return
+    end
+
+    -- Anti-DoS: cap inner batch size. The outer BATCH envelope enforces
+    -- MAX_BATCH_SIZE (20) but nothing stopped a peer from sending a single
+    -- RESPONSE_BATCH containing thousands of items. 100 covers the
+    -- legitimate worst case (one response per raider per session on a
+    -- 40-person raid, with a safety margin).
+    local MAX_RESPONSES_PER_BATCH = 100
+    if #data.responses > MAX_RESPONSES_PER_BATCH then
+        Loothing:Debug("Rejected RESPONSE_BATCH with", #data.responses,
+            "items (cap " .. MAX_RESPONSES_PER_BATCH .. ") from", sender)
+        self:TriggerEvent("OnMessageDropped",
+            Loothing.MsgType.RESPONSE_BATCH,
+            "oversized_batch", sender)
         return
     end
 

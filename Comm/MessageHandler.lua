@@ -79,9 +79,17 @@ local batchAccumulator = {}
 
 -- Replay-protection: track (sender.."-"..msgID) → timestamp for recent messages.
 -- Entries expire after SEEN_TTL seconds; sweep runs every 30 seconds.
-local seenIDs    = {}
-local SEEN_TTL   = 120
-local lastCleanup = 0
+-- Hard-capped at SEEN_MAX_ENTRIES to prevent unbounded growth under a
+-- flood of distinct msgIDs from a single malicious peer (at 1000 msg/s
+-- within the 120s TTL the table could otherwise reach ~120k entries).
+-- On overflow we do an emergency sweep of expired entries first; if still
+-- over the cap, evict the oldest SEEN_EVICT_BATCH entries by timestamp.
+local seenIDs          = {}
+local seenCount        = 0
+local SEEN_TTL         = 120
+local SEEN_MAX_ENTRIES = 10000
+local SEEN_EVICT_BATCH = 1000
+local lastCleanup      = 0
 
 -- Per-type comm statistics for diagnostics (/lt diag)
 local commStats = {
@@ -192,14 +200,22 @@ function CommMixin:GetCommStats()
     return commStats
 end
 
---- Get count of entries in the dedup table
+--- Get count of entries in the dedup table.
+-- Returns the live counter maintained by OnMessage (O(1)) with a lazy
+-- resync against the underlying table to correct any drift (e.g., after
+-- a failed sweep or /reload mid-insert). Historically this was an O(N)
+-- pairs iteration; the new counter keeps the hot path constant-time
+-- while preserving observable behavior.
 -- @return number
 function CommMixin:GetSeenIDCount()
-    local count = 0
-    for _ in pairs(seenIDs) do
-        count = count + 1
+    -- Belt-and-braces: recompute if the counter is obviously wrong (negative
+    -- or we're suspiciously at zero while the table has entries).
+    if seenCount < 0 or (seenCount == 0 and next(seenIDs) ~= nil) then
+        local count = 0
+        for _ in pairs(seenIDs) do count = count + 1 end
+        seenCount = count
     end
-    return count
+    return seenCount
 end
 
 --- Get count of active batch accumulator entries
@@ -535,7 +551,16 @@ function CommMixin:OnMessage(message, distribution, sender)
         return
     end
 
-    -- Version check
+    -- Version check (lower bound): reject legacy-format payloads below
+    -- MIN_PROTOCOL_VERSION. A forged v2-or-earlier message that happens to
+    -- pass the Adler-32 check could otherwise reach handlers with a
+    -- structurally-wrong payload shape. Upper-bound newer-version
+    -- messages are still attempted — protocol additions are expected to
+    -- be backwards-compatible at the schema level.
+    if version < Loothing.MIN_PROTOCOL_VERSION then
+        Loothing:Debug("Rejected message with obsolete protocol version:", version, "from", sender)
+        return
+    end
     if version > Loothing.PROTOCOL_VERSION then
         Loothing:Debug("Received message from newer protocol version:", version, "from", sender)
         -- Still try to process - might be backwards compatible
@@ -564,17 +589,51 @@ function CommMixin:OnMessage(message, distribution, sender)
         commStats.dropped[command] = (commStats.dropped[command] or 0) + 1
         return
     end
-    seenIDs[dedupKey] = now
 
-    -- Periodic sweep: remove entries older than SEEN_TTL (runs every 30s)
+    -- Periodic sweep: remove entries older than SEEN_TTL (runs every 30s).
+    -- Decrement seenCount as entries are purged so overflow detection stays
+    -- accurate; pre-cap check below relies on this count.
     if now - lastCleanup > 30 then
         lastCleanup = now
         for k, t in pairs(seenIDs) do
             if now - t > SEEN_TTL then
                 seenIDs[k] = nil
+                seenCount = seenCount - 1
             end
         end
     end
+
+    -- Anti-DoS cap: if we're at capacity, force an immediate expired-sweep
+    -- (in case the periodic sweep hasn't run yet). If we're still over cap
+    -- after that, evict the oldest SEEN_EVICT_BATCH entries by timestamp.
+    -- This preserves dedup correctness for recent messages while bounding
+    -- memory under a forged-msgID flood.
+    if seenCount >= SEEN_MAX_ENTRIES then
+        for k, t in pairs(seenIDs) do
+            if now - t > SEEN_TTL then
+                seenIDs[k] = nil
+                seenCount = seenCount - 1
+            end
+        end
+        if seenCount >= SEEN_MAX_ENTRIES then
+            -- Collect timestamps, sort ascending, evict the oldest batch.
+            local entries = {}
+            for k, t in pairs(seenIDs) do
+                entries[#entries + 1] = { k = k, t = t }
+            end
+            table.sort(entries, function(a, b) return a.t < b.t end)
+            local evict = math.min(SEEN_EVICT_BATCH, #entries)
+            for i = 1, evict do
+                seenIDs[entries[i].k] = nil
+                seenCount = seenCount - 1
+            end
+            Loothing:Debug("seenIDs DoS guard: evicted", evict,
+                "oldest entries (cap=" .. SEEN_MAX_ENTRIES .. ")")
+        end
+    end
+
+    seenIDs[dedupKey] = now
+    seenCount         = seenCount + 1
 
     -- Route to handler
     self:RouteMessage(command, data, sender, distribution)

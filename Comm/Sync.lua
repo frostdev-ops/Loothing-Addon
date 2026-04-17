@@ -240,9 +240,13 @@ function SyncMixin:HandleSyncData(data)
         return
     end
 
-    -- Verify sender
-    if data.masterLooter ~= self.syncTarget then
-        Loothing:Debug("Sync data from unexpected sender")
+    -- Verify sender. Use IsSamePlayer so casing drift between how the
+    -- requester stored syncTarget (often from a roster API) and how the
+    -- sync-data envelope carries masterLooter (post-NormalizeName) does
+    -- not cause a silent drop with no retry.
+    if not Utils.IsSamePlayer(data.masterLooter, self.syncTarget) then
+        Loothing:Debug("Sync data from unexpected sender (got",
+            tostring(data.masterLooter), "expected", tostring(self.syncTarget) .. ")")
         return
     end
 
@@ -708,7 +712,11 @@ end
 -- @param data table - Settings table
 -- @param sender string
 function SyncMixin:HandleSettingsData(data, sender)
-    if self.awaitingSettingsFrom ~= sender then
+    -- Defense in depth: although every sender reaching this callback has
+    -- been normalized at MessageHandler:OnMessage, IsSamePlayer keeps the
+    -- path correct if a future code path delivers sender into this field
+    -- without going through the ingress normalizer.
+    if not Utils.IsSamePlayer(self.awaitingSettingsFrom, sender) then
         return
     end
 
@@ -866,7 +874,7 @@ end
 -- @param data table - History entries
 -- @param sender string
 function SyncMixin:HandleHistoryData(data, sender)
-    if self.awaitingHistoryFrom ~= sender then return end
+    if not Utils.IsSamePlayer(self.awaitingHistoryFrom, sender) then return end
 
     if not data or type(data) ~= "table" then
         Loothing:Debug("Empty history data from " .. sender)

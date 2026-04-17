@@ -8,8 +8,13 @@ local _, ns = ...
 local Loothing = ns.Addon
 
 -- Addon info
-Loothing.VERSION = "2.0.18.1"
+Loothing.VERSION = "2.0.19"
 Loothing.PROTOCOL_VERSION = 4
+-- Minimum accepted protocol version on receive. v2 and earlier predate the
+-- current serializer/compressor pipeline and cannot be parsed safely; v3
+-- remains supported for legacy peers (differs from v4 only in the absence
+-- of per-message msgID). Anything below v3 is dropped.
+Loothing.MIN_PROTOCOL_VERSION = 3
 Loothing.ADDON_PREFIX = "LOOTHING"
 
 --[[--------------------------------------------------------------------

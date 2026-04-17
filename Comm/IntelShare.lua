@@ -321,6 +321,22 @@ function IntelShareMixin:HandleManifest(data, sender, distribution)
     -- Don't create duplicate entries
     if self.pendingReceive[transferID] then return end
 
+    -- Anti-DoS: cap one active pending transfer per sender. Without this, a
+    -- malicious peer could flood HandleManifest with unique transferIDs,
+    -- each creating a RECEIVE_TIMEOUT-lived entry plus a C_Timer. A
+    -- legitimate sender only needs one manifest in flight at a time.
+    local activeFromSender = 0
+    for _, pending in pairs(self.pendingReceive) do
+        if pending.sender and Utils.IsSamePlayer(pending.sender, sender) then
+            activeFromSender = activeFromSender + 1
+        end
+    end
+    if activeFromSender >= 1 then
+        Loothing:Debug("IntelShare: rejected manifest from", sender,
+            "— already one pending transfer in flight")
+        return
+    end
+
     -- Count expected datasets
     local expectedCount = 0
     if data.datasets then
