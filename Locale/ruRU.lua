@@ -209,8 +209,6 @@ L["PERSONAL_PREFERENCES"] = "Личные настройки"
 L["CONFIG_LOOT_RESPONSE"] = "Ответ на добычу"
 L["CONFIG_ROLLFRAME_AUTO_SHOW"] = "Автопоказ окна ответа"
 L["CONFIG_ROLLFRAME_AUTO_SHOW_DESC"] = "Автоматически показывать окно ответа при начале голосования"
-L["CONFIG_ROLLFRAME_AUTO_ROLL"] = "Авто-бросок при отправке"
-L["CONFIG_ROLLFRAME_AUTO_ROLL_DESC"] = "Автоматически выполнять /roll при отправке ответа"
 L["CONFIG_ROLLFRAME_GEAR_COMPARE"] = "Показать сравнение снаряжения"
 L["CONFIG_ROLLFRAME_GEAR_COMPARE_DESC"] = "Показать текущее снаряжение для сравнения"
 L["CONFIG_ROLLFRAME_REQUIRE_NOTE"] = "Требовать примечание"
@@ -288,7 +286,6 @@ L["REQUIRE_NOTES_DESC"] = "Голосующие должны добавить п
 L["BUTTON_SETS"] = "Наборы кнопок"
 L["ACTIVE_SET"] = "Активный набор"
 L["NEW_SET"] = "Новый набор"
-L["CONFIRM_DELETE_SET"] = "Удалить набор кнопок '%s'?"
 L["ADD_BUTTON"] = "Добавить кнопку"
 L["MAX_BUTTONS"] = "Максимум 10 кнопок за набор"
 L["MIN_BUTTONS"] = "Требуется как минимум 1 кнопка"
@@ -350,7 +347,6 @@ L["CONFIG_HISTORY_CLEARALL_CONFIRM"] = "Вы уверены, что хотите
 -- Enhanced Award Reasons
 L["CONFIG_REASON_LOG"] = "Логировать в историю"
 L["CONFIG_REASON_DISENCHANT"] = "Рассматривать как распыление"
-L["CONFIG_REASON_RESET_CONFIRM"] = "Восстановить все причины выдачи по умолчанию?"
 
 -- Council Management
 L["CONFIG_COUNCIL_REMOVEALL_CONFIRM"] = "Удалить всех членов совета?"
@@ -887,32 +883,19 @@ L["PROFILE_SHARE_TARGET_REQUIRED"] = "Сначала выберите цель."
 L["PROFILE_SHARE_UNAVAILABLE"] = "Обмен профилями недоступен."
 
 -- Popups: Award/Skip
-L["POPUP_AWARD_LATER"] = "Выдать {item} себе для распределения позже?"
-L["POPUP_SKIP_ITEM"] = "Пропустить {item} без выдачи?"
-L["POPUP_SKIP_ITEM_FMT"] = "Пропустить %s без выдачи?"
 
 -- Popups: Council
-L["POPUP_CLEAR_COUNCIL"] = "Удалить всех членов совета?"
-L["POPUP_CLEAR_COUNCIL_COUNT"] = "Удалить всех %d членов совета?"
 
 -- Popups: Ignored Items
-L["POPUP_CLEAR_IGNORED"] = "Очистить все игнорируемые предметы?"
-L["POPUP_CLEAR_IGNORED_COUNT"] = "Очистить все %d игнорируемых предметов?"
 
 -- Popups: Session
-L["POPUP_CONFIRM_END_SESSION"] = "Вы уверены, что хотите завершить текущую сессию? Все ожидающие предметы будут закрыты."
-L["POPUP_CONFIRM_USAGE"] = "Вы хотите использовать Loothing для распределения добычи в этом рейде?"
 L["POPUP_START_SESSION"] = "Начать сессию для {boss}?"
 L["POPUP_START_SESSION_FMT"] = "Начать сессию для %s?"
 L["POPUP_START_SESSION_GENERIC"] = "Начать сессию?"
 
 -- Popups: Revote
-L["POPUP_CONFIRM_REVOTE"] = "Сбросить все голоса и начать голосование заново за {item}?"
-L["POPUP_CONFIRM_REVOTE_FMT"] = "Сбросить все голоса и начать голосование заново за %s?"
 
 -- Popups: Reannounce
-L["POPUP_REANNOUNCE"] = "Объявить заново все предметы группе?"
-L["POPUP_REANNOUNCE_TITLE"] = "Повторное объявление предметов"
 L["POPUP_RENAME_SET"] = "Введите новое имя набора:"
 L["POPUP_RESET_ALL_SETS"] = "Сбросить ВСЕ наборы ответов к значениям по умолчанию? Это невозможно отменить."
 
@@ -932,12 +915,8 @@ L["POPUP_IMPORT_SETTINGS"] = "Выберите способ применения
 L["POPUP_IMPORT_SETTINGS_TITLE"] = "Импорт параметров"
 
 -- Popups: Profile
-L["POPUP_OVERWRITE_PROFILE"] = "Это перезапишет параметры текущего профиля. Продолжить?"
-L["POPUP_OVERWRITE_PROFILE_TITLE"] = "Перезапись профиля"
 
 -- Popups: Keep/Trade
-L["POPUP_KEEP_OR_TRADE"] = "Что вы хотите сделать с {item}?"
-L["POPUP_KEEP_OR_TRADE_FMT"] = "Что вы хотите сделать с %s?"
 
 -- Popups: Sync
 L["POPUP_SYNC_GENERIC_FMT"] = "%s хочет синхронизировать свои %s с вами. Принять?"
@@ -947,9 +926,6 @@ L["POPUP_SYNC_REQUEST_TITLE"] = "Запрос синхронизации"
 L["POPUP_SYNC_SETTINGS_FMT"] = "%s хочет синхронизировать свои параметры Loothing с вами. Принять?"
 
 -- Popups: Trade
-L["POPUP_TRADE_ADD_ITEMS"] = "Добавить {count} выданных предметов в торговлю с {player}?"
-L["POPUP_TRADE_ADD_MULTI"] = "Добавить %d выданных предметов в торговлю с %s?"
-L["POPUP_TRADE_ADD_SINGLE"] = "Добавить 1 выданный предмет в торговлю с %s?"
 
 -- Sync
 L["SYNC_ACCEPTED_FROM"] = "Синхронизация принята от %s"

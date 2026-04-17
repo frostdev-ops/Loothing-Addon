@@ -314,7 +314,7 @@ function SessionMixin:HandleTradable(data)
         end
         if not matched and data.itemID then
             for _, item in self.items:Enumerate() do
-                if item.itemID == data.itemID and playerName and item.looter == playerName then
+                if item.itemID == data.itemID and playerName and Utils.IsSamePlayer(item.looter, playerName) then
                     matched = item
                     break
                 end
@@ -322,7 +322,7 @@ function SessionMixin:HandleTradable(data)
         end
         if not matched then
             for _, item in self.items:Enumerate() do
-                if item.itemLink == itemLink and (not playerName or item.looter == playerName) then
+                if item.itemLink == itemLink and (not playerName or Utils.IsSamePlayer(item.looter, playerName)) then
                     matched = item
                     break
                 end
@@ -460,7 +460,7 @@ function SessionMixin:HandleNonTradable(data)
     end
     if not matched and data.itemID then
         for _, item in self.items:Enumerate() do
-            if item.itemID == data.itemID and data.playerName and item.looter == data.playerName then
+            if item.itemID == data.itemID and data.playerName and Utils.IsSamePlayer(item.looter, data.playerName) then
                 matched = item
                 break
             end
@@ -468,7 +468,7 @@ function SessionMixin:HandleNonTradable(data)
     end
     if not matched then
         for _, item in self.items:Enumerate() do
-            if item.itemLink == data.itemLink and (not data.playerName or item.looter == data.playerName) then
+            if item.itemLink == data.itemLink and (not data.playerName or Utils.IsSamePlayer(item.looter, data.playerName)) then
                 matched = item
                 break
             end
@@ -913,6 +913,14 @@ function SessionMixin:AddItem(itemLink, looter, guid, force, skipBroadcast)
             TraceLoot("add:boe-excluded", itemLink, "bindType=" .. tostring(bindType))
             return nil
         end
+    end
+
+    -- Skip class-blacklisted items (consumables, reagents, tradeskill, quest
+    -- items, housing decor) unless force is set. Mirrors the HandleTradable
+    -- pre-filter so bag-scan and manual-add paths are symmetric.
+    if not force and IsItemClassBlacklisted(itemLink) then
+        TraceLoot("add:class-blacklisted", itemLink)
+        return nil
     end
 
     -- Dedup by GUID
@@ -1426,12 +1434,6 @@ function SessionMixin:EndVoting(guid)
     return lastResults
 end
 
---- Handle vote timeout (legacy - now handled per-item)
-function SessionMixin:OnVoteTimeout()
-    Loothing:Debug("Vote timeout (legacy)")
-    self:EndVoting()
-end
-
 --- Get all items currently in voting state
 -- @return table - Array of voting items
 function SessionMixin:GetVotingItems()
@@ -1847,6 +1849,9 @@ function SessionMixin:AwardItem(guid, winner, response, awardReasonId, awardReas
             subTypeID     = item.subTypeID,
             bindType      = item.bindType,
             isBoe         = item.isBoe,
+            -- Back-reference to the session item, used by RevoteItem(force=true)
+            -- to remove superseded history rows when an award is revoked.
+            awardedItemGuid = item.guid,
             -- Winner info (original field names kept for backward compat)
             winner          = winner,
             winnerResponse  = response,
@@ -1973,6 +1978,12 @@ function SessionMixin:RevoteItem(guid, force)
         item.winnerResponse = nil
         item.awardedTime = nil
         item.awarded = false
+
+        -- Drop the superseded award's history row so a subsequent re-award
+        -- doesn't leave an orphan entry pointing at the previous winner.
+        if Loothing.History then
+            Loothing.History:RemoveByItemGUID(guid)
+        end
     end
 
     -- Flush votes and reset to pending

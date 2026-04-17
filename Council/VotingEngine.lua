@@ -76,7 +76,10 @@ end
     Simple Voting - Most votes wins
 ----------------------------------------------------------------------]]
 
---- Tally votes using simple majority
+--- Tally votes using simple majority of submitted ballots.
+-- NOTE: the majority denominator is the number of council members who
+-- submitted a ballot, not the total council size. Non-voters are not
+-- counted as abstentions. Winner requires > 50% of actual ballots cast.
 -- @param votes table - DataProvider or array of votes
 -- @param candidates table - Array of candidate names (optional, for filtering)
 -- @return table - { winner, response, counts, isTie, tiedCandidates }
@@ -198,6 +201,8 @@ function VotingEngine:TallyRankedChoice(votes, candidates, opts)
 
     local rounds = {}
     local eliminated = {}
+    -- totalVoters = council members who submitted a ballot (with >=1 response).
+    -- Non-voters and members still pending are not counted in the denominator.
     local totalVoters = #workingVotes
     local majorityThreshold = math.floor(totalVoters / 2) + 1
 

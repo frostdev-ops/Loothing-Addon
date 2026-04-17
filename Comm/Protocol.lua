@@ -27,7 +27,11 @@ ns.ProtocolMixin = ns.ProtocolMixin or {}
 
 -- Monotonically increasing sequence counter for replay-protection msgIDs.
 -- Resets to 0 on each reload (intentional: dedup window is 120s, reloads take longer).
+-- Wraps at 2^31 - 1 to keep values safely inside Lua 5.1's integer-exact
+-- float range. A single session will never approach this, but the cap
+-- prevents any downstream code that assumes int32 from getting surprised.
 local msgSeq = 0
+local MSG_SEQ_MAX = 0x7FFFFFFF
 
 --[[--------------------------------------------------------------------
     Checksum Helpers
@@ -89,8 +93,13 @@ end
 -- @param data table|nil - Message payload (structured table)
 -- @return string|nil, number|nil - Encoded message ready for Loolib.Comm, msgID
 function ProtocolMixin:Encode(command, data)
-    -- Assign a monotonic message ID for replay protection (Protocol v4+)
+    -- Assign a monotonic message ID for replay protection (Protocol v4+).
+    -- Wrap strictly beyond MSG_SEQ_MAX so 2^31-1 is still emittable — keeps
+    -- the wrap math consistent with the comment above the counter decl.
     msgSeq = msgSeq + 1
+    if msgSeq > MSG_SEQ_MAX then
+        msgSeq = 1
+    end
     local currentMsgID = msgSeq
 
     -- Step 1: Serialize (version + command + data + msgID → string)

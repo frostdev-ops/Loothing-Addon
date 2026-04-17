@@ -32,9 +32,12 @@ function ObserverMixin:Init()
     -- Local list (persisted)
     self.list = {}
 
-    -- Remote list (from ML, not persisted)
+    -- Remote list + transient view (from ML, never persisted to SavedVariables)
     self.remoteList = {}
     self.remotePrimary = false
+    self.remotePermissions    = nil
+    self.remoteOpenObservation = nil
+    self.remoteMlIsObserver    = nil
 
     -- Load from settings
     self:LoadFromSettings()
@@ -246,8 +249,17 @@ end
     Remote Roster (from ML)
 ----------------------------------------------------------------------]]
 
---- Set remote observer data (received from ML)
--- @param data table - { list, permissions, openObservation }
+--- Set remote observer data (received from ML).
+-- The ML's observer permissions / openObservation / mlIsObserver flags are
+-- stored ONLY in transient fields on this mixin. They used to be persisted
+-- via Loothing.Settings:Set("observers.*", ...), which mutated the
+-- receiver's own saved profile with the ML's configuration — so if you were
+-- later your own ML on a separate toon, your observer settings would be
+-- whatever the previous raid's ML had configured. The authoritative
+-- MLDB-broadcast path (MLDB.lua ApplyFromML + RestoreSettings) still
+-- handles applying + reverting these during a session with a preSessionSnapshot,
+-- so no functional change — just stops the leak into permanent storage.
+-- @param data table - { list, permissions, openObservation, mlIsObserver }
 function ObserverMixin:SetRemoteObserverList(data)
     if not data then return end
 
@@ -260,24 +272,23 @@ function ObserverMixin:SetRemoteObserverList(data)
 
     self.remotePrimary = true
 
-    -- Apply permissions from ML
-    if data.permissions and Loothing.Settings then
-        Loothing.Settings:Set("observers.permissions", data.permissions)
-    end
-    if data.openObservation ~= nil and Loothing.Settings then
-        Loothing.Settings:Set("observers.openObservation", data.openObservation)
-    end
-    if data.mlIsObserver ~= nil and Loothing.Settings then
-        Loothing.Settings:Set("observers.mlIsObserver", data.mlIsObserver)
-    end
+    -- Transient remote view; cleared on ClearRemoteObserverList (session end /
+    -- ML departure). Never written to SavedVariables.
+    self.remotePermissions    = data.permissions
+    self.remoteOpenObservation = data.openObservation
+    self.remoteMlIsObserver    = data.mlIsObserver
 
     self:TriggerEvent("OnObserverListChanged", data.list or {})
 end
 
---- Clear remote roster (become primary)
+--- Clear remote roster (become primary). Also releases the transient
+--- remote permissions / flags captured by SetRemoteObserverList.
 function ObserverMixin:ClearRemoteObserverList()
     wipe(self.remoteList)
     self.remotePrimary = false
+    self.remotePermissions    = nil
+    self.remoteOpenObservation = nil
+    self.remoteMlIsObserver    = nil
 end
 
 --[[--------------------------------------------------------------------

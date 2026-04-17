@@ -669,10 +669,19 @@ function DiagPanelMixin:Refresh()
         SetText(v.tempPool, format("%d / %d", pooled, maxPool))
         SetText(v.tempActive, tostring(outstanding), outstanding > 0 and COLOR_WARN or COLOR_OK)
 
-        local leaks = TempTable:GetLeaks()
-        local leakCount = 0
-        for _ in pairs(leaks) do leakCount = leakCount + 1 end
-        SetText(v.tempLeaks, tostring(leakCount), leakCount > 0 and COLOR_BAD or COLOR_OK)
+        local trackingEnabled = TempTable.AreLeakWarningsEnabled
+            and TempTable:AreLeakWarningsEnabled()
+        if trackingEnabled then
+            local leaks = TempTable:GetLeaks()
+            local leakCount = 0
+            for _ in pairs(leaks) do leakCount = leakCount + 1 end
+            SetText(v.tempLeaks, tostring(leakCount),
+                leakCount > 0 and COLOR_BAD or COLOR_OK)
+        else
+            -- WARN_ON_LEAK default-off in release builds; GetLeaks() would
+            -- report 0 regardless of reality. Say so rather than lie.
+            SetText(v.tempLeaks, "(tracking off)", COLOR_DIM)
+        end
     else
         SetText(v.tempPool, "N/A", COLOR_DIM)
         SetText(v.tempActive, "N/A", COLOR_DIM)
@@ -952,10 +961,16 @@ function DiagPanelMixin:BuildClipboardText()
         local pooled, outstanding, maxPool = TempTable:GetStats()
         L(format("  TempTable Pool: %d / %d", pooled, maxPool))
         L(format("  TempTable Active: %d", outstanding))
-        local leaks = TempTable:GetLeaks()
-        local leakCount = 0
-        for _ in pairs(leaks) do leakCount = leakCount + 1 end
-        L(format("  TempTable Leaks: %d", leakCount))
+        local trackingEnabled = TempTable.AreLeakWarningsEnabled
+            and TempTable:AreLeakWarningsEnabled()
+        if trackingEnabled then
+            local leaks = TempTable:GetLeaks()
+            local leakCount = 0
+            for _ in pairs(leaks) do leakCount = leakCount + 1 end
+            L(format("  TempTable Leaks: %d", leakCount))
+        else
+            L("  TempTable Leaks: (tracking off)")
+        end
     else
         L("  TempTable: N/A")
     end

@@ -65,7 +65,16 @@ function HistoryMixin:AddEntry(entry)
         return
     end
 
-    -- Guard: never persist test mode data to history
+    -- Guard: never persist test mode data to history. Check BOTH sources:
+    --   Loothing.TestMode (TestModeState, always loaded via Core/TestModeState.lua)
+    --   ns.TestMode        (Debug/TestMode.lua harness — loaded in release TOC too)
+    -- They can diverge briefly during init order, so testing either being
+    -- active is enough to block a write. Fixes the "remote HISTORY_ENTRY
+    -- slips through in test mode" edge case when only one of the two is up.
+    if Loothing.TestMode and Loothing.TestMode.IsActive
+        and Loothing.TestMode:IsActive() then
+        return
+    end
     if ns.TestMode and ns.TestMode:IsEnabled() then
         return
     end
@@ -73,6 +82,16 @@ function HistoryMixin:AddEntry(entry)
     -- Ensure required fields
     entry.timestamp = entry.timestamp or time()
     entry.guid = entry.guid or Utils.GenerateGUID()
+
+    -- Receiver-side idempotency on awardedItemGuid: if any prior entry carries
+    -- the same session-item GUID, evict it first. Keeps ML's local history
+    -- and every council member's local history in sync across revote-then-
+    -- re-award flows — no per-revote broadcast is needed because the next
+    -- re-award's HISTORY_ENTRY broadcast naturally supersedes the stale row.
+    -- Pre-2.0.18 entries lack awardedItemGuid and are never matched.
+    if entry.awardedItemGuid then
+        self:RemoveByItemGUID(entry.awardedItemGuid)
+    end
 
     -- Backfill date/time from timestamp if missing (pre-1.10 entries or remote sync)
     if not entry.date and entry.timestamp > 0 then
@@ -153,6 +172,32 @@ function HistoryMixin:RemoveEntry(guid)
         self:TriggerEvent("OnHistoryChanged", "remove", entry)
     end
     return true
+end
+
+--- Remove all history entries referencing a given session-item GUID.
+-- Used by SessionMixin:RevoteItem(force=true) to clean up the superseded
+-- award when an already-awarded item is returned to voting. Entries written
+-- before 2.0.18 lack awardedItemGuid and are silently skipped.
+-- @param itemGuid string - the session item's GUID
+-- @return number - count of entries removed
+function HistoryMixin:RemoveByItemGUID(itemGuid)
+    if not itemGuid then return 0 end
+
+    -- Collect first, remove second: RemoveEntry mutates self.entries.
+    local toRemove = {}
+    for _, entry in self.entries:Enumerate() do
+        if entry.awardedItemGuid == itemGuid then
+            toRemove[#toRemove + 1] = entry.guid
+        end
+    end
+
+    local removed = 0
+    for _, guid in ipairs(toRemove) do
+        if self:RemoveEntry(guid) then
+            removed = removed + 1
+        end
+    end
+    return removed
 end
 
 function HistoryMixin:IsBulkUpdating()

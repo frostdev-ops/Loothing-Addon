@@ -257,7 +257,6 @@ L["REQUIRE_NOTES_DESC"] = "Abstimmende müssen eine Notiz mit ihrer Abstimmung h
 L["BUTTON_SETS"] = "Tasten-Sets"
 L["ACTIVE_SET"] = "Aktives Set"
 L["NEW_SET"] = "Neues Set"
-L["CONFIRM_DELETE_SET"] = "Tasten-Set '%s' löschen?"
 L["ADD_BUTTON"] = "Taste hinzufügen"
 L["MAX_BUTTONS"] = "Maximal 10 Tasten pro Set"
 L["MIN_BUTTONS"] = "Mindestens 1 Taste erforderlich"
@@ -319,7 +318,6 @@ L["CONFIG_HISTORY_CLEARALL_CONFIRM"] = "Bist du sicher dass du ALLE Verlaufseint
 -- Enhanced Award Reasons
 L["CONFIG_REASON_LOG"] = "In History protokollieren"
 L["CONFIG_REASON_DISENCHANT"] = "Als Entzaubern behandeln"
-L["CONFIG_REASON_RESET_CONFIRM"] = "Alle Zuteilung-Gründe auf Standard zurücksetzen?"
 
 -- Council Management
 L["CONFIG_COUNCIL_REMOVEALL_CONFIRM"] = "Alle Beuterat-Mitglieder entfernen?"
@@ -678,8 +676,6 @@ L["PERSONAL_PREFERENCES"] = "Persönliche Einstellungen"
 L["CONFIG_LOOT_RESPONSE"] = "Beuteantwort"
 L["CONFIG_ROLLFRAME_AUTO_SHOW"] = "Antwortfenster automatisch anzeigen"
 L["CONFIG_ROLLFRAME_AUTO_SHOW_DESC"] = "Antwortfenster automatisch anzeigen wenn Abstimmung beginnt"
-L["CONFIG_ROLLFRAME_AUTO_ROLL"] = "Auto-Würfeln beim Absenden"
-L["CONFIG_ROLLFRAME_AUTO_ROLL_DESC"] = "Automatisch /roll auslösen beim Absenden einer Antwort"
 L["CONFIG_ROLLFRAME_GEAR_COMPARE"] = "Ausrüstungsvergleich anzeigen"
 L["CONFIG_ROLLFRAME_GEAR_COMPARE_DESC"] = "Aktuell angelegte Items zum Vergleich anzeigen"
 L["CONFIG_ROLLFRAME_REQUIRE_NOTE"] = "Notiz erforderlich"
@@ -862,28 +858,15 @@ L["QUALITY_HEIRLOOM"] = "Erbstück"
 L["QUALITY_UNKNOWN"] = "Unbekannt"
 
 -- Popups - Award / Session
-L["POPUP_AWARD_LATER"] = "{item} an dich selbst zuteilen um es später zu verteilen?"
-L["POPUP_CONFIRM_END_SESSION"] = "Bist du sicher dass du die aktuelle Beutesession beenden möchtest? Alle ausstehenden Items werden geschlossen."
-L["POPUP_CONFIRM_REVOTE"] = "Alle Stimmen löschen und Abstimmung für {item} neu starten?"
-L["POPUP_CONFIRM_REVOTE_FMT"] = "Alle Stimmen löschen und Abstimmung für %s neu starten?"
-L["POPUP_CONFIRM_USAGE"] = "Möchtest du Loothing für die Beuteverteilung in diesem Schlachtzug verwenden?"
-L["POPUP_REANNOUNCE"] = "Alle Items erneut an die Gruppe ankündigen?"
-L["POPUP_REANNOUNCE_TITLE"] = "Items erneut ankündigen"
 L["POPUP_RENAME_SET"] = "Neuen Namen für das Set eingeben:"
 L["POPUP_RESET_ALL_SETS"] = "ALLE Antwort-Sets auf Standard zurücksetzen? Dies kann nicht rückgängig gemacht werden."
-L["POPUP_SKIP_ITEM"] = "{item} ohne Zuteilung überspringen?"
-L["POPUP_SKIP_ITEM_FMT"] = "%s ohne Zuteilung überspringen?"
 L["POPUP_START_SESSION"] = "Beutesession für {boss} starten?"
 L["POPUP_START_SESSION_FMT"] = "Beutesession für %s starten?"
 L["POPUP_START_SESSION_GENERIC"] = "Beutesession starten?"
 
 -- Popups - Council
-L["POPUP_CLEAR_COUNCIL"] = "Alle Beuteratsmitglieder entfernen?"
-L["POPUP_CLEAR_COUNCIL_COUNT"] = "Alle %d Beuteratsmitglieder entfernen?"
 
 -- Popups - Ignored Items
-L["POPUP_CLEAR_IGNORED"] = "Alle ignorierten Items löschen?"
-L["POPUP_CLEAR_IGNORED_COUNT"] = "Alle %d ignorierten Items löschen?"
 
 -- Popups - History
 L["POPUP_DELETE_HISTORY_ALL"] = "ALLE Verlaufseinträge löschen? Dies kann nicht rückgängig gemacht werden."
@@ -901,12 +884,8 @@ L["POPUP_IMPORT_OVERWRITE_MULTI"] = "Dieser Import überschreibt %d bestehende V
 L["POPUP_IMPORT_OVERWRITE_SINGLE"] = "Dieser Import überschreibt 1 bestehenden Verlaufseintrag. Fortfahren?"
 L["POPUP_IMPORT_SETTINGS"] = "Wähle wie die importierten Einstellungen angewendet werden sollen:"
 L["POPUP_IMPORT_SETTINGS_TITLE"] = "Einstellungen importieren"
-L["POPUP_OVERWRITE_PROFILE"] = "Dies überschreibt deine aktuellen Profil-Einstellungen. Fortfahren?"
-L["POPUP_OVERWRITE_PROFILE_TITLE"] = "Profil überschreiben"
 
 -- Popups - Keep or Trade
-L["POPUP_KEEP_OR_TRADE"] = "Was möchtest du mit {item} machen?"
-L["POPUP_KEEP_OR_TRADE_FMT"] = "Was möchtest du mit %s machen?"
 
 -- Popups - Sync
 L["POPUP_SYNC_GENERIC_FMT"] = "%s möchte seine/ihre %s mit dir synchronisieren. Annehmen?"
@@ -916,9 +895,6 @@ L["POPUP_SYNC_REQUEST_TITLE"] = "Synchronisierungsanfrage"
 L["POPUP_SYNC_SETTINGS_FMT"] = "%s möchte seine/ihre Loothing-Einstellungen mit dir synchronisieren. Annehmen?"
 
 -- Popups - Trade
-L["POPUP_TRADE_ADD_ITEMS"] = "{count} zugeteilte Items zum Handel mit {player} hinzufügen?"
-L["POPUP_TRADE_ADD_MULTI"] = "%d zugeteilte Items zum Handel mit %s hinzufügen?"
-L["POPUP_TRADE_ADD_SINGLE"] = "1 zugeteiltes Item zum Handel mit %s hinzufügen?"
 
 -- Roster
 L["ROSTER_COUNCIL_MEMBER"] = "Beuteratsmitglied"

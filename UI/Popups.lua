@@ -279,7 +279,7 @@ end
     Dialog Definitions
 ----------------------------------------------------------------------]]
 
--- 0. ML Usage Prompt - "You are ML, use Loothing?"
+-- ML Usage Prompt - "You are ML, use Loothing?"
 Popups:Register("LOOTHING_ML_USAGE_PROMPT", {
     title = L["ADDON_NAME"],
     text = L["ML_USAGE_PROMPT_TEXT"],
@@ -306,62 +306,7 @@ Popups:Register("LOOTHING_ML_USAGE_PROMPT", {
     },
 })
 
--- 1. Confirm Usage - "Use Loothing for this session?"
-Popups:Register("LOOTHING_CONFIRM_USAGE", {
-    title = L["ADDON_NAME"],
-    text = L["POPUP_CONFIRM_USAGE"],
-    modal = true,
-    hide_on_escape = true,
-    show_while_dead = true,
-    buttons = {
-        {
-            text = L["YES"],
-            on_click = function(_dialog, data)
-                if data and data.onAccept then
-                    data.onAccept()
-                end
-            end,
-        },
-        {
-            text = L["NO"],
-            on_click = function(_dialog, data)
-                if data and data.onCancel then
-                    data.onCancel()
-                end
-            end,
-        },
-    },
-})
-
--- 2. Confirm Abort - "Abort current session?"
-Popups:Register("LOOTHING_CONFIRM_ABORT", {
-    title = L["END_SESSION"],
-    text = L["POPUP_CONFIRM_END_SESSION"],
-    modal = true,
-    hide_on_escape = true,
-    show_while_dead = true,
-    buttons = {
-        {
-            text = L["YES"],
-            danger = true,
-            on_click = function(_dialog, data)
-                if data and data.onAccept then
-                    data.onAccept()
-                end
-            end,
-        },
-        {
-            text = L["NO"],
-            on_click = function(_dialog, data)
-                if data and data.onCancel then
-                    data.onCancel()
-                end
-            end,
-        },
-    },
-})
-
--- 3. Confirm Award - "Award {item} to {player}?"
+-- Confirm Award - "Award {item} to {player}?"
 Popups:Register("LOOTHING_CONFIRM_AWARD", {
     title = L["AWARD_ITEM"],
     text = L["CONFIRM_AWARD"],
@@ -401,111 +346,7 @@ Popups:Register("LOOTHING_CONFIRM_AWARD", {
     },
 })
 
--- 4. Confirm Award Later - "Bag {item} for later?"
-Popups:Register("LOOTHING_CONFIRM_AWARD_LATER", {
-    title = L["AWARD_ITEM"],
-    text = L["POPUP_AWARD_LATER"],
-    modal = true,
-    hide_on_escape = true,
-    show_while_dead = true,
-    icon = function(data)
-        return GetItemIcon(data and data.item)
-    end,
-    buttons = {
-        {
-            text = L["YES"],
-            on_click = function(_dialog, data)
-                if data and data.onAccept then
-                    data.onAccept()
-                end
-            end,
-        },
-        {
-            text = L["NO"],
-            on_click = function(_dialog, data)
-                if data and data.onCancel then
-                    data.onCancel()
-                end
-            end,
-        },
-    },
-})
-
--- 5. Trade Add Item - "Add {count} items to trade with {player}?"
-Popups:Register("LOOTHING_TRADE_ADD_ITEM", {
-    title = L["TRADE_QUEUE"],
-    text = L["POPUP_TRADE_ADD_ITEMS"],
-    modal = true,
-    hide_on_escape = true,
-    show_while_dead = true,
-    on_show = function(_dialog, data)
-        if data and data.count and data.player then
-            if data.count == 1 then
-                return string.format(L["POPUP_TRADE_ADD_SINGLE"], data.player)
-            else
-                return string.format(L["POPUP_TRADE_ADD_MULTI"], data.count, data.player)
-            end
-        end
-        return nil
-    end,
-    buttons = {
-        {
-            text = L["YES"],
-            on_click = function(_dialog, data)
-                if data and data.onAccept then
-                    data.onAccept()
-                end
-            end,
-        },
-        {
-            text = L["NO"],
-            on_click = function(_dialog, data)
-                if data and data.onCancel then
-                    data.onCancel()
-                end
-            end,
-        },
-    },
-})
-
--- 6. Keep Item - "Keep {item} or trade?"
-Popups:Register("LOOTHING_KEEP_ITEM", {
-    title = L["AWARD_ITEM"],
-    text = L["POPUP_KEEP_OR_TRADE"],
-    modal = true,
-    hide_on_escape = true,
-    show_while_dead = true,
-    no_close_button = true,
-    icon = function(data)
-        return GetItemIcon(data and data.item)
-    end,
-    on_show = function(_dialog, data)
-        if data and data.item then
-            return string.format(L["POPUP_KEEP_OR_TRADE_FMT"], data.item)
-        end
-        return nil
-    end,
-    buttons = {
-        {
-            text = L["KEEP"],
-            on_click = function(_dialog, data)
-                if data and data.onKeep then
-                    data.onKeep()
-                end
-            end,
-        },
-        {
-            text = L["TRADE_QUEUE"],
-            on_click = function(_dialog, data)
-                if data and data.onTrade then
-                    data.onTrade()
-                end
-            end,
-        },
-    },
-})
-
--- 7. Sync Request - "{player} wants to sync {type}"
+-- Sync Request - "{player} wants to sync {type}"
 Popups:Register("LOOTHING_SYNC_REQUEST", {
     title = L["POPUP_SYNC_REQUEST_TITLE"],
     text = L["POPUP_SYNC_REQUEST"],
@@ -548,7 +389,7 @@ Popups:Register("LOOTHING_SYNC_REQUEST", {
     },
 })
 
--- 7b. Intel Share Request - "PlayerX wants to share desktop intel (5 datasets)"
+-- Intel Share Request - "PlayerX wants to share desktop intel (5 datasets)"
 Popups:Register("LOOTHING_INTEL_SHARE_REQUEST", {
     title = L["POPUP_INTEL_SHARE_TITLE"],
     text = L["POPUP_INTEL_SHARE_REQUEST"],
@@ -582,7 +423,7 @@ Popups:Register("LOOTHING_INTEL_SHARE_REQUEST", {
     },
 })
 
--- 7c. Intel Share Complete - "Reload UI for changes to take effect"
+-- Intel Share Complete - "Reload UI for changes to take effect"
 Popups:Register("LOOTHING_INTEL_SHARE_RELOAD", {
     title = L["POPUP_INTEL_SHARE_TITLE"],
     text = L["POPUP_INTEL_SHARE_RELOAD"],
@@ -610,7 +451,7 @@ Popups:Register("LOOTHING_INTEL_SHARE_RELOAD", {
     },
 })
 
--- 8. Import Overwrite - "Import will overwrite {count} entries"
+-- Import Overwrite - "Import will overwrite {count} entries"
 Popups:Register("LOOTHING_IMPORT_OVERWRITE", {
     title = L["HISTORY"],
     text = L["POPUP_IMPORT_OVERWRITE"],
@@ -648,7 +489,7 @@ Popups:Register("LOOTHING_IMPORT_OVERWRITE", {
     },
 })
 
--- 9. Confirm Delete History - "Delete {count} history entries?"
+-- Confirm Delete History - "Delete {count} history entries?"
 Popups:Register("LOOTHING_CONFIRM_DELETE_HISTORY", {
     title = L["CLEAR_HISTORY"],
     text = L["CONFIRM_CLEAR_HISTORY"],
@@ -688,231 +529,7 @@ Popups:Register("LOOTHING_CONFIRM_DELETE_HISTORY", {
     },
 })
 
--- 10. Confirm Clear Council - "Clear all council members?"
-Popups:Register("LOOTHING_CONFIRM_CLEAR_COUNCIL", {
-    title = L["COUNCIL"],
-    text = L["CONFIG_COUNCIL_REMOVEALL_CONFIRM"],
-    modal = true,
-    hide_on_escape = true,
-    show_while_dead = true,
-    on_show = function(_dialog, data)
-        if data and data.count then
-            return string.format(L["POPUP_CLEAR_COUNCIL_COUNT"], data.count)
-        end
-        return L["POPUP_CLEAR_COUNCIL"]
-    end,
-    buttons = {
-        {
-            text = L["YES"],
-            danger = true,
-            on_click = function(_dialog, data)
-                if data and data.onAccept then
-                    data.onAccept()
-                end
-            end,
-        },
-        {
-            text = L["NO"],
-            on_click = function(_dialog, data)
-                if data and data.onCancel then
-                    data.onCancel()
-                end
-            end,
-        },
-    },
-})
-
--- 11. Confirm Skip Item - "Skip this item?"
-Popups:Register("LOOTHING_CONFIRM_SKIP", {
-    title = L["SKIP_ITEM"],
-    text = L["POPUP_SKIP_ITEM"],
-    modal = true,
-    hide_on_escape = true,
-    show_while_dead = true,
-    icon = function(data)
-        return GetItemIcon(data and data.item)
-    end,
-    on_show = function(_dialog, data)
-        if data and data.item then
-            return string.format(L["POPUP_SKIP_ITEM_FMT"], data.item)
-        end
-        return nil
-    end,
-    buttons = {
-        {
-            text = L["YES"],
-            on_click = function(_dialog, data)
-                if data and data.onAccept then
-                    data.onAccept()
-                end
-            end,
-        },
-        {
-            text = L["NO"],
-            on_click = function(_dialog, data)
-                if data and data.onCancel then
-                    data.onCancel()
-                end
-            end,
-        },
-    },
-})
-
--- 12. Confirm Re-vote - "Clear all votes and restart voting?"
-Popups:Register("LOOTHING_CONFIRM_REVOTE", {
-    title = L["RE_VOTE"],
-    text = L["POPUP_CONFIRM_REVOTE"],
-    modal = true,
-    hide_on_escape = true,
-    show_while_dead = true,
-    icon = function(data)
-        return GetItemIcon(data and data.item)
-    end,
-    on_show = function(_dialog, data)
-        if data and data.item then
-            return string.format(L["POPUP_CONFIRM_REVOTE_FMT"], data.item)
-        end
-        return L["COUNCIL_CONFIRM_REVOTE"]
-    end,
-    buttons = {
-        {
-            text = L["YES"],
-            on_click = function(_dialog, data)
-                if data and data.onAccept then
-                    data.onAccept()
-                end
-            end,
-        },
-        {
-            text = L["NO"],
-            on_click = function(_dialog, data)
-                if data and data.onCancel then
-                    data.onCancel()
-                end
-            end,
-        },
-    },
-})
-
--- 13. Confirm Delete Ignored Items - "Clear all ignored items?"
-Popups:Register("LOOTHING_CONFIRM_CLEAR_IGNORED", {
-    title = L["IGNORED_ITEMS"],
-    text = L["CONFIRM_CLEAR_IGNORED"],
-    modal = true,
-    hide_on_escape = true,
-    show_while_dead = true,
-    on_show = function(_dialog, data)
-        if data and data.count then
-            return string.format(L["POPUP_CLEAR_IGNORED_COUNT"], data.count)
-        end
-        return L["POPUP_CLEAR_IGNORED"]
-    end,
-    buttons = {
-        {
-            text = L["YES"],
-            danger = true,
-            on_click = function(_dialog, data)
-                if data and data.onAccept then
-                    data.onAccept()
-                end
-            end,
-        },
-        {
-            text = L["NO"],
-            on_click = function(_dialog, data)
-                if data and data.onCancel then
-                    data.onCancel()
-                end
-            end,
-        },
-    },
-})
-
--- 14. Confirm Reset Award Reasons - "Reset all award reasons to defaults?"
-Popups:Register("LOOTHING_CONFIRM_RESET_REASONS", {
-    title = L["AWARD_REASONS"],
-    text = L["CONFIG_REASON_RESET_CONFIRM"],
-    modal = true,
-    hide_on_escape = true,
-    show_while_dead = true,
-    buttons = {
-        {
-            text = L["YES"],
-            danger = true,
-            on_click = function(_dialog, data)
-                if data and data.onAccept then
-                    data.onAccept()
-                end
-            end,
-        },
-        {
-            text = L["NO"],
-            on_click = function(_dialog, data)
-                if data and data.onCancel then
-                    data.onCancel()
-                end
-            end,
-        },
-    },
-})
-
--- 15. Confirm Delete Button Set - "Delete button set {name}?"
-Popups:Register("LOOTHING_CONFIRM_DELETE_SET", {
-    title = L["BUTTON_SETS"],
-    text = L["CONFIRM_DELETE_SET"],
-    modal = true,
-    hide_on_escape = true,
-    show_while_dead = true,
-    on_show = function(_dialog, data)
-        if data and data.name then
-            return string.format(L["CONFIRM_DELETE_SET"], data.name)
-        end
-        return nil
-    end,
-    buttons = {
-        {
-            text = L["YES"],
-            danger = true,
-            on_click = function(_dialog, data)
-                if data and data.onAccept then
-                    data.onAccept()
-                end
-            end,
-        },
-        {
-            text = L["NO"],
-            on_click = function(_dialog, data)
-                if data and data.onCancel then
-                    data.onCancel()
-                end
-            end,
-        },
-    },
-})
-
--- 16. Confirm Re-announce - "Re-announce all items?"
-Popups:Register("LOOTHING_CONFIRM_REANNOUNCE", {
-    title = L["POPUP_REANNOUNCE_TITLE"],
-    text = L["POPUP_REANNOUNCE"],
-    modal = true,
-    hide_on_escape = true,
-    show_while_dead = true,
-    buttons = {
-        {
-            text = L["YES"],
-            on_click = function(_dialog, data)
-                if data and data.onAccept then
-                    data.onAccept()
-                end
-            end,
-        },
-        {
-            text = L["NO"],
-        },
-    },
-})
-
--- 17. Confirm Start Session - "Start loot session for {boss}?"
+-- Confirm Start Session - "Start loot session for {boss}?"
 Popups:Register("LOOTHING_CONFIRM_START_SESSION", {
     title = L["START_SESSION"],
     text = L["POPUP_START_SESSION"],
@@ -945,30 +562,7 @@ Popups:Register("LOOTHING_CONFIRM_START_SESSION", {
     },
 })
 
--- 18. Confirm Profile Overwrite - "Overwrite current profile?"
-Popups:Register("LOOTHING_CONFIRM_PROFILE_OVERWRITE", {
-    title = L["POPUP_OVERWRITE_PROFILE_TITLE"],
-    text = L["POPUP_OVERWRITE_PROFILE"],
-    modal = true,
-    hide_on_escape = true,
-    show_while_dead = true,
-    buttons = {
-        {
-            text = L["OVERWRITE"],
-            danger = true,
-            on_click = function(_dialog, data)
-                if data and data.onAccept then
-                    data.onAccept()
-                end
-            end,
-        },
-        {
-            text = L["NO"],
-        },
-    },
-})
-
--- 19. Settings Import Confirmation — two action buttons for import mode
+-- Settings Import Confirmation — two action buttons for import mode
 Popups:Register("LOOTHING_SETTINGS_IMPORT_CONFIRM", {
     title = L["POPUP_IMPORT_SETTINGS_TITLE"],
     text = L["POPUP_IMPORT_SETTINGS"],

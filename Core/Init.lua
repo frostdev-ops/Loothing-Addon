@@ -2413,6 +2413,17 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
                 Loothing.Diagnostics:MarkRuntimeReady()
             end
 
+            -- Dev build detection: the dev TOC loads the test harness
+            -- (ns.TestRunner). When present, enable TempTable leak tracking
+            -- so /lt diag and DiagPanel show meaningful leak counts. Release
+            -- builds leave it off — debugstack(2) on every Acquire is
+            -- noticeable on hot paths (comm batching, event dispatch).
+            if ns.TestRunner and Loolib and Loolib.TempTable
+                and Loolib.TempTable.SetLeakWarnings then
+                Loolib.TempTable:SetLeakWarnings(true)
+                Loothing.isDevBuild = true
+            end
+
             Loothing.initialized = true
         end
     elseif event == "PLAYER_LOGIN" then

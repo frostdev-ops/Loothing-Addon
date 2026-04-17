@@ -485,7 +485,10 @@ function ResultsPanelMixin:UpdateWinnerSection(winner, totalVotes, candidates)
         if hideVotes then
             self.winnerText:SetText(L["RECOMMENDED"] .. ": " .. coloredName)
         else
-            self.winnerText:SetText(string.format(L["RECOMMENDED"] .. ": %s (%d " .. L["VOTES_LABEL"] .. ")", coloredName, maxVotes))
+            -- Show "N of M votes" so the majority denominator (ballots cast,
+            -- not council size) is visible inline with the winner's tally.
+            local totalVotes = self.results and self.results.totalVotes or maxVotes
+            self.winnerText:SetText(string.format(L["RECOMMENDED"] .. ": %s (%d/%d " .. L["VOTES_LABEL"] .. ")", coloredName, maxVotes, totalVotes))
         end
     end
 end

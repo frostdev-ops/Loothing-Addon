@@ -52,6 +52,16 @@ function RollFrameMixin:RegisterSessionEvents()
             self:SwitchToItem(#self.items)
         end
 
+        -- Cancel any deferred retries queued by a PRIOR voting item. This runs
+        -- unconditionally — even when the new item is hot-cache and does not
+        -- queue its own timers — because a hot item's arrival otherwise leaves
+        -- stale timers + OnItemInfoLoaded callbacks running for the previous
+        -- item and they can fire an autopass against an item the user has
+        -- moved on from (or that was removed from the session). Cancellation
+        -- bumps a token so any retry closure that wins a race against cancel
+        -- becomes a no-op.
+        self:CancelDeferredAutoPass()
+
         -- Deferred AutoPass: C_Item.GetItemInfo has its own cache separate from
         -- LoothingItem's loaded flag. For session-2+ items (batched arrival via
         -- SESSION_INIT, immediate VOTE_REQUEST) the server cache may be cold even
@@ -60,20 +70,29 @@ function RollFrameMixin:RegisterSessionEvents()
         -- OnItemInfoLoaded AND a short unconditional timer so neither path alone
         -- can strand us.
         if item.itemLink and not C_Item.GetItemInfo(item.itemLink) then
-            -- Cancel any deferred retries from a prior voting item in the same
-            -- session. Two voting items back-to-back without a session-end
-            -- between would otherwise grow `deferredAutoPassTimers` unbounded.
-            if self.deferredAutoPassTimers then
-                for _, t in ipairs(self.deferredAutoPassTimers) do
-                    if t and t.Cancel then t:Cancel() end
-                end
-                self.deferredAutoPassTimers = nil
-            end
-
             local AutoPass = ns.AutoPass
             if AutoPass then
+                -- Token captured by every retry closure below. CancelDeferredAutoPass
+                -- bumps self.deferredAutoPassToken; any closure whose captured
+                -- token no longer matches returns early.
+                self.deferredAutoPassToken = {}
+                local token = self.deferredAutoPassToken
+
                 local retry = function(reason)
+                    if self.deferredAutoPassToken ~= token then return end
                     if not Loothing.Session or not Loothing.Session:IsActive() then return end
+                    -- Skip if the item has been removed from the session or
+                    -- the frame has torn down its items table. AutoPassItem
+                    -- would otherwise append a stale response.
+                    if not self.items then return end
+                    local found = false
+                    for _, existingItem in ipairs(self.items) do
+                        if existingItem.guid == item.guid then
+                            found = true
+                            break
+                        end
+                    end
+                    if not found then return end
                     local resp = self:GetItemResponse(item.guid)
                     if resp and resp.submitted then return end
                     if AutoPass:CheckItem(item) then
@@ -83,8 +102,15 @@ function RollFrameMixin:RegisterSessionEvents()
                 end
 
                 if item.RegisterCallback then
+                    self.deferredAutoPassItem = item
                     item:RegisterCallback("OnItemInfoLoaded", function()
-                        item:UnregisterCallback("OnItemInfoLoaded", self)
+                        -- Always unregister our listener whether or not we
+                        -- still want to act — leaving it registered strongly
+                        -- retains the item via the closure's upvalue.
+                        if item.UnregisterCallback then
+                            item:UnregisterCallback("OnItemInfoLoaded", self)
+                        end
+                        if self.deferredAutoPassToken ~= token then return end
                         retry("OnItemInfoLoaded")
                     end, self)
                 end
@@ -128,12 +154,7 @@ function RollFrameMixin:RegisterSessionEvents()
         -- Closures capture the old session's `item`; letting them fire after
         -- the session flushes would enqueue an AUTOPASS for a guid that no
         -- longer exists in the new session.
-        if self.deferredAutoPassTimers then
-            for _, t in ipairs(self.deferredAutoPassTimers) do
-                if t and t.Cancel then t:Cancel() end
-            end
-            self.deferredAutoPassTimers = nil
-        end
+        self:CancelDeferredAutoPass()
         self:Close(false, "session_ended")
     end, self)
 
@@ -151,6 +172,33 @@ function RollFrameMixin:RegisterSessionEvents()
             local restricted = (newState == Loothing.CommState.STATE_RESTRICTED)
             self:SetCombatLocked(restricted)
         end, self)
+    end
+end
+
+--- Cancel any pending deferred autopass retry for a prior voting item.
+-- Bumps the token so timer/OnItemInfoLoaded closures become no-ops, cancels
+-- in-flight timers, and unregisters the item's OnItemInfoLoaded callback if
+-- still pending. Safe to call when nothing is pending.
+function RollFrameMixin:CancelDeferredAutoPass()
+    -- Bump the token first so any closure that races with this block sees
+    -- a mismatched token and returns early.
+    self.deferredAutoPassToken = nil
+
+    if self.deferredAutoPassTimers then
+        for _, t in ipairs(self.deferredAutoPassTimers) do
+            if t and t.Cancel then t:Cancel() end
+        end
+        self.deferredAutoPassTimers = nil
+    end
+
+    -- Unregister the prior item's OnItemInfoLoaded callback so a late cache
+    -- warm does not fire a retry for the wrong item.
+    if self.deferredAutoPassItem then
+        local priorItem = self.deferredAutoPassItem
+        self.deferredAutoPassItem = nil
+        if priorItem.UnregisterCallback then
+            priorItem:UnregisterCallback("OnItemInfoLoaded", self)
+        end
     end
 end
 

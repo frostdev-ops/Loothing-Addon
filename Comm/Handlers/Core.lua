@@ -651,15 +651,46 @@ end
 ----------------------------------------------------------------------]]
 
 --- Handle SESSION_INIT — combined session initialization message.
--- Unpacks and routes sub-messages through existing handlers for reuse.
--- Idempotent: receiving both SESSION_INIT and individual messages is harmless.
-function CommMixin:HandleSessionInit(data, sender, distribution)
+-- Unpacks and routes sub-messages through the standalone handlers so each
+-- sub-payload gets its own schema + sender-authorization check instead of
+-- being re-emitted unvalidated. Idempotent: receiving both SESSION_INIT
+-- and the individual messages is harmless.
+function CommMixin:HandleSessionInit(data, sender, _distribution)
     if not validateHandler("HandleSessionInit", data) then return end
 
-    -- Only accept from ML or group leader/assistant (same as SESSION_START)
-    if not isMasterLooter(sender) and not isGroupLeaderOrAssistant(sender) and not isGroupMember(sender) then
-        Loothing:Debug("Rejected SESSION_INIT from non-group sender:", sender)
-        return
+    -- Authorization:
+    --   * Current ML: accept (normal path).
+    --   * Raid leader/assistant WHEN the receiver does not yet know the ML:
+    --     accept as bootstrap and provisionally adopt the sender as ML so the
+    --     sub-payload handlers (strict ML-only) authorize. The MLDB sub-
+    --     payload refines this to the MLDB's settings.masterLooter.
+    --   * Otherwise reject. A non-ML group member must not be able to
+    --     broadcast SESSION_INIT — the force-end-on-sessionID-mismatch branch
+    --     below would let them terminate another player's active session.
+    if not isMasterLooter(sender) then
+        local mlKnown = Loothing.masterLooter and Loothing.masterLooter ~= ""
+        if mlKnown or not isGroupLeaderOrAssistant(sender) then
+            Loothing:Debug("Rejected SESSION_INIT from non-ML/non-leader:", sender)
+            return
+        end
+        -- Bootstrap REQUIRES an MLDB sub-payload with a populated data table.
+        -- Without it, HandleMLDBBroadcast would never fire OnMLDBBroadcast, the
+        -- subscriber would never resolve settings.masterLooter, and a
+        -- provisionally-adopted leader/assistant would stay impersonating ML
+        -- until the next legitimate MLDB arrived — long enough to forge
+        -- COUNCIL_ROSTER / ITEM_ADD / VOTE_* as the supposed ML.
+        if type(data.mldb) ~= "table" or type(data.mldb.data) ~= "table" then
+            Loothing:Debug("Rejected SESSION_INIT bootstrap (MLDB payload missing or malformed):",
+                sender)
+            return
+        end
+        -- Bootstrap path: ML unknown + sender is leader/assistant + valid MLDB
+        -- present. Provisionally promote sender so HandleCouncilRoster /
+        -- HandleItemAdd authorize. MLDB routing below will overwrite with the
+        -- MLDB's authoritative settings.masterLooter.
+        Loothing:Debug("SESSION_INIT bootstrap: provisionally adopting",
+            sender, "as ML (pending MLDB resolution)")
+        Loothing.masterLooter = sender
     end
 
     -- If we are still ACTIVE on a different session (e.g. the previous
@@ -682,30 +713,27 @@ function CommMixin:HandleSessionInit(data, sender, distribution)
         end
     end
 
-    -- Route each sub-payload through existing handlers.
-    -- Apply MLDB (and council) before session start so clients have authoritative
-    -- settings before Session state becomes ACTIVE — avoids a window where
-    -- GetEffectiveGroupLootMode() sees no MLDB yet and defaults to passive,
-    -- which breaks AutoPass and other MLDB-dependent checks on the first tick.
+    -- Route each sub-payload through the standalone handler so the per-handler
+    -- schema and authorization checks run. Order matters: MLDB first so
+    -- clients have authoritative settings (and ML identity, via the bootstrap
+    -- path in HandleMLDBBroadcast) before SessionStart flips state to ACTIVE —
+    -- otherwise GetEffectiveGroupLootMode() sees no MLDB yet and AutoPass /
+    -- other MLDB-dependent checks fail on the first tick.
     if data.mldb then
-        data.mldb.sender = sender
-        self:TriggerEvent("OnMLDBBroadcast", data.mldb)
+        self:HandleMLDBBroadcast(data.mldb, sender)
     end
 
     if data.councilRoster then
-        data.councilRoster.masterLooter = sender
-        self:TriggerEvent("OnCouncilRoster", data.councilRoster)
+        self:HandleCouncilRoster(data.councilRoster, sender)
     end
 
     if data.sessionStart then
-        data.sessionStart.masterLooter = sender
-        self:TriggerEvent("OnSessionStart", data.sessionStart)
+        self:HandleSessionStart(data.sessionStart, sender)
     end
 
     if data.items and type(data.items) == "table" then
         for _, itemData in ipairs(data.items) do
-            itemData.masterLooter = sender
-            self:TriggerEvent("OnItemAdd", itemData)
+            self:HandleItemAdd(itemData, sender)
         end
     end
 end
@@ -725,11 +753,30 @@ function CommMixin:HandleResponseBatch(data, sender)
         return
     end
 
-    -- Unpack batch: fire OnPlayerResponse per item
+    -- Unpack batch: per-item schema validation mirrors the direct
+    -- HandlePlayerResponse path. A malformed item is dropped individually
+    -- so a single bad entry does not poison the rest of the batch. Drops
+    -- fire OnMessageDropped so subscribers can rate-limit, alert, or ban a
+    -- peer that sends repeated garbage.
     for _, item in ipairs(data.responses) do
-        item.playerName = sender
-        item.sessionID = item.sessionID or data.sessionID
-        self:TriggerEvent("OnPlayerResponse", item)
+        if type(item) == "table" then
+            local ok, reason = Utils.ValidateSchema(item, SCHEMAS.PLAYER_RESPONSE)
+            if ok then
+                item.playerName = sender
+                item.sessionID = item.sessionID or data.sessionID
+                self:TriggerEvent("OnPlayerResponse", item)
+            else
+                Loothing:Debug("Rejected RESPONSE_BATCH item — schema:", reason)
+                self:TriggerEvent("OnMessageDropped",
+                    Loothing.MsgType.RESPONSE_BATCH,
+                    "schema_malformed_item", sender)
+            end
+        else
+            Loothing:Debug("Rejected RESPONSE_BATCH item — not a table")
+            self:TriggerEvent("OnMessageDropped",
+                Loothing.MsgType.RESPONSE_BATCH,
+                "schema_malformed_item", sender)
+        end
     end
 end
 

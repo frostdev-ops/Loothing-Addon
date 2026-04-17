@@ -276,12 +276,6 @@ function CommMixin.Send(self, command, data, target, priority)
         return
     end
 
-    -- Test mode intercept
-    if TestMode and TestMode.OnOutgoingComm then
-        local channel = target and "WHISPER" or (IsInRaid() and "RAID" or "PARTY")
-        TestMode:OnOutgoingComm(channel, target)
-    end
-
     -- Progressive backpressure: graduated shedding based on transport queue pressure
     local pressure = Comm:GetQueuePressure()
     local isCritical = CRITICAL_COMMANDS[command]
@@ -322,14 +316,35 @@ function CommMixin.Send(self, command, data, target, priority)
         return
     end
 
+    local queued
     if target then
-        Comm:SendCommMessage(Loothing.ADDON_PREFIX, encoded, "WHISPER", target, prio)
+        -- Resolve target to its roster-canonical casing. Utils.NormalizeName
+        -- lowercases the realm for cache-key consistency across chat-server
+        -- and API casing drift, but WoW's SendAddonMessage WHISPER rejects
+        -- non-canonical realm casing with "No player named 'X' is currently
+        -- playing". The canonical form comes from the raid/party roster API.
+        local whisperTarget = Utils.CanonicalizeGroupMemberName(target) or target
+        queued = Comm:SendCommMessage(Loothing.ADDON_PREFIX, encoded, "WHISPER", whisperTarget, prio)
     else
         local channel = IsInRaid() and "RAID" or "PARTY"
-        Comm:SendCommMessage(Loothing.ADDON_PREFIX, encoded, channel, nil, prio)
+        queued = Comm:SendCommMessage(Loothing.ADDON_PREFIX, encoded, channel, nil, prio)
     end
 
-    commStats.sent[command] = (commStats.sent[command] or 0) + 1
+    -- Loolib.Comm returns false when it drops under queue pressure (BULK only
+    -- today). Count those as dropped so /lt diag stats reflect reality instead
+    -- of reporting a send that never left the client.
+    if queued == false then
+        commStats.dropped[command] = (commStats.dropped[command] or 0) + 1
+        self:TriggerEvent("OnMessageDropped", command, "loolib_queue_full", target)
+    else
+        commStats.sent[command] = (commStats.sent[command] or 0) + 1
+        -- TestMode intercept fires only on successful queue so test-mode stats
+        -- match production stats (a queue-full drop is not an "outgoing" event).
+        if TestMode and TestMode.OnOutgoingComm then
+            local channel = target and "WHISPER" or (IsInRaid() and "RAID" or "PARTY")
+            TestMode:OnOutgoingComm(channel, target)
+        end
+    end
 end
 
 --[[--------------------------------------------------------------------
@@ -469,12 +484,19 @@ function CommMixin:SendGuild(command, data, priority)
         return
     end
 
-    if TestMode and TestMode.OnOutgoingComm then
-        TestMode:OnOutgoingComm("GUILD", nil)
+    local queued = Comm:SendCommMessage(Loothing.ADDON_PREFIX, encoded, "GUILD", nil, prio)
+    if queued == false then
+        commStats.dropped[command] = (commStats.dropped[command] or 0) + 1
+        -- Parity with CommMixin.Send: emit OnMessageDropped so subscribers
+        -- that wire retries / alerts see guild drops, not just /lt diag stats.
+        self:TriggerEvent("OnMessageDropped", command, "loolib_queue_full", nil)
+    else
+        commStats.sent[command] = (commStats.sent[command] or 0) + 1
+        -- Test-mode only records successful queueing (matches Send parity).
+        if TestMode and TestMode.OnOutgoingComm then
+            TestMode:OnOutgoingComm("GUILD", nil)
+        end
     end
-
-    Comm:SendCommMessage(Loothing.ADDON_PREFIX, encoded, "GUILD", nil, prio)
-    commStats.sent[command] = (commStats.sent[command] or 0) + 1
 end
 
 --- Send with guaranteed delivery (queued during encounter restrictions)
@@ -495,20 +517,6 @@ function CommMixin:SendGuaranteed(command, data, target, priority)
     self:Send(command, data, target, priority)
 end
 
---- Send via cross-realm relay (group channel with target envelope)
--- Use when direct whisper to a cross-realm player fails or is unreliable.
--- @param command string - Loothing.MsgType value
--- @param data table|nil - Message payload
--- @param target string - Target player name (with realm suffix)
--- @param priority string|nil
-function CommMixin:SendViaRelay(command, data, target, priority)
-    self:Send(Loothing.MsgType.XREALM, {
-        target = target,
-        command = command,
-        data = data,
-    }, nil, priority)
-end
-
 --[[--------------------------------------------------------------------
     Message Receiving
 ----------------------------------------------------------------------]]
@@ -518,7 +526,8 @@ end
 -- @param distribution string - Channel received on
 -- @param sender string - Sender name
 function CommMixin:OnMessage(message, distribution, sender)
-    -- Decode message (msgID is nil for v3 senders — dedup skipped for legacy peers)
+    -- Decode message (msgID is nil for v3 senders — dedup key falls back to
+    -- a content hash so a forged v3-formatted replay still dedups)
     local version, command, data, msgID = ns.Protocol:Decode(message)
 
     if not version or not command then
@@ -535,25 +544,34 @@ function CommMixin:OnMessage(message, distribution, sender)
     -- Normalize sender name
     sender = Utils.NormalizeName(sender)
 
-    -- Replay protection: deduplicate by sender+msgID (Protocol v4+).
-    -- v3 senders have msgID=nil; we skip dedup to stay backward compatible.
+    -- Replay protection: deduplicate by sender+msgID (Protocol v4+) or by a
+    -- content hash of the encoded blob for legacy v3 senders. A v3 forgery
+    -- that would previously slip past dedup entirely now collides with itself
+    -- via the hash; dedup window is SEEN_TTL (120s) either way.
+    local now = GetTime()
+    local dedupKey
     if msgID then
-        local now = GetTime()
-        local dedupKey = sender .. "-" .. msgID
-        if seenIDs[dedupKey] then
-            Loothing:Debug("Dropped duplicate", command, "from", sender, "msgID=", msgID)
-            commStats.dropped[command] = (commStats.dropped[command] or 0) + 1
-            return
-        end
-        seenIDs[dedupKey] = now
+        dedupKey = sender .. "-v4-" .. msgID
+    else
+        local hash = Loolib.Compressor and Loolib.Compressor.Adler32
+            and Loolib.Compressor:Adler32(message or "") or 0
+        dedupKey = sender .. "-v3-" .. tostring(hash) .. "-" .. tostring(#(message or ""))
+    end
 
-        -- Periodic sweep: remove entries older than SEEN_TTL (runs every 30s)
-        if now - lastCleanup > 30 then
-            lastCleanup = now
-            for k, t in pairs(seenIDs) do
-                if now - t > SEEN_TTL then
-                    seenIDs[k] = nil
-                end
+    if seenIDs[dedupKey] then
+        Loothing:Debug("Dropped duplicate", command, "from", sender,
+            "msgID=", tostring(msgID or "(v3-hash)"))
+        commStats.dropped[command] = (commStats.dropped[command] or 0) + 1
+        return
+    end
+    seenIDs[dedupKey] = now
+
+    -- Periodic sweep: remove entries older than SEEN_TTL (runs every 30s)
+    if now - lastCleanup > 30 then
+        lastCleanup = now
+        for k, t in pairs(seenIDs) do
+            if now - t > SEEN_TTL then
+                seenIDs[k] = nil
             end
         end
     end
@@ -884,19 +902,6 @@ function CommMixin:BroadcastCandidateUpdate(itemGUID, candidateData, sessionID)
     })
 end
 
---- Broadcast vote update (ML -> Council)
--- @param itemGUID string
--- @param candidateName string
--- @param voters table
--- @param sessionID string|nil
-function CommMixin:BroadcastVoteUpdate(itemGUID, candidateName, voters, sessionID)
-    self:Send(Loothing.MsgType.VOTE_UPDATE, {
-        itemGUID = itemGUID,
-        candidateName = candidateName,
-        voters = voters,
-        sessionID = sessionID,
-    })
-end
 
 --[[--------------------------------------------------------------------
     Broadcast Helpers - MLDB & Version

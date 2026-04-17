@@ -15,6 +15,57 @@ ns.CouncilTableMixin = CouncilTableMixin
 local ROW_HEIGHT = 24
 local CELL_PADDING = 2
 
+-- Blizzard exposes `nop` as a global (defined in FrameXML), but relying on
+-- undocumented globals is fragile and trips lint warnings. Use our own.
+local nop = function() end
+
+-- Return responses for menu iteration in a stable, custom-set-safe order.
+-- Prefers ResponseManager:GetSortedResponses() (the full active button set,
+-- including guild customizations). Falls back to ResponsePriority +
+-- ResponseInfo during early init when ResponseManager is not constructed
+-- yet. Output shape per entry: { id = <number>, name = <string> }.
+local function iterateOrderedResponses()
+    local ordered = {}
+    local seen = {}
+
+    if Loothing.ResponseManager and Loothing.ResponseManager.GetSortedResponses then
+        local ok, sorted = pcall(function()
+            return Loothing.ResponseManager:GetSortedResponses()
+        end)
+        if ok and type(sorted) == "table" then
+            for _, entry in ipairs(sorted) do
+                if entry.id and entry.name then
+                    ordered[#ordered + 1] = { id = entry.id, name = entry.name }
+                    seen[entry.id] = true
+                end
+            end
+        end
+    end
+
+    -- Fallback / union: walk ResponsePriority, then any extra numeric keys
+    -- in ResponseInfo that ResponseManager didn't already surface.
+    if Loothing.ResponsePriority and Loothing.ResponseInfo then
+        for _, responseID in ipairs(Loothing.ResponsePriority) do
+            if not seen[responseID] then
+                local info = Loothing.ResponseInfo[responseID]
+                if info and info.name then
+                    ordered[#ordered + 1] = { id = responseID, name = info.name }
+                    seen[responseID] = true
+                end
+            end
+        end
+        for responseID, info in pairs(Loothing.ResponseInfo) do
+            if type(responseID) == "number" and not seen[responseID]
+                and info and info.name then
+                ordered[#ordered + 1] = { id = responseID, name = info.name }
+                seen[responseID] = true
+            end
+        end
+    end
+
+    return ordered
+end
+
 --[[--------------------------------------------------------------------
     Row Creation & Cell Factory
 ----------------------------------------------------------------------]]
@@ -886,9 +937,17 @@ function CouncilTableMixin:ShowCandidateContextMenu(row, candidate)
                 end
             end)
 
-            -- Award with response type
-            for _, info in pairs(Loothing.ResponseInfo) do
-                rootDescription:CreateButton(string.format("Award: %s", info.name), function()
+            -- Award with response type. Route through ResponseManager:GetSortedResponses
+            -- so guilds running custom button sets (extra responses, renamed
+            -- IDs) see every response in the menu — the previous
+            -- `ipairs(Loothing.ResponsePriority)` hardcoded the default-5
+            -- list and silently hid customizations. Priority falls back to
+            -- iterating ResponseInfo in a stable order if ResponseManager
+            -- is unavailable during early init.
+            local orderedResponses = iterateOrderedResponses()
+            for _, info in ipairs(orderedResponses) do
+                local label = string.format(L["AWARD_PREFIX_FMT"], info.name)
+                rootDescription:CreateButton(label, function()
                     if Loothing.Session then
                         Loothing.Session:AwardItem(itemGUID, candidate.name, info.name)
                         self:TriggerEvent("OnCandidateAwarded", self.currentItem, candidate)
@@ -938,16 +997,19 @@ function CouncilTableMixin:ShowCandidateContextMenu(row, candidate)
             end)
         end
 
-        -- Change response (ML only)
+        -- Change response (ML only). Same ordered-custom-safe iteration as above.
         if isML then
             local responseSubmenu = rootDescription:CreateButton(L["CHANGE_RESPONSE"], nop)
-            for id, info in pairs(Loothing.ResponseInfo) do
-                responseSubmenu:CreateButton(info.name, function()
-                    if self.currentItem and self.currentItem.candidateManager then
-                        self.currentItem.candidateManager:SetCandidateResponse(candidate.name, id)
-                        self:RefreshCandidates()
-                    end
-                end)
+            for _, info in ipairs(iterateOrderedResponses()) do
+                local responseID = info.id
+                if responseID then
+                    responseSubmenu:CreateButton(info.name, function()
+                        if self.currentItem and self.currentItem.candidateManager then
+                            self.currentItem.candidateManager:SetCandidateResponse(candidate.name, responseID)
+                            self:RefreshCandidates()
+                        end
+                    end)
+                end
             end
         end
 

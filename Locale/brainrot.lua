@@ -206,8 +206,6 @@ B["PERSONAL_PREFERENCES"] = "Your Vibe Settings"
 B["CONFIG_LOOT_RESPONSE"] = "Your answer energy"
 B["CONFIG_ROLLFRAME_AUTO_SHOW"] = "Pop up when it's time"
 B["CONFIG_ROLLFRAME_AUTO_SHOW_DESC"] = "So you don't miss the bag"
-B["CONFIG_ROLLFRAME_AUTO_ROLL"] = "Let it rip"
-B["CONFIG_ROLLFRAME_AUTO_ROLL_DESC"] = "Sigma efficiency for /roll"
 B["CONFIG_ROLLFRAME_GEAR_COMPARE"] = "The drip check"
 B["CONFIG_ROLLFRAME_GEAR_COMPARE_DESC"] = "See if you're cooked"
 B["CONFIG_ROLLFRAME_REQUIRE_NOTE"] = "Explain yourself"
@@ -283,7 +281,6 @@ B["REQUIRE_NOTES_DESC"] = "Explain yourself king"
 B["BUTTON_SETS"] = "Your response menu fr"
 B["ACTIVE_SET"] = "Using this right now"
 B["NEW_SET"] = "Fresh vibes"
-B["CONFIRM_DELETE_SET"] = "You sure about yeeting '%s'?"
 B["ADD_BUTTON"] = "New response option"
 B["MAX_BUTTONS"] = "Can't have everything fr (Max 10)"
 B["MIN_BUTTONS"] = "Gotta have something (Min 1)"
@@ -477,7 +474,6 @@ B["CONFIG_HISTORY_CLEARALL_CONFIRM"] = "No takesies backsies fr?"
 -- Enhanced Award Reasons
 B["CONFIG_REASON_LOG"] = "Save it fr"
 B["CONFIG_REASON_DISENCHANT"] = "Mark it as dust"
-B["CONFIG_REASON_RESET_CONFIRM"] = "You sure about that?"
 
 -- Council Management
 B["CONFIG_COUNCIL_REMOVEALL_CONFIRM"] = "You sure?"
@@ -800,28 +796,15 @@ B["AWARD_LATER_SHORT"] = "Not rn"
 B["CANNOT_DELETE_LAST_SET"] = "Gotta keep at least one fr."
 
 -- Popups - Awards & Items
-B["POPUP_AWARD_LATER"] = "Stash {item} for the sigma moment?"
-B["POPUP_SKIP_ITEM"] = "Nobody wants {item} fr?"
-B["POPUP_SKIP_ITEM_FMT"] = "Nobody wants %s fr?"
-B["POPUP_CONFIRM_REVOTE"] = "Democracy reset for {item}?"
-B["POPUP_CONFIRM_REVOTE_FMT"] = "Round 2 fr: %s?"
-B["POPUP_REANNOUNCE"] = "Broadcast again?"
-B["POPUP_REANNOUNCE_TITLE"] = "Say it louder"
 
 -- Popups - Session
 B["POPUP_START_SESSION"] = "Let's eat: {boss}?"
 B["POPUP_START_SESSION_FMT"] = "Time to feast: %s?"
 B["POPUP_START_SESSION_GENERIC"] = "Let's get this bread?"
-B["POPUP_CONFIRM_END_SESSION"] = "No cap it's over?"
-B["POPUP_CONFIRM_USAGE"] = "Sigma choice: Use Loothing?"
 
 -- Popups - Council
-B["POPUP_CLEAR_COUNCIL"] = "Purge the squad?"
-B["POPUP_CLEAR_COUNCIL_COUNT"] = "Full squad wipe: %d members?"
 
 -- Popups - Ignored Items
-B["POPUP_CLEAR_IGNORED"] = "Unblock everything?"
-B["POPUP_CLEAR_IGNORED_COUNT"] = "Mass unblock: %d items?"
 
 -- Popups - History
 B["POPUP_DELETE_HISTORY_ALL"] = "Receipts gone forever fr?"
@@ -843,12 +826,8 @@ B["POPUP_IMPORT_SETTINGS"] = "Pick your path:"
 B["POPUP_IMPORT_SETTINGS_TITLE"] = "Absorb the sigma"
 
 -- Popups - Keep or Trade
-B["POPUP_KEEP_OR_TRADE"] = "Keep or nah: {item}?"
-B["POPUP_KEEP_OR_TRADE_FMT"] = "Keep or yeet: %s?"
 
 -- Popups - Profile
-B["POPUP_OVERWRITE_PROFILE"] = "No going back fr?"
-B["POPUP_OVERWRITE_PROFILE_TITLE"] = "Sigma override"
 
 -- Popups - Sync
 B["POPUP_SYNC_GENERIC_FMT"] = "Incoming vibes: %s syncing %s to you. Accept?"
@@ -858,9 +837,6 @@ B["POPUP_SYNC_REQUEST_TITLE"] = "Someone's sharing"
 B["POPUP_SYNC_SETTINGS_FMT"] = "Sigma config incoming: %s syncing settings. Accept?"
 
 -- Popups - Trade
-B["POPUP_TRADE_ADD_ITEMS"] = "Hand over the goods: {count} items to {player}?"
-B["POPUP_TRADE_ADD_MULTI"] = "Bulk delivery fr: %d items to %s?"
-B["POPUP_TRADE_ADD_SINGLE"] = "One piece of drip incoming: %s?"
 
 -- Profiles
 B["CREATE_NEW_PROFILE"] = "Fresh loadout"

@@ -308,8 +308,12 @@ function HeartbeatMixin:HandleHeartbeat(digest, sender)
                 end
             end
 
-            -- Deep-check observer hash (may be absent from older peers)
-            if not needsSync and digest.observerHash ~= nil then
+            -- Deep-check observer hash. Skip when the remote omits it (older
+            -- peers) or when the local Observer module is absent — otherwise a
+            -- client without Observer loaded compares a local zero hash against
+            -- a non-zero digest forever and pings the ML every heartbeat for a
+            -- sync it cannot apply.
+            if not needsSync and digest.observerHash ~= nil and Loothing.Observer then
                 local localObserverHash = self:ComputeObserverHash()
                 if localObserverHash ~= digest.observerHash then
                     Loothing:Debug("Heartbeat: observer hash mismatch -- incremental sync (observer)")
@@ -371,11 +375,18 @@ function HeartbeatMixin:TriggerAutoSync(mlName)
     end)
 end
 
---- Cancel any pending jittered sync (e.g., if heartbeat shows convergence)
+--- Cancel any pending jittered sync (e.g., if heartbeat shows convergence).
+-- Also resets the auto-sync cooldown watermark so a subsequent genuine
+-- mismatch within AUTO_SYNC_COOLDOWN is not suppressed — the scheduled
+-- sync never actually ran, so the cooldown must not be treated as "just
+-- fired". This path is only the convergence cancel; the replacement paths
+-- in TriggerAutoSync / TriggerIncrementalSync inline their own cancel and
+-- deliberately keep the watermark set.
 function HeartbeatMixin:CancelPendingSync()
     if self.pendingSyncTimer then
         self.pendingSyncTimer:Cancel()
         self.pendingSyncTimer = nil
+        self.lastAutoSyncTime = 0
         Loothing:Debug("Heartbeat: cancelled pending sync (state converged)")
     end
 end

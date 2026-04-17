@@ -174,23 +174,35 @@ function Utils.GetPlayerFullName()
     return name .. "-" .. realm
 end
 
---- Normalize a player name to "Name-Realm" format
+--- Normalize a player name to "Name-Realm" format.
+-- The realm segment is lowercased so chat-server casing ("Jimbo-illidan")
+-- and API casing ("Jimbo-Illidan") produce the same normalized form, which
+-- lets every name-keyed cache across the addon (versionCache, remoteRoster,
+-- remoteList, recentMLDBSenders, activeCandidates, …) compare safely via
+-- direct table-key lookups. Short-name casing is preserved so log output
+-- stays readable.
+--
+-- Important: DO NOT pass NormalizeName's output to SendAddonMessage as a
+-- WHISPER target — the lowercased realm may not match WoW's canonical
+-- casing and the whisper will fail with "No player named 'X' is currently
+-- playing." Use Utils.CanonicalizeGroupMemberName for whisper targets.
 -- @param name string - Player name (may or may not include realm)
--- @return string - Normalized "Name-Realm" format
+-- @return string - Normalized "Name-realm" format (realm lowercased)
 function Utils.NormalizeName(name)
     if not name or Loolib.SecretUtil.IsSecretValue(name) then return nil end
 
-    -- Already has realm
-    if name:find("-") then
-        return name
+    -- Already has realm: lowercase the realm segment only.
+    local short, realm = name:match("^([^-]+)-(.+)$")
+    if short and realm then
+        return short .. "-" .. realm:lower()
     end
 
     -- Add current realm (nil-safe: GetNormalizedRealmName can return nil before PLAYER_LOGIN)
-    local realm = GetNormalizedRealmName() or GetRealmName() or ""
-    if realm == "" then
+    local currentRealm = GetNormalizedRealmName() or GetRealmName() or ""
+    if currentRealm == "" then
         return name
     end
-    return name .. "-" .. realm
+    return name .. "-" .. currentRealm:lower()
 end
 
 --- Get short name (without realm)
@@ -201,7 +213,9 @@ function Utils.GetShortName(fullName)
     return fullName:match("^([^-]+)") or fullName
 end
 
---- Check if two names refer to the same player
+--- Check if two names refer to the same player.
+-- NormalizeName lowercases the realm, so direct equality is case-insensitive
+-- on the realm segment already.
 -- @param name1 string - First name
 -- @param name2 string - Second name
 -- @return boolean
@@ -209,6 +223,58 @@ function Utils.IsSamePlayer(name1, name2)
     if not name1 or not name2 then return false end
     if Loolib.SecretUtil.IsSecretValue(name1, name2) then return false end
     return Utils.NormalizeName(name1) == Utils.NormalizeName(name2)
+end
+
+--- Canonicalize a player name for use as a WHISPER addon-message target.
+-- NormalizeName lowercases the realm for cache-key consistency, but WoW's
+-- SendAddonMessage(..., "WHISPER", target) rejects realms that don't match
+-- the server's canonical casing. This helper walks the current group roster
+-- and returns the roster-API casing of the matching member, which is always
+-- canonical. Falls back to the input name when the target isn't in the
+-- group (guild whispers, cross-session self-whispers, etc.) — those rarely
+-- hit case-mismatch errors in practice because the caller already has the
+-- canonical form from some earlier API.
+-- @param name string - Player name (any casing, with or without realm)
+-- @return string - Roster-canonical casing if the player is in the group, else the input
+function Utils.CanonicalizeGroupMemberName(name)
+    if not name or Loolib.SecretUtil.IsSecretValue(name) then return name end
+    if not IsInGroup() then return name end
+
+    local function finalize(rosterName)
+        if not rosterName then return name end
+        if rosterName:find("-") then
+            return rosterName
+        end
+        -- Same-realm members come back without a realm suffix; append our
+        -- realm in its canonical (non-lowercased) form.
+        local currentRealm = GetNormalizedRealmName() or GetRealmName() or ""
+        if currentRealm == "" then
+            return rosterName
+        end
+        return rosterName .. "-" .. currentRealm
+    end
+
+    if IsInRaid() then
+        for i = 1, GetNumGroupMembers() do
+            local rosterName = Loolib.SecretUtil.SafeGetRaidRosterInfo(i)
+            if rosterName and Utils.IsSamePlayer(rosterName, name) then
+                return finalize(rosterName)
+            end
+        end
+    else
+        local units = { "player" }
+        for i = 1, GetNumSubgroupMembers() do
+            units[#units + 1] = "party" .. i
+        end
+        for _, unit in ipairs(units) do
+            local unitName = Loolib.SecretUtil.SafeUnitName(unit)
+            if unitName and Utils.IsSamePlayer(unitName, name) then
+                return finalize(unitName)
+            end
+        end
+    end
+
+    return name
 end
 
 --[[--------------------------------------------------------------------
