@@ -13,7 +13,7 @@ local Loothing = ns.Addon
 local SkinningMixin = ns.SkinningMixin
 
 local PANEL_WIDTH = 380
-local PANEL_HEIGHT = 460
+local PANEL_HEIGHT = 488
 local QUEUE_ROW_HEIGHT = 22
 
 local SimulatorPanelMixin = ns.SimulatorPanelMixin or {}
@@ -43,6 +43,27 @@ local function getBosses()
         return ns.Simulator:ListBosses()
     end
     return {}
+end
+
+local function getRaids()
+    if ns.Simulator and ns.Simulator.ListRaids then
+        return ns.Simulator:ListRaids()
+    end
+    return {}
+end
+
+local function getSelectedRaidID()
+    if ns.Simulator and ns.Simulator.GetSelectedRaidID then
+        return ns.Simulator:GetSelectedRaidID()
+    end
+    return nil
+end
+
+local function getCurrentRaidName()
+    if ns.Simulator and ns.Simulator.GetCurrentRaidName then
+        return ns.Simulator:GetCurrentRaidName()
+    end
+    return "(unknown)"
 end
 
 local function getCouncil()
@@ -140,7 +161,7 @@ function SimulatorPanelMixin:BuildKillSection()
     local section = CreateFrame("Frame", nil, self.frame, "BackdropTemplate")
     section:SetPoint("TOPLEFT", 8, -62)
     section:SetPoint("TOPRIGHT", -8, -62)
-    section:SetHeight(96)
+    section:SetHeight(124)   -- +28 over the previous 96 to fit the raid row
     styleSurface(section, { 0.05, 0.05, 0.07, 1 }, { 0.2, 0.2, 0.25, 1 })
 
     local label = section:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -148,9 +169,23 @@ function SimulatorPanelMixin:BuildKillSection()
     label:SetText("Fire / Queue Kill")
     label:SetTextColor(0.7, 0.7, 0.85)
 
+    -- Raid dropdown (picks any raid from any tier)
+    local raidLabel = section:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    raidLabel:SetPoint("TOPLEFT", 8, -26)
+    raidLabel:SetText("Raid:")
+    raidLabel:SetTextColor(0.8, 0.8, 0.8)
+
+    self.raidDropdown = CreateFrame("Frame", "LoothingSimRaidDropdown", section, "UIDropDownMenuTemplate")
+    self.raidDropdown:SetPoint("LEFT", raidLabel, "RIGHT", -8, -2)
+    UIDropDownMenu_SetWidth(self.raidDropdown, 200)
+    UIDropDownMenu_Initialize(self.raidDropdown,
+        function(_, level, menuList) self:PopulateRaidDropdown(level, menuList) end,
+        "MENU")  -- MENU mode allows nested tier submenus
+    UIDropDownMenu_SetText(self.raidDropdown, getCurrentRaidName())
+
     -- Boss dropdown
     local bossLabel = section:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    bossLabel:SetPoint("TOPLEFT", 8, -26)
+    bossLabel:SetPoint("TOPLEFT", 8, -54)
     bossLabel:SetText("Boss:")
     bossLabel:SetTextColor(0.8, 0.8, 0.8)
 
@@ -162,7 +197,7 @@ function SimulatorPanelMixin:BuildKillSection()
 
     -- Item count
     local countLabel = section:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    countLabel:SetPoint("TOPLEFT", 8, -52)
+    countLabel:SetPoint("TOPLEFT", 8, -80)
     countLabel:SetText("Items:")
     countLabel:SetTextColor(0.8, 0.8, 0.8)
 
@@ -208,8 +243,8 @@ end
 
 function SimulatorPanelMixin:BuildLootSection()
     local section = CreateFrame("Frame", nil, self.frame, "BackdropTemplate")
-    section:SetPoint("TOPLEFT", 8, -164)
-    section:SetPoint("TOPRIGHT", -8, -164)
+    section:SetPoint("TOPLEFT", 8, -192)
+    section:SetPoint("TOPRIGHT", -8, -192)
     section:SetHeight(58)
     styleSurface(section, { 0.05, 0.05, 0.07, 1 }, { 0.2, 0.2, 0.25, 1 })
 
@@ -261,7 +296,7 @@ end
 
 function SimulatorPanelMixin:BuildQueueSection()
     local section = CreateFrame("Frame", nil, self.frame, "BackdropTemplate")
-    section:SetPoint("TOPLEFT", 8, -228)
+    section:SetPoint("TOPLEFT", 8, -256)
     section:SetPoint("BOTTOMRIGHT", -8, 60)
     styleSurface(section, { 0.05, 0.05, 0.07, 1 }, { 0.2, 0.2, 0.25, 1 })
 
@@ -351,6 +386,70 @@ end
 --[[--------------------------------------------------------------------
     Dropdown population
 ----------------------------------------------------------------------]]
+
+function SimulatorPanelMixin:PopulateRaidDropdown(level, menuList)
+    level = level or 1
+    local selectedID = getSelectedRaidID()
+
+    if level == 1 then
+        -- Top-level list: tier headers. Each tier gets a submenu with
+        -- its raids. "MENU" mode gives us the ► arrow + cascaded child.
+        local raids = getRaids()
+        if #raids == 0 then
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = "(no raids — EJ not loaded)"
+            info.isTitle = true
+            info.notCheckable = true
+            UIDropDownMenu_AddButton(info, level)
+            return
+        end
+
+        -- Group by tier in the order ListRaids returns (latest tier first).
+        local tiers = {}
+        local seenTier = {}
+        for _, r in ipairs(raids) do
+            if not seenTier[r.tierIndex] then
+                seenTier[r.tierIndex] = true
+                tiers[#tiers + 1] = { index = r.tierIndex, name = r.tierName }
+            end
+        end
+
+        for _, t in ipairs(tiers) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.text             = t.name
+            info.hasArrow         = true
+            info.notCheckable     = true
+            info.menuList         = t.index   -- passed back in level==2
+            info.keepShownOnClick = true
+            UIDropDownMenu_AddButton(info, level)
+        end
+        return
+    end
+
+    -- Level 2: raids within the chosen tier.
+    local tierIndex = menuList
+    for _, r in ipairs(getRaids()) do
+        if r.tierIndex == tierIndex then
+            local info = UIDropDownMenu_CreateInfo()
+            local label = r.instanceName
+            if r.isLatest then
+                label = label .. "  |cff888888(current)|r"
+            end
+            info.text    = label
+            info.checked = (r.instanceID == selectedID)
+            info.func    = function()
+                if ns.Simulator and ns.Simulator.SelectRaid then
+                    ns.Simulator:SelectRaid(r.instanceID)
+                end
+                self.selectedBoss = nil  -- raid changed; clear boss
+                UIDropDownMenu_SetText(self.raidDropdown, r.instanceName)
+                UIDropDownMenu_SetText(self.bossDropdown, "Random")
+                CloseDropDownMenus()
+            end
+            UIDropDownMenu_AddButton(info, level)
+        end
+    end
+end
 
 function SimulatorPanelMixin:PopulateBossDropdown()
     local info = UIDropDownMenu_CreateInfo()
@@ -461,6 +560,7 @@ function SimulatorPanelMixin:RegisterCallbacks()
     ns.Simulator:RegisterCallback("OnSimStateChanged", function() self:RefreshAll() end, "SimulatorPanel")
     ns.Simulator:RegisterCallback("OnQueueChanged", function() self:RefreshQueue() end, "SimulatorPanel")
     ns.Simulator:RegisterCallback("OnAutofireChanged", function(_, on) self:RefreshAutofire(on) end, "SimulatorPanel")
+    ns.Simulator:RegisterCallback("OnSelectedRaidChanged", function() self:RefreshRaidDropdown() end, "SimulatorPanel")
 
     if Loothing.Session and Loothing.Session.RegisterCallback then
         Loothing.Session:RegisterCallback("OnSessionStarted", function() self:RefreshStatus() end, "SimulatorPanel")
@@ -468,10 +568,17 @@ function SimulatorPanelMixin:RegisterCallbacks()
     end
 end
 
+function SimulatorPanelMixin:RefreshRaidDropdown()
+    if self.raidDropdown then
+        UIDropDownMenu_SetText(self.raidDropdown, getCurrentRaidName())
+    end
+end
+
 function SimulatorPanelMixin:RefreshAll()
     self:RefreshStatus()
     self:RefreshQueue()
     self:RefreshAutofire(ns.Simulator and ns.Simulator:IsAutoFire())
+    self:RefreshRaidDropdown()
 end
 
 function SimulatorPanelMixin:RefreshStatus()

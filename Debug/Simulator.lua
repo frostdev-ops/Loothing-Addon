@@ -22,6 +22,7 @@ local SIMULATOR_EVENTS = {
     "OnSimStateChanged",
     "OnQueueChanged",
     "OnAutofireChanged",
+    "OnSelectedRaidChanged",
 }
 
 local DEFAULT_INSTANCE_KEY = "NerubarPalace"
@@ -386,47 +387,69 @@ local function ensureEJLoaded()
     return EJ_GetNumTiers ~= nil and EJ_GetInstanceByIndex ~= nil
 end
 
---- Build a cached descriptor of the current tier's latest raid.
---- @return table|nil { instanceID, instanceName, tierName, bosses (id->boss), bossList (ordered) }
-function Simulator:LoadCurrentRaid()
-    if self.cachedRaid then return self.cachedRaid end
+--- List every raid in the Encounter Journal, grouped by tier.
+--- Ordered latest-first by tier, and latest-first within each tier.
+--- Cached for the session (EJ data is static per client install).
+--- @return table[] { { tierIndex, tierName, instanceID, instanceName, isLatest }, ... }
+function Simulator:ListRaids()
+    if self._cachedRaidsList then return self._cachedRaidsList end
+    if not ensureEJLoaded() then return {} end
 
-    if not ensureEJLoaded() then
-        safePrint("[Sim] Encounter Journal unavailable — cannot resolve current raid.")
-        return nil
+    local out = {}
+    local numTiers = EJ_GetNumTiers() or 0
+    for tier = numTiers, 1, -1 do
+        EJ_SelectTier(tier)
+        local tierName = EJ_GetTierInfo(tier) or ("Tier " .. tier)
+
+        -- Collect raids in their EJ order, then reverse so the latest
+        -- within this tier ends up first.
+        local tierRaids = {}
+        local idx = 1
+        while true do
+            local instanceID, name = EJ_GetInstanceByIndex(idx, true)  -- true = isRaid
+            if not instanceID then break end
+            tierRaids[#tierRaids + 1] = { instanceID = instanceID, instanceName = name }
+            idx = idx + 1
+        end
+        for i = #tierRaids, 1, -1 do
+            out[#out + 1] = {
+                tierIndex    = tier,
+                tierName     = tierName,
+                instanceID   = tierRaids[i].instanceID,
+                instanceName = tierRaids[i].instanceName,
+                isLatest     = (tier == numTiers) and (i == #tierRaids),
+            }
+        end
     end
 
-    local maxTier = EJ_GetNumTiers()
-    if not maxTier or maxTier < 1 then return nil end
+    self._cachedRaidsList = out
+    return out
+end
 
-    EJ_SelectTier(maxTier)
-    local tierName = EJ_GetTierInfo(maxTier)
-
-    -- Walk the raid list; the last entry is the most recently shipped raid.
-    local lastID, lastName = nil, nil
-    local idx = 1
-    while true do
-        local instanceID, name = EJ_GetInstanceByIndex(idx, true) -- true = isRaid
-        if not instanceID then break end
-        lastID, lastName = instanceID, name
-        idx = idx + 1
+--- Load a specific raid's boss list by Encounter Journal instance ID.
+--- Caches per-instance; safe to call repeatedly.
+function Simulator:LoadRaid(instanceID)
+    if not instanceID then return nil end
+    self.cachedRaidsByID = self.cachedRaidsByID or {}
+    if self.cachedRaidsByID[instanceID] then
+        return self.cachedRaidsByID[instanceID]
     end
-    if not lastID then return nil end
+    if not ensureEJLoaded() then return nil end
 
-    EJ_SelectInstance(lastID)
+    EJ_SelectInstance(instanceID)
 
     -- EJ_GetEncounterInfoByIndex returns:
     --   name, description, journalEncounterID, rootSectionID, link,
     --   journalInstanceID, dungeonEncounterID, ...
     -- We need BOTH IDs:
-    --   * dungeonEncounterID -- the gameplay ENCOUNTER_END id (sent to Session)
-    --   * journalEncounterID -- the EJ id required by EJ_SelectEncounter
+    --   * dungeonEncounterID  — the gameplay ENCOUNTER_END id (sent to Session)
+    --   * journalEncounterID  — the EJ id required by EJ_SelectEncounter
     local bossList = {}
     local bossKeyed = {}
     local order = 1
     while true do
         local name, _, journalEncounterID, _, _, _, dungeonEncounterID =
-            EJ_GetEncounterInfoByIndex(order, lastID)
+            EJ_GetEncounterInfoByIndex(order, instanceID)
         if not name then break end
         if not dungeonEncounterID or dungeonEncounterID == 0 then
             -- Some EJ entries (intro events, council "encounters") have no
@@ -435,11 +458,11 @@ function Simulator:LoadCurrentRaid()
             order = order + 1
         else
             local boss = {
-                encounterID = dungeonEncounterID,
+                encounterID        = dungeonEncounterID,
                 journalEncounterID = journalEncounterID,
-                name = name,
-                order = order,
-                items = nil,  -- loot loaded lazily via LoadBossLoot()
+                name               = name,
+                order              = order,
+                items              = nil,  -- loot loaded lazily via LoadBossLoot()
             }
             bossList[#bossList + 1] = boss
             bossKeyed[dungeonEncounterID] = boss
@@ -449,19 +472,73 @@ function Simulator:LoadCurrentRaid()
 
     if #bossList == 0 then return nil end
 
-    self.cachedRaid = {
-        instanceID = lastID,
-        instanceName = lastName,
-        tierName = tierName,
-        bosses = bossKeyed,
-        bossList = bossList,
+    -- Attach instanceName / tierName from the ListRaids metadata so
+    -- consumers (panel, slash output) can render human-readable labels.
+    local raidInfo
+    for _, r in ipairs(self:ListRaids()) do
+        if r.instanceID == instanceID then raidInfo = r; break end
+    end
+
+    local raid = {
+        instanceID   = instanceID,
+        instanceName = raidInfo and raidInfo.instanceName or "(unknown)",
+        tierName     = raidInfo and raidInfo.tierName     or "(unknown)",
+        tierIndex    = raidInfo and raidInfo.tierIndex,
+        bosses       = bossKeyed,
+        bossList     = bossList,
     }
-    safeDebug("[Sim] LoadCurrentRaid:", lastName, "(tier=", tierName, ", bosses=", #bossList, ")")
+    self.cachedRaidsByID[instanceID] = raid
+    safeDebug("[Sim] LoadRaid:", raid.instanceName, "(tier=", raid.tierName, ", bosses=", #bossList, ")")
+    return raid
+end
+
+--- Instance ID of the latest raid (most recent tier, last entry in that tier).
+function Simulator:GetLatestRaidID()
+    local raids = self:ListRaids()
+    return raids[1] and raids[1].instanceID or nil
+end
+
+--- The instance ID the user (or default) has currently selected for firing.
+function Simulator:GetSelectedRaidID()
+    return self.selectedRaidID or self:GetLatestRaidID()
+end
+
+--- Change the active raid. Invalidates the single-raid cache + any currently
+--- selected boss is cleared (the caller is responsible for reflecting that
+--- in the UI, since the selection lives in the panel mixin).
+function Simulator:SelectRaid(instanceID)
+    if instanceID == self.selectedRaidID then return false end
+    self.selectedRaidID = instanceID
+    self.cachedRaid = nil  -- LoadCurrentRaid will re-resolve next call
+    self:TriggerEvent("OnSelectedRaidChanged", instanceID)
+    safeDebug("[Sim] Selected raid:", tostring(instanceID))
+    return true
+end
+
+--- Build a cached descriptor of the currently-selected raid (defaults to
+--- the latest available). Kept as the canonical entry point for
+--- ResolveBoss/ListBosses/etc. so the rest of the module doesn't need to
+--- know about the multi-raid cache.
+--- @return table|nil { instanceID, instanceName, tierName, bosses (id->boss), bossList (ordered) }
+function Simulator:LoadCurrentRaid()
+    if self.cachedRaid then return self.cachedRaid end
+
+    if not ensureEJLoaded() then
+        safePrint("[Sim] Encounter Journal unavailable — cannot resolve raid list.")
+        return nil
+    end
+
+    local id = self:GetSelectedRaidID()
+    if not id then return nil end
+
+    self.cachedRaid = self:LoadRaid(id)
     return self.cachedRaid
 end
 
 function Simulator:RefreshTier()
     self.cachedRaid = nil
+    self.cachedRaidsByID = {}
+    self._cachedRaidsList = nil
 end
 
 --- Lazily fetch the EJ loot list for a boss, caching it on the boss table.
