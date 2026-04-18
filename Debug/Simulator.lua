@@ -426,6 +426,29 @@ function Simulator:ListRaids()
     return out
 end
 
+--- Temporarily clear the EJ class/spec loot filter and return the
+--- prior (classID, specID) so the caller can restore it. The EJ filter
+--- is sticky and persists across sessions — if the user has it set to
+--- their own class/spec, C_EncounterJournal.GetLootInfoByIndex hides
+--- any item that isn't usable by that class/spec (trinkets with class
+--- restrictions, off-class tier tokens, etc.). Since the simulator
+--- wants the FULL loot table, clear before reading.
+local function pushEJLootFilter()
+    if not EJ_GetLootFilter or not EJ_SetLootFilter then return nil, nil end
+    local classID, specID = EJ_GetLootFilter()
+    if (classID or 0) ~= 0 or (specID or 0) ~= 0 then
+        EJ_SetLootFilter(0, 0)
+    end
+    return classID, specID
+end
+
+local function popEJLootFilter(classID, specID)
+    if not EJ_SetLootFilter then return end
+    if (classID or 0) ~= 0 or (specID or 0) ~= 0 then
+        EJ_SetLootFilter(classID or 0, specID or 0)
+    end
+end
+
 --- Load a specific raid's boss list by Encounter Journal instance ID.
 --- Caches per-instance; safe to call repeatedly.
 function Simulator:LoadRaid(instanceID)
@@ -560,6 +583,11 @@ function Simulator:LoadBossLoot(boss)
 
     EJ_SelectEncounter(boss.journalEncounterID)
 
+    -- Clear any sticky EJ class/spec filter for the duration of this
+    -- read. Otherwise trinkets / off-class tokens / spec-restricted
+    -- items are silently dropped from the loot list the sim sees.
+    local priorClassID, priorSpecID = pushEJLootFilter()
+
     local items = {}
     local n = (EJ_GetNumLoot and EJ_GetNumLoot()) or 0
     for i = 1, n do
@@ -581,6 +609,9 @@ function Simulator:LoadBossLoot(boss)
             }
         end
     end
+
+    popEJLootFilter(priorClassID, priorSpecID)
+
     boss.items = items
     safeDebug("[Sim] LoadBossLoot:", boss.name, "loot=", #items)
     return items
@@ -665,8 +696,21 @@ function Simulator:GenerateItemsForBoss(boss, count)
         pool = { 212405, 212450, 212460, 212470, 212480, 212502, 212504, 212506 }
     end
 
+    -- Randomised pick without duplicates. The old cyclic `pool[i %% N]`
+    -- selection always returned items 1..count in EJ order, which meant
+    -- trinkets (typically at positions 10+ of an EJ loot list) never
+    -- dropped at default `count = 3`. Shuffle a copy so every item is
+    -- equally likely.
+    local shuffled = {}
+    for i = 1, #pool do shuffled[i] = pool[i] end
+    for i = #shuffled, 2, -1 do
+        local j = math.random(i)
+        shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
+    end
+
     for i = 1, count do
-        local entry = pool[((i - 1) % #pool) + 1]
+        -- Wrap once shuffled is exhausted (when user asks for count > #pool)
+        local entry = shuffled[((i - 1) % #shuffled) + 1]
         local itemID = type(entry) == "table" and entry.itemID or entry
         items[#items + 1] = resolveLink(itemID)
     end
