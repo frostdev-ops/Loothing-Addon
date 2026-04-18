@@ -44,6 +44,15 @@ function ItemFilterMixin:ShouldIgnoreItem(itemLink)
         return false
     end
 
+    -- Fail-closed when Settings is missing: without it, the per-player
+    -- ignore-list system is effectively disabled (we have no per-player
+    -- preferences to consult), so return false. The class/quality fail-
+    -- closed fallbacks in IsClassBlocked / IsBelowMinQuality still cover
+    -- the gross cases when Settings is unavailable.
+    if not Loothing.Settings then
+        return false
+    end
+
     -- Check if ignore system is enabled
     if not Loothing.Settings:GetIgnoreItemsEnabled() then
         return false
