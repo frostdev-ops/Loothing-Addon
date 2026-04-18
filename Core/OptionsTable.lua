@@ -72,12 +72,13 @@ local function BuildArgs()
         args = generalArgs,
     }
 
-    -- Tab 2: Master Looter (ml + autoaward + ignore + history)
+    -- Tab 2: Master Looter (ml + autoaward + lootFilter + ignore + history)
     local mlArgs = {}
     addClonedGroup(mlArgs, "ml", localArgs and localArgs.ml, 1)
     addClonedGroup(mlArgs, "autoaward", localArgs and localArgs.autoaward, 2)
-    addClonedGroup(mlArgs, "ignore", localArgs and localArgs.ignore, 3)
-    addClonedGroup(mlArgs, "history", localArgs and localArgs.history, 4)
+    addClonedGroup(mlArgs, "lootFilter", localArgs and localArgs.lootFilter, 3)
+    addClonedGroup(mlArgs, "ignore", localArgs and localArgs.ignore, 4)
+    addClonedGroup(mlArgs, "history", localArgs and localArgs.history, 5)
     rootArgs.masterLooter = {
         type = "group",
         name = L["CONFIG_TAB_MASTER_LOOTER"],
@@ -159,6 +160,9 @@ local PATH_ALIASES = {
     -- ML tab children
     ml             = { "masterLooter", "ml" },
     autoaward      = { "masterLooter", "autoaward" },
+    lootfilter     = { "masterLooter", "lootFilter" },
+    lootFilter     = { "masterLooter", "lootFilter" },
+    filter         = { "masterLooter", "lootFilter" },
     ignore         = { "masterLooter", "ignore" },
     history        = { "masterLooter", "history" },
     -- Session & Voting (unchanged)

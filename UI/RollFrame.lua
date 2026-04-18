@@ -5,6 +5,7 @@
 
 local _, ns = ...
 local Loolib = LibStub("Loolib")
+local TokenData = ns.TokenData
 local Loothing = ns.Addon
 local Protocol = ns.Protocol
 local Utils = ns.Utils
@@ -222,8 +223,11 @@ function RollFrameMixin:DisplayItem(item)
     if item.itemLevel and item.itemLevel > 0 then
         infoText = string.format("ilvl %d", item.itemLevel)
     end
-    if item.equipSlot and item.equipSlot ~= "" then
-        local slotName = _G[item.equipSlot] or item.equipSlot:gsub("INVTYPE_", "")
+    local slotName = TokenData and TokenData:FormatItemSlot(item)
+    if not slotName and item.equipSlot and item.equipSlot ~= "" then
+        slotName = item.equipSlot:gsub("INVTYPE_", "")
+    end
+    if slotName then
         if infoText ~= "" then
             infoText = infoText .. " - " .. slotName
         else
@@ -260,6 +264,23 @@ function RollFrameMixin:DisplayItem(item)
 
     -- Guarantee layout is correct regardless of RefreshResponseButtons path
     self:UpdateLayout()
+
+    -- If the item's full info hasn't loaded yet (cold cache, or async tier-token
+    -- override still pending), schedule a one-shot re-render once the info
+    -- arrives. Without this, tokens render with empty equipSlot — no slot
+    -- label, no gear comparison, no upgrade indicator — until the user clicks
+    -- something. The closure self-unregisters on fire and no-ops if the user
+    -- has switched to a different item in the meantime.
+    if item and not item.itemInfoLoaded and item.RegisterCallback then
+        item:RegisterCallback("OnItemInfoLoaded", function()
+            if item.UnregisterCallback then
+                item:UnregisterCallback("OnItemInfoLoaded", self)
+            end
+            if self.item == item then
+                self:DisplayItem(item)
+            end
+        end, self)
+    end
 end
 
 --- Update the wishlist indicator for the current item

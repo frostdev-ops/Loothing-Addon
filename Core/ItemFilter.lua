@@ -102,6 +102,185 @@ function ItemFilterMixin:ShouldIgnoreItem(itemLink)
     return false
 end
 
+--[[--------------------------------------------------------------------
+    Class / quality filter (master-looter loot policy)
+
+    These methods read the loot.filter.* settings (see
+    Core/SettingsLootFilter.lua). They are independent of
+    :ShouldIgnoreItem above, which handles the per-player ignore list.
+----------------------------------------------------------------------]]
+
+-- Localised display names for the user-blockable classes/subclasses.
+-- Keyed by classID, with optional .subclasses[subID] specialisation
+-- when a subclass-only block needs a more specific label than the
+-- whole-class label. Falls back to L["LOOT_FILTER_BLOCK_*"] strings.
+local function getCategoryLabel(classID, subclassID)
+    if classID == nil then return nil end
+    -- Subclass-specific overrides first
+    if classID == 15 then
+        if subclassID == 1 then return L["LOOT_FILTER_BLOCK_MISC_REAGENT"] or "Misc: Reagent" end
+        if subclassID == 4 then return L["LOOT_FILTER_BLOCK_MISC_OTHER"]   or "Misc: Other" end
+    end
+    local labels = {
+        [0]  = L["LOOT_FILTER_BLOCK_CONSUMABLES"] or "Consumable",
+        [5]  = L["LOOT_FILTER_BLOCK_REAGENTS"]    or "Reagent",
+        [7]  = L["LOOT_FILTER_BLOCK_TRADESKILL"]  or "Recipe",
+        [12] = L["LOOT_FILTER_BLOCK_QUEST"]       or "Quest item",
+        [20] = L["LOOT_FILTER_BLOCK_HOUSING"]     or "Housing / Decor",
+    }
+    return labels[classID]
+end
+
+--- True if the item's class/subclass is blocked by user settings.
+-- Fail-closed: if Loothing.Settings is missing (Settings module didn't
+-- load), fall back to the seed defaults exposed by SettingsLootFilter
+-- so a broken Settings module can't silently disable class blocking.
+-- @param itemLink string
+-- @return boolean
+-- @return string|nil - Category label (for UI hint), nil if not blocked
+function ItemFilterMixin:IsClassBlocked(itemLink)
+    if not itemLink then return false end
+    local _, _, _, _, _, classID, subclassID = C_Item.GetItemInfoInstant(itemLink)
+    if not classID then return false end
+
+    if Loothing.Settings then
+        if Loothing.Settings:IsLootFilterClassBlocked(classID) then
+            return true, getCategoryLabel(classID, subclassID)
+                or self:GetItemCategory(itemLink)
+                or string.format("Class %d", classID)
+        end
+        if Loothing.Settings:IsLootFilterSubclassBlocked(classID, subclassID) then
+            return true, getCategoryLabel(classID, subclassID)
+                or self:GetItemCategory(itemLink)
+                or string.format("Class %d / %d", classID, subclassID)
+        end
+        return false
+    end
+
+    -- Settings module unavailable — apply the static seed defaults so a
+    -- broken Settings load can't silently let consumables/recipes through.
+    local def = ns.LootFilterDefaults and ns.LootFilterDefaults.classes
+    if def then
+        local entry = def[classID]
+        if entry then
+            if entry.all == true then
+                return true, getCategoryLabel(classID, subclassID)
+                    or string.format("Class %d", classID)
+            end
+            if subclassID and entry[subclassID] == true then
+                return true, getCategoryLabel(classID, subclassID)
+                    or string.format("Class %d / %d", classID, subclassID)
+            end
+        end
+    end
+    return false
+end
+
+--- True if the item's quality is below the configured minimum.
+-- Fail-closed: when Loothing.Settings is missing, fall back to the
+-- legacy `Loothing.MinQuality` constant (EPIC) instead of disabling
+-- the gate. Matches the seed-defaults fallback in IsClassBlocked.
+-- @param itemLink string
+-- @return boolean
+-- @return number|nil - actual quality
+-- @return number    - configured minimum
+function ItemFilterMixin:IsBelowMinQuality(itemLink)
+    local minQ
+    if Loothing.Settings then
+        minQ = Loothing.Settings:GetLootFilterMinQuality() or 0
+    else
+        minQ = Loothing.MinQuality or 4  -- EPIC fallback when Settings absent
+    end
+    if not itemLink then return false, nil, minQ end
+    if minQ <= 0 then
+        -- Quality filter disabled — never block.
+        return false, nil, minQ
+    end
+    local _, _, quality = C_Item.GetItemInfo(itemLink)
+    if quality == nil then
+        -- Item not yet cached — defer the decision rather than blocking.
+        return false, nil, minQ
+    end
+    return quality < minQ, quality, minQ
+end
+
+--- Composite evaluation used by the Loot Picker to decide default
+--- checkbox state and render per-row hints. Resolves item info ONCE
+--- and shares classID/subclassID/quality across all sub-checks.
+-- @param itemLink string
+-- @return table - { allowed, reason, classID, subclassID, quality, minQuality }
+function ItemFilterMixin:EvaluateItem(itemLink)
+    -- Fail-closed minQ: same logic as IsBelowMinQuality — fall back to
+    -- the EPIC constant when the Settings module is missing so the
+    -- picker doesn't silently downgrade to "no quality filter".
+    local minQ
+    if Loothing.Settings then
+        minQ = Loothing.Settings:GetLootFilterMinQuality() or 0
+    else
+        minQ = Loothing.MinQuality or 4
+    end
+    local result = {
+        allowed     = true,
+        reason      = nil,
+        classID     = nil,
+        subclassID  = nil,
+        quality     = nil,
+        minQuality  = minQ,
+    }
+    if not itemLink then
+        -- No link — default to ALLOWED so an unknown link doesn't trip
+        -- a "blocked" badge in the picker; the caller can still skip.
+        result.reason = "no-item"
+        return result
+    end
+
+    local _, _, _, _, _, classID, subclassID = C_Item.GetItemInfoInstant(itemLink)
+    result.classID = classID
+    result.subclassID = subclassID
+
+    local _, _, quality = C_Item.GetItemInfo(itemLink)
+    result.quality = quality
+
+    -- Per-player ignore list
+    if self:ShouldIgnoreItem(itemLink) then
+        result.allowed = false
+        result.reason = "ignored"
+        return result
+    end
+
+    -- Class/subclass block (uses shared classID/subclassID, no extra fetch).
+    -- Same fail-closed fallback as IsClassBlocked: when Settings is absent,
+    -- defer to the seed defaults exposed by SettingsLootFilter.
+    if classID then
+        local blocked, label = self:IsClassBlocked(itemLink)
+        if blocked then
+            result.allowed = false
+            result.reason = "class:" .. (label or string.format("Class %d", classID))
+            return result
+        end
+    end
+
+    -- Quality threshold — only enforce when filter is enabled (minQ > 0)
+    -- AND the item is cached. Cold cache defers to allowed.
+    if minQ > 0 and quality ~= nil and quality < minQ then
+        result.allowed = false
+        result.reason = "quality"
+        return result
+    end
+
+    -- BoE check (separate gate from class block — controlled by ml.autoAddBoEs)
+    if Loothing.Settings and not Loothing.Settings:Get("ml.autoAddBoEs", false) then
+        local _, _, _, _, _, _, _, _, _, _, _, _, _, bindType = C_Item.GetItemInfo(itemLink)
+        if bindType == 2 then  -- Enum.ItemBind.OnEquip
+            result.allowed = false
+            result.reason = "boe"
+            return result
+        end
+    end
+
+    return result
+end
+
 --- Get item category type for display
 -- @param itemLink string - Full item link
 -- @return string|nil - Category name or nil

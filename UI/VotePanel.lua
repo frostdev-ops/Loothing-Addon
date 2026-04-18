@@ -663,11 +663,19 @@ function VotePanelMixin:SetItem(item)
         self.itemLevel:SetText("")
     end
 
-    if item.equipSlot and item.equipSlot ~= "" then
-        local slotName = _G[item.equipSlot] or item.equipSlot
-        self.itemSlot:SetText(slotName)
-    else
-        self.itemSlot:SetText("")
+    self.itemSlot:SetText(
+        (ns.TokenData and ns.TokenData:FormatItemSlot(item)) or "")
+
+    -- Re-render once item info loads (cold cache, async tier-token override).
+    if not item.itemInfoLoaded and item.RegisterCallback then
+        item:RegisterCallback("OnItemInfoLoaded", function()
+            if item.UnregisterCallback then
+                item:UnregisterCallback("OnItemInfoLoaded", self)
+            end
+            if self.item == item then
+                self:SetItem(item)
+            end
+        end, self)
     end
 
     -- Rebuild candidate buttons for this item

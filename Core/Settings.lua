@@ -89,6 +89,7 @@ local PROFILE_DEFAULTS = {
     rollFrame           = CopyDefaults(Loothing.DefaultSettings.rollFrame),
     councilTable        = CopyDefaults(Loothing.DefaultSettings.councilTable),
     winnerDetermination = CopyDefaults(Loothing.DefaultSettings.winnerDetermination),
+    loot                = CopyDefaults(Loothing.DefaultSettings.loot),
 }
 
 local GLOBAL_DEFAULTS = {

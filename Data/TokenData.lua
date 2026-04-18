@@ -805,6 +805,77 @@ ns.TokenTable = {
     [237598] = "ShoulderSlot", -- Mystic Yearning Cursemark,
     [237599] = "ShoulderSlot", -- Venerated Yearning Cursemark,
     [237600] = "ShoulderSlot", -- Zenith Yearning Cursemark,
+
+    -- Midnight Season 1 - The Voidspire (Nullcore family)
+    -- Hand slot (Vorasius)
+    [249351] = "HandsSlot",    -- Voidwoven Hungering Nullcore (cloth)
+    [249352] = "HandsSlot",    -- Voidcured Hungering Nullcore (leather)
+    [249353] = "HandsSlot",    -- Voidcast Hungering Nullcore (mail)
+    [249354] = "HandsSlot",    -- Voidforged Hungering Nullcore (plate)
+    -- Head slot (War Chaplain Senn)
+    [249355] = "HeadSlot",     -- Voidwoven Fanatical Nullcore (cloth)
+    [249356] = "HeadSlot",     -- Voidcured Fanatical Nullcore (leather)
+    [249357] = "HeadSlot",     -- Voidcast Fanatical Nullcore (mail)
+    [249358] = "HeadSlot",     -- Voidforged Fanatical Nullcore (plate)
+    -- Legs slot (Vaelgor)
+    [249359] = "LegsSlot",     -- Voidwoven Corrupted Nullcore (cloth)
+    [249360] = "LegsSlot",     -- Voidcured Corrupted Nullcore (leather)
+    [249361] = "LegsSlot",     -- Voidcast Corrupted Nullcore (mail)
+    [249362] = "LegsSlot",     -- Voidforged Corrupted Nullcore (plate)
+    -- Shoulder slot (Fallen-King Salhadaar)
+    [249363] = "ShoulderSlot", -- Voidwoven Unraveled Nullcore (cloth)
+    [249364] = "ShoulderSlot", -- Voidcured Unraveled Nullcore (leather)
+    [249365] = "ShoulderSlot", -- Voidcast Unraveled Nullcore (mail)
+    [249366] = "ShoulderSlot", -- Voidforged Unraveled Nullcore (plate)
+
+    -- Midnight Season 1 - March on Quel'Danas (omni-token, exchangeable with Kirana for any tier piece)
+    [249367] = "MultiSlots",   -- Chiming Void Curio (Midnight Falls - all classes, all slots)
+}
+
+--- Token name family prefix → set of class tokens (must match keys in CLASS_NAME_TO_ID)
+--- Used to derive the class restriction bitmask for tier tokens whose name starts
+--- with a known family prefix. Omni-tokens (no prefix match) fall back to all-classes.
+--- @type table<string, table<string, boolean>>
+ns.TokenClassFamilies = {
+    -- Midnight Season 1 (The Voidspire — Nullcore)
+    ["Voidcast"]   = { EVOKER=true, HUNTER=true, SHAMAN=true },        -- mail
+    ["Voidcured"]  = { DEMONHUNTER=true, ROGUE=true, MONK=true, DRUID=true }, -- leather
+    ["Voidwoven"]  = { WARLOCK=true, PRIEST=true, MAGE=true },         -- cloth
+    ["Voidforged"] = { DEATHKNIGHT=true, PALADIN=true, WARRIOR=true }, -- plate
+}
+
+--- Slot keyword → INVTYPE_* constant. Reverse of GetSlotName for engine-side
+--- equipSlot fields. Note: HandsSlot maps to INVTYPE_HAND (singular).
+--- MultiSlots intentionally has no INVTYPE — omni-tokens have no concrete slot.
+local SLOT_TO_INVTYPE = {
+    ["HeadSlot"]     = "INVTYPE_HEAD",
+    ["ShoulderSlot"] = "INVTYPE_SHOULDER",
+    ["BackSlot"]     = "INVTYPE_CLOAK",
+    ["ChestSlot"]    = "INVTYPE_CHEST",
+    ["HandsSlot"]    = "INVTYPE_HAND",
+    ["LegsSlot"]     = "INVTYPE_LEGS",
+    ["WristSlot"]    = "INVTYPE_WRIST",
+    ["WaistSlot"]    = "INVTYPE_WAIST",
+    ["FeetSlot"]     = "INVTYPE_FEET",
+    ["Trinket"]      = "INVTYPE_TRINKET",
+}
+
+--- Class name → classID mapping (matches AutoPass.CLASS_NAME_TO_ID)
+local CLASS_NAME_TO_ID = {
+    WARRIOR = 1, PALADIN = 2, HUNTER = 3, ROGUE = 4, PRIEST = 5,
+    DEATHKNIGHT = 6, SHAMAN = 7, MAGE = 8, WARLOCK = 9, MONK = 10,
+    DRUID = 11, DEMONHUNTER = 12, EVOKER = 13,
+}
+
+local ALL_CLASSES_FLAG = bit.lshift(1, 13) - 1
+
+--- Map name-pattern keywords (middle word of Nullcore tokens) to slot. Used as a
+--- fallback when an itemID hasn't been added to TokenTable yet (mid-patch hotfix).
+local NAME_PATTERN_TO_SLOT = {
+    ["Hungering"] = "HandsSlot",
+    ["Fanatical"] = "HeadSlot",
+    ["Corrupted"] = "LegsSlot",
+    ["Unraveled"] = "ShoulderSlot",
 }
 
 --- Table mapping item IDs to base item levels (normal difficulty)
@@ -816,18 +887,41 @@ ns.TokenIlvls = {
     -- Historical data can be added here if needed for legacy content
 }
 
---- Check if an item is a tier token
---- @param itemID number The item ID to check
---- @return boolean isToken True if the item is a token, false otherwise
-function TokenData:IsToken(itemID)
-    return ns.TokenTable[itemID] ~= nil
+--- Resolve the slot for an item if it is a tier token.
+--- Resolution order: itemID table → name pattern fallback → nil.
+--- The fallback covers tokens hotfixed in mid-patch before the table is updated.
+--- @param itemID number|nil The item ID to check
+--- @param itemName string|nil The item name (used by the name-pattern fallback)
+--- @param subType string|nil C_Item.GetItemInfo subType (e.g., "Token") — currently informational
+--- @return string|nil slot The slot keyword (e.g., "HeadSlot", "MultiSlots"), or nil if not a token
+function TokenData:IsToken(itemID, itemName, subType)
+    if itemID and ns.TokenTable[itemID] then
+        return ns.TokenTable[itemID]
+    end
+    if itemName then
+        for keyword, slot in pairs(NAME_PATTERN_TO_SLOT) do
+            if itemName:find(keyword) and itemName:find("Nullcore") then
+                return slot
+            end
+        end
+    end
+    return nil
 end
 
---- Get the equipment slot for a token
+--- Get the equipment slot for a token by itemID only (fast lookup).
 --- @param itemID number The item ID to check
---- @return string|nil slot The equipment slot name (e.g., "HeadSlot", "ChestSlot"), or nil if not a token
+--- @return string|nil slot The equipment slot name (e.g., "HeadSlot"), or nil if not a token
 function TokenData:GetSlot(itemID)
     return ns.TokenTable[itemID]
+end
+
+--- Get the INVTYPE_* equipSlot constant for a token slot keyword.
+--- e.g., GetINVTypeFromSlot("HeadSlot") → "INVTYPE_HEAD".
+--- Returns nil for "MultiSlots" (omni-tokens have no concrete slot).
+--- @param slot string The slot keyword (e.g., "HeadSlot")
+--- @return string|nil invtype The INVTYPE_* constant, or nil for omni/unknown slots
+function TokenData:GetINVTypeFromSlot(slot)
+    return slot and SLOT_TO_INVTYPE[slot] or nil
 end
 
 --- Get the base item level for a token (normal difficulty)
@@ -838,26 +932,56 @@ function TokenData:GetIlvl(itemID)
     return ns.TokenIlvls[itemID]
 end
 
---- Get the classes that can use a token
---- This function queries the game API to determine which classes can use the token
---- @param itemLink string The item link (e.g., from C_Item.GetItemInfo)
---- @return number classFlags Bitmask of classes that can use this token (same as C_Item.GetItemClassInfo)
-function TokenData:GetClasses(itemLink)
-    if not itemLink then
-        return bit.lshift(1, 13) - 1 -- All classes if no link provided
+--- Get the class restriction bitmask for a tier token.
+--- Resolution order:
+---   1. Match itemName prefix against TokenClassFamilies → build bitmask from class set.
+---   2. Fallback to TooltipScan tooltip parse (catches tokens we don't have a family entry for).
+---   3. Fallback to ALL_CLASSES_FLAG (omni-tokens or unknown — let everyone roll).
+--- @param itemName string|nil The item name (e.g., "Voidcast Fanatical Nullcore")
+--- @param itemLink string|nil The item link (used for tooltip fallback)
+--- @return number classFlags Bitmask of classes that can use this token
+function TokenData:GetTokenClassFlag(itemName, itemLink)
+    if itemName then
+        for prefix, classSet in pairs(ns.TokenClassFamilies) do
+            if itemName:find("^" .. prefix) then
+                local flag = 0
+                for className in pairs(classSet) do
+                    local classID = CLASS_NAME_TO_ID[className]
+                    if classID then
+                        flag = flag + bit.lshift(1, classID - 1)
+                    end
+                end
+                if flag > 0 then return flag end
+            end
+        end
     end
 
-    -- Use the tooltip API to determine usability
-    -- This leverages the game's built-in logic for token class restrictions
-    local tooltipData = C_TooltipInfo.GetHyperlink(itemLink)
-    if not tooltipData or not tooltipData.lines then
-        return bit.lshift(1, 13) - 1
+    if itemLink and ns.TooltipScan and ns.TooltipScan.GetItemClassRestrictionFlag then
+        local flag = ns.TooltipScan:GetItemClassRestrictionFlag(itemLink)
+        if flag and flag > 0 then return flag end
     end
 
-    -- WoW 12.0+ personal loot makes tier tokens class-unrestricted.
-    -- Tooltip-based class parsing was planned for Classic support but is
-    -- unnecessary for Midnight. Returns all-classes bitmask as default.
-    return bit.lshift(1, 13) - 1
+    return ALL_CLASSES_FLAG
+end
+
+--- Format the slot label for an item, accounting for tier tokens.
+--- Centralizes the equipSlot → token-slot fallback + "(Token)" badge that
+--- otherwise gets duplicated across every UI surface that shows the slot.
+--- Returns nil when no slot has been resolved yet (item info still loading).
+--- @param item table - LoothingItem
+--- @return string|nil label
+function TokenData:FormatItemSlot(item)
+    if not item then return nil end
+    local label
+    if item.equipSlot and item.equipSlot ~= "" then
+        label = _G[item.equipSlot] or item.equipSlot
+    elseif item.tokenSlot then
+        label = self:GetSlotName(item.tokenSlot)
+    end
+    if label and item.isToken then
+        label = label .. " (Token)"
+    end
+    return label
 end
 
 --- Get a human-readable slot name from a slot constant

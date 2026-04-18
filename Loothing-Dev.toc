@@ -3,7 +3,7 @@
 ## Title: Loothing (Dev)
 ## Notes: Development build with test harness and debug tooling
 ## Author: James Kueller
-## Version: 2.0.19
+## Version: 2.0.20
 ## SavedVariables: LoolibDB
 ## Dependencies: Loolib
 ## IconTexture: Interface\AddOns\Loothing\Media\logo
@@ -40,6 +40,7 @@ Core\Migration.lua
 Core\SchemaMigration.lua
 Core\Settings.lua
 Core\SettingsVoting.lua
+Core\SettingsLootFilter.lua
 Core\SettingsExport.lua
 Core\Options\SessionSettings.lua
 Core\Options\LocalPreferences.lua
@@ -59,6 +60,7 @@ Utils\AutoPass.lua
 Modules\VersionCheck.lua
 
 # Data Layer
+Data\TokenData.lua
 Data\ItemData.lua
 Data\VoteData.lua
 Data\Session.lua
@@ -71,7 +73,6 @@ Data\ResponseTracker.lua
 Data\VoteTracker.lua
 Data\CandidateData.lua
 Data\CandidateManager.lua
-Data\TokenData.lua
 Data\TrinketData.lua
 Data\EncounterData.lua
 Data\PlayerCache.lua
@@ -124,6 +125,7 @@ UI\Components\CandidateResultRow.lua
 UI\ResultsPanel.lua
 UI\SessionPanel.lua
 UI\AddItemFrame.lua
+UI\LootPickerFrame.lua
 UI\HistoryPanel.lua
 UI\TradePanel.lua
 UI\RosterPanel.lua
@@ -170,3 +172,7 @@ Debug\Tests\SettingsExportTests.lua
 Debug\Tests\NormalizeNameTests.lua
 Debug\Tests\HistoryRevokeTests.lua
 Debug\Tests\FullSessionTests.lua
+
+# Simulator (dev-only — full-pipeline boss kill harness)
+Debug\Simulator.lua
+UI\SimulatorPanel.lua

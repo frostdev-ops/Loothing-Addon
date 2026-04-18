@@ -24,28 +24,25 @@ local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local Utils = ns.Utils
 
--- Item classes that should never be added to loot council sessions.
--- Matches RCLC's blacklistedItemClasses. Keys are Enum.ItemClass values,
--- sub-keys are Enum.ItemXSubclass values or "all" for the entire class.
-local BLACKLISTED_ITEM_CLASSES = {
-    [0]  = { all = true },  -- Consumables
-    [5]  = { all = true },  -- Reagents
-    [7]  = { all = true },  -- Tradeskill items
-    [12] = { all = true },  -- Quest items
-    [15] = { [1] = true, [4] = true },  -- Miscellaneous: Reagent, Other (Anima)
-    [20] = { all = true },  -- Decor / Housing
-}
+--- Resolved minimum-quality threshold (Loothing.MinQuality is the
+--- legacy hardcoded fallback; the user-configurable value lives in
+--- Settings:GetLootFilterMinQuality()).
+local function GetMinQuality()
+    if Loothing.Settings and Loothing.Settings.GetLootFilterMinQuality then
+        return Loothing.Settings:GetLootFilterMinQuality()
+    end
+    return Loothing.MinQuality or 4
+end
 
---- Check if an item should be excluded from loot council by its item class.
--- @param itemLink string
--- @return boolean - true if the item is blacklisted
-local function IsItemClassBlacklisted(itemLink)
-    if not itemLink then return false end
-    local _, _, _, _, _, itemClassID, itemSubClassID = C_Item.GetItemInfoInstant(itemLink)
-    if not itemClassID then return false end
-    local classEntry = BLACKLISTED_ITEM_CLASSES[itemClassID]
-    if not classEntry then return false end
-    return classEntry.all or classEntry[itemSubClassID] or false
+--- Check if an item is blocked by the user-configurable class filter.
+--- Delegates to Loothing.ItemFilter:IsClassBlocked, which reads the
+--- loot.filter.classes.* settings (seeded from the old hardcoded
+--- BLACKLISTED_ITEM_CLASSES table by SchemaMigration v4).
+local function IsItemClassBlocked(itemLink)
+    if Loothing.ItemFilter and Loothing.ItemFilter.IsClassBlocked then
+        return Loothing.ItemFilter:IsClassBlocked(itemLink) and true or false
+    end
+    return false
 end
 
 --- Check if an item is Bind on Equip (not soulbound raid loot).
@@ -99,6 +96,7 @@ local SESSION_EVENTS = {
     "OnCandidateRollUpdated",
     "OnItemTradabilityChanged",
     "OnVoteReceived",
+    "OnLootBufferChanged",  -- LootPickerFrame subscribes to re-render rows when bag-scan adds late items
 }
 
 --- Initialize the session manager
@@ -345,31 +343,45 @@ function SessionMixin:HandleTradable(data)
         return
     end
 
-    -- Quality check
-    local quality = Utils.GetItemQuality(itemLink)
-    if not quality or quality < Loothing.MinQuality then
-        TraceLoot("handleT:quality-low", itemLink,
-            "got=" .. tostring(quality) .. " min=" .. tostring(Loothing.MinQuality))
-        return
-    end
+    -- Filter gates (quality + class block) apply in EVERY mode EXCEPT
+    -- `prompt`. In prompt mode the Loot Picker is the ML's chance to
+    -- override filters per-kill, so the buffer captures everything and
+    -- the picker's checkbox state decides what reaches the session.
+    -- `auto` and `manual` both apply filters: auto needs them because
+    -- there's no UI gate, and manual feeds the SessionPanel which has no
+    -- "show filtered" toggle. Defaulting to `auto` (most restrictive)
+    -- when Settings is missing keeps a broken Settings module from
+    -- silently disabling filtering.
+    local triggerAction = (Loothing.Settings and Loothing.Settings:GetSessionTriggerAction())
+        or "auto"
+    local enforceFilters = (triggerAction ~= "prompt")
 
-    -- Item class blacklist (consumables, reagents, quest items, etc.)
-    if IsItemClassBlacklisted(itemLink) then
-        TraceLoot("handleT:class-blacklisted", itemLink)
-        return
-    end
+    if enforceFilters then
+        local minQ = GetMinQuality()
+        local quality = Utils.GetItemQuality(itemLink)
+        if minQ > 0 and (not quality or quality < minQ) then
+            TraceLoot("handleT:quality-low", itemLink,
+                "got=" .. tostring(quality) .. " min=" .. tostring(minQ))
+            return
+        end
 
-    -- BoE check (skip unless setting enables BoE collection)
-    local boe = IsItemBoE(itemLink)
-    if boe and not (Loothing.Settings and Loothing.Settings:Get("ml.autoAddBoEs", false)) then
-        TraceLoot("handleT:boe-excluded", itemLink)
-        return
-    end
+        if IsItemClassBlocked(itemLink) then
+            TraceLoot("handleT:class-blocked", itemLink)
+            return
+        end
 
-    -- User ignore list
-    if Loothing.ItemFilter and Loothing.ItemFilter:ShouldIgnoreItem(itemLink) then
-        TraceLoot("handleT:in-ignore-list", itemLink)
-        return
+        -- BoE check (skip unless setting enables BoE collection)
+        local boe = IsItemBoE(itemLink)
+        if boe and not (Loothing.Settings and Loothing.Settings:Get("ml.autoAddBoEs", false)) then
+            TraceLoot("handleT:boe-excluded", itemLink)
+            return
+        end
+
+        -- User ignore list
+        if Loothing.ItemFilter and Loothing.ItemFilter:ShouldIgnoreItem(itemLink) then
+            TraceLoot("handleT:in-ignore-list", itemLink)
+            return
+        end
     end
 
     if self:IsActive() then
@@ -423,6 +435,7 @@ function SessionMixin:HandleTradable(data)
             encounterID = self.lastEncounterID,
             timestamp = time(),
         })
+        self:TriggerEvent("OnLootBufferChanged", self.lootBuffer)
         -- Trigger session start via debounce (same as afterLoot path)
         self.receivedLootCount = (self.receivedLootCount or 0) + 1
         if self.pendingLootTimer then
@@ -531,14 +544,20 @@ function SessionMixin:StartSession(encounterID, encounterName)
         Loothing.MainFrame:Show()
     end
 
-    -- Replay buffered loot items from before session started
+    -- Replay buffered loot items from before session started.
+    -- Entries marked `_picked = true` came from the Loot Picker (the ML
+    -- explicitly opted in) and bypass filter gates via force=true.
     local bufferTTL = Loothing.Timing and Loothing.Timing.LOOT_BUFFER_TTL or 60
     local now = time()
     local bufferedItems = {}
     for _, entry in ipairs(self.lootBuffer) do
         if entry.encounterID == encounterID and (now - entry.timestamp) <= bufferTTL then
-            local item = self:AddItem(entry.itemLink, entry.playerName, nil, nil, true)
+            local force = entry._picked == true
+            local item = self:AddItem(entry.itemLink, entry.playerName, nil, force, true)
             if item then
+                if force then
+                    item.isTradable = true
+                end
                 bufferedItems[#bufferedItems + 1] = {
                     itemLink = entry.itemLink,
                     guid = item.guid,
@@ -548,7 +567,10 @@ function SessionMixin:StartSession(encounterID, encounterName)
             end
         end
     end
-    wipe(self.lootBuffer)
+    if #self.lootBuffer > 0 then
+        wipe(self.lootBuffer)
+        self:TriggerEvent("OnLootBufferChanged", self.lootBuffer)
+    end
 
     -- Build and send combined SESSION_INIT (single reliable broadcast replaces
     -- separate SESSION_START + MLDB + COUNCIL_ROSTER + N ITEM_ADD broadcasts).
@@ -650,12 +672,18 @@ function SessionMixin:EndSession()
     self.lastEligibleEncounter = nil
     self.lastEncounterID = nil
     self.lastEncounterName = nil
-    if self.lootBuffer then wipe(self.lootBuffer) end
+    if self.lootBuffer and #self.lootBuffer > 0 then
+        wipe(self.lootBuffer)
+        self:TriggerEvent("OnLootBufferChanged", self.lootBuffer)
+    end
 
-    -- Hide any pending session prompt dialog
+    -- Hide any pending session prompt dialog or open Loot Picker
     local Popups = GetPopups()
     if Popups then
         Popups:Hide("LOOTHING_CONFIRM_START_SESSION")
+    end
+    if ns.LootPickerFrame and ns.LootPickerFrame.Hide and ns.LootPickerFrame:IsShown() then
+        ns.LootPickerFrame:Hide()
     end
 
     local sessionID = self.sessionID
@@ -890,13 +918,17 @@ function SessionMixin:AddItem(itemLink, looter, guid, force, skipBroadcast)
         return nil
     end
 
-    -- Check quality threshold
+    -- Check quality threshold (uses configurable loot.filter.minQuality).
+    -- minQ == 0 disables the gate; matches HandleTradable semantics.
     if not force then
-        local quality = Utils.GetItemQuality(itemLink)
-        if quality < Loothing.MinQuality then
-            TraceLoot("add:quality-low", itemLink,
-                "got=" .. tostring(quality) .. " min=" .. tostring(Loothing.MinQuality))
-            return nil
+        local minQ = GetMinQuality()
+        if minQ > 0 then
+            local quality = Utils.GetItemQuality(itemLink)
+            if not quality or quality < minQ then
+                TraceLoot("add:quality-low", itemLink,
+                    "got=" .. tostring(quality) .. " min=" .. tostring(minQ))
+                return nil
+            end
         end
     end
 
@@ -915,11 +947,12 @@ function SessionMixin:AddItem(itemLink, looter, guid, force, skipBroadcast)
         end
     end
 
-    -- Skip class-blacklisted items (consumables, reagents, tradeskill, quest
-    -- items, housing decor) unless force is set. Mirrors the HandleTradable
-    -- pre-filter so bag-scan and manual-add paths are symmetric.
-    if not force and IsItemClassBlacklisted(itemLink) then
-        TraceLoot("add:class-blacklisted", itemLink)
+    -- Skip class-blocked items (consumables, reagents, tradeskill, quest
+    -- items, housing decor — defaults are configurable in settings) unless
+    -- force is set. Mirrors the HandleTradable pre-filter so bag-scan and
+    -- manual-add paths are symmetric.
+    if not force and IsItemClassBlocked(itemLink) then
+        TraceLoot("add:class-blocked", itemLink)
         return nil
     end
 
@@ -2002,8 +2035,17 @@ end
 
 --- Handle encounter start
 function SessionMixin:OnEncounterStart()
-    -- Wipe stale buffer from previous encounter that never started a session
-    if self.lootBuffer then wipe(self.lootBuffer) end
+    -- Wipe stale buffer from previous encounter that never started a session.
+    -- If a Loot Picker is open showing the prior encounter's items, force-
+    -- close it so the user doesn't accidentally award stale loot to the
+    -- new boss.
+    if self.lootBuffer and #self.lootBuffer > 0 then
+        wipe(self.lootBuffer)
+        self:TriggerEvent("OnLootBufferChanged", self.lootBuffer)
+    end
+    if ns.LootPickerFrame and ns.LootPickerFrame.Hide and ns.LootPickerFrame:IsShown() then
+        ns.LootPickerFrame:Hide()
+    end
 
     -- Cancel any stale afterLoot debounce from a previous encounter
     if self.pendingLootTimer then
@@ -2272,6 +2314,23 @@ function SessionMixin:ScanBagsForTradeableItems()
         end
     end
 
+    -- In `prompt` mode the ML's Loot Picker is the canonical override
+    -- gate — the bag scan must surface EVERY new tradeable so the picker
+    -- has a complete list, including BoEs, low-quality drops, ignored
+    -- items, and class-blocked items (consumables, reagents, etc.). Each
+    -- of those still gets a "BLOCKED" chip in the picker with its reason,
+    -- so the ML can opt them in per-kill. `auto` and `manual` retain the
+    -- pre-2.0.20 behavior of silently dropping filter rejections.
+    --
+    -- Note: this honors the LOCAL client's triggerAction. If the ML uses
+    -- prompt mode but a candidate's setting is auto, that candidate's bag
+    -- scan still filters before TRADABLE is sent. Universal prompt-mode
+    -- coverage requires the whole raid to share the setting; document
+    -- this in release notes and revisit by broadcasting MLDB-side later.
+    local triggerAction = (Loothing.Settings and Loothing.Settings:GetSessionTriggerAction())
+        or "auto"
+    local enforceFilters = (triggerAction ~= "prompt")
+
     -- Find items that are NEW since the pre-encounter snapshot.
     -- Each filter rejection emits a TraceLoot line so the failing gate is
     -- visible in /lt debug output — silent drops are the primary debug
@@ -2285,48 +2344,58 @@ function SessionMixin:ScanBagsForTradeableItems()
         elseif self.reportedTradeableItems[itemLink] then
             TraceLoot("already-reported", itemLink)
         else
-            local quality = Utils.GetItemQuality(itemLink)
-            if not quality or quality < Loothing.MinQuality then
-                TraceLoot("quality-low", itemLink,
-                    "got=" .. tostring(quality) .. " min=" .. tostring(Loothing.MinQuality))
-            elseif IsItemClassBlacklisted(itemLink) then
-                local _, _, _, _, _, classID, subClassID = C_Item.GetItemInfoInstant(itemLink)
-                TraceLoot("class-blacklisted", itemLink,
-                    "class=" .. tostring(classID) .. " sub=" .. tostring(subClassID))
-            else
-                local boe = IsItemBoE(itemLink)
-                local autoAddBoEs = Loothing.Settings and Loothing.Settings:Get("ml.autoAddBoEs", false)
-                if boe and not autoAddBoEs then
-                    TraceLoot("boe-excluded", itemLink, "autoAddBoEs=false")
-                elseif Loothing.ItemFilter and Loothing.ItemFilter:ShouldIgnoreItem(itemLink) then
-                    TraceLoot("in-ignore-list", itemLink)
+            local rejected = false
+            if enforceFilters then
+                local minQ = GetMinQuality()
+                local quality = Utils.GetItemQuality(itemLink)
+                if not quality or quality < minQ then
+                    TraceLoot("quality-low", itemLink,
+                        "got=" .. tostring(quality) .. " min=" .. tostring(minQ))
+                    rejected = true
+                elseif IsItemClassBlocked(itemLink) then
+                    local _, _, _, _, _, classID, subClassID = C_Item.GetItemInfoInstant(itemLink)
+                    TraceLoot("class-blocked", itemLink,
+                        "class=" .. tostring(classID) .. " sub=" .. tostring(subClassID))
+                    rejected = true
                 else
-                    local tradeTime = self:FindTradeTimeForItem(itemLink, TradeQueue)
-                    if not tradeTime or tradeTime <= 0 then
-                        TraceLoot("no-trade-time", itemLink,
-                            "returned=" .. tostring(tradeTime))
-                    else
-                        local isML = self:IsMasterLooter()
-                            or (Loothing.handleLoot and Loothing.isMasterLooter)
-                        TraceLoot("candidate", itemLink, "isML=" .. tostring(isML))
+                    local boe = IsItemBoE(itemLink)
+                    local autoAddBoEs = Loothing.Settings and Loothing.Settings:Get("ml.autoAddBoEs", false)
+                    if boe and not autoAddBoEs then
+                        TraceLoot("boe-excluded", itemLink, "autoAddBoEs=false")
+                        rejected = true
+                    elseif Loothing.ItemFilter and Loothing.ItemFilter:ShouldIgnoreItem(itemLink) then
+                        TraceLoot("in-ignore-list", itemLink)
+                        rejected = true
+                    end
+                end
+            end
 
-                        if isML then
-                            -- ML self-loopback: process locally, bypass comm layer.
-                            -- HandleTradable is idempotent (matches existing items
-                            -- before adding new ones).
-                            self:HandleTradable({
-                                itemLink = itemLink,
-                                timeRemaining = tradeTime,
-                                playerName = Utils.GetPlayerFullName(),
-                            })
-                            self.reportedTradeableItems[itemLink] = true
-                        else
-                            Loothing.Comm:Send(Loothing.MsgType.TRADABLE, {
-                                itemLink = itemLink,
-                                timeRemaining = tradeTime,
-                            })
-                            self.reportedTradeableItems[itemLink] = true
-                        end
+            if not rejected then
+                local tradeTime = self:FindTradeTimeForItem(itemLink, TradeQueue)
+                if not tradeTime or tradeTime <= 0 then
+                    TraceLoot("no-trade-time", itemLink,
+                        "returned=" .. tostring(tradeTime))
+                else
+                    local isML = self:IsMasterLooter()
+                        or (Loothing.handleLoot and Loothing.isMasterLooter)
+                    TraceLoot("candidate", itemLink, "isML=" .. tostring(isML))
+
+                    if isML then
+                        -- ML self-loopback: process locally, bypass comm layer.
+                        -- HandleTradable is idempotent (matches existing items
+                        -- before adding new ones).
+                        self:HandleTradable({
+                            itemLink = itemLink,
+                            timeRemaining = tradeTime,
+                            playerName = Utils.GetPlayerFullName(),
+                        })
+                        self.reportedTradeableItems[itemLink] = true
+                    else
+                        Loothing.Comm:Send(Loothing.MsgType.TRADABLE, {
+                            itemLink = itemLink,
+                            timeRemaining = tradeTime,
+                        })
+                        self.reportedTradeableItems[itemLink] = true
                     end
                 end
             end
@@ -2371,7 +2440,9 @@ function SessionMixin:FindTradeTimeForItem(itemLink, TradeQueue)
     return nil
 end
 
---- Show session start confirmation dialog to ML
+--- Show the loot-picker dialog to the ML so they can choose which items
+--- from the encounter go into the new session. Falls back to the
+--- legacy yes/no popup if the picker isn't available (test mode, etc.).
 -- @param encounterID number
 -- @param encounterName string
 function SessionMixin:ShowSessionPrompt(encounterID, encounterName)
@@ -2386,6 +2457,15 @@ function SessionMixin:ShowSessionPrompt(encounterID, encounterName)
         encounterName = encounterName or "Unknown Boss"
     end
 
+    -- Preferred path: themed Loot Picker (replaces the yes/no popup)
+    local picker = ns.LootPickerFrame
+    if picker and picker.Show then
+        picker:Show(encounterID, encounterName, self.lootBuffer)
+        return
+    end
+
+    -- Fallback: legacy confirmation popup (still used when the picker
+    -- frame failed to load — e.g., during certain test harness paths).
     local Popups = GetPopups()
     if not Popups then return end
 
@@ -2395,6 +2475,87 @@ function SessionMixin:ShowSessionPrompt(encounterID, encounterName)
             self:StartSession(encounterID, encounterName)
         end,
     })
+end
+
+--- Cancel any pending prompt-mode debounce so a stale follow-up bag
+--- scan doesn't immediately re-show the picker after the user cancels.
+--- Called from LootPickerFrame:OnCancel.
+function SessionMixin:CancelPendingPrompt()
+    if self.pendingLootTimer then
+        self.pendingLootTimer:Cancel()
+        self.pendingLootTimer = nil
+    end
+    -- Stop the post-encounter bag scan and clear its dedup table.
+    -- Without this, the 30-second scan would keep firing every 2s and
+    -- buffer additional drops, silently re-arming `pendingLootTimer`
+    -- and re-opening the picker the user just dismissed.
+    self:StopPostEncounterBagScan()
+    if self.reportedTradeableItems then
+        wipe(self.reportedTradeableItems)
+    end
+    self.receivedLootCount = 0
+    self.lastEligibleEncounter = nil
+    self.lastEncounterID = nil
+    self.lastEncounterName = nil
+    if self.lootBuffer and #self.lootBuffer > 0 then
+        wipe(self.lootBuffer)
+        self:TriggerEvent("OnLootBufferChanged", self.lootBuffer)
+    end
+end
+
+--- Start a session with a pre-selected list of items from the picker.
+--- The ML has already opted in to each item (including filter overrides);
+--- the items are pre-loaded into the buffer so StartSession's regular
+--- buffer-replay path picks them up and includes them in the single
+--- SESSION_INIT broadcast (instead of one ITEM_ADD per item).
+--- AddItem is called with force=true via the buffer-replay path's
+--- explicit picked-item flag below.
+-- @param encounterID number
+-- @param encounterName string
+-- @param pickedItems table - array of { itemLink, playerName, encounterID? }
+-- @return boolean - true on success; false (with buffer preserved) on failure
+function SessionMixin:StartSessionWithPickedItems(encounterID, encounterName, pickedItems)
+    if type(pickedItems) ~= "table" then
+        pickedItems = {}
+    end
+
+    -- Snapshot buffer so we can restore it if StartSession bails.
+    local priorBuffer = self.lootBuffer or {}
+
+    -- Replace the buffer with EXACTLY the picked items so StartSession's
+    -- buffer-replay loop (which builds SESSION_INIT) consumes the picker's
+    -- decisions atomically. Stamp each entry with the target encounterID
+    -- so the replay loop's encounter-match guard accepts them, and mark
+    -- with `_picked = true` so AddItem can be told to bypass filters.
+    local now = time()
+    local replay = {}
+    for _, entry in ipairs(pickedItems) do
+        if entry.itemLink then
+            replay[#replay + 1] = {
+                itemLink    = entry.itemLink,
+                playerName  = entry.playerName,
+                encounterID = encounterID,  -- normalise so replay-guard passes
+                timestamp   = now,
+                _picked     = true,         -- StartSession reads this to force-add
+            }
+        end
+    end
+    self.lootBuffer = replay
+    self:TriggerEvent("OnLootBufferChanged", self.lootBuffer)
+
+    if not self:StartSession(encounterID, encounterName) then
+        -- Restore prior buffer so the user can retry. Surface the error.
+        self.lootBuffer = priorBuffer
+        self:TriggerEvent("OnLootBufferChanged", self.lootBuffer)
+        if Loothing and Loothing.Print then
+            local L = Loothing.Locale or {}
+            Loothing:Print(L["LOOT_PICKER_START_FAILED"]
+                or "Could not start the loot session — your picks were preserved.")
+        end
+        return false
+    end
+
+    return true
 end
 
 --- Handle boss kill
@@ -2468,11 +2629,17 @@ function SessionMixin:OnLootReceived(encounterID, _itemID, itemLink, _quantity, 
         return
     end
 
-    -- Inactive but we're designated to handle loot: buffer the item for replay on session start
+    -- Inactive but we're designated to handle loot: buffer the item for replay on session start.
+    -- Mirrors HandleTradable: prompt mode bypasses filters so the picker
+    -- can show every item; auto/manual still apply quality + ignore.
     if not self:IsActive() and Loothing.handleLoot then
+        local triggerAction = (Loothing.Settings and Loothing.Settings:GetSessionTriggerAction()) or "auto"
+        local enforceFilters = (triggerAction ~= "prompt")
         local quality = Utils.GetItemQuality(itemLink)
-        if quality and quality >= Loothing.MinQuality then
-            if Loothing.ItemFilter and Loothing.ItemFilter:ShouldIgnoreItem(itemLink) then
+        local minQ = GetMinQuality()
+        local qualityOK = (not enforceFilters) or (minQ <= 0) or (quality and quality >= minQ)
+        if qualityOK then
+            if enforceFilters and Loothing.ItemFilter and Loothing.ItemFilter:ShouldIgnoreItem(itemLink) then
                 Loothing:Debug("Item filtered (buffer):", itemLink)
             else
                 -- Dedup: bag scanner and HandleTradable can also buffer the same item
@@ -2491,6 +2658,7 @@ function SessionMixin:OnLootReceived(encounterID, _itemID, itemLink, _quantity, 
                         timestamp = time(),
                     })
                     Loothing:Debug("Buffered loot item:", itemLink, "from", playerName, "encounter", encounterID)
+                    self:TriggerEvent("OnLootBufferChanged", self.lootBuffer)
                 end
                 if Utils.IsSamePlayer(playerName, Utils.GetPlayerFullName()) and Loothing.TradeQueue then
                     Loothing.TradeQueue:UpdateAndSendRecentTradableItem(itemLink)

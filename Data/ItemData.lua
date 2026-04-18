@@ -13,6 +13,8 @@ local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local Utils = ns.Utils
+local TokenData = ns.TokenData
+local TooltipScan = ns.TooltipScan
 
 --[[--------------------------------------------------------------------
     Item Info Retry
@@ -280,6 +282,10 @@ function ItemMixin:Init(itemLink, looter, encounterID)
     -- Class restriction flag (bitwise, ALL_CLASSES_FLAG = all classes)
     self.classesFlag = ALL_CLASSES_FLAG
 
+    -- Tier-token flags (populated by _ApplyTokenOverride after item info loads)
+    self.isToken = nil
+    self.tokenSlot = nil
+
     -- BoE tracking
     self.isBoe = false
 
@@ -306,6 +312,36 @@ function ItemMixin:Init(itemLink, looter, encounterID)
     self:LoadItemInfo()
 end
 
+--- Apply tier-token overrides and tooltip-derived class restrictions.
+-- For tokens: replaces equipSlot with the slot the token represents and
+-- populates classesFlag from the token's family map (or tooltip fallback).
+-- For non-token Weapon/Armor: scrapes tooltip to populate classesFlag if it
+-- still defaults to ALL_CLASSES_FLAG (covers legendaries, class-specific tomes).
+-- @param itemInfo table - The itemInfo table returned by GetItemInfoWithRetry
+function ItemMixin:_ApplyTokenOverride(itemInfo)
+    if not itemInfo or not TokenData then return end
+
+    local tokenSlot = TokenData:IsToken(self.itemID, self.name, itemInfo.subType)
+    if tokenSlot then
+        self.isToken = true
+        self.tokenSlot = tokenSlot
+        local invtype = TokenData:GetINVTypeFromSlot(tokenSlot)
+        if invtype then
+            self.equipSlot = invtype
+        end
+        self.classesFlag = TokenData:GetTokenClassFlag(self.name, self.itemLink)
+        return
+    end
+
+    if (itemInfo.typeID == Enum.ItemClass.Weapon or itemInfo.typeID == Enum.ItemClass.Armor)
+       and self.classesFlag == ALL_CLASSES_FLAG and self.itemLink and TooltipScan then
+        local flag = TooltipScan:GetItemClassRestrictionFlag(self.itemLink)
+        if flag and flag > 0 then
+            self.classesFlag = flag
+        end
+    end
+end
+
 --- Load item info asynchronously with retry
 function ItemMixin:LoadItemInfo()
     GetItemInfoWithRetry(self.itemLink, function(itemInfo)
@@ -320,10 +356,22 @@ function ItemMixin:LoadItemInfo()
         self.subTypeID = itemInfo.subTypeID
         self.subType = itemInfo.subType
         self.bindType = itemInfo.bindType
+
+        self:_ApplyTokenOverride(itemInfo)
+
         self.itemInfoLoaded = true
 
-        -- Determine typeCode now that we have full item info
-        local newTypeCode = DetermineTypeCode(itemInfo)
+        -- Determine typeCode now that we have full item info.
+        -- Tokens classified by the override get the explicit "TOKEN" code
+        -- regardless of what DetermineTypeCode would infer from the raw
+        -- itemInfo (which sees empty equipSlot for Miscellaneous-class
+        -- tokens and would otherwise fall through to "default").
+        local newTypeCode
+        if self.isToken then
+            newTypeCode = "TOKEN"
+        else
+            newTypeCode = DetermineTypeCode(itemInfo)
+        end
         local typeCodeChanged = newTypeCode ~= self.typeCode
         self.typeCode = newTypeCode
 
@@ -800,6 +848,12 @@ function ItemMixin.PrepareLootTableEntry(entry, callback)
             item.subTypeID = itemInfo.subTypeID
             item.subType = itemInfo.subType
             item.bindType = itemInfo.bindType
+
+            -- Re-apply token override on the receiving side; the loot-table comm
+            -- payload may carry stale or empty equipSlot from older clients, and
+            -- classesFlag must reflect tier-token family rules locally.
+            item:_ApplyTokenOverride(itemInfo)
+
             item.itemInfoLoaded = true
             item.neutralizedString = NeutralizeItemString(item.itemLink)
         else

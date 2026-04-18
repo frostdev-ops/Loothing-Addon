@@ -154,6 +154,21 @@ end
 function ItemRowMixin:SetItem(item)
     self.item = item
     self:Refresh()
+
+    -- Tier tokens (and any cold-cache item) resolve equipSlot/classesFlag
+    -- asynchronously inside ItemMixin:LoadItemInfo. Re-render once the info
+    -- arrives so the slot label and "(Token)" badge appear without waiting
+    -- for an external redraw.
+    if item and not item.itemInfoLoaded and item.RegisterCallback then
+        item:RegisterCallback("OnItemInfoLoaded", function()
+            if item.UnregisterCallback then
+                item:UnregisterCallback("OnItemInfoLoaded", self)
+            end
+            if self.item == item then
+                self:Refresh()
+            end
+        end, self)
+    end
 end
 
 --- Get the item data
@@ -189,13 +204,10 @@ function ItemRowMixin:Refresh()
         self.ilvlText:SetText("")
     end
 
-    -- Slot
-    if self.item.equipSlot and self.item.equipSlot ~= "" then
-        local slotName = _G[self.item.equipSlot] or self.item.equipSlot
-        self.slotText:SetText(slotName)
-    else
-        self.slotText:SetText("")
-    end
+    -- Slot (FormatItemSlot handles equipSlot, tokenSlot fallback, and the
+    -- " (Token)" badge in one call.)
+    self.slotText:SetText(
+        (ns.TokenData and ns.TokenData:FormatItemSlot(self.item)) or "")
 
     -- Status
     self:UpdateStatus()

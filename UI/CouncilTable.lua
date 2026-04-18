@@ -384,12 +384,24 @@ function CouncilTableMixin:CreateItemTab(index, item)
     slotText:SetJustifyH("LEFT")
     slotText:SetWordWrap(false)
     SkinningMixin:StyleText(slotText, "bodySmall", "textMuted")
-    if item.equipSlot and item.equipSlot ~= "" then
-        slotText:SetText(_G[item.equipSlot] or item.equipSlot)
-    else
-        slotText:SetText("")
-    end
+    slotText:SetText(
+        (ns.TokenData and ns.TokenData:FormatItemSlot(item)) or "")
     tab.slotText = slotText
+
+    -- Cards are constructed once per item — if equipSlot wasn't resolved yet
+    -- (cold cache, async tier-token override), refresh the label in place
+    -- when the item info arrives. The closure unregisters itself on fire.
+    if item and not item.itemInfoLoaded and item.RegisterCallback then
+        item:RegisterCallback("OnItemInfoLoaded", function()
+            if item.UnregisterCallback then
+                item:UnregisterCallback("OnItemInfoLoaded", tab)
+            end
+            if tab.slotText then
+                tab.slotText:SetText(
+                    (ns.TokenData and ns.TokenData:FormatItemSlot(item)) or "")
+            end
+        end, tab)
+    end
 
     -- State indicator (14x14, bottom-right of card)
     local stateIndicator = tab:CreateTexture(nil, "OVERLAY", nil, 6)

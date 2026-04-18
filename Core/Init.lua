@@ -2112,7 +2112,11 @@ local function RegisterSlashCommands()
                     printLine("session.scope.dungeon: " .. yn(Settings:Get("session.scope.dungeon", false)))
                     printLine("session.scope.openW:   " .. yn(Settings:Get("session.scope.openWorld", false)))
                 end
-                printLine("MinQuality:            " .. tostring(Loothing.MinQuality))
+                local minQ = Loothing.Settings and Loothing.Settings.GetLootFilterMinQuality
+                    and Loothing.Settings:GetLootFilterMinQuality()
+                    or Loothing.MinQuality
+                printLine("MinQuality:            " .. tostring(minQ)
+                    .. " (loot.filter.minQuality)")
                 if Session then
                     printLine("preEncounterBagSnapshot size: " .. countKeys(Session.preEncounterBagSnapshot))
                     printLine("reportedTradeableItems size:  " .. countKeys(Session.reportedTradeableItems))
@@ -2256,6 +2260,23 @@ local function RegisterSlashCommands()
                 local TestMode = ns.TestModeState
                 if TestMode and TestMode.HandleSlash then
                     TestMode:HandleSlash(args or "")
+                else
+                    printError(L["SLASH_TEST_UNAVAILABLE"])
+                end
+            end,
+        },
+        {
+            key = "sim",
+            devOnly = true,
+            description = L["SLASH_DESC_SIM"] or "Boss-kill simulator (full pipeline)",
+            usage = { "/lt sim help", "/lt sim panel", "/lt sim kill [boss] [N]" },
+            handler = function(args)
+                if not requireDebug("/lt sim") then
+                    return
+                end
+                local Simulator = ns.Simulator
+                if Simulator and Simulator.HandleCommand then
+                    Simulator:HandleCommand(args or "")
                 else
                     printError(L["SLASH_TEST_UNAVAILABLE"])
                 end
@@ -2528,6 +2549,12 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             if Loothing.MLDB and Loothing.MLDB.RecoverIfOrphaned then
                 Loothing.MLDB:RecoverIfOrphaned()
             end
+            -- Recover from a /reload-orphaned simulator state so the user's
+            -- triggerTiming setting is restored if the sim was active when
+            -- they reloaded. Cheap, idempotent — safe to call always.
+            if ns.Simulator and ns.Simulator.RecoverOrphanedStash then
+                ns.Simulator:RecoverOrphanedStash()
+            end
             -- If cache didn't restore handleLoot, re-check like login path
             if IsInGroup() and not Loothing.handleLoot then
                 ScheduleRaidEnter(3)
@@ -2539,6 +2566,12 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             -- that died across the disconnect (no SESSION_END ever arrived).
             if Loothing.MLDB and Loothing.MLDB.RecoverIfOrphaned then
                 Loothing.MLDB:RecoverIfOrphaned()
+            end
+            -- Recover from a /reload-orphaned simulator state so the user's
+            -- triggerTiming setting is restored if the sim was active when
+            -- they reloaded. Cheap, idempotent — safe to call always.
+            if ns.Simulator and ns.Simulator.RecoverOrphanedStash then
+                ns.Simulator:RecoverOrphanedStash()
             end
             -- If no session was restored, check for raid entry prompt
             if IsInGroup() and not Loothing.handleLoot then

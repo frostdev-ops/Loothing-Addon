@@ -861,6 +861,13 @@ function SkinningMixin:RefreshTheme()
         end
     end
 
+    -- Refresh the Loot Picker if it's open (lives in ns, not Loothing.UI).
+    if ns.LootPickerFrame and type(ns.LootPickerFrame.IsShown) == "function"
+        and ns.LootPickerFrame:IsShown()
+        and type(ns.LootPickerFrame.ApplyTheme) == "function" then
+        ns.LootPickerFrame:ApplyTheme()
+    end
+
     self:RefreshStyledButtons()
 end
 

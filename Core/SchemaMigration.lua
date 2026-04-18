@@ -245,10 +245,59 @@ local function migrateV3(profile)
     profile.responses = nil
 end
 
+--[[--------------------------------------------------------------------
+    Schema v4 — Loothing 2.0.20 configurable loot filter
+
+    Seeds the new `loot.filter.*` namespace from the legacy hardcoded
+    BLACKLISTED_ITEM_CLASSES table so existing users see no behavior
+    change on upgrade. Only writes keys that are unset — re-running
+    after a user has customised their filter is a no-op.
+
+    Sources:
+      Loothing.MinQuality constant -> loot.filter.minQuality
+      hardcoded BLACKLISTED_ITEM_CLASSES -> loot.filter.classes.<id>.*
+----------------------------------------------------------------------]]
+local function migrateV4(profile)
+    -- Defensive type guards (mirrors the migrateV2/V3 pattern) — without
+    -- these, a corrupt or hostile SVars `loot = false` would error here
+    -- and pcall it from the runner, leaving the profile stuck at v3 and
+    -- re-erroring on every login.
+    if type(profile.loot) ~= "table" then
+        profile.loot = {}
+    end
+    if type(profile.loot.filter) ~= "table" then
+        profile.loot.filter = {}
+    end
+    local filter = profile.loot.filter
+
+    -- minQuality must be a number; auto-heal "epic" / nil / boolean.
+    if type(filter.minQuality) ~= "number" then
+        -- Default to 0 (no quality filtering). Pre-2.0.20 there was a
+        -- hardcoded EPIC-only gate in HandleTradable with no UI surface,
+        -- which silently dropped any drop the ML might have wanted to
+        -- consider. Existing users get the safer default; if they want
+        -- the old strictness back they can raise it under Settings →
+        -- Loot Filtering.
+        filter.minQuality = 0
+    end
+
+    if type(filter.classes) ~= "table" then
+        filter.classes = {
+            [0]  = { blocked = true },
+            [5]  = { blocked = true },
+            [7]  = { blocked = true },
+            [12] = { blocked = true },
+            [15] = { blocked = false, subclasses = { [1] = true, [4] = true } },
+            [20] = { blocked = true },
+        }
+    end
+end
+
 --- All migration functions, indexed by the target schemaVersion.
 local migrations = {
     [2] = migrateV2,
     [3] = migrateV3,
+    [4] = migrateV4,
 }
 
 --- Run all pending migrations on a SavedVariables store.

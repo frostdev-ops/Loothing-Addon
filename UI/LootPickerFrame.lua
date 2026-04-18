@@ -1,0 +1,768 @@
+--[[--------------------------------------------------------------------
+    Loothing - LootPickerFrame
+
+    Floating themed dialog the Master Looter sees when an encounter ends
+    in "prompt" trigger mode. Replaces the legacy yes/no
+    LOOTHING_CONFIRM_START_SESSION popup.
+
+    Each row corresponds to one entry in Session.lootBuffer:
+      * Allowed items default to checked.
+      * Items the configured filter would have rejected are hidden by
+        default; flipping "Show blocked" reveals them with a red hint
+        chip so the ML can opt in on a per-kill basis.
+
+    On Start: calls Session:StartSessionWithPickedItems(encID, encName,
+    pickedItems). That method uses force=true on AddItem so manual
+    overrides bypass the class/quality gates (the ML chose them).
+
+    On Cancel: wipes the buffer, no session starts.
+----------------------------------------------------------------------]]
+
+local _, ns = ...
+local Loolib = LibStub("Loolib")
+local Loothing = ns.Addon
+
+local PANEL_WIDTH = 560
+local PANEL_HEIGHT = 560
+local ROW_HEIGHT_DEFAULT = 50
+local ROW_HEIGHT_BLOCKED = 64       -- taller for blocked rows so reason has its own line
+local ROW_SPACING = 6
+local ICON_SIZE = 36
+
+local LootPickerFrameMixin = ns.LootPickerFrameMixin or {}
+ns.LootPickerFrameMixin = LootPickerFrameMixin
+
+local function GetSkinning()
+    return ns.SkinningMixin
+end
+
+local function GetLocale()
+    return ns.Locale or Loothing.Locale or {}
+end
+
+local function L(key, fallback)
+    local locale = GetLocale()
+    return (locale and locale[key]) or fallback or key
+end
+
+local function styleSurface(frame, variant)
+    local sk = GetSkinning()
+    if sk and sk.StyleSurface then
+        sk:StyleSurface(frame, variant)
+    else
+        frame:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Buttons\\WHITE8x8",
+            tile = false, edgeSize = 1,
+            insets = { left = 1, right = 1, top = 1, bottom = 1 },
+        })
+        frame:SetBackdropColor(0.08, 0.08, 0.08, 0.95)
+        frame:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+    end
+end
+
+local function styleButton(button, variant)
+    local sk = GetSkinning()
+    if sk and sk.StylePlainButton then
+        sk:StylePlainButton(button, variant)
+    end
+end
+
+local function getColor(key, fallback)
+    local sk = GetSkinning()
+    if sk and sk.GetColor then
+        return sk:GetColor(key, fallback)
+    end
+    return fallback or { 1, 1, 1, 1 }
+end
+
+local function applyTextColor(fontString, key, fallback)
+    if not fontString then return end
+    local c = getColor(key, fallback)
+    if c then fontString:SetTextColor(c[1], c[2], c[3], c[4] or 1) end
+end
+
+local function qualityColor(quality)
+    if ITEM_QUALITY_COLORS and quality and ITEM_QUALITY_COLORS[quality] then
+        local c = ITEM_QUALITY_COLORS[quality]
+        return c.r, c.g, c.b
+    end
+    return 0.5, 0.5, 0.5
+end
+
+--[[--------------------------------------------------------------------
+    Lifecycle
+----------------------------------------------------------------------]]
+
+function LootPickerFrameMixin:Init()
+    if self._built then return end
+    self._built = true
+
+    self.encounterID = 0
+    self.encounterName = ""
+    self.entries = {}            -- normalized buffer entries with eval results
+    self.rows = {}
+    self.showBlocked = false
+    self._starting = false       -- guards OnStart against double-clicks
+    self._suppressEvent = false  -- short-circuits self-fired callbacks
+
+    self:BuildFrame()
+    self:RegisterSessionCallback()
+end
+
+function LootPickerFrameMixin:RegisterSessionCallback()
+    if self._callbackHooked then return end
+    if not Loothing.Session or not Loothing.Session.RegisterCallback then return end
+    -- Loolib CallbackRegistry's Function-type dispatch passes (owner, ...args)
+    -- to subscribers registered without extra args — so the first param IS
+    -- our `self`, NOT the buffer. Verified against Loolib/Events/CallbackRegistry.lua:325.
+    Loothing.Session:RegisterCallback("OnLootBufferChanged", function(_owner, buffer)
+        if self._suppressEvent then return end
+        if not self.frame or not self.frame:IsShown() then return end
+        self:RebuildEntries(buffer)
+        self:Render()
+    end, self)
+    self._callbackHooked = true
+end
+
+--[[--------------------------------------------------------------------
+    Frame construction
+----------------------------------------------------------------------]]
+
+function LootPickerFrameMixin:BuildFrame()
+    local frame = CreateFrame("Frame", "LoothingLootPickerFrame", UIParent, "BackdropTemplate")
+    frame:SetSize(PANEL_WIDTH, PANEL_HEIGHT)
+    frame:SetPoint("CENTER")
+    frame:SetFrameStrata("DIALOG")
+    frame:SetFrameLevel(100)
+    frame:SetMovable(true)
+    frame:EnableMouse(true)
+    frame:SetClampedToScreen(true)
+    frame:RegisterForDrag("LeftButton")
+    frame:SetScript("OnDragStart", function(f) f:StartMoving() end)
+    frame:SetScript("OnDragStop", function(f)
+        f:StopMovingOrSizing()
+        local sk = GetSkinning()
+        if sk and sk.SaveFrameState then
+            sk:SaveFrameState(f, "LootPicker")
+        end
+    end)
+    frame:Hide()
+    self.frame = frame
+    styleSurface(frame, "frame")
+
+    -- Decorative header strip + accent line
+    local sk = GetSkinning()
+    if sk and sk.DecorateWindow then
+        sk:DecorateWindow(frame)
+    end
+
+    -- Title (sits inside the header strip)
+    local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    title:SetPoint("TOPLEFT", 14, -12)
+    title:SetText(L("LOOT_PICKER_TITLE", "Pick Loot for Session"))
+    applyTextColor(title, "text", { 1, 0.82, 0 })
+    self.titleText = title
+
+    -- Subtitle: encounter name + count
+    local subtitle = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    subtitle:SetPoint("TOPLEFT", 14, -32)
+    applyTextColor(subtitle, "textMuted", { 0.7, 0.7, 0.7 })
+    self.subtitleText = subtitle
+
+    -- Close button (acts as Cancel)
+    local closeBtn = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
+    closeBtn:SetSize(22, 22)
+    closeBtn:SetPoint("TOPRIGHT", -2, -2)
+    closeBtn:SetScript("OnClick", function() self:OnCancel() end)
+
+    -- Toolbar: Show blocked + Select all / none
+    local toolbar = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+    toolbar:SetPoint("TOPLEFT", 10, -52)
+    toolbar:SetPoint("TOPRIGHT", -10, -52)
+    toolbar:SetHeight(28)
+    styleSurface(toolbar, "alt")
+    self.toolbar = toolbar
+
+    self.showBlockedCheck = CreateFrame("CheckButton", "LoothingLootPickerShowBlocked", toolbar,
+        "ChatConfigCheckButtonTemplate")
+    self.showBlockedCheck:SetPoint("LEFT", 6, 0)
+    if self.showBlockedCheck.Text then
+        self.showBlockedCheck.Text:SetText(L("LOOT_PICKER_SHOW_BLOCKED", "Show blocked items"))
+    else
+        local lbl = self.showBlockedCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        lbl:SetPoint("LEFT", self.showBlockedCheck, "RIGHT", 2, 1)
+        lbl:SetText(L("LOOT_PICKER_SHOW_BLOCKED", "Show blocked items"))
+    end
+    self.showBlockedCheck:SetScript("OnClick", function(c)
+        local newState = c:GetChecked() and true or false
+        -- When hiding blocked rows, also uncheck them so they don't get
+        -- silently included in the start payload (the count would lie).
+        if not newState and self.showBlocked then
+            for _, e in ipairs(self.entries) do
+                if not e.eval.allowed then e.checked = false end
+            end
+        end
+        self.showBlocked = newState
+        self:Render()
+    end)
+
+    self.selectNoneBtn = ns.CreateThemedButton(toolbar)
+    self.selectNoneBtn:SetSize(96, 20)
+    self.selectNoneBtn:SetPoint("RIGHT", -6, 0)
+    self.selectNoneBtn:SetText(L("LOOT_PICKER_SELECT_NONE", "Select None"))
+    self.selectNoneBtn:SetScript("OnClick", function() self:SetAll(false) end)
+    styleButton(self.selectNoneBtn, "ghost")
+
+    self.selectAllBtn = ns.CreateThemedButton(toolbar)
+    self.selectAllBtn:SetSize(96, 20)
+    self.selectAllBtn:SetPoint("RIGHT", self.selectNoneBtn, "LEFT", -4, 0)
+    self.selectAllBtn:SetText(L("LOOT_PICKER_SELECT_ALL", "Select All"))
+    self.selectAllBtn:SetScript("OnClick", function() self:SetAll(true) end)
+    styleButton(self.selectAllBtn, "ghost")
+
+    -- Scrollable list
+    local listFrame = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+    listFrame:SetPoint("TOPLEFT", 10, -84)
+    listFrame:SetPoint("BOTTOMRIGHT", -10, 50)
+    styleSurface(listFrame, "inset")
+    self.listFrame = listFrame
+
+    local scroll = CreateFrame("ScrollFrame", "LoothingLootPickerScroll", listFrame,
+        "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", 4, -4)
+    scroll:SetPoint("BOTTOMRIGHT", -26, 4)
+    self.scrollFrame = scroll
+
+    local content = CreateFrame("Frame", nil, scroll)
+    content:SetSize(PANEL_WIDTH - 50, 1)
+    scroll:SetScrollChild(content)
+    self.scrollContent = content
+
+    self.emptyText = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    self.emptyText:SetPoint("CENTER", scroll, "CENTER", 0, 0)
+    self.emptyText:SetText(L("LOOT_PICKER_EMPTY", "No tradable loot detected yet."))
+    applyTextColor(self.emptyText, "textMuted", { 0.6, 0.6, 0.6 })
+    self.emptyText:Hide()
+
+    -- Footer buttons
+    self.startBtn = ns.CreateThemedButton(frame)
+    self.startBtn:SetSize(180, 26)
+    self.startBtn:SetPoint("BOTTOMRIGHT", -10, 12)
+    self.startBtn:SetScript("OnClick", function() self:OnStart() end)
+    styleButton(self.startBtn, "primary")
+
+    self.cancelBtn = ns.CreateThemedButton(frame)
+    self.cancelBtn:SetSize(96, 26)
+    self.cancelBtn:SetPoint("RIGHT", self.startBtn, "LEFT", -6, 0)
+    self.cancelBtn:SetText(L("LOOT_PICKER_CANCEL", "Cancel"))
+    self.cancelBtn:SetScript("OnClick", function() self:OnCancel() end)
+    styleButton(self.cancelBtn, "ghost")
+
+    -- Theming, position persistence, ESC-close, click-to-raise
+    if sk and sk.SetupFrame then
+        sk:SetupFrame(frame, "LootPicker", "LoothingLootPickerFrame", {
+            escapeClose = true,
+            combatMinimize = false,
+        })
+    else
+        local WM = Loolib:GetModule("WindowManager")
+        if WM and WM.Register then WM:Register(frame) end
+    end
+
+    -- Refresh row visuals when item info finishes loading from a cold
+    -- cache (icon, ilvl, real link). Only re-renders while shown.
+    frame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+    frame:SetScript("OnEvent", function(_, event, itemID)
+        if event ~= "GET_ITEM_INFO_RECEIVED" then return end
+        if not frame:IsShown() then return end
+        if not itemID then return end
+        for _, entry in ipairs(self.entries) do
+            local link = entry.itemLink
+            if link and link:find("|Hitem:" .. itemID .. ":", 1, true) then
+                -- Re-evaluate this entry against the now-cached data
+                if Loothing.ItemFilter and Loothing.ItemFilter.EvaluateItem then
+                    entry.eval = Loothing.ItemFilter:EvaluateItem(link)
+                end
+                self:Render()
+                return
+            end
+        end
+    end)
+end
+
+--- Re-apply theme colors to picker children. Called from SkinningMixin
+--- when the user changes theme/accent while the picker is open.
+function LootPickerFrameMixin:ApplyTheme()
+    if not self._built or not self.frame then return end
+    styleSurface(self.frame, "frame")
+    styleSurface(self.toolbar, "alt")
+    styleSurface(self.listFrame, "inset")
+    applyTextColor(self.titleText, "text", { 1, 0.82, 0 })
+    applyTextColor(self.subtitleText, "textMuted", { 0.7, 0.7, 0.7 })
+    for _, row in ipairs(self.rows) do
+        if row:IsShown() then styleSurface(row, "alt") end
+    end
+    -- Re-bind active rows to refresh chip/text colors.
+    self:Render()
+end
+
+--[[--------------------------------------------------------------------
+    Public API
+----------------------------------------------------------------------]]
+
+function LootPickerFrameMixin:Show(encounterID, encounterName, lootBuffer)
+    if not self._built then self:Init() end
+
+    -- Defensive re-attach: Session may have loaded after our first Init.
+    self:RegisterSessionCallback()
+
+    local newEncounter = (encounterID ~= self.encounterID)
+                       or not self.frame:IsShown()
+
+    self.encounterID = encounterID or 0
+    self.encounterName = encounterName or L("LOOT_PICKER_DEFAULT_BOSS", "Encounter")
+    self._starting = false
+
+    -- Only reset showBlocked + entries when this is a different encounter
+    -- (or first show). A re-fire of Show for the SAME encounter — e.g.,
+    -- a late bag-scan adding more items — should preserve the user's
+    -- "Show blocked" state and any check overrides they've made.
+    if newEncounter then
+        self.showBlocked = false
+        if self.showBlockedCheck then self.showBlockedCheck:SetChecked(false) end
+        self.entries = {}
+    end
+
+    self:RebuildEntries(lootBuffer)
+    self:Render()
+    self.frame:Show()
+    self.frame:Raise()
+end
+
+function LootPickerFrameMixin:Hide()
+    if self.frame then self.frame:Hide() end
+end
+
+function LootPickerFrameMixin:IsShown()
+    return self.frame and self.frame:IsShown() or false
+end
+
+--[[--------------------------------------------------------------------
+    Entry construction (one per buffer item)
+----------------------------------------------------------------------]]
+
+function LootPickerFrameMixin:RebuildEntries(buffer)
+    -- Snapshot prior entries BEFORE wiping so we can preserve the user's
+    -- per-item check overrides across rebuilds (live updates from late
+    -- bag scans). Without this snapshot, FindPreviousCheckedState would
+    -- always read from the just-cleared list and return nil.
+    local prior = self.entries or {}
+    self.entries = {}
+    if type(buffer) ~= "table" then return end
+
+    local filter = Loothing.ItemFilter
+    for i, raw in ipairs(buffer) do
+        if raw and raw.itemLink then
+            local eval
+            if filter and filter.EvaluateItem then
+                eval = filter:EvaluateItem(raw.itemLink)
+            else
+                eval = { allowed = true }
+            end
+
+            -- Preserve user override across rebuilds for the SAME (link, looter).
+            local previousChecked
+            for _, e in ipairs(prior) do
+                if e.itemLink == raw.itemLink and e.playerName == raw.playerName then
+                    previousChecked = e.checked
+                    break
+                end
+            end
+
+            local checked
+            if previousChecked ~= nil then
+                checked = previousChecked
+            else
+                checked = eval.allowed and true or false
+            end
+
+            self.entries[#self.entries + 1] = {
+                index       = i,
+                itemLink    = raw.itemLink,
+                playerName  = raw.playerName,
+                encounterID = raw.encounterID,
+                eval        = eval,
+                checked     = checked,
+            }
+        end
+    end
+end
+
+--[[--------------------------------------------------------------------
+    Rendering
+----------------------------------------------------------------------]]
+
+function LootPickerFrameMixin:Render()
+    -- Hide all rows first; reuse via pool
+    for _, row in ipairs(self.rows) do row:Hide() end
+
+    -- Subtitle
+    local total = #self.entries
+    if self.subtitleText then
+        self.subtitleText:SetText(string.format(
+            L("LOOT_PICKER_SUBTITLE_FMT", "%s    -    %d items"),
+            self.encounterName, total))
+    end
+
+    local visible = {}
+    for _, entry in ipairs(self.entries) do
+        if entry.eval.allowed or self.showBlocked then
+            visible[#visible + 1] = entry
+        end
+    end
+
+    if #visible == 0 then
+        self.emptyText:Show()
+    else
+        self.emptyText:Hide()
+    end
+
+    -- Materialise rows for visible entries (variable row height: blocked
+    -- items get extra room for the reason line).
+    local yOffset = 0
+    local maxIdx = 0
+    for i, entry in ipairs(visible) do
+        local row = self.rows[i]
+        if not row then
+            row = self:CreateRow()
+            self.rows[i] = row
+        end
+        local rowH = entry.eval.allowed and ROW_HEIGHT_DEFAULT or ROW_HEIGHT_BLOCKED
+        row:SetHeight(rowH)
+        row.qBar:SetHeight(rowH - 4)
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", self.scrollContent, "TOPLEFT", 2, -yOffset)
+        row:SetPoint("RIGHT", self.scrollContent, "RIGHT", -2, 0)
+        self:BindRow(row, entry)
+        row:Show()
+        yOffset = yOffset + rowH + ROW_SPACING
+        maxIdx = i
+    end
+    -- Hide and detach any leftover pooled rows so stale references don't
+    -- pin item links from a previous (larger) encounter.
+    for i = maxIdx + 1, #self.rows do
+        local r = self.rows[i]
+        if r then
+            r:Hide()
+            r._link = nil
+            r._entry = nil
+        end
+    end
+
+    -- Resize content to actual aggregate height
+    self.scrollContent:SetHeight(math.max(1, yOffset))
+
+    -- Defer to UpdateStartButton so the visible-only counting rule is
+    -- consistent across the two call paths.
+    self:UpdateStartButton()
+end
+
+function LootPickerFrameMixin:CreateRow()
+    local row = CreateFrame("Frame", nil, self.scrollContent, "BackdropTemplate")
+    row:SetHeight(ROW_HEIGHT_DEFAULT)
+    styleSurface(row, "alt")
+
+    -- Quality bar (left edge, full height — height is updated per-row in Render)
+    local qBar = row:CreateTexture(nil, "ARTWORK")
+    qBar:SetSize(3, ROW_HEIGHT_DEFAULT - 4)
+    qBar:SetPoint("LEFT", 2, 0)
+    row.qBar = qBar
+
+    -- Checkbox
+    local check = CreateFrame("CheckButton", nil, row, "ChatConfigCheckButtonTemplate")
+    check:SetPoint("LEFT", 10, 0)
+    check:SetSize(22, 22)
+    if check.Text then check.Text:SetText("") end
+    row.check = check
+
+    -- Icon
+    local icon = row:CreateTexture(nil, "ARTWORK")
+    icon:SetSize(ICON_SIZE, ICON_SIZE)
+    icon:SetPoint("LEFT", check, "RIGHT", 6, 0)
+    row.icon = icon
+
+    -- Status chip (top-right) — visible only when item is blocked
+    local chip = CreateFrame("Frame", nil, row, "BackdropTemplate")
+    chip:SetHeight(18)
+    chip:SetPoint("TOPRIGHT", -8, -4)
+    chip:Hide()
+    chip:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        tile = false, edgeSize = 1,
+        insets = { left = 1, right = 1, top = 1, bottom = 1 },
+    })
+    local chipText = chip:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    chipText:SetPoint("LEFT", 6, 0)
+    chipText:SetPoint("RIGHT", -6, 0)
+    chip.text = chipText
+    row.chip = chip
+
+    -- Item name (top line, leaves room for the chip on the right)
+    local nameText = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    nameText:SetPoint("TOPLEFT", icon, "TOPRIGHT", 8, -2)
+    nameText:SetPoint("RIGHT", chip, "LEFT", -8, 0)
+    nameText:SetJustifyH("LEFT")
+    nameText:SetWordWrap(false)
+    row.nameText = nameText
+
+    -- Looter / ilvl line
+    local metaText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    metaText:SetPoint("TOPLEFT", nameText, "BOTTOMLEFT", 0, -2)
+    metaText:SetPoint("RIGHT", row, "RIGHT", -8, 0)
+    metaText:SetJustifyH("LEFT")
+    metaText:SetWordWrap(false)
+    row.metaText = metaText
+
+    -- Reason line (third line, only populated for blocked items)
+    -- Anchored UNDER metaText so it doesn't overlap on tall blocked rows.
+    local reasonText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    reasonText:SetPoint("TOPLEFT", metaText, "BOTTOMLEFT", 0, -2)
+    reasonText:SetPoint("RIGHT", row, "RIGHT", -8, 0)
+    reasonText:SetJustifyH("LEFT")
+    reasonText:SetWordWrap(false)
+    row.reasonText = reasonText
+
+    -- Hover/tooltip
+    row:EnableMouse(true)
+    row:SetScript("OnEnter", function(r)
+        if r._link then
+            GameTooltip:SetOwner(r, "ANCHOR_RIGHT")
+            GameTooltip:SetHyperlink(r._link)
+            GameTooltip:Show()
+        end
+    end)
+    row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    return row
+end
+
+function LootPickerFrameMixin:BindRow(row, entry)
+    row._link = entry.itemLink
+    row._entry = entry
+
+    -- Resolve item info for icon + name + ilvl + quality
+    local _, _, quality, ilvl, _, _, _, _, _, iconTex = C_Item.GetItemInfo(entry.itemLink)
+    quality = quality or entry.eval.quality
+
+    -- Quality bar
+    local qr, qg, qb = qualityColor(quality)
+    row.qBar:SetColorTexture(qr, qg, qb, 1)
+
+    -- Icon
+    if iconTex then row.icon:SetTexture(iconTex) else row.icon:SetTexture(nil) end
+
+    -- Name (raw item link so the chat-quality color comes through)
+    row.nameText:SetText(entry.itemLink)
+
+    -- Meta line: "Looter: X    ilvl Y"
+    local metaParts = {}
+    metaParts[#metaParts + 1] = string.format(L("LOOT_PICKER_LOOTER_FMT", "Looter: %s"),
+        entry.playerName or L("LOOT_PICKER_UNKNOWN_LOOTER", "Unknown"))
+    if ilvl and ilvl > 0 then
+        metaParts[#metaParts + 1] = string.format(L("LOOT_PICKER_ILVL_FMT", "ilvl %d"), ilvl)
+    end
+    row.metaText:SetText(table.concat(metaParts, "    "))
+    applyTextColor(row.metaText, "textMuted", { 0.7, 0.7, 0.7 })
+
+    -- Status chip + reason line — populated only when blocked
+    if entry.eval.allowed then
+        row.chip:Hide()
+        row.reasonText:SetText("")
+    else
+        row.chip:Show()
+        row.chip.text:SetText(L("LOOT_PICKER_CHIP_BLOCKED", "BLOCKED"))
+        local danger = getColor("danger", { 0.95, 0.4, 0.4 })
+        row.chip:SetBackdropColor(danger[1] * 0.25, danger[2] * 0.15, danger[3] * 0.15, 0.9)
+        row.chip:SetBackdropBorderColor(danger[1], danger[2], danger[3], 0.85)
+        applyTextColor(row.chip.text, "danger", { 1, 0.55, 0.55 })
+
+        local reason = self:DescribeReason(entry.eval, quality) or ""
+        row.reasonText:SetText(reason)
+        applyTextColor(row.reasonText, "danger", { 0.95, 0.55, 0.55 })
+
+        local chipWidth = math.min(140, math.max(68, row.chip.text:GetStringWidth() + 16))
+        row.chip:SetWidth(chipWidth)
+    end
+
+    -- Checkbox state + handler
+    row.check:SetChecked(entry.checked)
+    row.check:SetScript("OnClick", function(c)
+        entry.checked = c:GetChecked() and true or false
+        self:UpdateStartButton()
+    end)
+end
+
+-- Escape % so reasons containing literal % (e.g., "Hand of A'dal (5%)")
+-- don't blow up string.format.
+local function escapeFormatPct(s)
+    if type(s) ~= "string" then return tostring(s) end
+    return (s:gsub("%%", "%%%%"))
+end
+
+function LootPickerFrameMixin:DescribeReason(eval, resolvedQuality)
+    if eval.allowed then return nil end
+    local reason = eval.reason or ""
+    local fmt = L("LOOT_PICKER_BLOCKED_REASON_FMT", "Blocked by filter: %s")
+
+    if reason == "" then
+        return string.format(fmt, L("LOOT_PICKER_REASON_UNKNOWN", "unknown"))
+    end
+    if reason == "ignored" then
+        return string.format(fmt, escapeFormatPct(L("LOOT_PICKER_REASON_IGNORED", "ignored item")))
+    end
+    if reason == "boe" then
+        return string.format(fmt, escapeFormatPct(L("LOOT_PICKER_REASON_BOE", "Bind on Equip")))
+    end
+    if reason:sub(1, 6) == "class:" then
+        return string.format(fmt, escapeFormatPct(reason:sub(7)))
+    end
+    if reason == "quality" then
+        local q = resolvedQuality or eval.quality or 0
+        local minQ = eval.minQuality or 0
+        return string.format(L("LOOT_PICKER_BLOCKED_QUALITY_FMT", "Below quality threshold (q%d < q%d)"),
+            q, minQ)
+    end
+    return string.format(fmt, escapeFormatPct(reason))
+end
+
+function LootPickerFrameMixin:UpdateStartButton()
+    -- Count only entries that are checked AND visible (allowed-by-filter
+    -- OR Show-blocked-on). Hidden-but-checked entries can't exist after
+    -- the showBlockedCheck OnClick auto-uncheck, but the Render path
+    -- iterates everyone, so guard here too.
+    local startCount = 0
+    for _, e in ipairs(self.entries) do
+        if e.checked and (e.eval.allowed or self.showBlocked) then
+            startCount = startCount + 1
+        end
+    end
+    if self.startBtn then
+        self.startBtn:SetText(string.format(
+            L("LOOT_PICKER_START_FMT", "Start Session  -  %d items"), startCount))
+        self.startBtn:SetEnabled(startCount > 0)
+    end
+end
+
+--[[--------------------------------------------------------------------
+    Actions
+----------------------------------------------------------------------]]
+
+function LootPickerFrameMixin:SetAll(checked)
+    for _, e in ipairs(self.entries) do
+        if checked then
+            -- Only flip allowed entries when ticking; blocked stay off
+            -- unless the user has Show Blocked on (then take everything)
+            if self.showBlocked or e.eval.allowed then
+                e.checked = true
+            end
+        else
+            e.checked = false
+        end
+    end
+    self:Render()
+end
+
+function LootPickerFrameMixin:OnStart()
+    -- Double-click guard
+    if self._starting then return end
+    self._starting = true
+
+    if not Loothing.Session or not Loothing.Session.StartSessionWithPickedItems then
+        self._starting = false
+        self:Hide()
+        return
+    end
+
+    local picked = {}
+    for _, e in ipairs(self.entries) do
+        -- Reject any entry whose encounterID drifted (paranoia against the
+        -- next-encounter-mid-render race; CancelPendingPrompt + the
+        -- OnEncounterStart hide-on-show fix should also prevent this.)
+        if e.checked
+            and (e.encounterID == nil or e.encounterID == self.encounterID) then
+            picked[#picked + 1] = {
+                itemLink   = e.itemLink,
+                playerName = e.playerName,
+            }
+        end
+    end
+
+    -- Hold the frame visible across the StartSession attempt — if we Hide
+    -- before the call and the start fails, our Show() retry path uses
+    -- `not self.frame:IsShown()` to compute newEncounter, which would
+    -- evaluate true and wipe self.entries (losing the user's overrides).
+    -- Hide only on confirmed success.
+    self._suppressEvent = true
+    local ok = Loothing.Session:StartSessionWithPickedItems(self.encounterID, self.encounterName, picked)
+    self._suppressEvent = false
+    if ok == false then
+        -- StartSession failed (no group, lost ML rights, etc.). Frame
+        -- stays shown with current entries; print a one-line error so
+        -- the user understands why nothing happened.
+        self._starting = false
+        if self.frame then
+            self.frame:Raise()  -- bring back to top in case another popup grabbed focus
+        end
+        return
+    end
+    self:Hide()
+    self._starting = false
+end
+
+function LootPickerFrameMixin:OnCancel()
+    self:Hide()
+    self._starting = false
+    -- Centralised cleanup: wipes buffer, cancels the debounce timer that
+    -- would otherwise re-prompt seconds later, clears stale encounter
+    -- references. Falls back to the old wipe pattern if the helper isn't
+    -- available (older Session module).
+    self._suppressEvent = true
+    if Loothing.Session and Loothing.Session.CancelPendingPrompt then
+        Loothing.Session:CancelPendingPrompt()
+    elseif Loothing.Session and Loothing.Session.lootBuffer then
+        Loothing.Session.lootBuffer = {}
+        if Loothing.Session.TriggerEvent then
+            Loothing.Session:TriggerEvent("OnLootBufferChanged", Loothing.Session.lootBuffer)
+        end
+    end
+    self._suppressEvent = false
+end
+
+--[[--------------------------------------------------------------------
+    Module export — instance lives at ns.LootPickerFrame and is built on
+    first method dispatch. Wrapped method closures are memoised on the
+    wrapper table so repeated calls don't allocate.
+----------------------------------------------------------------------]]
+
+local instance = nil
+local function getInstance()
+    if not instance then
+        instance = Loolib.CreateFromMixins(LootPickerFrameMixin)
+    end
+    return instance
+end
+
+ns.LootPickerFrame = setmetatable({}, {
+    __index = function(t, key)
+        local inst = getInstance()
+        local v = inst[key]
+        if type(v) == "function" then
+            local wrapped = function(_, ...) return v(inst, ...) end
+            t[key] = wrapped  -- memoise so subsequent dispatch is direct
+            return wrapped
+        end
+        return v
+    end,
+})

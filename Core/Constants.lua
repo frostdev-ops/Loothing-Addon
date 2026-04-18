@@ -8,7 +8,7 @@ local _, ns = ...
 local Loothing = ns.Addon
 
 -- Addon info
-Loothing.VERSION = "2.0.19"
+Loothing.VERSION = "2.0.20"
 Loothing.PROTOCOL_VERSION = 4
 -- Minimum accepted protocol version on receive. v2 and earlier predate the
 -- current serializer/compressor pipeline and cannot be parsed safely; v3
@@ -281,7 +281,10 @@ Loothing.DefaultSettings = {
     --        councilTable.rowHeight, voting.numButtons,
     --        winnerDetermination.requireConfirmation, legacy
     --        `responses` definitions table)
-    schemaVersion = 3,
+    --   v4 = 2.0.20 configurable loot filter (loot.filter.* namespace
+    --        seeded from the old hardcoded BLACKLISTED_ITEM_CLASSES
+    --        and Loothing.MinQuality)
+    schemaVersion = 4,
 
     council = {
         members = {},
@@ -548,6 +551,30 @@ Loothing.DefaultSettings = {
             seeVoterIdentities = false,
             seeResponses = true,
             seeNotes = false,
+        },
+    },
+
+    -- Loot filter (configurable replacement for the old hardcoded
+    -- BLACKLISTED_ITEM_CLASSES + Loothing.MinQuality. Mirrors the
+    -- structure used by SchemaMigration v4 for newly-created profiles.
+    -- See Core/SettingsLootFilter.lua for accessors.
+    --
+    -- Defaults are deliberately permissive: quality filtering is OFF
+    -- (minQuality = 0) and only the most obvious non-loot classes are
+    -- blocked. The class blocks only kick in for `auto` trigger mode —
+    -- in `prompt` mode every item reaches the picker so the ML can
+    -- override on a per-kill basis.
+    loot = {
+        filter = {
+            minQuality = 0,                 -- 0 = no quality filtering; raise for auto-mode strictness
+            classes = {
+                [0]  = { blocked = true },                                          -- Consumables
+                [5]  = { blocked = true },                                          -- Reagents
+                [7]  = { blocked = true },                                          -- Tradeskill / recipes
+                [12] = { blocked = true },                                          -- Quest items
+                [15] = { blocked = false, subclasses = { [1] = true, [4] = true } }, -- Misc: Reagent + Other (Anima)
+                [20] = { blocked = true },                                          -- Decor / Housing
+            },
         },
     },
 }

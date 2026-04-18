@@ -555,6 +555,125 @@ local function GetLocalPreferencesOptions()
                 },
             },
             -- ============================================================
+            -- Loot Filtering (configurable replacement for hardcoded blacklist)
+            --
+            -- This is a LOCAL setting (only affects you when you're ML),
+            -- so it intentionally does NOT use IsSessionLocked — you can
+            -- still configure how YOU will behave next time you ML, even
+            -- while another council member is currently running a session.
+            -- ============================================================
+            lootFilter = {
+                type = "group",
+                name = L["LOOT_FILTER_HEADER"],
+                order = 4.5,
+                args = {
+                    minQuality = {
+                        type = "select",
+                        name = L["LOOT_FILTER_MIN_QUALITY"],
+                        desc = L["LOOT_FILTER_MIN_QUALITY_DESC"],
+                        order = 1,
+                        width = "double",
+                        values = GetQualityValues,
+                        sorting = { 0, 1, 2, 3, 4, 5 },
+                        get = function() return Loothing.Settings:GetLootFilterMinQuality() end,
+                        set = function(_, v) Loothing.Settings:SetLootFilterMinQuality(v) end,
+                    },
+                    classHeader = {
+                        type = "header",
+                        name = L["LOOT_FILTER_CLASS_HEADER"],
+                        order = 10,
+                    },
+                    classDesc = {
+                        type = "description",
+                        name = L["LOOT_FILTER_CLASS_DESC"],
+                        order = 11,
+                    },
+                    blockConsumables = {
+                        type = "toggle",
+                        name = L["LOOT_FILTER_BLOCK_CONSUMABLES"],
+                        desc = L["LOOT_FILTER_BLOCK_CONSUMABLES_DESC"],
+                        order = 20,
+                        width = "full",
+                        get = function() return Loothing.Settings:IsLootFilterClassBlocked(0) end,
+                        set = function(_, v) Loothing.Settings:SetLootFilterClassBlocked(0, v) end,
+                    },
+                    blockReagents = {
+                        type = "toggle",
+                        name = L["LOOT_FILTER_BLOCK_REAGENTS"],
+                        desc = L["LOOT_FILTER_BLOCK_REAGENTS_DESC"],
+                        order = 21,
+                        width = "full",
+                        get = function() return Loothing.Settings:IsLootFilterClassBlocked(5) end,
+                        set = function(_, v) Loothing.Settings:SetLootFilterClassBlocked(5, v) end,
+                    },
+                    blockTradeskill = {
+                        type = "toggle",
+                        name = L["LOOT_FILTER_BLOCK_TRADESKILL"],
+                        desc = L["LOOT_FILTER_BLOCK_TRADESKILL_DESC"],
+                        order = 22,
+                        width = "full",
+                        get = function() return Loothing.Settings:IsLootFilterClassBlocked(7) end,
+                        set = function(_, v) Loothing.Settings:SetLootFilterClassBlocked(7, v) end,
+                    },
+                    blockQuest = {
+                        type = "toggle",
+                        name = L["LOOT_FILTER_BLOCK_QUEST"],
+                        desc = L["LOOT_FILTER_BLOCK_QUEST_DESC"],
+                        order = 23,
+                        width = "full",
+                        get = function() return Loothing.Settings:IsLootFilterClassBlocked(12) end,
+                        set = function(_, v) Loothing.Settings:SetLootFilterClassBlocked(12, v) end,
+                    },
+                    blockHousing = {
+                        type = "toggle",
+                        name = L["LOOT_FILTER_BLOCK_HOUSING"],
+                        desc = L["LOOT_FILTER_BLOCK_HOUSING_DESC"],
+                        order = 24,
+                        width = "full",
+                        get = function() return Loothing.Settings:IsLootFilterClassBlocked(20) end,
+                        set = function(_, v) Loothing.Settings:SetLootFilterClassBlocked(20, v) end,
+                    },
+                    blockMiscReagent = {
+                        type = "toggle",
+                        name = L["LOOT_FILTER_BLOCK_MISC_REAGENT"],
+                        desc = L["LOOT_FILTER_BLOCK_MISC_REAGENT_DESC"],
+                        order = 25,
+                        width = "full",
+                        get = function() return Loothing.Settings:IsLootFilterSubclassBlocked(15, 1) end,
+                        set = function(_, v) Loothing.Settings:SetLootFilterSubclassBlocked(15, 1, v) end,
+                    },
+                    blockMiscOther = {
+                        type = "toggle",
+                        name = L["LOOT_FILTER_BLOCK_MISC_OTHER"],
+                        desc = L["LOOT_FILTER_BLOCK_MISC_OTHER_DESC"],
+                        order = 26,
+                        width = "full",
+                        get = function() return Loothing.Settings:IsLootFilterSubclassBlocked(15, 4) end,
+                        set = function(_, v) Loothing.Settings:SetLootFilterSubclassBlocked(15, 4, v) end,
+                    },
+                    resetSpacer = {
+                        type = "header",
+                        name = "",
+                        order = 30,
+                    },
+                    resetDefaults = {
+                        type = "execute",
+                        name = L["LOOT_FILTER_RESET_DEFAULTS"],
+                        desc = L["LOOT_FILTER_RESET_DEFAULTS_DESC"],
+                        order = 31,
+                        width = "double",  -- long label needs more room than the default 200px
+                        confirm = true,
+                        confirmText = L["LOOT_FILTER_RESET_CONFIRM"],
+                        func = function()
+                            if Loothing.Settings.ResetLootFilterClasses then
+                                Loothing.Settings:ResetLootFilterClasses()
+                            end
+                            if Loolib.Config then Loolib.Config:NotifyChange("Loothing") end
+                        end,
+                    },
+                },
+            },
+            -- ============================================================
             -- Frame Behavior
             -- ============================================================
             frame = {

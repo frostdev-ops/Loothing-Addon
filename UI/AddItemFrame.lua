@@ -464,7 +464,10 @@ function AddItemFrameMixin:RefreshRecentDrops()
             local link = C_Container.GetContainerItemLink(bag, slot)
             if link then
                 local _, _, quality, ilvl = C_Item.GetItemInfo(link)
-                if quality and quality >= (Loothing.MinQuality or 4) then
+                local minQ = (Loothing.Settings and Loothing.Settings.GetLootFilterMinQuality
+                    and Loothing.Settings:GetLootFilterMinQuality())
+                    or Loothing.MinQuality or 4
+                if quality and quality >= minQ then
                     local timeRemaining = nil
                     if Loothing.TradeQueue and Loothing.TradeQueue.GetContainerItemTradeTimeRemaining then
                         timeRemaining = Loothing.TradeQueue:GetContainerItemTradeTimeRemaining(bag, slot)
