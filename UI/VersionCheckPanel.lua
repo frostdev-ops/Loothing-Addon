@@ -10,6 +10,20 @@ local L = ns.Locale
 local VersionCheck = ns.VersionCheck
 local C_Timer = C_Timer
 
+local AnimationUtil = Loolib.AnimationUtil
+local AnimationPresets = Loolib.AnimationPresets
+local PixelUtil = Loolib.PixelUtil
+
+local function GetSkinning() return ns.SkinningMixin end
+local function GetColorKey(key, fallback)
+    local sk = GetSkinning()
+    if sk and sk.GetColor then return sk:GetColor(key, fallback) end
+    return fallback or { 1, 1, 1, 1 }
+end
+
+local ApplyAccentGlow = ns.FramePolish.ApplyAccentGlow
+local AttachIconButtonPolish = ns.FramePolish.AttachIconButtonPolish
+
 --[[--------------------------------------------------------------------
     VersionCheckPanelMixin
 ----------------------------------------------------------------------]]
@@ -85,6 +99,21 @@ function VersionCheckPanelMixin:CreateFrame()
         edgeSize = 32,
         insets = { left = 11, right = 12, top = 12, bottom = 11 },
     })
+    frame:SetAlpha(0)
+
+    -- Accent glow strip behind the title
+    local headerStrip = frame:CreateTexture(nil, "BACKGROUND", nil, 2)
+    headerStrip:SetPoint("TOPLEFT", 12, -12)
+    headerStrip:SetPoint("TOPRIGHT", -12, -12)
+    headerStrip:SetHeight(40)
+    headerStrip:SetColorTexture(1, 1, 1, 1)
+    self.headerStrip = headerStrip
+    ApplyAccentGlow(headerStrip, 0.18)
+
+    -- Pixel-perfect outer border
+    if PixelUtil and type(PixelUtil.SetThinBorder) == "function" then
+        self.pixelBorder = PixelUtil.SetThinBorder(frame, GetColorKey("borderStrong", { 0, 0, 0, 1 }))
+    end
 
     -- Title bar for dragging
     local titleBar = CreateFrame("Frame", nil, frame)
@@ -120,6 +149,7 @@ function VersionCheckPanelMixin:CreateElements()
     self.closeButton:SetScript("OnClick", function()
         self:Hide()
     end)
+    AttachIconButtonPolish(self.closeButton, { hoverScale = 1.15, pressScale = 0.90 })
 
     -- Column headers
     self:CreateColumnHeaders()
@@ -329,13 +359,44 @@ end
 ----------------------------------------------------------------------]]
 
 function VersionCheckPanelMixin:Show()
+    if self.frame._loothingFadeGroup then self.frame._loothingFadeGroup:Stop() end
     self.frame:Show()
     self.frame:Raise()
     self:RefreshList()
+
+    if AnimationPresets then
+        self.frame._loothingFadeGroup = AnimationPresets.FadeIn(self.frame, 0.22, "outCubic")
+    else
+        self.frame:SetAlpha(1)
+    end
 end
 
 function VersionCheckPanelMixin:Hide()
-    self.frame:Hide()
+    if not self.frame then return end
+    if self.frame._loothingFadeGroup then self.frame._loothingFadeGroup:Stop() end
+    if AnimationPresets and self.frame:IsVisible() then
+        self.frame._loothingFadeGroup = AnimationPresets.FadeOut(self.frame, 0.13, "inCubic", true, function()
+            if self.frame then self.frame:SetAlpha(0) end
+        end)
+    else
+        self.frame:Hide()
+    end
+end
+
+function VersionCheckPanelMixin:ApplyTheme()
+    if not self.frame then return end
+    if self.headerStrip then
+        ApplyAccentGlow(self.headerStrip, 0.18)
+        self.headerStrip:SetAlpha(1)
+    end
+    if self.pixelBorder then
+        local c = GetColorKey("borderStrong", { 0, 0, 0, 1 })
+        for _, tex in pairs(self.pixelBorder) do
+            if type(tex) == "table" and type(tex.SetColorTexture) == "function" then
+                tex:SetColorTexture(c[1] or 0, c[2] or 0, c[3] or 0, c[4] or 1)
+            end
+        end
+    end
 end
 
 function VersionCheckPanelMixin:Toggle()

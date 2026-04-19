@@ -11,6 +11,12 @@ local Utils = ns.Utils
 local Popups = ns.Popups
 local SkinningMixin = ns.SkinningMixin
 
+local AnimationUtil = Loolib.AnimationUtil
+local PixelUtil = Loolib.PixelUtil
+
+local ApplyAccentGlow = ns.FramePolish.ApplyAccentGlow
+local AttachIconButtonPolish = ns.FramePolish.AttachIconButtonPolish
+
 --[[--------------------------------------------------------------------
     SessionPanelMixin
 ----------------------------------------------------------------------]]
@@ -54,7 +60,6 @@ end
 --- Create UI elements
 function SessionPanelMixin:CreateElements()
 
-
     -- Header area
     self:CreateHeader()
 
@@ -74,11 +79,19 @@ end
 --- Create header
 function SessionPanelMixin:CreateHeader()
 
-
     local header = CreateFrame("Frame", nil, self.frame)
     header:SetPoint("TOPLEFT", 8, -8)
     header:SetPoint("TOPRIGHT", -8, -8)
     header:SetHeight(50)
+
+    -- Soft accent glow behind the session status row. Tracks SkinningMixin accent color.
+    local headerStrip = header:CreateTexture(nil, "BACKGROUND", nil, 2)
+    headerStrip:SetPoint("TOPLEFT", 0, 0)
+    headerStrip:SetPoint("TOPRIGHT", 0, 0)
+    headerStrip:SetHeight(28)
+    headerStrip:SetColorTexture(1, 1, 1, 1)
+    self.headerStrip = headerStrip
+    ApplyAccentGlow(headerStrip, 0.18)
 
     -- Session status
     self.statusText = header:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
@@ -141,12 +154,16 @@ end
 --- Create item list
 function SessionPanelMixin:CreateItemList()
 
-
     -- List container
     local container = CreateFrame("Frame", nil, self.frame, "BackdropTemplate")
     container:SetPoint("TOPLEFT", 8, -66)
     container:SetPoint("BOTTOMRIGHT", -8, 50)
     SkinningMixin:StyleSurface(container, "inset")
+
+    -- Pixel-perfect inner border (crispening overlay on the inset backdrop)
+    if PixelUtil and type(PixelUtil.SetThinBorder) == "function" then
+        self.listPixelBorder = PixelUtil.SetThinBorder(container, SkinningMixin:GetColor("borderStrong"))
+    end
 
     -- Column headers
     local headerFrame = CreateFrame("Frame", nil, container)
@@ -352,7 +369,6 @@ end
 --- Create the bulk action bar (hidden by default)
 function SessionPanelMixin:CreateBulkActionBar()
 
-
     local bar = CreateFrame("Frame", nil, self.listContainer, "BackdropTemplate")
     bar:SetPoint("TOPLEFT", 0, -25)
     bar:SetPoint("TOPRIGHT", 0, -25)
@@ -484,7 +500,6 @@ end
 function SessionPanelMixin:UpdateBulkBarButtons()
     if not self.bulkBar then return end
 
-
     local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
     local count = self:GetSelectedCount()
 
@@ -587,7 +602,6 @@ end
 function SessionPanelMixin:OnBulkSkip()
     if not Loothing.Session then return end
 
-
     local pending = self:GetSelectedItemsByState(Loothing.ItemState.PENDING)
     local voting = self:GetSelectedItemsByState(Loothing.ItemState.VOTING)
     local count = #pending + #voting
@@ -613,7 +627,6 @@ end
 function SessionPanelMixin:OnBulkRemove()
     if not Loothing.Session then return end
 
-
     local items = self:GetSelectedItemsByState(Loothing.ItemState.PENDING)
     if #items == 0 then return end
 
@@ -633,7 +646,6 @@ end
 --- Re-vote on all selected TALLIED items (with confirmation)
 function SessionPanelMixin:OnBulkRevote()
     if not Loothing.Session then return end
-
 
     local items = self:GetSelectedItemsByState(Loothing.ItemState.TALLIED)
     if #items == 0 then return end
@@ -724,7 +736,6 @@ end
 
 --- Create footer with controls
 function SessionPanelMixin:CreateFooter()
-
 
     local footer = CreateFrame("Frame", nil, self.frame)
     footer:SetPoint("BOTTOMLEFT", 8, 8)
@@ -990,6 +1001,20 @@ function SessionPanelMixin:ApplyTheme()
     SkinningMixin:StylePlainButton(self.councilTableBtn)
     SkinningMixin:StylePlainButton(self.reopenResponseBtn)
     SkinningMixin:StylePlainButton(self.refreshButton)
+
+    -- Re-apply custom accents so skin/accent switches take effect.
+    if self.headerStrip then
+        ApplyAccentGlow(self.headerStrip, 0.18)
+        self.headerStrip:SetAlpha(1)
+    end
+    if self.listPixelBorder and PixelUtil then
+        local c = SkinningMixin:GetColor("borderStrong") or { 0, 0, 0, 1 }
+        for _, tex in pairs(self.listPixelBorder) do
+            if type(tex) == "table" and type(tex.SetColorTexture) == "function" then
+                tex:SetColorTexture(c[1] or 0, c[2] or 0, c[3] or 0, c[4] or 1)
+            end
+        end
+    end
 end
 
 --[[--------------------------------------------------------------------
@@ -1069,7 +1094,6 @@ end
 
 --- Update header display
 function SessionPanelMixin:UpdateHeader()
-
 
     if not Loothing.Session then
         self.statusText:SetText(L["NO_SESSION"])
@@ -1454,6 +1478,7 @@ function SessionPanelMixin:AddMLControls(row, item)
         deleteBtn:SetScript("OnLeave", function()
             GameTooltip:Hide()
         end)
+        AttachIconButtonPolish(deleteBtn, { hoverScale = 1.15, pressScale = 0.90 })
         frame._deleteButton = deleteBtn
     end
 

@@ -806,6 +806,14 @@ ns.TokenTable = {
     [237599] = "ShoulderSlot", -- Venerated Yearning Cursemark,
     [237600] = "ShoulderSlot", -- Zenith Yearning Cursemark,
 
+    -- Midnight Season 1 - Dreamrift (Riftbloom family - chest slot)
+    -- Shares the cloth/leather/mail/plate class split with the Voidspire
+    -- Nullcore family but uses the "Aln-" prefix instead of "Void-".
+    [249347] = "ChestSlot",    -- Alnwoven Riftbloom (cloth)
+    [249348] = "ChestSlot",    -- Alncured Riftbloom (leather)
+    [249349] = "ChestSlot",    -- Alncast Riftbloom (mail)
+    [249350] = "ChestSlot",    -- Alnforged Riftbloom (plate)
+
     -- Midnight Season 1 - The Voidspire (Nullcore family)
     -- Hand slot (Vorasius)
     [249351] = "HandsSlot",    -- Voidwoven Hungering Nullcore (cloth)
@@ -842,6 +850,12 @@ ns.TokenClassFamilies = {
     ["Voidcured"]  = { DEMONHUNTER=true, ROGUE=true, MONK=true, DRUID=true }, -- leather
     ["Voidwoven"]  = { WARLOCK=true, PRIEST=true, MAGE=true },         -- cloth
     ["Voidforged"] = { DEATHKNIGHT=true, PALADIN=true, WARRIOR=true }, -- plate
+    -- Midnight Season 1 (Dreamrift — Riftbloom). Same armor-class split as
+    -- Nullcore; different raid, different prefix.
+    ["Alncast"]    = { EVOKER=true, HUNTER=true, SHAMAN=true },        -- mail
+    ["Alncured"]   = { DEMONHUNTER=true, ROGUE=true, MONK=true, DRUID=true }, -- leather
+    ["Alnwoven"]   = { WARLOCK=true, PRIEST=true, MAGE=true },         -- cloth
+    ["Alnforged"]  = { DEATHKNIGHT=true, PALADIN=true, WARRIOR=true }, -- plate
 }
 
 --- Slot keyword → INVTYPE_* constant. Reverse of GetSlotName for engine-side
@@ -869,13 +883,18 @@ local CLASS_NAME_TO_ID = {
 
 local ALL_CLASSES_FLAG = bit.lshift(1, 13) - 1
 
---- Map name-pattern keywords (middle word of Nullcore tokens) to slot. Used as a
---- fallback when an itemID hasn't been added to TokenTable yet (mid-patch hotfix).
+--- Map name-pattern keywords (middle/suffix word of Midnight S1 tokens) to slot.
+--- Used as a fallback when an itemID hasn't been added to TokenTable yet (mid-patch
+--- hotfix). The IsToken fallback requires a known family prefix match BEFORE
+--- consulting this table, so keywords don't false-positive on non-token items.
 local NAME_PATTERN_TO_SLOT = {
+    -- Voidspire Nullcore middle words
     ["Hungering"] = "HandsSlot",
     ["Fanatical"] = "HeadSlot",
     ["Corrupted"] = "LegsSlot",
     ["Unraveled"] = "ShoulderSlot",
+    -- Dreamrift Riftbloom suffix (chest)
+    ["Riftbloom"] = "ChestSlot",
 }
 
 --- Table mapping item IDs to base item levels (normal difficulty)
@@ -899,9 +918,22 @@ function TokenData:IsToken(itemID, itemName, subType)
         return ns.TokenTable[itemID]
     end
     if itemName then
-        for keyword, slot in pairs(NAME_PATTERN_TO_SLOT) do
-            if itemName:find(keyword) and itemName:find("Nullcore") then
-                return slot
+        -- Require BOTH a known family prefix (Voidwoven/Alncast/...) AND a
+        -- known slot keyword before classifying as a token. Without the
+        -- family-prefix gate, unrelated items that happen to contain a
+        -- keyword like "Fanatical" or "Corrupted" could be misclassified.
+        local hasFamily = false
+        for prefix in pairs(ns.TokenClassFamilies) do
+            if itemName:find("^" .. prefix) then
+                hasFamily = true
+                break
+            end
+        end
+        if hasFamily then
+            for keyword, slot in pairs(NAME_PATTERN_TO_SLOT) do
+                if itemName:find(keyword) then
+                    return slot
+                end
             end
         end
     end

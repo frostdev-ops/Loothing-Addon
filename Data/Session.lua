@@ -37,11 +37,25 @@ end
 --- Check if an item is blocked by the user-configurable class filter.
 --- Delegates to Loothing.ItemFilter:IsClassBlocked, which reads the
 --- loot.filter.classes.* settings (seeded from the old hardcoded
---- BLACKLISTED_ITEM_CLASSES table by SchemaMigration v4).
+--- BLACKLISTED_ITEM_CLASSES table by SchemaMigration v4). When
+--- ItemFilter is missing (broken load), fall back to the seed defaults
+--- exposed by SettingsLootFilter so consumables / recipes / quest
+--- items can't silently leak into sessions.
 local function IsItemClassBlocked(itemLink)
     if Loothing.ItemFilter and Loothing.ItemFilter.IsClassBlocked then
         return Loothing.ItemFilter:IsClassBlocked(itemLink) and true or false
     end
+    -- Fail-closed fallback — mirrors ItemFilter:IsClassBlocked's own
+    -- fallback chain when Loothing.Settings is unavailable.
+    if not itemLink then return false end
+    local _, _, _, _, _, classID, subclassID = C_Item.GetItemInfoInstant(itemLink)
+    if not classID then return false end
+    local def = ns.LootFilterDefaults and ns.LootFilterDefaults.classes
+    if not def then return false end
+    local entry = def[classID]
+    if not entry then return false end
+    if entry.all == true then return true end
+    if subclassID and entry[subclassID] == true then return true end
     return false
 end
 
@@ -672,18 +686,23 @@ function SessionMixin:EndSession()
     self.lastEligibleEncounter = nil
     self.lastEncounterID = nil
     self.lastEncounterName = nil
-    if self.lootBuffer and #self.lootBuffer > 0 then
-        wipe(self.lootBuffer)
-        self:TriggerEvent("OnLootBufferChanged", self.lootBuffer)
-    end
 
-    -- Hide any pending session prompt dialog or open Loot Picker
+    -- Hide any pending session prompt dialog or open Loot Picker FIRST,
+    -- then wipe the buffer — otherwise the picker's own callback would
+    -- render an empty state briefly before its fade-out completes.
     local Popups = GetPopups()
     if Popups then
         Popups:Hide("LOOTHING_CONFIRM_START_SESSION")
     end
-    if ns.LootPickerFrame and ns.LootPickerFrame.Hide and ns.LootPickerFrame:IsShown() then
+    if ns.LootPickerFrame and ns.LootPickerFrame.IsShown
+        and ns.LootPickerFrame:IsShown() then
+        ns.LootPickerFrame._suppressOnHideCleanup = true
         ns.LootPickerFrame:Hide()
+        ns.LootPickerFrame._suppressOnHideCleanup = false
+    end
+    if self.lootBuffer and #self.lootBuffer > 0 then
+        wipe(self.lootBuffer)
+        self:TriggerEvent("OnLootBufferChanged", self.lootBuffer)
     end
 
     local sessionID = self.sessionID
@@ -2035,16 +2054,21 @@ end
 
 --- Handle encounter start
 function SessionMixin:OnEncounterStart()
-    -- Wipe stale buffer from previous encounter that never started a session.
-    -- If a Loot Picker is open showing the prior encounter's items, force-
-    -- close it so the user doesn't accidentally award stale loot to the
-    -- new boss.
+    -- If a Loot Picker is open showing the prior encounter's items,
+    -- close it FIRST — before we wipe lootBuffer — so the picker's
+    -- OnLootBufferChanged callback doesn't re-render an empty state
+    -- during its fade-out animation. Suppress the picker's OnHide
+    -- cleanup so it doesn't fight Session's own wipe.
+    if ns.LootPickerFrame and ns.LootPickerFrame.IsShown
+        and ns.LootPickerFrame:IsShown() then
+        ns.LootPickerFrame._suppressOnHideCleanup = true
+        ns.LootPickerFrame:Hide()
+        ns.LootPickerFrame._suppressOnHideCleanup = false
+    end
+    -- Now wipe stale buffer from previous encounter that never started a session.
     if self.lootBuffer and #self.lootBuffer > 0 then
         wipe(self.lootBuffer)
         self:TriggerEvent("OnLootBufferChanged", self.lootBuffer)
-    end
-    if ns.LootPickerFrame and ns.LootPickerFrame.Hide and ns.LootPickerFrame:IsShown() then
-        ns.LootPickerFrame:Hide()
     end
 
     -- Cancel any stale afterLoot debounce from a previous encounter
@@ -2519,33 +2543,44 @@ function SessionMixin:StartSessionWithPickedItems(encounterID, encounterName, pi
         pickedItems = {}
     end
 
-    -- Snapshot buffer so we can restore it if StartSession bails.
-    local priorBuffer = self.lootBuffer or {}
+    self.lootBuffer = self.lootBuffer or {}
 
-    -- Replace the buffer with EXACTLY the picked items so StartSession's
-    -- buffer-replay loop (which builds SESSION_INIT) consumes the picker's
-    -- decisions atomically. Stamp each entry with the target encounterID
-    -- so the replay loop's encounter-match guard accepts them, and mark
-    -- with `_picked = true` so AddItem can be told to bypass filters.
+    -- Snapshot buffer CONTENTS (by copy) so we can restore them if
+    -- StartSession bails. Using a deep list-copy instead of a reference
+    -- capture lets us preserve the identity of `self.lootBuffer` via
+    -- `wipe` + `table.insert` — safer for any module that caches the
+    -- reference (the picker doesn't, but future consumers might).
+    local priorBuffer = {}
+    for i, entry in ipairs(self.lootBuffer) do priorBuffer[i] = entry end
+
+    -- Replace buffer contents with EXACTLY the picked items so
+    -- StartSession's buffer-replay loop (which builds SESSION_INIT)
+    -- consumes the picker's decisions atomically. Stamp each entry with
+    -- the target encounterID so the replay loop's encounter-match guard
+    -- accepts them, and mark with `_picked = true` so AddItem can be
+    -- told to bypass filters.
     local now = time()
-    local replay = {}
+    wipe(self.lootBuffer)
     for _, entry in ipairs(pickedItems) do
         if entry.itemLink then
-            replay[#replay + 1] = {
+            table.insert(self.lootBuffer, {
                 itemLink    = entry.itemLink,
                 playerName  = entry.playerName,
                 encounterID = encounterID,  -- normalise so replay-guard passes
                 timestamp   = now,
                 _picked     = true,         -- StartSession reads this to force-add
-            }
+            })
         end
     end
-    self.lootBuffer = replay
     self:TriggerEvent("OnLootBufferChanged", self.lootBuffer)
 
     if not self:StartSession(encounterID, encounterName) then
-        -- Restore prior buffer so the user can retry. Surface the error.
-        self.lootBuffer = priorBuffer
+        -- Restore prior buffer contents (preserving table identity) so
+        -- the picker's re-show sees the same rows.
+        wipe(self.lootBuffer)
+        for _, entry in ipairs(priorBuffer) do
+            table.insert(self.lootBuffer, entry)
+        end
         self:TriggerEvent("OnLootBufferChanged", self.lootBuffer)
         if Loothing and Loothing.Print then
             local L = Loothing.Locale or {}

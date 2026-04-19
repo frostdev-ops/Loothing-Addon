@@ -7,6 +7,13 @@ local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local StyleUtil = Loolib.StyleUtil
+local AnimationUtil = Loolib.AnimationUtil
+
+-- Animation tuning for button state transitions.
+local BUTTON_HOVER_DURATION = 0.12
+local BUTTON_PRESS_SCALE = 0.96
+local BUTTON_PRESS_DOWN_DURATION = 0.06
+local BUTTON_PRESS_UP_DURATION = 0.09
 
 local function CopyTable(source)
     if type(source) ~= "table" then
@@ -554,56 +561,60 @@ function SkinningMixin:GetButtonVariantPalette(variant)
             hoverBorderColorKey = "accent",
             pressedBorderColorKey = "accent",
             textColorKey = "text",
-            hoverTextColorKey = "text",
-            pressedTextColorKey = "text",
+            -- Hover/press backgrounds switch to the full `accent` / `accentCool`
+            -- colors, which are bright on every theme (amber, emerald, blue,
+            -- etc.). Near-white `text` on those backgrounds becomes unreadable,
+            -- so invert to `panel` (dark) — matching primary/success/warning/danger.
+            hoverTextColorKey = "panel",
+            pressedTextColorKey = "panel",
             disabledTextColorKey = "textSubtle",
         },
         primary = {
             bgColorKey = "accentSoft",
-            hoverBgColorKey = "panel",
-            pressedBgColorKey = "panelInset",
+            hoverBgColorKey = "accent",
+            pressedBgColorKey = "accentCool",
             borderColorKey = "accent",
             hoverBorderColorKey = "accent",
-            pressedBorderColorKey = "accent",
+            pressedBorderColorKey = "accentCool",
             textColorKey = "text",
-            hoverTextColorKey = "text",
-            pressedTextColorKey = "text",
+            hoverTextColorKey = "panel",
+            pressedTextColorKey = "panel",
             disabledTextColorKey = "textSubtle",
         },
         success = {
             bgColorKey = "panelAlt",
-            hoverBgColorKey = "panel",
+            hoverBgColorKey = "success",
             pressedBgColorKey = "panelInset",
             borderColorKey = "success",
             hoverBorderColorKey = "success",
             pressedBorderColorKey = "success",
             textColorKey = "success",
-            hoverTextColorKey = "text",
-            pressedTextColorKey = "text",
+            hoverTextColorKey = "panel",
+            pressedTextColorKey = "panel",
             disabledTextColorKey = "textSubtle",
         },
         warning = {
             bgColorKey = "panelAlt",
-            hoverBgColorKey = "panel",
+            hoverBgColorKey = "warning",
             pressedBgColorKey = "panelInset",
             borderColorKey = "warning",
             hoverBorderColorKey = "warning",
             pressedBorderColorKey = "warning",
             textColorKey = "warning",
-            hoverTextColorKey = "text",
-            pressedTextColorKey = "text",
+            hoverTextColorKey = "panel",
+            pressedTextColorKey = "panel",
             disabledTextColorKey = "textSubtle",
         },
         danger = {
             bgColorKey = "panelAlt",
-            hoverBgColorKey = "panel",
+            hoverBgColorKey = "danger",
             pressedBgColorKey = "panelInset",
             borderColorKey = "danger",
             hoverBorderColorKey = "danger",
             pressedBorderColorKey = "danger",
             textColorKey = "danger",
-            hoverTextColorKey = "text",
-            pressedTextColorKey = "text",
+            hoverTextColorKey = "panel",
+            pressedTextColorKey = "panel",
             disabledTextColorKey = "textSubtle",
         },
         ghost = {
@@ -627,6 +638,13 @@ function SkinningMixin:RefreshButtonVisualState(button)
     if not button then
         return
     end
+
+    -- Stop any in-flight hover/press tween so the snap actually wins.
+    -- Without this, calling RefreshButtonVisualState during theme refresh
+    -- or OnEnable/OnDisable/OnShow would write the target colors, then be
+    -- immediately overwritten by the next animation tick.
+    if button._ltColorGroup then button._ltColorGroup:Stop() end
+    if button._ltPressGroup then button._ltPressGroup:Stop() end
 
     local palette = self:GetButtonVariantPalette(button.ltButtonVariant)
     local disabled = button.IsEnabled and not button:IsEnabled()
@@ -658,6 +676,122 @@ function SkinningMixin:RefreshButtonVisualState(button)
     ApplyColorToFontString(GetButtonFontString(button), self:GetColor(textColorKey))
 end
 
+--- Resolve the target backdrop/border/text colors for a button in its
+--- current interaction state (hover/press/disabled). Returns three color
+--- tables: bg, border, text. Used by AnimateButtonState to compute tween
+--- targets without duplicating the palette-resolve logic.
+function SkinningMixin:ResolveButtonStateColors(button)
+    local palette = self:GetButtonVariantPalette(button.ltButtonVariant)
+    local disabled = button.IsEnabled and not button:IsEnabled()
+    local hovered = not disabled and button.IsMouseOver and button:IsMouseOver()
+    local pressed = not disabled and button.GetButtonState and button:GetButtonState() == "PUSHED"
+
+    local bgColorKey = disabled and "panelInset" or palette.bgColorKey
+    local borderColorKey = disabled and "border" or palette.borderColorKey
+    local textColorKey = disabled and (palette.disabledTextColorKey or "textSubtle") or palette.textColorKey
+
+    if hovered then
+        bgColorKey = palette.hoverBgColorKey or bgColorKey
+        borderColorKey = palette.hoverBorderColorKey or borderColorKey
+        textColorKey = palette.hoverTextColorKey or textColorKey
+    end
+    if pressed then
+        bgColorKey = palette.pressedBgColorKey or bgColorKey
+        borderColorKey = palette.pressedBorderColorKey or borderColorKey
+        textColorKey = palette.pressedTextColorKey or textColorKey
+    end
+
+    return self:GetColor(bgColorKey), self:GetColor(borderColorKey), self:GetColor(textColorKey)
+end
+
+--- Tween a button's colors toward its current-state target. Falls back to
+--- RefreshButtonVisualState (snap) when AnimationUtil isn't loaded or the
+--- button isn't visible.
+function SkinningMixin:AnimateButtonState(button)
+    if not button then return end
+    if not AnimationUtil or not button:IsVisible() then
+        return self:RefreshButtonVisualState(button)
+    end
+
+    local toBg, toBorder, toText = self:ResolveButtonStateColors(button)
+    local fontString = GetButtonFontString(button)
+
+    local function readColor(getter, holder, fallback)
+        if type(getter) ~= "function" then
+            return { fallback[1] or 0, fallback[2] or 0, fallback[3] or 0, fallback[4] or 1 }
+        end
+        local r, g, b, a = getter(holder)
+        if r == nil then
+            return { fallback[1] or 0, fallback[2] or 0, fallback[3] or 0, fallback[4] or 1 }
+        end
+        return { r, g, b, a or 1 }
+    end
+
+    local fromBg = readColor(button.GetBackdropColor, button, toBg)
+    local fromBorder = readColor(button.GetBackdropBorderColor, button, toBorder)
+    local fromText = fontString and readColor(fontString.GetTextColor, fontString, toText) or nil
+
+    if button._ltColorGroup then button._ltColorGroup:Stop() end
+
+    local group = AnimationUtil.CreateGroup(button)
+    if button.SetBackdropColor then
+        group:CreateAnimation("color", {
+            target = button,
+            sink = "backdropColor",
+            from = fromBg,
+            to = { toBg[1], toBg[2], toBg[3], toBg[4] or 1 },
+            duration = BUTTON_HOVER_DURATION,
+            easing = "outQuad",
+        })
+    end
+    if button.SetBackdropBorderColor then
+        group:CreateAnimation("color", {
+            target = button,
+            sink = "backdropBorderColor",
+            from = fromBorder,
+            to = { toBorder[1], toBorder[2], toBorder[3], toBorder[4] or 1 },
+            duration = BUTTON_HOVER_DURATION,
+            easing = "outQuad",
+        })
+    end
+    if fontString and fromText then
+        group:CreateAnimation("color", {
+            target = fontString,
+            sink = "textColor",
+            from = fromText,
+            to = { toText[1], toText[2], toText[3], toText[4] or 1 },
+            duration = BUTTON_HOVER_DURATION,
+            easing = "outQuad",
+        })
+    end
+    button._ltColorGroup = group
+    group:Play()
+end
+
+--- Play a press-down / press-up scale pulse on a button.
+function SkinningMixin:AnimateButtonPress(button, pressed)
+    if not button or not AnimationUtil or type(button.GetScale) ~= "function" then return end
+    local current = button:GetScale() or 1
+    -- If a persistent uiScale is set, we tween relative to it so we always return to the same size.
+    if not button._ltBaseScale then
+        button._ltBaseScale = current
+    end
+    local base = button._ltBaseScale
+    local target = pressed and (base * BUTTON_PRESS_SCALE) or base
+
+    if button._ltPressGroup then button._ltPressGroup:Stop() end
+    local group = AnimationUtil.CreateGroup(button)
+    group:CreateAnimation("scale", {
+        target = button,
+        from = current,
+        to = target,
+        duration = pressed and BUTTON_PRESS_DOWN_DURATION or BUTTON_PRESS_UP_DURATION,
+        easing = pressed and "outQuad" or "outBack",
+    })
+    button._ltPressGroup = group
+    group:Play()
+end
+
 function SkinningMixin:EnsureButtonStateHooks(button)
     if not button or button._ltButtonStateHooked or not button.HookScript then
         return
@@ -665,17 +799,33 @@ function SkinningMixin:EnsureButtonStateHooks(button)
 
     button._ltButtonStateHooked = true
 
-    local function RefreshState(btn)
+    -- Tween on interaction events so hover/press feel fluid. Snap for
+    -- non-interaction events (Enable/Disable/Show) because those are
+    -- typically tied to theme refreshes or state changes the user doesn't
+    -- "watch" transition.
+    button:HookScript("OnEnter", function(btn)
+        SkinningMixin:AnimateButtonState(btn)
+    end)
+    button:HookScript("OnLeave", function(btn)
+        SkinningMixin:AnimateButtonState(btn)
+    end)
+    button:HookScript("OnMouseDown", function(btn)
+        SkinningMixin:AnimateButtonState(btn)
+        SkinningMixin:AnimateButtonPress(btn, true)
+    end)
+    button:HookScript("OnMouseUp", function(btn)
+        SkinningMixin:AnimateButtonState(btn)
+        SkinningMixin:AnimateButtonPress(btn, false)
+    end)
+    button:HookScript("OnEnable", function(btn)
         SkinningMixin:RefreshButtonVisualState(btn)
-    end
-
-    button:HookScript("OnEnter", RefreshState)
-    button:HookScript("OnLeave", RefreshState)
-    button:HookScript("OnMouseDown", RefreshState)
-    button:HookScript("OnMouseUp", RefreshState)
-    button:HookScript("OnEnable", RefreshState)
-    button:HookScript("OnDisable", RefreshState)
-    button:HookScript("OnShow", RefreshState)
+    end)
+    button:HookScript("OnDisable", function(btn)
+        SkinningMixin:RefreshButtonVisualState(btn)
+    end)
+    button:HookScript("OnShow", function(btn)
+        SkinningMixin:RefreshButtonVisualState(btn)
+    end)
 end
 
 function SkinningMixin:DecorateWindow(frame)
@@ -852,20 +1002,33 @@ function SkinningMixin:RefreshTheme()
     if Loothing.MainFrame and type(Loothing.MainFrame.ApplyTheme) == "function" then
         Loothing.MainFrame:ApplyTheme()
     end
-    if Loothing.UI then
-        if Loothing.UI.CouncilTable and type(Loothing.UI.CouncilTable.ApplyTheme) == "function" then
-            Loothing.UI.CouncilTable:ApplyTheme()
+    -- Dispatch ApplyTheme to every polished top-level panel so accent/skin
+    -- changes take effect immediately, even if the panel is currently open.
+    -- Each entry is (owner_table, key). The ApplyTheme method must live on
+    -- the mixin instance at owner_table[key].
+    local dispatchTargets = {
+        -- Panels/tables stored on Loothing.UI
+        { Loothing.UI, "CouncilTable" },
+        { Loothing.UI, "RollFrame" },
+        { Loothing.UI, "VotePanel" },
+        { Loothing.UI, "ResultsPanel" },
+        { Loothing.UI, "SyncPanel" },
+        { Loothing.UI, "VersionCheckPanel" },
+        -- Mixin instances stored directly on Loothing (not Loothing.UI)
+        { Loothing,    "DiagPanel" },
+        { Loothing,    "AddItemFrame" },
+        { Loothing,    "ResponseButtonSettings" },
+        { Loothing,    "AwardReasonsSettings" },
+        -- Frames stored on ns with metatable proxy / direct Mixin() (ApplyTheme lives on the frame itself)
+        { ns,          "LootPickerFrame" },
+        { ns,          "IconPickerFrame" },
+    }
+    for _, entry in ipairs(dispatchTargets) do
+        local owner, key = entry[1], entry[2]
+        local target = owner and owner[key]
+        if target and type(target.ApplyTheme) == "function" then
+            target:ApplyTheme()
         end
-        if Loothing.UI.RollFrame and type(Loothing.UI.RollFrame.ApplyTheme) == "function" then
-            Loothing.UI.RollFrame:ApplyTheme()
-        end
-    end
-
-    -- Refresh the Loot Picker if it's open (lives in ns, not Loothing.UI).
-    if ns.LootPickerFrame and type(ns.LootPickerFrame.IsShown) == "function"
-        and ns.LootPickerFrame:IsShown()
-        and type(ns.LootPickerFrame.ApplyTheme) == "function" then
-        ns.LootPickerFrame:ApplyTheme()
     end
 
     self:RefreshStyledButtons()

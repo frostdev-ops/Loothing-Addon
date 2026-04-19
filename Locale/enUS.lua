@@ -968,7 +968,7 @@ L["DISPLAY_TEXT_LABEL"] = "Display Text:"
 L["RESPONSE_TEXT_LABEL"] = "Response Text:"
 L["ICON_LABEL"] = "Icon:"
 L["WHISPER_KEYS_LABEL"] = "Whisper Keys:"
-L["ICON_SET"] = "Icon: ✓"
+L["ICON_SET"] = "Icon |TInterface\\RAIDFRAME\\ReadyCheck-Ready:12:12|t"
 L["PICK_ICON"] = "Pick Icon…"
 
 --[[--------------------------------------------------------------------

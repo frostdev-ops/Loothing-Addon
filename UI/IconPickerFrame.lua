@@ -4,7 +4,22 @@
 ----------------------------------------------------------------------]]
 
 local _, ns = ...
+local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
+
+local AnimationUtil = Loolib.AnimationUtil
+local AnimationPresets = Loolib.AnimationPresets
+local PixelUtil = Loolib.PixelUtil
+
+local function GetSkinning() return ns.SkinningMixin end
+local function GetColorKey(key, fallback)
+    local sk = GetSkinning()
+    if sk and sk.GetColor then return sk:GetColor(key, fallback) end
+    return fallback or { 1, 1, 1, 1 }
+end
+
+local ApplyAccentGlow = ns.FramePolish.ApplyAccentGlow
+local AttachIconButtonPolish = ns.FramePolish.AttachIconButtonPolish
 
 local GRID_COLS    = 8
 local ICON_SIZE    = 36
@@ -29,13 +44,47 @@ function IconPickerMixin:Open(anchorFrame, onSelect)
 
     self:ClearAllPoints()
     self:SetPoint("TOPLEFT", anchorFrame, "TOPRIGHT", 4, 0)
+
+    if self._loothingFadeGroup then self._loothingFadeGroup:Stop() end
     self:Show()
     self:Raise()
+    -- Pick up any theme/accent change that happened while the picker was closed.
+    if type(self.ApplyTheme) == "function" then self:ApplyTheme() end
+
+    if AnimationPresets then
+        self._loothingFadeGroup = AnimationPresets.FadeIn(self, 0.22, "outCubic")
+    else
+        self:SetAlpha(1)
+    end
 end
 
 --- Close the picker without selecting
 function IconPickerMixin:Close()
-    self:Hide()
+    if self._loothingFadeGroup then self._loothingFadeGroup:Stop() end
+    if AnimationPresets and self:IsVisible() then
+        local frame = self
+        self._loothingFadeGroup = AnimationPresets.FadeOut(self, 0.13, "inCubic", true, function()
+            if frame then frame:SetAlpha(0) end
+        end)
+    else
+        self:Hide()
+    end
+end
+
+--- Re-apply custom accents on theme change.
+function IconPickerMixin:ApplyTheme()
+    if self.headerStrip then
+        ApplyAccentGlow(self.headerStrip, 0.18)
+        self.headerStrip:SetAlpha(1)
+    end
+    if self.pixelBorder then
+        local c = GetColorKey("borderStrong", { 0, 0, 0, 1 })
+        for _, tex in pairs(self.pixelBorder) do
+            if type(tex) == "table" and type(tex.SetColorTexture) == "function" then
+                tex:SetColorTexture(c[1] or 0, c[2] or 0, c[3] or 0, c[4] or 1)
+            end
+        end
+    end
 end
 
 --- Rebuild the icon grid based on current search string
@@ -142,16 +191,32 @@ function IconPickerMixin:OnLoad()
     })
     self:SetBackdropColor(0.1, 0.1, 0.1, 0.95)
     self:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
+    self:SetAlpha(0)
 
     local gridW = GRID_COLS * (ICON_SIZE + ICON_PADDING) - ICON_PADDING
     local scrollBarW = 20
     self:SetWidth(FRAME_PADDING * 2 + gridW + scrollBarW)
+
+    -- Accent glow strip behind the search bar
+    local headerStrip = self:CreateTexture(nil, "BACKGROUND", nil, 2)
+    headerStrip:SetPoint("TOPLEFT", 4, -4)
+    headerStrip:SetPoint("TOPRIGHT", -4, -4)
+    headerStrip:SetHeight(SEARCH_HEIGHT + 16)
+    headerStrip:SetColorTexture(1, 1, 1, 1)
+    self.headerStrip = headerStrip
+    ApplyAccentGlow(headerStrip, 0.18)
+
+    -- Pixel-perfect outer border
+    if PixelUtil and type(PixelUtil.SetThinBorder) == "function" then
+        self.pixelBorder = PixelUtil.SetThinBorder(self, GetColorKey("borderStrong", { 0, 0, 0, 1 }))
+    end
 
     -- Close button
     local closeBtn = CreateFrame("Button", nil, self, "UIPanelCloseButton")
     closeBtn:SetSize(20, 20)
     closeBtn:SetPoint("TOPRIGHT", -2, -2)
     closeBtn:SetScript("OnClick", function() self:Close() end)
+    AttachIconButtonPolish(closeBtn, { hoverScale = 1.15, pressScale = 0.90 })
 
     -- Search box
     local search = CreateFrame("EditBox", nil, self, "InputBoxTemplate")

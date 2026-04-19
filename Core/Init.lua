@@ -2625,8 +2625,17 @@ function Addon:Debug(...)
     end
 end
 
+-- Inline texture escapes so the icon renders in the chat frame's font
+-- (we can't swap chat's font to our TTF icon font, so use WoW textures).
+local ICON_WARN  = "|TInterface\\DialogFrame\\DialogAlertIcon:14:14:0:0|t"
+local ICON_ERROR = "|TInterface\\RAIDFRAME\\ReadyCheck-NotReady:14:14|t"
+
+function Addon:Warn(...)
+    print(ICON_WARN .. " |cffffcc00[Loothing Warn]|r", SecretUtil.SecretsForPrint(...))
+end
+
 function Addon:Error(...)
-    print("|cffff0000[Loothing Error]|r", SecretUtil.SecretsForPrint(...))
+    print(ICON_ERROR .. " |cffff0000[Loothing Error]|r", SecretUtil.SecretsForPrint(...))
 end
 
 function Addon:Print(...)

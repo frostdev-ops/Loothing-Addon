@@ -11,6 +11,13 @@ local Utils = ns.Utils
 local SkinningMixin = ns.SkinningMixin
 local L = Loothing.Locale
 
+local AnimationUtil = Loolib.AnimationUtil
+local AnimationPresets = Loolib.AnimationPresets
+local PixelUtil = Loolib.PixelUtil
+
+local ApplyAccentGlow = ns.FramePolish.ApplyAccentGlow
+local AttachIconButtonPolish = ns.FramePolish.AttachIconButtonPolish
+
 local CouncilTableMixin = Loolib.CreateFromMixins(Loolib.CallbackRegistryMixin, ns.CouncilTableMixin or {})
 ns.CouncilTableMixin = CouncilTableMixin
 
@@ -101,6 +108,23 @@ function CouncilTableMixin:CreateFrame()
     })
     ns.CouncilTableFrame = frame
 
+    -- Start hidden-alpha so the first Show() can fade in.
+    frame:SetAlpha(0)
+
+    -- Gradient accent strip behind the title (dynamic from SkinningMixin).
+    local headerStrip = frame:CreateTexture(nil, "BACKGROUND", nil, 2)
+    headerStrip:SetPoint("TOPLEFT", 2, -2)
+    headerStrip:SetPoint("TOPRIGHT", -2, -2)
+    headerStrip:SetHeight(36)
+    headerStrip:SetColorTexture(1, 1, 1, 1)
+    self.headerStrip = headerStrip
+    ApplyAccentGlow(headerStrip, 0.18)
+
+    -- Pixel-perfect outer border: color refreshed from SkinningMixin in ApplyTheme.
+    if PixelUtil and type(PixelUtil.SetThinBorder) == "function" then
+        self.pixelBorder = PixelUtil.SetThinBorder(frame, SkinningMixin:GetColor("borderStrong"))
+    end
+
     -- Title bar for dragging
     local titleBar = CreateFrame("Frame", nil, frame)
     titleBar:SetPoint("TOPLEFT", 12, -12)
@@ -134,6 +158,7 @@ function CouncilTableMixin:CreateFrame()
         self:SavePosition()
         self:OnResize()
     end)
+    AttachIconButtonPolish(resizeGrip, { hoverScale = 1.15, pressScale = 0.90 })
 
     self.frame = frame
 end
@@ -143,6 +168,8 @@ function CouncilTableMixin:CreateElements()
     local closeButton = CreateFrame("Button", nil, self.frame, "UIPanelCloseButton")
     closeButton:SetPoint("TOPRIGHT", -5, -5)
     closeButton:SetScript("OnClick", function() self:Hide() end)
+    AttachIconButtonPolish(closeButton, { hoverScale = 1.15, pressScale = 0.90 })
+    self.closeButton = closeButton
 
     -- Item tabs container (top of frame)
     self:CreateItemTabBar()
@@ -221,6 +248,7 @@ function CouncilTableMixin:CreateItemTabBar()
         self:ScrollTo(self.scrollOffset - SCROLL_STEP)
     end)
     leftArrow:Hide()
+    AttachIconButtonPolish(leftArrow, { hoverScale = 1.15, pressScale = 0.90 })
     self.scrollLeftArrow = leftArrow
 
     -- Right scroll arrow
@@ -235,6 +263,7 @@ function CouncilTableMixin:CreateItemTabBar()
         self:ScrollTo(self.scrollOffset + SCROLL_STEP)
     end)
     rightArrow:Hide()
+    AttachIconButtonPolish(rightArrow, { hoverScale = 1.15, pressScale = 0.90 })
     self.scrollRightArrow = rightArrow
 
     -- Clip frame between arrows
@@ -680,6 +709,7 @@ function CouncilTableMixin:CreateDetailTooltip()
         self.selectedCandidate = nil
         self:RefreshCandidates()
     end)
+    AttachIconButtonPolish(closeBtn, { hoverScale = 1.18, pressScale = 0.90 })
 
     -- Scroll frame so content can exceed tooltip height
     local scrollFrame = CreateFrame("ScrollFrame", nil, tooltip, "UIPanelScrollFrameTemplate")
@@ -787,14 +817,24 @@ function CouncilTableMixin:CreateDetailTooltip()
     mpInfo:SetWordWrap(true)
     self.moreInfoMythicPlus = mpInfo
 
-    -- Parse Performance
+    -- Parse Performance. Text renders in the default font; the trend
+    -- indicator is a sibling FontString in the icon font (FA is
+    -- icons-only and would tofu any Latin on the main line).
     local parseInfo = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     parseInfo:SetPoint("TOPLEFT", mpInfo, "BOTTOMLEFT", 0, -2)
-    parseInfo:SetPoint("RIGHT", -6, 0)
+    parseInfo:SetPoint("RIGHT", -20, 0)
     parseInfo:SetJustifyH("LEFT")
     SkinningMixin:StyleText(parseInfo, "bodySmall", "warning")
     parseInfo:SetWordWrap(true)
     self.moreInfoParses = parseInfo
+
+    -- Anchor to parseInfo's TOPRIGHT (not mpInfo's) so the trend glyph
+    -- stays on line 1 of the parse row even if M+ text above wraps.
+    local parseTrend = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    parseTrend:SetPoint("TOPRIGHT", parseInfo, "TOPRIGHT", 14, 0)
+    Loolib.Fonts:SetIconFont(parseTrend, 12, "")
+    parseTrend:Hide()
+    self.moreInfoParsesTrend = parseTrend
 
     -- Attendance
     local attendInfo = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -1079,6 +1119,22 @@ function CouncilTableMixin:ApplyTheme()
     SkinningMixin:StyleText(self.titleText, "title", "text")
     SkinningMixin:StyleText(self.emptyText, "body", "textSubtle")
 
+    -- Re-apply the gradient accent strip so theme/accent switches take effect.
+    if self.headerStrip then
+        ApplyAccentGlow(self.headerStrip, 0.18)
+        self.headerStrip:SetAlpha(1)
+    end
+
+    -- Recolor pixel border from theme "borderStrong".
+    if self.pixelBorder and PixelUtil then
+        local c = SkinningMixin:GetColor("borderStrong") or { 0, 0, 0, 1 }
+        for _, tex in pairs(self.pixelBorder) do
+            if type(tex) == "table" and type(tex.SetColorTexture) == "function" then
+                tex:SetColorTexture(c[1] or 0, c[2] or 0, c[3] or 0, c[4] or 1)
+            end
+        end
+    end
+
     if self.observerText then
         SkinningMixin:StyleText(self.observerText, "bodySmall", "warning")
     end
@@ -1225,6 +1281,7 @@ function CouncilTableMixin:CreateEnchanterButton()
     end)
     btn:SetScript("OnLeave", GameTooltip_Hide)
     btn:Hide()
+    AttachIconButtonPolish(btn, { hoverScale = 1.12, pressScale = 0.92, rotateOnHover = true })
     self.enchanterBtn = btn
 end
 
@@ -1440,6 +1497,9 @@ end
 
 -- Show/Hide/Toggle
 function CouncilTableMixin:Show()
+    -- Stop any in-flight open/close fade before starting a new one.
+    if self.frame._loothingFadeGroup then self.frame._loothingFadeGroup:Stop() end
+
     self:HideDetailTooltip()
     self:LoadPosition()
     self.frame:Show()
@@ -1448,10 +1508,26 @@ function CouncilTableMixin:Show()
     self:RefreshItemTabs()
     self:RefreshCandidates()
     self:UpdateActionButtons()
+
+    if AnimationPresets then
+        self.frame._loothingFadeGroup = AnimationPresets.FadeIn(self.frame, 0.22, "outCubic")
+    else
+        self.frame:SetAlpha(1)
+    end
 end
 
 function CouncilTableMixin:Hide()
-    self.frame:Hide()
+    if self.frame._loothingFadeGroup then self.frame._loothingFadeGroup:Stop() end
+
+    if AnimationPresets and self.frame:IsVisible() then
+        self.frame._loothingFadeGroup = AnimationPresets.FadeOut(self.frame, 0.13, "inCubic", true, function()
+            -- Reset alpha for next Show so we don't get a visible starting-alpha pop.
+            self.frame:SetAlpha(0)
+        end)
+    else
+        self.frame:Hide()
+    end
+
     -- Hint: tell council members how to reopen if session is still active
     if Loothing.Session and Loothing.Session:IsActive() then
         Loothing:Print(L["COUNCIL_TABLE_HIDDEN_HINT"])

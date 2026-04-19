@@ -142,7 +142,11 @@ function SimulatorPanelMixin:BuildFrame()
         if ns.Simulator:IsActive() then
             ns.Simulator:Disable()
         else
-            ns.Simulator:Enable(true)
+            -- Try Enable without force first so the safety gates
+            -- (real raid, active session, open picker, encounter in
+            -- progress) can refuse and surface a chat warning. If the
+            -- user wants to bypass, they can call `/lt sim on force`.
+            ns.Simulator:Enable(false)
         end
     end)
     SkinningMixin:StylePlainButton(self.toggleBtn)
@@ -177,7 +181,10 @@ function SimulatorPanelMixin:BuildKillSection()
 
     self.raidDropdown = CreateFrame("Frame", "LoothingSimRaidDropdown", section, "UIDropDownMenuTemplate")
     self.raidDropdown:SetPoint("LEFT", raidLabel, "RIGHT", -8, -2)
-    UIDropDownMenu_SetWidth(self.raidDropdown, 200)
+    -- Width generous enough for long raid names (e.g., "Amirdrassil, the
+    -- Dream's Hope") without truncation. PANEL_WIDTH is 380; 260 leaves
+    -- enough room for the label + margins.
+    UIDropDownMenu_SetWidth(self.raidDropdown, 260)
     UIDropDownMenu_Initialize(self.raidDropdown,
         function(_, level, menuList) self:PopulateRaidDropdown(level, menuList) end,
         "MENU")  -- MENU mode allows nested tier submenus
@@ -433,7 +440,11 @@ function SimulatorPanelMixin:PopulateRaidDropdown(level, menuList)
             local info = UIDropDownMenu_CreateInfo()
             local label = r.instanceName
             if r.isLatest then
-                label = label .. "  |cff888888(current)|r"
+                -- "latest" rather than "current" to disambiguate from the
+                -- selection checkmark — this marker indicates the raid
+                -- Blizzard considers the current live tier's finale, not
+                -- the user's selection.
+                label = label .. "  |cff888888(latest)|r"
             end
             info.text    = label
             info.checked = (r.instanceID == selectedID)
@@ -525,23 +536,28 @@ function SimulatorPanelMixin:GetLooterToken()
     return self.selectedLooter
 end
 
+-- Respect the same safety gates (real raid / active session / open
+-- picker / encounter in progress) as the slash-command path. Using
+-- `Enable(false)` means the user has to manually enable via
+-- `/lt sim on force` if they want to bypass — the UI should not
+-- silently disarm broadcast-to-live-raid protection.
 function SimulatorPanelMixin:OnFireKill()
     if not ns.Simulator:IsActive() then
-        ns.Simulator:Enable(true)
+        if not ns.Simulator:Enable(false) then return end
     end
     ns.Simulator:FireKillForBoss(self:GetBossToken(), self.itemCount, self:GetLooterToken())
 end
 
 function SimulatorPanelMixin:OnQueueKill()
     if not ns.Simulator:IsActive() then
-        ns.Simulator:Enable(true)
+        if not ns.Simulator:Enable(false) then return end
     end
     ns.Simulator:QueueKill(self:GetBossToken(), self.itemCount, self:GetLooterToken())
 end
 
 function SimulatorPanelMixin:OnAddLoot()
     if not ns.Simulator:IsActive() then
-        ns.Simulator:Enable(true)
+        if not ns.Simulator:Enable(false) then return end
     end
     local text = self.lootInput:GetText() or ""
     if text == "" then

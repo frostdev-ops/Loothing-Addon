@@ -10,6 +10,20 @@ local Loothing = ns.Addon
 local Utils = ns.Utils
 local L = ns.Locale
 
+local AnimationUtil = Loolib.AnimationUtil
+local AnimationPresets = Loolib.AnimationPresets
+local PixelUtil = Loolib.PixelUtil
+
+local function GetSkinning() return ns.SkinningMixin end
+local function GetColorKey(key, fallback)
+    local sk = GetSkinning()
+    if sk and sk.GetColor then return sk:GetColor(key, fallback) end
+    return fallback or { 1, 1, 1, 1 }
+end
+
+local ApplyAccentGlow = ns.FramePolish.ApplyAccentGlow
+local AttachIconButtonPolish = ns.FramePolish.AttachIconButtonPolish
+
 local FRAME_W        = 600
 local FRAME_H        = 550
 local FRAME_MIN_W    = 520
@@ -38,14 +52,47 @@ function AwardReasonsSettingsMixin:Show()
         return
     end
 
+    if self.frame._loothingFadeGroup then self.frame._loothingFadeGroup:Stop() end
     self:BringToFront()
     self.frame:Show()
+    -- Pick up any theme/accent change that happened while the modal was closed.
+    if type(self.ApplyTheme) == "function" then self:ApplyTheme() end
     self:UpdateLayout()
     self:Refresh()
+
+    if AnimationPresets then
+        self.frame._loothingFadeGroup = AnimationPresets.FadeIn(self.frame, 0.22, "outCubic")
+    else
+        self.frame:SetAlpha(1)
+    end
 end
 
 function AwardReasonsSettingsMixin:Hide()
-    self.frame:Hide()
+    if not self.frame then return end
+    if self.frame._loothingFadeGroup then self.frame._loothingFadeGroup:Stop() end
+    if AnimationPresets and self.frame:IsVisible() then
+        self.frame._loothingFadeGroup = AnimationPresets.FadeOut(self.frame, 0.13, "inCubic", true, function()
+            if self.frame then self.frame:SetAlpha(0) end
+        end)
+    else
+        self.frame:Hide()
+    end
+end
+
+function AwardReasonsSettingsMixin:ApplyTheme()
+    if not self.frame then return end
+    if self.headerStrip then
+        ApplyAccentGlow(self.headerStrip, 0.18)
+        self.headerStrip:SetAlpha(1)
+    end
+    if self.pixelBorder then
+        local c = GetColorKey("borderStrong", { 0, 0, 0, 1 })
+        for _, tex in pairs(self.pixelBorder) do
+            if type(tex) == "table" and type(tex.SetColorTexture) == "function" then
+                tex:SetColorTexture(c[1] or 0, c[2] or 0, c[3] or 0, c[4] or 1)
+            end
+        end
+    end
 end
 
 function AwardReasonsSettingsMixin:IsShown()
@@ -133,8 +180,23 @@ function AwardReasonsSettingsMixin:BuildFrame()
     f:SetBackdropColor(0.08, 0.08, 0.08, 0.97)
     f:SetBackdropBorderColor(0.7, 0.7, 0.7, 1)
     f:Hide()
+    f:SetAlpha(0)
     self.frame = f
     ns.AwardReasonsSettingsFrame = f
+
+    -- Accent glow strip behind the title
+    local headerStrip = f:CreateTexture(nil, "BACKGROUND", nil, 2)
+    headerStrip:SetPoint("TOPLEFT", 12, -12)
+    headerStrip:SetPoint("TOPRIGHT", -12, -12)
+    headerStrip:SetHeight(36)
+    headerStrip:SetColorTexture(1, 1, 1, 1)
+    self.headerStrip = headerStrip
+    ApplyAccentGlow(headerStrip, 0.18)
+
+    -- Pixel-perfect outer border
+    if PixelUtil and type(PixelUtil.SetThinBorder) == "function" then
+        self.pixelBorder = PixelUtil.SetThinBorder(f, GetColorKey("borderStrong", { 0, 0, 0, 1 }))
+    end
 
     -- Title
     local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
@@ -146,6 +208,8 @@ function AwardReasonsSettingsMixin:BuildFrame()
     local closeBtn = CreateFrame("Button", nil, f, "UIPanelCloseButton")
     closeBtn:SetPoint("TOPRIGHT", -4, -4)
     closeBtn:SetScript("OnClick", function() self:Hide() end)
+    AttachIconButtonPolish(closeBtn, { hoverScale = 1.15, pressScale = 0.90 })
+    self.closeBtn = closeBtn
 
     -- Resize grip
     local resizeGrip = CreateFrame("Button", nil, f)
@@ -396,7 +460,8 @@ function AwardReasonsSettingsMixin:CreateRow()
     upBtn:SetSize(16, 14)
     upBtn:SetPoint("LEFT", 4, 3)
     upBtn:SetNormalFontObject("GameFontNormalSmall")
-    upBtn:SetText("▲")
+    upBtn:SetText(Loolib.Fonts:Icon("arrow-up"))
+    Loolib.Fonts:ApplyIconFontToButton(upBtn, 10, "")
     row.upBtn = upBtn
 
     -- Move down button
@@ -404,7 +469,8 @@ function AwardReasonsSettingsMixin:CreateRow()
     downBtn:SetSize(16, 14)
     downBtn:SetPoint("LEFT", 4, -5)
     downBtn:SetNormalFontObject("GameFontNormalSmall")
-    downBtn:SetText("▼")
+    downBtn:SetText(Loolib.Fonts:Icon("arrow-down"))
+    Loolib.Fonts:ApplyIconFontToButton(downBtn, 10, "")
     row.downBtn = downBtn
 
     -- Color swatch
@@ -440,7 +506,8 @@ function AwardReasonsSettingsMixin:CreateRow()
     delBtn:SetSize(20, 20)
     delBtn:SetPoint("RIGHT", -4, 0)
     delBtn:SetNormalFontObject("GameFontNormalSmall")
-    delBtn:SetText("|cffff4444✕|r")
+    delBtn:SetText(Loolib.Fonts:IconColored("xmark", "ff4444"))
+    Loolib.Fonts:ApplyIconFontToButton(delBtn, 12, "")
     row.delBtn = delBtn
 
     -- ---- Expanded region ----
@@ -568,8 +635,9 @@ function AwardReasonsSettingsMixin:PopulateRow(row, reasonData, idx, total, isEx
         Utils.BroadcastMLDBIfML()
     end)
 
-    -- Expand button
-    row.expandBtn:SetText(isExpanded and ("▲ " .. L["LESS"]) or ("▼ " .. L["EDIT"]))
+    -- Expand button (text only — the icon font has no Latin glyphs so
+    -- we can't mix a chevron into the same FontString as "LESS"/"EDIT").
+    row.expandBtn:SetText(isExpanded and L["LESS"] or L["EDIT"])
     row.expandBtn:SetScript("OnClick", function()
         if self.expandedRow == reasonData.id then
             self.expandedRow = nil

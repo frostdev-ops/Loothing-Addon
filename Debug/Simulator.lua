@@ -176,6 +176,16 @@ function Simulator:Enable(force)
     -- is called mid-flight, late-firing timers can detect they're stale.
     self._gen = (self._gen or 0) + 1
 
+    -- Seed math.random once per enable so the Fisher-Yates shuffle in
+    -- GenerateItemsForBoss produces varied picks. WoW seeds math.random
+    -- at login but we seed explicitly to ensure variety even when Enable
+    -- is called before any other RNG consumer has perturbed the state.
+    if not self._seededRNG then
+        self._seededRNG = true
+        local t = (GetTime and GetTime() or time()) * 1000
+        math.randomseed(math.floor(t))
+    end
+
     self:InstallMLState()
     self:HookRaidRoster()
     if not self.fakeRaiders then
@@ -195,6 +205,11 @@ function Simulator:Disable()
     if not self.state.active then return false end
     self.state.active = false
     self.state.currentKill = nil
+    -- Clear the FireKill mutex so a new Enable cycle starts clean even
+    -- if a prior firing was aborted mid-flight. The `_gen` counter also
+    -- invalidates any in-flight C_Timer closures.
+    self._firing = false
+    self._autofireRetries = nil
     self:UnregisterSessionCallbacks()
     self:UnhookRaidRoster()
     self:RestoreMLState()
@@ -434,19 +449,20 @@ end
 --- restrictions, off-class tier tokens, etc.). Since the simulator
 --- wants the FULL loot table, clear before reading.
 local function pushEJLootFilter()
-    if not EJ_GetLootFilter or not EJ_SetLootFilter then return nil, nil end
+    if not EJ_GetLootFilter or not EJ_SetLootFilter then return 0, 0 end
     local classID, specID = EJ_GetLootFilter()
-    if (classID or 0) ~= 0 or (specID or 0) ~= 0 then
+    classID, specID = classID or 0, specID or 0
+    if classID ~= 0 or specID ~= 0 then
         EJ_SetLootFilter(0, 0)
     end
     return classID, specID
 end
 
+--- Restore the prior EJ class/spec loot filter. ALWAYS re-applies so an
+--- interloping Set between push/pop doesn't leave the filter stale.
 local function popEJLootFilter(classID, specID)
     if not EJ_SetLootFilter then return end
-    if (classID or 0) ~= 0 or (specID or 0) ~= 0 then
-        EJ_SetLootFilter(classID or 0, specID or 0)
-    end
+    EJ_SetLootFilter(classID or 0, specID or 0)
 end
 
 --- Load a specific raid's boss list by Encounter Journal instance ID.
@@ -586,31 +602,41 @@ function Simulator:LoadBossLoot(boss)
     -- Clear any sticky EJ class/spec filter for the duration of this
     -- read. Otherwise trinkets / off-class tokens / spec-restricted
     -- items are silently dropped from the loot list the sim sees.
+    -- The read is pcall-wrapped so any EJ read error ALWAYS restores
+    -- the user's filter (without pcall, an error leaked the cleared
+    -- filter into the player's live Encounter Journal UI permanently).
     local priorClassID, priorSpecID = pushEJLootFilter()
 
     local items = {}
-    local n = (EJ_GetNumLoot and EJ_GetNumLoot()) or 0
-    for i = 1, n do
-        local lootInfo
-        if C_EncounterJournal and C_EncounterJournal.GetLootInfoByIndex then
-            lootInfo = C_EncounterJournal.GetLootInfoByIndex(i)
-        end
-        if lootInfo and lootInfo.itemID then
-            -- Kick off the item cache load so HandleTradable's quality
-            -- check (which parses the |c color code) sees a fully
-            -- decorated link by the time we inject it. EJ's lootInfo.link
-            -- often lacks the color code on first read, which would make
-            -- Utils.GetItemQuality return 0.
-            if C_Item and C_Item.RequestLoadItemDataByID then
-                C_Item.RequestLoadItemDataByID(lootInfo.itemID)
+    local ok, err = pcall(function()
+        local n = (EJ_GetNumLoot and EJ_GetNumLoot()) or 0
+        for i = 1, n do
+            local lootInfo
+            if C_EncounterJournal and C_EncounterJournal.GetLootInfoByIndex then
+                lootInfo = C_EncounterJournal.GetLootInfoByIndex(i)
             end
-            items[#items + 1] = {
-                itemID = lootInfo.itemID,
-            }
+            if lootInfo and lootInfo.itemID then
+                -- Kick off the item cache load so HandleTradable's quality
+                -- check (which parses the |c color code) sees a fully
+                -- decorated link by the time we inject it. EJ's lootInfo.link
+                -- often lacks the color code on first read, which would make
+                -- Utils.GetItemQuality return 0.
+                if C_Item and C_Item.RequestLoadItemDataByID then
+                    C_Item.RequestLoadItemDataByID(lootInfo.itemID)
+                end
+                items[#items + 1] = {
+                    itemID = lootInfo.itemID,
+                }
+            end
         end
-    end
+    end)
 
     popEJLootFilter(priorClassID, priorSpecID)
+
+    if not ok then
+        safeDebug("[Sim] LoadBossLoot error:", tostring(err))
+        items = {}
+    end
 
     boss.items = items
     safeDebug("[Sim] LoadBossLoot:", boss.name, "loot=", #items)
@@ -972,16 +998,28 @@ function Simulator:FireKill(boss, items, looters)
 
     -- Mirror the real ENCOUNTER_START -> ENCOUNTER_END dispatch chain
     -- (Core/Init.lua:1042-1052). Calling the handlers directly is the same
-    -- entry point Blizzard's event dispatch uses.
+    -- entry point Blizzard's event dispatch uses. pcall-wrap so a handler
+    -- error can't leave `_firing` stuck true forever.
     if Loothing.Session.OnEncounterStart then
-        Loothing.Session:OnEncounterStart(boss.encounterID, boss.name,
-            DEFAULT_DIFFICULTY, DEFAULT_GROUP_SIZE)
+        local ok, err = pcall(Loothing.Session.OnEncounterStart, Loothing.Session,
+            boss.encounterID, boss.name, DEFAULT_DIFFICULTY, DEFAULT_GROUP_SIZE)
+        if not ok then
+            safeDebug("[Sim] OnEncounterStart error:", tostring(err))
+            self._firing = false
+            return false
+        end
     end
 
     C_Timer.After(0.1, function()
         if not self:_isCurrent(gen) then self._firing = false; return end
-        Loothing.Session:OnEncounterEnd(boss.encounterID, boss.name,
-            DEFAULT_DIFFICULTY, DEFAULT_GROUP_SIZE, 1)
+
+        local ok, err = pcall(Loothing.Session.OnEncounterEnd, Loothing.Session,
+            boss.encounterID, boss.name, DEFAULT_DIFFICULTY, DEFAULT_GROUP_SIZE, 1)
+        if not ok then
+            safeDebug("[Sim] OnEncounterEnd error:", tostring(err))
+            self._firing = false
+            return
+        end
 
         -- After OnEncounterEnd has cached lastEligibleEncounter and started
         -- the bag scan, inject items via HandleTradable. This mirrors what
@@ -991,7 +1029,7 @@ function Simulator:FireKill(boss, items, looters)
             if not self:_isCurrent(gen) then self._firing = false; return end
             for i, link in ipairs(items) do
                 local looter = (looters and looters[i]) or self:PickLooter()
-                Loothing.Session:HandleTradable({
+                pcall(Loothing.Session.HandleTradable, Loothing.Session, {
                     itemLink = link,
                     timeRemaining = DEFAULT_TRADE_TIME,
                     playerName = looter,

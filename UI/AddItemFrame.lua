@@ -6,8 +6,16 @@
 local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
+local SkinningMixin = ns.SkinningMixin
+
+local AnimationUtil = Loolib.AnimationUtil
+local AnimationPresets = Loolib.AnimationPresets
+local PixelUtil = Loolib.PixelUtil
 
 local L = Loothing.Locale
+
+local ApplyAccentGlow = ns.FramePolish.ApplyAccentGlow
+local AttachIconButtonPolish = ns.FramePolish.AttachIconButtonPolish
 
 --[[--------------------------------------------------------------------
     Item Resolution Pipeline
@@ -74,11 +82,27 @@ function AddItemFrameMixin:BuildFrame()
     frame:SetBackdropColor(0.08, 0.08, 0.08, 0.95)
     frame:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
     frame:Hide()
+    frame:SetAlpha(0)
     self.frame = frame
     ns.AddItemFrame = frame
 
     local WM = Loolib:GetModule("WindowManager")
     if WM then WM:Register(frame) end
+
+    -- Accent glow strip behind the title (effect #4)
+    local headerStrip = frame:CreateTexture(nil, "BACKGROUND", nil, 2)
+    headerStrip:SetPoint("TOPLEFT", 2, -2)
+    headerStrip:SetPoint("TOPRIGHT", -2, -2)
+    headerStrip:SetHeight(26)
+    headerStrip:SetColorTexture(1, 1, 1, 1)
+    self.headerStrip = headerStrip
+    ApplyAccentGlow(headerStrip, 0.18)
+
+    -- Pixel-perfect outer border (effect #5)
+    if PixelUtil and type(PixelUtil.SetThinBorder) == "function" then
+        self.pixelBorder = PixelUtil.SetThinBorder(frame,
+            (SkinningMixin and SkinningMixin:GetColor("borderStrong")) or { 0, 0, 0, 1 })
+    end
 
     -- Title
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -91,6 +115,8 @@ function AddItemFrameMixin:BuildFrame()
     closeBtn:SetSize(22, 22)
     closeBtn:SetPoint("TOPRIGHT", -2, -2)
     closeBtn:SetScript("OnClick", function() self:Hide() end)
+    AttachIconButtonPolish(closeBtn, { hoverScale = 1.15, pressScale = 0.90 })
+    self.closeBtn = closeBtn
 
     -- Tab separator line under title
     local sep1 = frame:CreateTexture(nil, "ARTWORK")
@@ -189,9 +215,16 @@ function AddItemFrameMixin:BuildEnterItemPanel()
     panel:Hide()
     self.enterItemPanel = panel
 
-    -- Hint text
+    -- Hint text preceded by an info icon (icon font has no Latin glyphs,
+    -- so text and icon live in two FontStrings).
+    local hintIcon = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    hintIcon:SetPoint("TOPLEFT")
+    Loolib.Fonts:SetIconFont(hintIcon, 10, "")
+    hintIcon:SetText(Loolib.Fonts:Icon("circle-info"))
+    hintIcon:SetTextColor(0.6, 0.8, 1.0)
+
     local hint = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    hint:SetPoint("TOPLEFT")
+    hint:SetPoint("LEFT", hintIcon, "RIGHT", 4, 0)
     hint:SetText(L["ENTER_ITEM_HINT"])
     hint:SetTextColor(0.7, 0.7, 0.7)
     hint:SetJustifyH("LEFT")
@@ -809,17 +842,52 @@ end
 
 function AddItemFrameMixin:Show()
     wipe(self.itemQueue)
+    if self.frame._loothingFadeGroup then self.frame._loothingFadeGroup:Stop() end
     self.frame:Show()
     self.frame:Raise()
+    -- Pick up any theme/accent change that happened while the modal was closed.
+    if type(self.ApplyTheme) == "function" then self:ApplyTheme() end
     self:SelectTab(1)
     self.editBox:SetFocus()
+
+    if AnimationPresets then
+        self.frame._loothingFadeGroup = AnimationPresets.FadeIn(self.frame, 0.22, "outCubic")
+    else
+        self.frame:SetAlpha(1)
+    end
 end
 
 function AddItemFrameMixin:Hide()
-    self.frame:Hide()
+    if self.frame._loothingFadeGroup then self.frame._loothingFadeGroup:Stop() end
+    if AnimationPresets and self.frame:IsVisible() then
+        self.frame._loothingFadeGroup = AnimationPresets.FadeOut(self.frame, 0.13, "inCubic", true, function()
+            self.frame:SetAlpha(0)
+        end)
+    else
+        self.frame:Hide()
+    end
     self.editBox:SetText("")
     wipe(self.itemQueue)
     self.addBtn:SetEnabled(false)
+end
+
+-- Re-apply custom accents on theme change.
+function AddItemFrameMixin:ApplyTheme()
+    if not self.frame then return end
+    if not SkinningMixin then SkinningMixin = ns.SkinningMixin end
+
+    if self.headerStrip then
+        ApplyAccentGlow(self.headerStrip, 0.18)
+        self.headerStrip:SetAlpha(1)
+    end
+    if self.pixelBorder and SkinningMixin then
+        local c = SkinningMixin:GetColor("borderStrong") or { 0, 0, 0, 1 }
+        for _, tex in pairs(self.pixelBorder) do
+            if type(tex) == "table" and type(tex.SetColorTexture) == "function" then
+                tex:SetColorTexture(c[1] or 0, c[2] or 0, c[3] or 0, c[4] or 1)
+            end
+        end
+    end
 end
 
 function AddItemFrameMixin:IsShown()

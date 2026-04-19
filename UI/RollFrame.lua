@@ -289,20 +289,25 @@ end
 function RollFrameMixin:UpdateWishlistIndicator(item)
     if not self.wishlistIndicator then return end
 
-    if not item or not item.itemID or not Loothing.Wishlist or not Loothing.Wishlist:HasData() then
+    local function hideAll()
         self.wishlistIndicator:Hide()
+        if self.wishlistIcon then self.wishlistIcon:Hide() end
+    end
+
+    if not item or not item.itemID or not Loothing.Wishlist or not Loothing.Wishlist:HasData() then
+        hideAll()
         return
     end
 
     local playerName = Utils.GetPlayerFullName()
     if not playerName then
-        self.wishlistIndicator:Hide()
+        hideAll()
         return
     end
 
     local entry = Loothing.Wishlist:GetPlayerEntryForItem(item.itemID, playerName)
     if not entry then
-        self.wishlistIndicator:Hide()
+        hideAll()
         return
     end
 
@@ -310,15 +315,36 @@ function RollFrameMixin:UpdateWishlistIndicator(item)
     local label = nlInfo and nlInfo.label or (entry.needLevel or "?")
     local c = nlInfo and nlInfo.color or { r = 1, g = 1, b = 1 }
 
-    self.wishlistIndicator:SetText(string.format("\226\152\133 On your wishlist: %s, Priority %d", label, entry.priority or 0))
+    self.wishlistIndicator:SetText(string.format("On your wishlist: %s, Priority %d", label, entry.priority or 0))
     self.wishlistIndicator:SetTextColor(c.r, c.g, c.b)
     self.wishlistIndicator:Show()
+    if self.wishlistIcon then
+        self.wishlistIcon:SetTextColor(c.r, c.g, c.b)
+        self.wishlistIcon:Show()
+    end
 end
 
 --- Reset UI state
 -- @param previousResponse table|nil - Previous response data if item was already responded to
 function RollFrameMixin:ResetUIState(previousResponse)
     local alreadyResponded = previousResponse and previousResponse.submitted
+
+    -- Title bar lock glyph reflects locked-in status.
+    if self.titleLock then
+        if alreadyResponded then
+            self.titleLock:Show()
+            if self.titleText then
+                self.titleText:ClearAllPoints()
+                self.titleText:SetPoint("LEFT", self.titleLock, "RIGHT", 4, 0)
+            end
+        else
+            self.titleLock:Hide()
+            if self.titleText then
+                self.titleText:ClearAllPoints()
+                self.titleText:SetPoint("LEFT", 5, 0)
+            end
+        end
+    end
 
     -- Restore note from previous response (editable in change mode, locked if submitted)
     if self.noteEditBox then
@@ -1161,17 +1187,46 @@ function RollFrameMixin:Show()
         self.immediateReshowTimer:Cancel()
         self.immediateReshowTimer = nil
     end
+
+    local Loolib_Presets = Loolib and Loolib.AnimationPresets
+    if self.frame._loothingFadeGroup then
+        self.frame._loothingFadeGroup:Stop()
+        -- If a Hide-fade was interrupted mid-flight, its onFinished never
+        -- ran and `_suppressUnexpectedHide` would still be true. Clear it
+        -- here so subsequent unexpected Hide events (combat minimize, etc.)
+        -- aren't silently swallowed.
+        self._suppressUnexpectedHide = false
+    end
+
     self:RestorePosition()
     self.frame:Show()
+
+    if Loolib_Presets then
+        self.frame._loothingFadeGroup = Loolib_Presets.FadeIn(self.frame, 0.22, "outCubic")
+    else
+        self.frame:SetAlpha(1)
+    end
 end
 
 --- Hide the frame
 function RollFrameMixin:Hide()
     self:StopTimer()
     self:UnregisterRollCapture()
-    self._suppressUnexpectedHide = true
-    self.frame:Hide()
-    self._suppressUnexpectedHide = false
+
+    local Loolib_Presets = Loolib and Loolib.AnimationPresets
+    if self.frame._loothingFadeGroup then self.frame._loothingFadeGroup:Stop() end
+
+    if Loolib_Presets and self.frame:IsVisible() then
+        self._suppressUnexpectedHide = true
+        self.frame._loothingFadeGroup = Loolib_Presets.FadeOut(self.frame, 0.13, "inCubic", true, function()
+            self.frame:SetAlpha(0)
+            self._suppressUnexpectedHide = false
+        end)
+    else
+        self._suppressUnexpectedHide = true
+        self.frame:Hide()
+        self._suppressUnexpectedHide = false
+    end
 end
 
 --- Toggle visibility
@@ -1231,9 +1286,21 @@ function RollFrameMixin:Close(submitted, reason)
 
     self:StopTimer()
     self:SavePosition()
-    self._suppressUnexpectedHide = true
-    self.frame:Hide()
-    self._suppressUnexpectedHide = false
+
+    local Loolib_Presets = Loolib and Loolib.AnimationPresets
+    if self.frame._loothingFadeGroup then self.frame._loothingFadeGroup:Stop() end
+
+    if Loolib_Presets and self.frame:IsVisible() then
+        self._suppressUnexpectedHide = true
+        self.frame._loothingFadeGroup = Loolib_Presets.FadeOut(self.frame, 0.13, "inCubic", true, function()
+            self.frame:SetAlpha(0)
+            self._suppressUnexpectedHide = false
+        end)
+    else
+        self._suppressUnexpectedHide = true
+        self.frame:Hide()
+        self._suppressUnexpectedHide = false
+    end
 
     if not submitted then
         self:TriggerEvent("OnFrameClosed", self.item)

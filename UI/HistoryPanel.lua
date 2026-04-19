@@ -10,6 +10,12 @@ local Utils = ns.Utils
 local Popups = ns.Popups
 local SkinningMixin = ns.SkinningMixin
 
+local AnimationUtil = Loolib.AnimationUtil
+local PixelUtil = Loolib.PixelUtil
+
+local ApplyAccentGlow = ns.FramePolish.ApplyAccentGlow
+local AttachIconButtonPolish = ns.FramePolish.AttachIconButtonPolish
+
 --[[--------------------------------------------------------------------
     HistoryPanelMixin
 ----------------------------------------------------------------------]]
@@ -104,6 +110,15 @@ function HistoryPanelMixin:CreateFilterBar()
     filterBar:SetPoint("TOPLEFT", 8, -8)
     filterBar:SetPoint("TOPRIGHT", -8, -8)
     filterBar:SetHeight(28)
+
+    -- Soft accent glow across the filter bar (acts as the panel header).
+    local headerStrip = filterBar:CreateTexture(nil, "BACKGROUND", nil, 2)
+    headerStrip:SetPoint("TOPLEFT", -4, 2)
+    headerStrip:SetPoint("TOPRIGHT", 4, 2)
+    headerStrip:SetHeight(32)
+    headerStrip:SetColorTexture(1, 1, 1, 1)
+    self.headerStrip = headerStrip
+    ApplyAccentGlow(headerStrip, 0.18)
 
     -- Nil-safe placeholder string (guards against missing locale key)
     local placeholder = L["SEARCH"]
@@ -266,6 +281,11 @@ function HistoryPanelMixin:CreateHistoryList()
     container:SetPoint("BOTTOMRIGHT", 0, 0)
     SkinningMixin:StyleSurface(container, "inset")
 
+    -- Pixel-perfect inner border on the main history list.
+    if PixelUtil and type(PixelUtil.SetThinBorder) == "function" then
+        self.listPixelBorder = PixelUtil.SetThinBorder(container, SkinningMixin:GetColor("borderStrong"))
+    end
+
     -- Column headers
     local headerFrame = CreateFrame("Frame", nil, container)
     headerFrame:SetPoint("TOPLEFT", 8, -4)
@@ -423,6 +443,20 @@ function HistoryPanelMixin:ApplyTheme()
 
     if self.listSeparator then
         self.listSeparator:SetColorTexture(unpack(SkinningMixin:GetColor("border")))
+    end
+
+    -- Re-apply custom accents so skin/accent switches take effect.
+    if self.headerStrip then
+        ApplyAccentGlow(self.headerStrip, 0.18)
+        self.headerStrip:SetAlpha(1)
+    end
+    if self.listPixelBorder and PixelUtil then
+        local c = SkinningMixin:GetColor("borderStrong") or { 0, 0, 0, 1 }
+        for _, tex in pairs(self.listPixelBorder) do
+            if type(tex) == "table" and type(tex.SetColorTexture) == "function" then
+                tex:SetColorTexture(c[1] or 0, c[2] or 0, c[3] or 0, c[4] or 1)
+            end
+        end
     end
 end
 
@@ -1057,6 +1091,7 @@ local function GetOrCreateHugeExportFrame()
     local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", -5, -5)
     close:SetScript("OnClick", function() frame:Hide() end)
+    AttachIconButtonPolish(close, { hoverScale = 1.15, pressScale = 0.90 })
 
     local editBox = CreateFrame("EditBox", nil, frame)
     editBox:SetMultiLine(false)
@@ -1138,6 +1173,7 @@ function HistoryPanelMixin:ShowExportDialog()
         close:SetScript("OnClick", function()
             frame:Hide()
         end)
+        AttachIconButtonPolish(close, { hoverScale = 1.15, pressScale = 0.90 })
 
         local scrollFrame = CreateFrame("ScrollFrame", nil, frame, "UIPanelScrollFrameTemplate")
         scrollFrame:SetPoint("TOPLEFT", 16, -40)

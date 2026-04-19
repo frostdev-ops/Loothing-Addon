@@ -9,6 +9,12 @@ local Loothing = ns.Addon
 local Utils = ns.Utils
 local SkinningMixin = ns.SkinningMixin
 
+local AnimationUtil = Loolib.AnimationUtil
+local PixelUtil = Loolib.PixelUtil
+
+local ApplyAccentGlow = ns.FramePolish.ApplyAccentGlow
+local AttachIconButtonPolish = ns.FramePolish.AttachIconButtonPolish
+
 --[[--------------------------------------------------------------------
     TradePanelMixin
 
@@ -74,6 +80,15 @@ function TradePanelMixin:CreateHeader()
     header:SetPoint("TOPRIGHT", -8, -8)
     header:SetHeight(50)
 
+    -- Soft accent glow behind the title. Tracks SkinningMixin accent color.
+    local headerStrip = header:CreateTexture(nil, "BACKGROUND", nil, 2)
+    headerStrip:SetPoint("TOPLEFT", 0, 0)
+    headerStrip:SetPoint("TOPRIGHT", 0, 0)
+    headerStrip:SetHeight(28)
+    headerStrip:SetColorTexture(1, 1, 1, 1)
+    self.headerStrip = headerStrip
+    ApplyAccentGlow(headerStrip, 0.18)
+
     -- Title
     self.titleText = header:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     self.titleText:SetPoint("TOPLEFT")
@@ -85,11 +100,18 @@ function TradePanelMixin:CreateHeader()
     self.countText:SetPoint("TOPLEFT", self.titleText, "BOTTOMLEFT", 0, -4)
     SkinningMixin:StyleText(self.countText, "body", "textMuted")
 
-    -- Help text
+    -- Help text preceded by an info icon (icon font + text font require
+    -- two FontStrings; icons-only font has no Latin glyphs).
     self.helpText = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     self.helpText:SetPoint("TOPRIGHT")
     self.helpText:SetText(L["TRADE_PANEL_HELP"])
     SkinningMixin:StyleText(self.helpText, "bodySmall", "textMuted")
+
+    self.helpIcon = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    self.helpIcon:SetPoint("RIGHT", self.helpText, "LEFT", -4, 0)
+    Loolib.Fonts:SetIconFont(self.helpIcon, 10, "")
+    self.helpIcon:SetText(Loolib.Fonts:Icon("circle-info"))
+    self.helpIcon:SetTextColor(0.6, 0.8, 1.0)
 
     self.header = header
 end
@@ -103,6 +125,11 @@ function TradePanelMixin:CreateList()
     container:SetPoint("TOPLEFT", 8, -66)
     container:SetPoint("BOTTOMRIGHT", -8, 50)
     SkinningMixin:StyleSurface(container, "inset")
+
+    -- Pixel-perfect inner border
+    if PixelUtil and type(PixelUtil.SetThinBorder) == "function" then
+        self.listPixelBorder = PixelUtil.SetThinBorder(container, SkinningMixin:GetColor("borderStrong"))
+    end
 
     -- Column headers
     local headerFrame = CreateFrame("Frame", nil, container)
@@ -248,6 +275,20 @@ function TradePanelMixin:ApplyTheme()
 
     SkinningMixin:StylePlainButton(self.refreshButton)
     SkinningMixin:StylePlainButton(self.clearButton, "primary")
+
+    -- Re-apply custom accents so skin/accent switches take effect.
+    if self.headerStrip then
+        ApplyAccentGlow(self.headerStrip, 0.18)
+        self.headerStrip:SetAlpha(1)
+    end
+    if self.listPixelBorder and PixelUtil then
+        local c = SkinningMixin:GetColor("borderStrong") or { 0, 0, 0, 1 }
+        for _, tex in pairs(self.listPixelBorder) do
+            if type(tex) == "table" and type(tex.SetColorTexture) == "function" then
+                tex:SetColorTexture(c[1] or 0, c[2] or 0, c[3] or 0, c[4] or 1)
+            end
+        end
+    end
 end
 
 --[[--------------------------------------------------------------------
@@ -511,6 +552,7 @@ function TradePanelMixin:CreateRow()
     row.removeButton:SetNormalTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
     row.removeButton:SetHighlightTexture("Interface\\Buttons\\UI-GROUPLOOT-PASS-HIGHLIGHT")
     row.removeButton:SetPushedTexture("Interface\\Buttons\\UI-GROUPLOOT-PASS-DOWN")
+    AttachIconButtonPolish(row.removeButton, { hoverScale = 1.15, pressScale = 0.90 })
 
     -- Hover effect
     row:SetScript("OnEnter", function(rowFrame)

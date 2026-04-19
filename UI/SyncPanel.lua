@@ -8,6 +8,19 @@ local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local Utils = ns.Utils
 local L = Loothing.Locale
+local SkinningMixin = ns.SkinningMixin
+
+local AnimationUtil = Loolib.AnimationUtil
+local AnimationPresets = Loolib.AnimationPresets
+local PixelUtil = Loolib.PixelUtil
+
+-- Animation durations
+local SHOW_DURATION = 0.22
+local HIDE_DURATION = 0.13
+local INDICATOR_SLIDE_DURATION = 0.22
+
+local ApplyAccentGlow = ns.FramePolish.ApplyAccentGlow
+local AttachIconButtonPolish = ns.FramePolish.AttachIconButtonPolish
 
 --[[--------------------------------------------------------------------
     SyncPanelMixin
@@ -58,6 +71,23 @@ function SyncPanelMixin:CreateFrame()
         insets = { left = 11, right = 12, top = 12, bottom = 11 },
     })
 
+    -- Start hidden-alpha so the first Show() can fade in
+    frame:SetAlpha(0)
+
+    -- Accent glow strip: soft fade-from-accent-to-transparent behind the title.
+    local headerStrip = frame:CreateTexture(nil, "BACKGROUND", nil, 2)
+    headerStrip:SetPoint("TOPLEFT", 12, -12)
+    headerStrip:SetPoint("TOPRIGHT", -12, -12)
+    headerStrip:SetHeight(30)
+    headerStrip:SetColorTexture(1, 1, 1, 1)
+    self.headerStrip = headerStrip
+    ApplyAccentGlow(headerStrip, 0.18)
+
+    -- Pixel-perfect outer border
+    if PixelUtil and type(PixelUtil.SetThinBorder) == "function" then
+        self.pixelBorder = PixelUtil.SetThinBorder(frame, SkinningMixin and SkinningMixin:GetColor("borderStrong") or { 0.2, 0.2, 0.2, 1 })
+    end
+
     -- Title bar for dragging
     local titleBar = CreateFrame("Frame", nil, frame)
     titleBar:SetPoint("TOPLEFT", 12, -12)
@@ -92,6 +122,7 @@ function SyncPanelMixin:CreateElements()
     self.closeButton:SetScript("OnClick", function()
         self:Hide()
     end)
+    AttachIconButtonPolish(self.closeButton, { hoverScale = 1.15, pressScale = 0.90 })
 
     -- Sync type buttons
     self:CreateSyncTypeButtons()
@@ -156,6 +187,68 @@ function SyncPanelMixin:CreateSyncTypeButtons()
         self.targetBtn:SetText(L["SELECT_TARGET"])
         self:UpdateUI()
     end)
+
+    -- Shared sliding indicator under the active sync-type button.
+    local indicator = self.frame:CreateTexture(nil, "OVERLAY", nil, 7)
+    indicator:SetHeight(3)
+    indicator:SetWidth(0)
+    indicator:SetColorTexture(1, 1, 1, 1)
+    indicator:Hide()
+    self.typeIndicator = indicator
+end
+
+--- Slide the shared sync-type indicator to the active button.
+function SyncPanelMixin:MoveTypeIndicatorTo(button)
+    if not self.typeIndicator or not button then return end
+    local indicator = self.typeIndicator
+
+    local accent = (SkinningMixin and SkinningMixin:GetColor("accent")) or { 0.4, 0.55, 0.9, 1 }
+    indicator:SetVertexColor(accent[1] or 0.4, accent[2] or 0.55, accent[3] or 0.9, accent[4] or 1)
+    indicator:Show()
+
+    local targetWidth = math.max(0, (button:GetWidth() or 100) - 8)
+    local skipAnim = not self.frame or not self.frame:IsVisible() or not self._typeIndicatorPositioned
+
+    if not AnimationUtil or skipAnim then
+        indicator:ClearAllPoints()
+        indicator:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 4, -3)
+        indicator:SetWidth(targetWidth)
+        self._typeIndicatorPositioned = true
+        self._typeIndicatorAnchor = button
+        return
+    end
+
+    -- Re-anchor to new button with same width, then tween width.
+    local currentWidth = indicator:GetWidth() or 0
+    indicator:ClearAllPoints()
+    indicator:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 4, -3)
+    indicator:SetWidth(currentWidth)
+
+    if self._typeIndicatorGroup then self._typeIndicatorGroup:Stop() end
+    local group = AnimationUtil.CreateGroup(indicator)
+    group:CreateAnimation("width", {
+        target = indicator,
+        from = currentWidth,
+        to = targetWidth,
+        duration = INDICATOR_SLIDE_DURATION,
+        easing = "outCubic",
+    })
+    group:SetOnFinished(function()
+        indicator:ClearAllPoints()
+        indicator:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 4, -3)
+        indicator:SetWidth(targetWidth)
+    end)
+    self._typeIndicatorGroup = group
+    self._typeIndicatorAnchor = button
+    self._typeIndicatorPositioned = true
+    group:Play()
+end
+
+--- Resolve the button for the current sync type.
+function SyncPanelMixin:GetActiveTypeButton()
+    if self.syncType == "history" then return self.historyBtn end
+    if self.syncType == "intel" then return self.intelBtn end
+    return self.settingsBtn
 end
 
 --- Create target player dropdown using MenuUtil
@@ -305,6 +398,11 @@ function SyncPanelMixin:UpdateUI()
     if isIntel then
         self:UpdateIntelStatus()
     end
+
+    -- Slide the sync-type indicator to the active button.
+    if self.MoveTypeIndicatorTo then
+        self:MoveTypeIndicatorTo(self:GetActiveTypeButton())
+    end
 end
 
 --- Get online group/guild members
@@ -422,12 +520,35 @@ end
 ----------------------------------------------------------------------]]
 
 function SyncPanelMixin:Show()
+    if self.frame._loothingFadeGroup then self.frame._loothingFadeGroup:Stop() end
+
     self.frame:Show()
     self.frame:Raise()
+
+    -- Re-apply custom accents in case skin/accent changed while hidden.
+    if self.ApplyTheme then self:ApplyTheme() end
+
+    -- Snap indicator once layout is final (skip-anim on first show).
+    if self.MoveTypeIndicatorTo then
+        self:MoveTypeIndicatorTo(self:GetActiveTypeButton())
+    end
+
+    if AnimationPresets then
+        self.frame._loothingFadeGroup = AnimationPresets.FadeIn(self.frame, SHOW_DURATION, "outCubic")
+    else
+        self.frame:SetAlpha(1)
+    end
 end
 
 function SyncPanelMixin:Hide()
-    self.frame:Hide()
+    if self.frame._loothingFadeGroup then self.frame._loothingFadeGroup:Stop() end
+    if AnimationPresets then
+        self.frame._loothingFadeGroup = AnimationPresets.FadeOut(self.frame, HIDE_DURATION, "inCubic", true, function()
+            self.frame:SetAlpha(0)
+        end)
+    else
+        self.frame:Hide()
+    end
 end
 
 function SyncPanelMixin:Toggle()
@@ -442,6 +563,28 @@ function SyncPanelMixin:IsShown()
     return self.frame:IsShown()
 end
 
+--- Re-apply custom accents, pixel border, indicator color from the current theme.
+--- Called from Show() because SyncPanel isn't in SkinningMixin:RefreshTheme's static
+--- ApplyTheme chain; re-apply on each open keeps it in sync with Frame Behavior settings.
+function SyncPanelMixin:ApplyTheme()
+    if self.headerStrip then
+        ApplyAccentGlow(self.headerStrip, 0.18)
+        self.headerStrip:SetAlpha(1)
+    end
+    if self.pixelBorder and PixelUtil then
+        local c = (SkinningMixin and SkinningMixin:GetColor("borderStrong")) or { 0, 0, 0, 1 }
+        for _, tex in pairs(self.pixelBorder) do
+            if type(tex) == "table" and type(tex.SetColorTexture) == "function" then
+                tex:SetColorTexture(c[1] or 0, c[2] or 0, c[3] or 0, c[4] or 1)
+            end
+        end
+    end
+    if self.typeIndicator then
+        local accent = (SkinningMixin and SkinningMixin:GetColor("accent")) or { 0.4, 0.55, 0.9, 1 }
+        self.typeIndicator:SetVertexColor(accent[1] or 0.4, accent[2] or 0.55, accent[3] or 0.9, accent[4] or 1)
+    end
+end
+
 --[[--------------------------------------------------------------------
     Intel Share Integration
 ----------------------------------------------------------------------]]
@@ -449,25 +592,45 @@ end
 --- Update the intel status text showing available datasets
 function SyncPanelMixin:UpdateIntelStatus()
     if not self.intelStatusText then
+        -- Plug icon sits to the left; text flows after it.
+        self.intelStatusIcon = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        self.intelStatusIcon:SetPoint("TOPLEFT", 30, -118)
+        Loolib.Fonts:SetIconFont(self.intelStatusIcon, 12, "")
+
         self.intelStatusText = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        self.intelStatusText:SetPoint("TOPLEFT", 30, -118)
-        self.intelStatusText:SetWidth(290)
+        self.intelStatusText:SetPoint("LEFT", self.intelStatusIcon, "RIGHT", 6, 0)
+        -- Preserve the original 290px width budget (the icon + 6px gap
+        -- consume some of it, so the text column shrinks to ~270px which
+        -- still fits the INTEL_SHARE_* strings).
+        self.intelStatusText:SetWidth(290 - 18)
         self.intelStatusText:SetJustifyH("LEFT")
         self.intelStatusText:SetWordWrap(true)
     end
 
+    local function setOffline(msg)
+        self.intelStatusIcon:SetText(Loolib.Fonts:Icon("plug-circle-xmark"))
+        self.intelStatusIcon:SetTextColor(1.0, 0.30, 0.30)
+        self.intelStatusText:SetText("|cffff0000" .. msg .. "|r")
+    end
+
+    local function setOnline(msg)
+        self.intelStatusIcon:SetText(Loolib.Fonts:Icon("plug-circle-check"))
+        self.intelStatusIcon:SetTextColor(0.20, 1.0, 0.60)
+        self.intelStatusText:SetText("|cff33ff99" .. msg .. "|r")
+    end
+
     if not Loothing.IntelShare then
-        self.intelStatusText:SetText("|cffff0000" .. L["INTEL_SHARE_NO_DATA"] .. "|r")
+        setOffline(L["INTEL_SHARE_NO_DATA"])
         self.sendBtn:Disable()
         return
     end
 
     local _, count = Loothing.IntelShare:GetAvailableDatasets()
     if count == 0 then
-        self.intelStatusText:SetText("|cffff0000" .. L["INTEL_SHARE_NO_DATA"] .. "|r")
+        setOffline(L["INTEL_SHARE_NO_DATA"])
         self.sendBtn:Disable()
     else
-        self.intelStatusText:SetText("|cff33ff99" .. string.format(L["INTEL_SHARE_DATASETS_READY"], count) .. "|r")
+        setOnline(string.format(L["INTEL_SHARE_DATASETS_READY"], count))
         self.sendBtn:Enable()
     end
 end

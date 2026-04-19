@@ -4,6 +4,7 @@
 ----------------------------------------------------------------------]]
 
 local _, ns = ...
+local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local Utils = ns.Utils
 local TestMode = ns.TestMode
@@ -737,13 +738,25 @@ function CouncilTableMixin:UpdatePlayerIntelSection(intel)
             line1Parts[#line1Parts + 1] = string.format("Best |cffffffff%.0f|r", intel.parseBest)
             hasData = true
         end
-        -- Trend indicator inline with scores
-        if intel.parseTrend == "up" then
-            line1Parts[#line1Parts + 1] = "|cff33ee33\226\150\178|r"
-        elseif intel.parseTrend == "down" then
-            line1Parts[#line1Parts + 1] = "|cffee3333\226\150\188|r"
-        elseif intel.parseTrend == "stable" then
-            line1Parts[#line1Parts + 1] = "|cff999999\226\151\134|r"
+        -- Trend indicator goes into its own icon-font FontString (the
+        -- icon font is icons-only, so it can't share a FontString with
+        -- the Latin text on line1Parts).
+        if self.moreInfoParsesTrend then
+            if intel.parseTrend == "up" then
+                self.moreInfoParsesTrend:SetText(Loolib.Fonts:Icon("arrow-up"))
+                self.moreInfoParsesTrend:SetTextColor(0.2, 0.93, 0.2)
+                self.moreInfoParsesTrend:Show()
+            elseif intel.parseTrend == "down" then
+                self.moreInfoParsesTrend:SetText(Loolib.Fonts:Icon("arrow-down"))
+                self.moreInfoParsesTrend:SetTextColor(0.93, 0.2, 0.2)
+                self.moreInfoParsesTrend:Show()
+            elseif intel.parseTrend == "stable" then
+                self.moreInfoParsesTrend:SetText(Loolib.Fonts:Icon("minus"))
+                self.moreInfoParsesTrend:SetTextColor(0.6, 0.6, 0.6)
+                self.moreInfoParsesTrend:Show()
+            else
+                self.moreInfoParsesTrend:Hide()
+            end
         end
 
         if hasData then
@@ -906,6 +919,7 @@ function CouncilTableMixin:ClearPlayerIntelSection()
         self.moreInfoMythicPlus:SetTextColor(0.5, 0.5, 0.5)
     end
     if self.moreInfoParses then self.moreInfoParses:SetText("") end
+    if self.moreInfoParsesTrend then self.moreInfoParsesTrend:Hide() end
     if self.moreInfoAttendance then self.moreInfoAttendance:SetText("") end
     if self.moreInfoGearReady then self.moreInfoGearReady:SetText("") end
     if self.moreInfoTrinketSim then self.moreInfoTrinketSim:SetText("") end

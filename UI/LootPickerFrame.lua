@@ -22,6 +22,13 @@ local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 
+local AnimationUtil = Loolib.AnimationUtil
+local AnimationPresets = Loolib.AnimationPresets
+local PixelUtil = Loolib.PixelUtil
+
+local ApplyAccentGlow = ns.FramePolish.ApplyAccentGlow
+local AttachIconButtonPolish = ns.FramePolish.AttachIconButtonPolish
+
 local PANEL_WIDTH = 560
 local PANEL_HEIGHT = 560
 local ROW_HEIGHT_DEFAULT = 50
@@ -148,13 +155,53 @@ function LootPickerFrameMixin:BuildFrame()
         end
     end)
     frame:Hide()
+    frame:SetAlpha(0)
     self.frame = frame
     styleSurface(frame, "frame")
+
+    -- Hook OnHide so ESC-key / UISpecialFrames / external Hide() all
+    -- route through the same cancellation cleanup that OnCancel runs.
+    -- Gated on `_suppressOnHideCleanup` so OnStart / OnCancel (which
+    -- call Hide themselves as part of their own cleanup) don't re-enter.
+    frame:HookScript("OnHide", function()
+        if self._suppressOnHideCleanup then return end
+        self:_DoCleanupOnHide()
+    end)
+
+    -- OnShow: re-register item-info event + raise
+    frame:HookScript("OnShow", function()
+        if self._itemInfoEventRegistered then return end
+        frame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+        self._itemInfoEventRegistered = true
+    end)
+    -- Unregister the item-info event on hide so the handler doesn't
+    -- churn through its linear `self.entries` scan on every item cache
+    -- hit while the picker isn't even visible.
+    frame:HookScript("OnHide", function()
+        if self._itemInfoEventRegistered then
+            frame:UnregisterEvent("GET_ITEM_INFO_RECEIVED")
+            self._itemInfoEventRegistered = false
+        end
+    end)
 
     -- Decorative header strip + accent line
     local sk = GetSkinning()
     if sk and sk.DecorateWindow then
         sk:DecorateWindow(frame)
+    end
+
+    -- Gradient accent strip behind the title (effect #4)
+    local headerStrip = frame:CreateTexture(nil, "BACKGROUND", nil, 2)
+    headerStrip:SetPoint("TOPLEFT", 2, -2)
+    headerStrip:SetPoint("TOPRIGHT", -2, -2)
+    headerStrip:SetHeight(44)
+    headerStrip:SetColorTexture(1, 1, 1, 1)
+    self.headerStrip = headerStrip
+    ApplyAccentGlow(headerStrip, 0.18)
+
+    -- Pixel-perfect outer border (effect #5)
+    if PixelUtil and type(PixelUtil.SetThinBorder) == "function" then
+        self.pixelBorder = PixelUtil.SetThinBorder(frame, getColor("borderStrong", { 0, 0, 0, 1 }))
     end
 
     -- Title (sits inside the header strip)
@@ -175,6 +222,8 @@ function LootPickerFrameMixin:BuildFrame()
     closeBtn:SetSize(22, 22)
     closeBtn:SetPoint("TOPRIGHT", -2, -2)
     closeBtn:SetScript("OnClick", function() self:OnCancel() end)
+    AttachIconButtonPolish(closeBtn, { hoverScale = 1.15, pressScale = 0.90 })
+    self.closeBtn = closeBtn
 
     -- Toolbar: Show blocked + Select all / none
     local toolbar = CreateFrame("Frame", nil, frame, "BackdropTemplate")
@@ -187,12 +236,21 @@ function LootPickerFrameMixin:BuildFrame()
     self.showBlockedCheck = CreateFrame("CheckButton", "LoothingLootPickerShowBlocked", toolbar,
         "ChatConfigCheckButtonTemplate")
     self.showBlockedCheck:SetPoint("LEFT", 6, 0)
+    -- Filter icon sits between checkbox and label to mark this as a filter toggle.
+    self.filterIcon = self.showBlockedCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    self.filterIcon:SetPoint("LEFT", self.showBlockedCheck, "RIGHT", 2, 1)
+    Loolib.Fonts:SetIconFont(self.filterIcon, 10, "")
+    self.filterIcon:SetText(Loolib.Fonts:Icon("filter"))
+    self.filterIcon:SetTextColor(0.8, 0.8, 0.85)
     if self.showBlockedCheck.Text then
+        self.showBlockedCheck.Text:ClearAllPoints()
+        self.showBlockedCheck.Text:SetPoint("LEFT", self.filterIcon, "RIGHT", 4, 0)
         self.showBlockedCheck.Text:SetText(L("LOOT_PICKER_SHOW_BLOCKED", "Show blocked items"))
     else
-        local lbl = self.showBlockedCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        lbl:SetPoint("LEFT", self.showBlockedCheck, "RIGHT", 2, 1)
-        lbl:SetText(L("LOOT_PICKER_SHOW_BLOCKED", "Show blocked items"))
+        self.showBlockedLabel = self.showBlockedLabel or self.showBlockedCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        self.showBlockedLabel:ClearAllPoints()
+        self.showBlockedLabel:SetPoint("LEFT", self.filterIcon, "RIGHT", 4, 1)
+        self.showBlockedLabel:SetText(L("LOOT_PICKER_SHOW_BLOCKED", "Show blocked items"))
     end
     self.showBlockedCheck:SetScript("OnClick", function(c)
         local newState = c:GetChecked() and true or false
@@ -271,8 +329,9 @@ function LootPickerFrameMixin:BuildFrame()
     end
 
     -- Refresh row visuals when item info finishes loading from a cold
-    -- cache (icon, ilvl, real link). Only re-renders while shown.
-    frame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+    -- cache (icon, ilvl, real link). The event is registered/unregistered
+    -- in the OnShow/OnHide hooks above so the handler doesn't scan
+    -- self.entries on every item-cache hit while the picker is hidden.
     frame:SetScript("OnEvent", function(_, event, itemID)
         if event ~= "GET_ITEM_INFO_RECEIVED" then return end
         if not frame:IsShown() then return end
@@ -302,6 +361,19 @@ function LootPickerFrameMixin:ApplyTheme()
     applyTextColor(self.subtitleText, "textMuted", { 0.7, 0.7, 0.7 })
     for _, row in ipairs(self.rows) do
         if row:IsShown() then styleSurface(row, "alt") end
+    end
+    -- Re-apply custom accents
+    if self.headerStrip then
+        ApplyAccentGlow(self.headerStrip, 0.18)
+        self.headerStrip:SetAlpha(1)
+    end
+    if self.pixelBorder then
+        local c = getColor("borderStrong", { 0, 0, 0, 1 })
+        for _, tex in pairs(self.pixelBorder) do
+            if type(tex) == "table" and type(tex.SetColorTexture) == "function" then
+                tex:SetColorTexture(c[1] or 0, c[2] or 0, c[3] or 0, c[4] or 1)
+            end
+        end
     end
     -- Re-bind active rows to refresh chip/text colors.
     self:Render()
@@ -336,12 +408,30 @@ function LootPickerFrameMixin:Show(encounterID, encounterName, lootBuffer)
 
     self:RebuildEntries(lootBuffer)
     self:Render()
+
+    if self.frame._loothingFadeGroup then self.frame._loothingFadeGroup:Stop() end
     self.frame:Show()
     self.frame:Raise()
+    -- Pick up any theme/accent change that happened while the modal was closed.
+    if type(self.ApplyTheme) == "function" then self:ApplyTheme() end
+
+    if AnimationPresets then
+        self.frame._loothingFadeGroup = AnimationPresets.FadeIn(self.frame, 0.22, "outCubic")
+    else
+        self.frame:SetAlpha(1)
+    end
 end
 
 function LootPickerFrameMixin:Hide()
-    if self.frame then self.frame:Hide() end
+    if not self.frame then return end
+    if self.frame._loothingFadeGroup then self.frame._loothingFadeGroup:Stop() end
+    if AnimationPresets and self.frame:IsVisible() then
+        self.frame._loothingFadeGroup = AnimationPresets.FadeOut(self.frame, 0.13, "inCubic", true, function()
+            if self.frame then self.frame:SetAlpha(0) end
+        end)
+    else
+        self.frame:Hide()
+    end
 end
 
 function LootPickerFrameMixin:IsShown()
@@ -717,27 +807,46 @@ function LootPickerFrameMixin:OnStart()
         end
         return
     end
+    -- Successful start — suppress the OnHide cleanup path so we don't
+    -- wipe the buffer Session already consumed via the replay loop.
+    self._suppressOnHideCleanup = true
     self:Hide()
+    self._suppressOnHideCleanup = false
     self._starting = false
 end
 
-function LootPickerFrameMixin:OnCancel()
-    self:Hide()
+--- Shared cleanup run when the picker hides WITHOUT a successful Start.
+--- Called from both the manual Cancel button (via OnCancel) and any
+--- indirect Hide (ESC key, UISpecialFrames, external Hide). Session
+--- bookkeeping is centralised in Session:CancelPendingPrompt.
+function LootPickerFrameMixin:_DoCleanupOnHide()
     self._starting = false
-    -- Centralised cleanup: wipes buffer, cancels the debounce timer that
-    -- would otherwise re-prompt seconds later, clears stale encounter
-    -- references. Falls back to the old wipe pattern if the helper isn't
-    -- available (older Session module).
     self._suppressEvent = true
     if Loothing.Session and Loothing.Session.CancelPendingPrompt then
         Loothing.Session:CancelPendingPrompt()
     elseif Loothing.Session and Loothing.Session.lootBuffer then
-        Loothing.Session.lootBuffer = {}
+        -- Prefer wipe() to preserve table identity for any module that
+        -- might have captured the reference; fall back to assignment if
+        -- wipe is unavailable in the environment.
+        if type(wipe) == "function" then
+            wipe(Loothing.Session.lootBuffer)
+        else
+            Loothing.Session.lootBuffer = {}
+        end
         if Loothing.Session.TriggerEvent then
             Loothing.Session:TriggerEvent("OnLootBufferChanged", Loothing.Session.lootBuffer)
         end
     end
     self._suppressEvent = false
+end
+
+function LootPickerFrameMixin:OnCancel()
+    -- OnHide hook would otherwise re-run cleanup; flag it off across
+    -- the Hide call so the hook no-ops.
+    self._suppressOnHideCleanup = true
+    self:Hide()
+    self._suppressOnHideCleanup = false
+    self:_DoCleanupOnHide()
 end
 
 --[[--------------------------------------------------------------------

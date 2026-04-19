@@ -8,6 +8,10 @@ local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local SkinningMixin = ns.SkinningMixin
 
+local AnimationUtil = Loolib.AnimationUtil
+local AnimationPresets = Loolib.AnimationPresets
+local PixelUtil = Loolib.PixelUtil
+
 --[[--------------------------------------------------------------------
     MainFrameMixin
 ----------------------------------------------------------------------]]
@@ -25,7 +29,27 @@ local FRAME_WIDTH = 600
 local FRAME_HEIGHT = 500
 local TAB_HEIGHT = 32
 
---- Initialize the main frame
+-- Animation durations
+local SHOW_DURATION = 0.22
+local HIDE_DURATION = 0.13
+local TAB_FADE_OUT = 0.13
+local TAB_FADE_IN = 0.22
+local TAB_FADE_STAGGER = 0.05
+local TAB_HOVER_DURATION = 0.15
+local INDICATOR_SLIDE_DURATION = 0.22
+
+local function unpackColor(color)
+    if type(color) ~= "table" then return 1, 1, 1, 1 end
+    return color[1] or 1, color[2] or 1, color[3] or 1, color[4] or 1
+end
+
+local function cloneColor(color)
+    if type(color) ~= "table" then return { 1, 1, 1, 1 } end
+    return { color[1] or 1, color[2] or 1, color[3] or 1, color[4] or 1 }
+end
+
+local ApplyAccentGlow = ns.FramePolish.ApplyAccentGlow
+local AttachIconButtonPolish = ns.FramePolish.AttachIconButtonPolish
 function MainFrameMixin:Init()
     Loolib.CallbackRegistryMixin.OnLoad(self)
     self:GenerateCallbackEvents(MAIN_FRAME_EVENTS)
@@ -62,6 +86,24 @@ function MainFrameMixin:CreateFrame()
     })
     ns.MainFrameFrame = frame
 
+    -- Start hidden-alpha so the first Show() can fade in
+    frame:SetAlpha(0)
+
+    -- Accent glow strip: a subtle fade-from-accent-to-transparent behind the title.
+    -- Color is sourced from SkinningMixin's current accent, so it tracks Frame Behavior settings.
+    local headerStrip = frame:CreateTexture(nil, "BACKGROUND", nil, 2)
+    headerStrip:SetPoint("TOPLEFT", 2, -2)
+    headerStrip:SetPoint("TOPRIGHT", -2, -2)
+    headerStrip:SetHeight(40)
+    headerStrip:SetColorTexture(1, 1, 1, 1)
+    self.headerStrip = headerStrip
+    ApplyAccentGlow(headerStrip, 0.18)
+
+    -- Pixel-perfect outer border: color is refreshed from SkinningMixin in ApplyTheme.
+    if PixelUtil and type(PixelUtil.SetThinBorder) == "function" then
+        self.pixelBorder = PixelUtil.SetThinBorder(frame, SkinningMixin:GetColor("borderStrong"))
+    end
+
     -- Title
     self.titleText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     self.titleText:SetPoint("TOPLEFT", 20, -14)
@@ -80,6 +122,7 @@ function MainFrameMixin:CreateFrame()
     self.closeButton:SetScript("OnClick", function()
         self:Hide()
     end)
+    AttachIconButtonPolish(self.closeButton, { hoverScale = 1.15, pressScale = 0.90 })
 
     -- Settings button (gear icon)
     self.settingsButton = CreateFrame("Button", nil, frame)
@@ -98,6 +141,7 @@ function MainFrameMixin:CreateFrame()
     self.settingsButton:SetScript("OnLeave", function()
         GameTooltip:Hide()
     end)
+    AttachIconButtonPolish(self.settingsButton, { hoverScale = 1.12, pressScale = 0.92, rotateOnHover = true })
 
     -- Title bar for dragging
     local titleBar = CreateFrame("Frame", nil, frame)
@@ -144,6 +188,15 @@ function MainFrameMixin:CreateFrame()
     self.tabContainer:SetPoint("TOPRIGHT", -16, -48)
     self.tabContainer:SetHeight(TAB_HEIGHT + 6)
 
+    -- Shared selection indicator that slides between tabs
+    local indicator = self.tabContainer:CreateTexture(nil, "OVERLAY", nil, 7)
+    indicator:SetHeight(3)
+    indicator:SetPoint("BOTTOMLEFT", self.tabContainer, "BOTTOMLEFT", 2, 2)
+    indicator:SetWidth(0)
+    indicator:SetColorTexture(1, 1, 1, 1)
+    indicator:Hide()
+    self.tabIndicator = indicator
+
     local tabDivider = SkinningMixin:CreateDivider(frame, "horizontal", "border", 1)
     tabDivider:SetPoint("TOPLEFT", 16, -42)
     tabDivider:SetPoint("TOPRIGHT", -16, -42)
@@ -163,10 +216,10 @@ function MainFrameMixin:CreateTabs()
     local L = Loothing.Locale
 
     local tabDefs = {
-        { id = "session", name = L["TAB_SESSION"] },
-        { id = "roster", name = L["TAB_ROSTER"] },
-        { id = "trade", name = L["TAB_TRADE"] },
-        { id = "history", name = L["TAB_HISTORY"] },
+        { id = "session", name = L["TAB_SESSION"], icon = "dice-six" },
+        { id = "roster",  name = L["TAB_ROSTER"],  icon = "users" },
+        { id = "trade",   name = L["TAB_TRADE"],   icon = "handshake" },
+        { id = "history", name = L["TAB_HISTORY"], icon = "clock-rotate-left" },
     }
 
     local tabWidth = 100
@@ -174,7 +227,7 @@ function MainFrameMixin:CreateTabs()
     local xOffset = 0
 
     for _, def in ipairs(tabDefs) do
-        local tab = self:CreateTab(def.id, def.name, xOffset)
+        local tab = self:CreateTab(def.id, def.name, xOffset, def.icon)
         self.tabs[def.id] = tab
         xOffset = xOffset + tabWidth + spacing
     end
@@ -184,8 +237,9 @@ end
 -- @param id string - Tab identifier
 -- @param name string - Display name
 -- @param xOffset number
+-- @param iconName string|nil - Loolib icon name for the tab's leading glyph
 -- @return Frame
-function MainFrameMixin:CreateTab(id, name, xOffset)
+function MainFrameMixin:CreateTab(id, name, xOffset, iconName)
     local tab = CreateFrame("Button", nil, self.tabContainer, "BackdropTemplate")
     tab:SetSize(100, TAB_HEIGHT - 4)
     tab:SetPoint("BOTTOMLEFT", xOffset, 0)
@@ -215,9 +269,28 @@ function MainFrameMixin:CreateTab(id, name, xOffset)
     selectGlow:Hide()
     tab.selectGlow = selectGlow
 
-    -- Text
+    -- Leading icon (rendered in the Loolib icon font). Anchored to the
+    -- left; the text anchor shifts right to accommodate it.
+    local icon
+    if iconName then
+        icon = tab:CreateFontString(nil, "OVERLAY")
+        Loolib.Fonts:SetIconFont(icon, 12, "")
+        icon:SetText(Loolib.Fonts:Icon(iconName))
+        icon:SetPoint("LEFT", 10, 0)
+        tab.icon = icon
+    end
+
+    -- Text (bound LEFT→icon, RIGHT→tab edge so long translated labels
+    -- truncate cleanly instead of overflowing the tab backdrop).
     local text = tab:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    text:SetPoint("CENTER")
+    if icon then
+        text:SetPoint("LEFT", icon, "RIGHT", 5, 0)
+    else
+        text:SetPoint("LEFT", 6, 0)
+    end
+    text:SetPoint("RIGHT", -6, 0)
+    text:SetWordWrap(false)
+    text:SetJustifyH(icon and "LEFT" or "CENTER")
     text:SetText(name)
     SkinningMixin:StyleText(text, "header", "textMuted")
     tab.text = text
@@ -228,43 +301,209 @@ function MainFrameMixin:CreateTab(id, name, xOffset)
         self:SelectTab(id)
     end)
 
-    -- Hover effects
+    -- Smooth hover color tween. Skips animating when the tab is the active one.
     tab:SetScript("OnEnter", function(btn)
         if self.currentTab ~= id then
-            btn:SetBackdropColor(unpack(SkinningMixin:GetColor("rowHover")))
-            btn:SetBackdropBorderColor(unpack(SkinningMixin:GetColor("borderStrong")))
-            btn.text:SetTextColor(unpack(SkinningMixin:GetColor("text")))
+            self:AnimateTabColors(btn, "hover")
         end
     end)
     tab:SetScript("OnLeave", function(btn)
         if self.currentTab ~= id then
-            btn:SetBackdropColor(unpack(SkinningMixin:GetColor("panelAlt")))
-            btn:SetBackdropBorderColor(unpack(SkinningMixin:GetColor("borderStrong")))
-            btn.text:SetTextColor(unpack(SkinningMixin:GetColor("textMuted")))
+            self:AnimateTabColors(btn, "idle")
         end
     end)
 
     return tab
 end
 
-function MainFrameMixin:UpdateTabVisual(tab, isActive)
+--- Tween a tab's backdrop + border + text colors toward a named state.
+--- Cancels any in-flight tween on the same tab before starting the new one.
+--- @param tab Button
+--- @param state string - "idle" | "hover" | "active"
+function MainFrameMixin:AnimateTabColors(tab, state)
+    if not tab or not AnimationUtil then return end
+    -- If the frame isn't visible yet, snap colors rather than animating.
+    if not self.frame or not self.frame:IsVisible() then
+        -- Apply target colors directly.
+        local textColorKey
+        if state == "active" then
+            tab:SetBackdropColor(unpack(SkinningMixin:GetColor("panel")))
+            tab:SetBackdropBorderColor(unpack(SkinningMixin:GetColor("accent")))
+            textColorKey = "accent"
+        elseif state == "hover" then
+            tab:SetBackdropColor(unpack(SkinningMixin:GetColor("rowHover")))
+            tab:SetBackdropBorderColor(unpack(SkinningMixin:GetColor("borderStrong")))
+            textColorKey = "text"
+        else
+            tab:SetBackdropColor(unpack(SkinningMixin:GetColor("panelAlt")))
+            tab:SetBackdropBorderColor(unpack(SkinningMixin:GetColor("borderStrong")))
+            textColorKey = "textMuted"
+        end
+        tab.text:SetTextColor(unpack(SkinningMixin:GetColor(textColorKey)))
+        if tab.icon then tab.icon:SetTextColor(unpack(SkinningMixin:GetColor(textColorKey))) end
+        return
+    end
+
+    local bgKey, borderKey, textKey
+    if state == "active" then
+        bgKey, borderKey, textKey = "panel", "accent", "accent"
+    elseif state == "hover" then
+        bgKey, borderKey, textKey = "rowHover", "borderStrong", "text"
+    else
+        bgKey, borderKey, textKey = "panelAlt", "borderStrong", "textMuted"
+    end
+
+    local toBg = cloneColor(SkinningMixin:GetColor(bgKey))
+    local toBorder = cloneColor(SkinningMixin:GetColor(borderKey))
+    local toText = cloneColor(SkinningMixin:GetColor(textKey))
+
+    -- Read current values so we tween from the real starting point.
+    -- Guards: Get* may return nothing if a color was never set; fall back to target.
+    local function readColor(getter, holder, fallback)
+        if type(getter) ~= "function" then return cloneColor(fallback) end
+        local r, g, b, a = getter(holder)
+        if r == nil or g == nil or b == nil then return cloneColor(fallback) end
+        return { r, g, b, a or 1 }
+    end
+
+    local fromBg = readColor(tab.GetBackdropColor, tab, toBg)
+    local fromBorder = readColor(tab.GetBackdropBorderColor, tab, toBorder)
+    local fromText = readColor(tab.text.GetTextColor, tab.text, toText)
+
+    if tab._loothingColorGroup then tab._loothingColorGroup:Stop() end
+
+    local group = AnimationUtil.CreateGroup(tab)
+    group:CreateAnimation("color", {
+        target = tab,
+        sink = "backdropColor",
+        from = fromBg,
+        to = toBg,
+        duration = TAB_HOVER_DURATION,
+        easing = "outQuad",
+    })
+    group:CreateAnimation("color", {
+        target = tab,
+        sink = "backdropBorderColor",
+        from = fromBorder,
+        to = toBorder,
+        duration = TAB_HOVER_DURATION,
+        easing = "outQuad",
+    })
+    group:CreateAnimation("color", {
+        target = tab.text,
+        sink = "textColor",
+        from = fromText,
+        to = toText,
+        duration = TAB_HOVER_DURATION,
+        easing = "outQuad",
+    })
+    if tab.icon then
+        local fromIcon = readColor(tab.icon.GetTextColor, tab.icon, toText)
+        group:CreateAnimation("color", {
+            target = tab.icon,
+            sink = "textColor",
+            from = fromIcon,
+            to = toText,
+            duration = TAB_HOVER_DURATION,
+            easing = "outQuad",
+        })
+    end
+    tab._loothingColorGroup = group
+    group:Play()
+end
+
+function MainFrameMixin:UpdateTabVisual(tab, isActive, animate)
     if not tab then
         return
     end
 
+    -- The per-tab selectBar/selectGlow are superseded by self.tabIndicator;
+    -- keep them hidden to avoid visual duplication.
+    if tab.selectBar then tab.selectBar:Hide() end
+    if tab.selectGlow and isActive then tab.selectGlow:Show() elseif tab.selectGlow then tab.selectGlow:Hide() end
+
+    if animate ~= false and AnimationUtil then
+        self:AnimateTabColors(tab, isActive and "active" or "idle")
+        return
+    end
+
+    -- Snap form (used on ApplyTheme and initial layout)
+    local textColorKey
     if isActive then
         tab:SetBackdropColor(unpack(SkinningMixin:GetColor("panel")))
         tab:SetBackdropBorderColor(unpack(SkinningMixin:GetColor("accent")))
-        if tab.selectBar then tab.selectBar:Show() end
-        if tab.selectGlow then tab.selectGlow:Show() end
-        tab.text:SetTextColor(unpack(SkinningMixin:GetColor("accent")))
+        textColorKey = "accent"
     else
         tab:SetBackdropColor(unpack(SkinningMixin:GetColor("panelAlt")))
         tab:SetBackdropBorderColor(unpack(SkinningMixin:GetColor("borderStrong")))
-        if tab.selectBar then tab.selectBar:Hide() end
-        if tab.selectGlow then tab.selectGlow:Hide() end
-        tab.text:SetTextColor(unpack(SkinningMixin:GetColor("textMuted")))
+        textColorKey = "textMuted"
     end
+    tab.text:SetTextColor(unpack(SkinningMixin:GetColor(textColorKey)))
+    if tab.icon then tab.icon:SetTextColor(unpack(SkinningMixin:GetColor(textColorKey))) end
+end
+
+--- Slide the shared tab indicator to a tab. Called from SelectTab.
+--- @param tab Button
+function MainFrameMixin:MoveIndicatorTo(tab)
+    if not self.tabIndicator or not tab then return end
+    local indicator = self.tabIndicator
+    local containerLeft = self.tabContainer:GetLeft() or 0
+    local tabLeft = tab:GetLeft() or 0
+    local targetX = (tabLeft - containerLeft) + 2
+    local targetWidth = math.max(0, tab:GetWidth() - 4)
+    local accent = cloneColor(SkinningMixin:GetColor("accent"))
+
+    indicator:SetVertexColor(unpackColor(accent))
+    indicator:Show()
+
+    -- Skip animation when frame isn't visible, or on the first positioning (no prior anchor).
+    local skipAnim = not self.frame or not self.frame:IsVisible() or not self._indicatorPositioned
+
+    if not AnimationUtil or skipAnim then
+        indicator:ClearAllPoints()
+        indicator:SetPoint("BOTTOMLEFT", self.tabContainer, "BOTTOMLEFT", targetX, 2)
+        indicator:SetWidth(targetWidth)
+        self._indicatorPositioned = true
+        return
+    end
+
+    local currentX
+    local p, _, _, x = indicator:GetPoint(1)
+    if p and x then currentX = x else currentX = targetX end
+    local currentWidth = indicator:GetWidth() or 0
+
+    -- Base-anchor the indicator so `move` animation can delta-offset cleanly.
+    indicator:ClearAllPoints()
+    indicator:SetPoint("BOTTOMLEFT", self.tabContainer, "BOTTOMLEFT", currentX, 2)
+
+    if self._tabIndicatorGroup then self._tabIndicatorGroup:Stop() end
+
+    local group = AnimationUtil.CreateGroup(indicator)
+    -- Slide via move: capture base anchor = {currentX, 2}, tween from {0,0} to {dx,0}
+    group:CreateAnimation("move", {
+        target = indicator,
+        baseAnchor = { point = "BOTTOMLEFT", relativeTo = self.tabContainer, relativePoint = "BOTTOMLEFT", x = currentX, y = 2 },
+        from = { 0, 0 },
+        to = { targetX - currentX, 0 },
+        duration = INDICATOR_SLIDE_DURATION,
+        easing = "outCubic",
+    })
+    group:CreateAnimation("width", {
+        target = indicator,
+        from = currentWidth,
+        to = targetWidth,
+        duration = INDICATOR_SLIDE_DURATION,
+        easing = "outCubic",
+    })
+    group:SetOnFinished(function()
+        -- Re-anchor cleanly at the end so later layout reads see the final position.
+        indicator:ClearAllPoints()
+        indicator:SetPoint("BOTTOMLEFT", self.tabContainer, "BOTTOMLEFT", targetX, 2)
+        indicator:SetWidth(targetWidth)
+    end)
+    self._tabIndicatorGroup = group
+    self._indicatorPositioned = true
+    group:Play()
 end
 
 function MainFrameMixin:ApplyTheme()
@@ -314,7 +553,27 @@ function MainFrameMixin:ApplyTheme()
         tab:SetHeight(tabHeight - 4)
         SkinningMixin:StyleSurface(tab, "alt")
         SkinningMixin:StyleText(tab.text, "header", "textMuted")
-        self:UpdateTabVisual(tab, self.currentTab == tab.id)
+        self:UpdateTabVisual(tab, self.currentTab == tab.id, false)
+    end
+
+    -- Re-apply the accent glow so accent/theme switches take effect.
+    if self.headerStrip then
+        ApplyAccentGlow(self.headerStrip, 0.18)
+        self.headerStrip:SetAlpha(1)
+    end
+    if self.pixelBorder and PixelUtil and type(PixelUtil.SetThinBorder) == "function" then
+        -- Recolor pixel border from theme "borderStrong".
+        local c = SkinningMixin:GetColor("borderStrong") or { 0, 0, 0, 1 }
+        for _, tex in pairs(self.pixelBorder) do
+            if type(tex) == "table" and type(tex.SetColorTexture) == "function" then
+                tex:SetColorTexture(c[1] or 0, c[2] or 0, c[3] or 0, c[4] or 1)
+            end
+        end
+    end
+    if self.tabIndicator then
+        self.tabIndicator:SetVertexColor(unpack(SkinningMixin:GetColor("accent")))
+        local activeTab = self.currentTab and self.tabs[self.currentTab] or nil
+        if activeTab and self.frame:IsVisible() then self:MoveIndicatorTo(activeTab) end
     end
 
     for _, panelWrapper in pairs(self.panels or {}) do
@@ -377,33 +636,67 @@ function MainFrameMixin:SelectTab(tabId)
         return
     end
 
-    -- Deselect previous
-    if self.currentTab then
-        local prevTab = self.tabs[self.currentTab]
-        if prevTab then
-            self:UpdateTabVisual(prevTab, false)
-        end
-
-        local prevPanel = self.panels[self.currentTab]
-        if prevPanel then
-            prevPanel.frame:Hide()
-        end
-    end
-
-    -- Select new
+    local prevTab = self.currentTab and self.tabs[self.currentTab] or nil
+    local prevPanel = self.currentTab and self.panels[self.currentTab] or nil
     self.currentTab = tabId
+
+    if prevTab then
+        self:UpdateTabVisual(prevTab, false)
+    end
 
     local tab = self.tabs[tabId]
     if tab then
         self:UpdateTabVisual(tab, true)
+        self:MoveIndicatorTo(tab)
     end
 
     local panel = self.panels[tabId]
-    if panel then
-        panel.frame:Show()
+
+    -- Snapshot the tab this SelectTab call is targeting. Rapid switches
+    -- (A→B→C within the cross-fade window) must not let the deferred
+    -- showNewPanel for B fire after C has already started — otherwise B's
+    -- panel is momentarily shown on top of C.
+    local pendingTab = tabId
+
+    local function showNewPanel()
+        if self.currentTab ~= pendingTab then
+            -- A later SelectTab superseded this one. Bail out so we don't
+            -- fade in a now-stale panel on top of the real one.
+            return
+        end
+        if not panel then return end
         if panel.panel and panel.panel.Refresh then
             panel.panel:Refresh()
         end
+        if AnimationPresets then
+            -- Capture the fade-in group so a future tab-switch can Stop() it
+            -- before starting its own fade-out; without this the new in-flight
+            -- tween on the same frame is uncancellable.
+            if panel.frame._loothingFadeGroup then panel.frame._loothingFadeGroup:Stop() end
+            panel.frame._loothingFadeGroup = AnimationPresets.FadeIn(panel.frame, TAB_FADE_IN, "outCubic")
+        else
+            panel.frame:Show()
+        end
+    end
+
+    local canAnimatePanels = prevPanel and prevPanel.frame and prevPanel.frame:IsShown()
+        and AnimationPresets and self.frame:IsVisible()
+    if canAnimatePanels then
+        -- Stop any existing fade so rapid tab-switching doesn't leave panels mid-fade.
+        if prevPanel.frame._loothingFadeGroup then prevPanel.frame._loothingFadeGroup:Stop() end
+        local fadeOut = AnimationPresets.FadeOut(prevPanel.frame, TAB_FADE_OUT, "inQuad", true, function()
+            prevPanel.frame:SetAlpha(1)
+        end)
+        prevPanel.frame._loothingFadeGroup = fadeOut
+        -- Stagger the new-panel fade slightly so the visual handoff reads as a cross-fade.
+        if C_Timer and C_Timer.After then
+            C_Timer.After(TAB_FADE_OUT + TAB_FADE_STAGGER, showNewPanel)
+        else
+            showNewPanel()
+        end
+    else
+        if prevPanel then prevPanel.frame:Hide() end
+        showNewPanel()
     end
 
     self:TriggerEvent("OnTabSelected", tabId)
@@ -421,6 +714,9 @@ end
 
 --- Show the main frame
 function MainFrameMixin:Show()
+    -- Stop any in-flight open/close fade before starting a new one.
+    if self.frame._loothingFadeGroup then self.frame._loothingFadeGroup:Stop() end
+
     self.frame:Show()
 
     -- Refresh current panel
@@ -429,12 +725,32 @@ function MainFrameMixin:Show()
         panel.panel:Refresh()
     end
 
+    -- Snap indicator to the active tab (safe now that layout is final).
+    local activeTab = self.currentTab and self.tabs[self.currentTab] or nil
+    if activeTab then self:MoveIndicatorTo(activeTab) end
+
+    if AnimationPresets then
+        self.frame._loothingFadeGroup = AnimationPresets.FadeIn(self.frame, SHOW_DURATION, "outCubic")
+    else
+        self.frame:SetAlpha(1)
+    end
+
     self:TriggerEvent("OnShow")
 end
 
 --- Hide the main frame
 function MainFrameMixin:Hide()
-    self.frame:Hide()
+    if self.frame._loothingFadeGroup then self.frame._loothingFadeGroup:Stop() end
+
+    if AnimationPresets then
+        self.frame._loothingFadeGroup = AnimationPresets.FadeOut(self.frame, HIDE_DURATION, "inCubic", true, function()
+            -- Reset alpha for next Show so we don't get a visible starting-alpha pop.
+            self.frame:SetAlpha(0)
+        end)
+    else
+        self.frame:Hide()
+    end
+
     self:TriggerEvent("OnHide")
 end
 

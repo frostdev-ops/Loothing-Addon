@@ -110,6 +110,13 @@ function SettingsPanelMixin:CreateElements()
     SkinningMixin:StyleText(message, "title", "text")
     self.messageText = message
 
+    -- Info icon anchored to the left of the centered message.
+    self.messageIcon = container:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    self.messageIcon:SetPoint("RIGHT", message, "LEFT", -6, 0)
+    Loolib.Fonts:SetIconFont(self.messageIcon, 16, "")
+    self.messageIcon:SetText(Loolib.Fonts:Icon("circle-info"))
+    self.messageIcon:SetTextColor(0.6, 0.8, 1.0)
+
     local openBtn = ns.CreateThemedButton(container)
     openBtn:SetSize(220, 28)
     openBtn:SetPoint("TOP", message, "BOTTOM", 0, -16)

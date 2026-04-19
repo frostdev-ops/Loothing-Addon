@@ -4,8 +4,19 @@
 ----------------------------------------------------------------------]]
 
 local _, ns = ...
+local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local SkinningMixin = ns.SkinningMixin
+
+local AnimationUtil = Loolib.AnimationUtil
+local AnimationPresets = Loolib.AnimationPresets
+local PixelUtil = Loolib.PixelUtil
+
+local ApplyAccentGlow = ns.FramePolish.ApplyAccentGlow
+local AttachIconButtonPolish = ns.FramePolish.AttachIconButtonPolish
+
+-- Expose the helpers to sibling RollFrame/ files (Events.lua) via ns.
+ns._RollFrame_AttachIconButtonPolish = AttachIconButtonPolish
 
 local RollFrameMixin = ns.RollFrameMixin or {}
 ns.RollFrameMixin = RollFrameMixin
@@ -60,6 +71,9 @@ function RollFrameMixin:CreateFrame()
     end)
     ns.RollFrameFrame = frame
 
+    -- Start hidden-alpha so the first Show() can fade in.
+    frame:SetAlpha(0)
+
     -- Gold accent bar at top
     local accentBar = frame:CreateTexture(nil, "OVERLAY", nil, 7)
     accentBar:SetPoint("TOPLEFT", 0, 0)
@@ -76,6 +90,21 @@ function RollFrameMixin:CreateFrame()
     headerBg:SetColorTexture(unpack(SkinningMixin:GetColor("header")))
     self.headerBackground = headerBg
 
+    -- Gradient accent glow layered over the header band (dynamic from SkinningMixin).
+    -- Sits above headerBg (BACKGROUND sublayer 1) but below the title text (OVERLAY).
+    local headerStrip = frame:CreateTexture(nil, "BACKGROUND", nil, 2)
+    headerStrip:SetPoint("TOPLEFT", 2, -2)
+    headerStrip:SetPoint("TOPRIGHT", -2, -2)
+    headerStrip:SetHeight(36)
+    headerStrip:SetColorTexture(1, 1, 1, 1)
+    self.headerStrip = headerStrip
+    ApplyAccentGlow(headerStrip, 0.18)
+
+    -- Pixel-perfect outer border: color refreshed from SkinningMixin in ApplyTheme.
+    if PixelUtil and type(PixelUtil.SetThinBorder) == "function" then
+        self.pixelBorder = PixelUtil.SetThinBorder(frame, SkinningMixin:GetColor("borderStrong"))
+    end
+
     local titleBar = CreateFrame("Frame", nil, frame)
     titleBar:SetPoint("TOPLEFT", 12, -8)
     titleBar:SetPoint("TOPRIGHT", -12, -8)
@@ -89,6 +118,16 @@ function RollFrameMixin:CreateFrame()
         frame:StopMovingOrSizing()
         self:SavePosition()
     end)
+
+    -- Lock glyph shown only when the user's response is locked-in for
+    -- this item (populated by ResetUIState based on previousResponse.submitted).
+    local titleLock = titleBar:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    titleLock:SetPoint("LEFT", 5, 0)
+    Loolib.Fonts:SetIconFont(titleLock, 14, "")
+    titleLock:SetText(Loolib.Fonts:Icon("lock"))
+    titleLock:SetTextColor(1.0, 0.82, 0.0)
+    titleLock:Hide()
+    self.titleLock = titleLock
 
     local titleText = titleBar:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     titleText:SetPoint("LEFT", 5, 0)
@@ -113,6 +152,7 @@ function RollFrameMixin:CreateElements()
     self.closeButton:SetScript("OnClick", function()
         self:Close(false, "user")
     end)
+    AttachIconButtonPolish(self.closeButton, { hoverScale = 1.15, pressScale = 0.90 })
 
     self:CreateSessionButtonFrame()
     self:CreateItemDisplay()
@@ -152,6 +192,22 @@ function RollFrameMixin:ApplyTheme()
     end
     if self.headerBackground then
         self.headerBackground:SetColorTexture(unpack(SkinningMixin:GetColor("header")))
+    end
+
+    -- Re-apply the gradient accent strip so accent/theme switches take effect.
+    if self.headerStrip then
+        ApplyAccentGlow(self.headerStrip, 0.18)
+        self.headerStrip:SetAlpha(1)
+    end
+
+    -- Recolor pixel border from theme "borderStrong".
+    if self.pixelBorder and PixelUtil then
+        local c = SkinningMixin:GetColor("borderStrong") or { 0, 0, 0, 1 }
+        for _, tex in pairs(self.pixelBorder) do
+            if type(tex) == "table" and type(tex.SetColorTexture) == "function" then
+                tex:SetColorTexture(c[1] or 0, c[2] or 0, c[3] or 0, c[4] or 1)
+            end
+        end
     end
 
     if self.titleText then
@@ -280,6 +336,13 @@ function RollFrameMixin:CreateSessionButton(index, item)
             GameTooltip:Hide()
         end)
 
+        -- Note: deliberately NOT attaching AttachIconButtonPolish here.
+        -- Session buttons are anchored TOPRIGHT with large row-based offsets
+        -- (e.g. row 7 at y = -238); SetScale-based polish animates those
+        -- offsets too, causing visible displacement that grows with row.
+        -- The Blizzard SetHighlightTexture above gives hover feedback
+        -- without mutating the frame's scale.
+
         self.sessionButtons[index] = btn
     end
 
@@ -406,7 +469,6 @@ function RollFrameMixin:SwitchToItem(index)
     self:DisplayItem(item)
     self:UpdateSessionButtons()
 end
-
 
 --[[--------------------------------------------------------------------
     Dynamic Layout System
@@ -581,9 +643,18 @@ function RollFrameMixin:CreateItemDisplay()
     self.itemInfo:SetPoint("BOTTOMLEFT", iconBtn, "BOTTOMRIGHT", 8, 2)
     self.itemInfo:SetTextColor(1, 0.82, 0)
 
-    -- Wishlist indicator (shown when item is on player's wishlist)
+    -- Wishlist indicator (shown when item is on player's wishlist).
+    -- The star glyph uses the Loolib icon font (FA star); the text
+    -- uses the regular font in a sibling FontString.
+    local wishlistIcon = container:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    wishlistIcon:SetPoint("TOPLEFT", self.itemInfo, "BOTTOMLEFT", 0, -2)
+    Loolib.Fonts:SetIconFont(wishlistIcon, 12, "")
+    wishlistIcon:SetText(Loolib.Fonts:Icon("star"))
+    wishlistIcon:Hide()
+    self.wishlistIcon = wishlistIcon
+
     local wishlistLine = container:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    wishlistLine:SetPoint("TOPLEFT", self.itemInfo, "BOTTOMLEFT", 0, -2)
+    wishlistLine:SetPoint("LEFT", wishlistIcon, "RIGHT", 4, 0)
     wishlistLine:SetPoint("RIGHT", -8, 0)
     wishlistLine:SetJustifyH("LEFT")
     wishlistLine:SetWordWrap(false)
@@ -851,6 +922,28 @@ function RollFrameMixin:RefreshResponseButtons()
                 if button.selectAnim then button.selectAnim:Play() end
             end)
 
+            -- Hover hint: border tint + subtle glow brighten toward the button's
+            -- response color. No-op when the button is already selected.
+            button:SetScript("OnEnter", function(btn)
+                if self.selectedResponse == btn.buttonId then return end
+                local color = btn.buttonData and btn.buttonData.color
+                local r, g, b = 0.6, 0.6, 0.6
+                if color then
+                    if color.r then r, g, b = color.r, color.g, color.b
+                    elseif type(color) == "table" then r, g, b = color[1], color[2], color[3] end
+                end
+                btn:SetBackdropBorderColor(r, g, b, 0.9)
+                if btn.selectedGlow then
+                    btn.selectedGlow:SetColorTexture(r, g, b, 0.08)
+                    btn.selectedGlow:Show()
+                end
+            end)
+            button:SetScript("OnLeave", function(btn)
+                if self.selectedResponse == btn.buttonId then return end
+                btn:SetBackdropBorderColor(0.22, 0.22, 0.22, 1)
+                if btn.selectedGlow then btn.selectedGlow:Hide() end
+            end)
+
             self.responseButtons[btnData.id] = button
             self.responseButtonsArray[i] = button
             button:Show()
@@ -898,7 +991,10 @@ function RollFrameMixin:OnResponseClick(button)
         btn:SetBackdropBorderColor(0.22, 0.22, 0.22, 1)
     end
 
-    if button.selectedGlow then button.selectedGlow:Show() end
+    if button.selectedGlow then
+        button.selectedGlow:SetColorTexture(1, 0.82, 0, 0.12)
+        button.selectedGlow:Show()
+    end
     if button.accentBar then button.accentBar:Show() end
     button:SetBackdropBorderColor(1, 0.82, 0, 0.9)
     self.selectedResponse = button.buttonId

@@ -125,6 +125,13 @@ function ItemRowMixin:CreateElements()
     self.winnerText:SetWordWrap(false)
     self.winnerText:Hide()
 
+    -- Trophy glyph shown alongside the winner name when the item is awarded.
+    self.winnerTrophy = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    Loolib.Fonts:SetIconFont(self.winnerTrophy, 12, "")
+    self.winnerTrophy:SetText(Loolib.Fonts:Icon("trophy"))
+    self.winnerTrophy:SetTextColor(1.0, 0.82, 0.0)
+    self.winnerTrophy:Hide()
+
     self:ApplyDefaultLayout()
 end
 
@@ -254,13 +261,18 @@ function ItemRowMixin:UpdateLayout()
     self._layoutAwarded = isAwarded
 
     if isAwarded then
-        -- Awarded chain: nameText → winnerText → statusText → actionButton(hidden)
+        -- Awarded chain: nameText → winnerTrophy → winnerText → statusText → actionButton(hidden)
         self.winnerText:ClearAllPoints()
         self.winnerText:SetPoint("RIGHT", self.statusText, "LEFT", -8, 0)
 
+        if self.winnerTrophy then
+            self.winnerTrophy:ClearAllPoints()
+            self.winnerTrophy:SetPoint("RIGHT", self.winnerText, "LEFT", -4, 0)
+        end
+
         self.nameText:ClearAllPoints()
         self.nameText:SetPoint("TOPLEFT", self.icon, "TOPRIGHT", PADDING + 2, -2)
-        self.nameText:SetPoint("RIGHT", self.winnerText, "LEFT", -8, 0)
+        self.nameText:SetPoint("RIGHT", self.winnerTrophy or self.winnerText, "LEFT", -8, 0)
     else
         self:ApplyDefaultLayout()
     end
@@ -405,8 +417,11 @@ function ItemRowMixin:UpdateWinner()
 
         self.winnerText:SetText(coloredName)
         self.winnerText:Show()
+        -- Anchor is owned by UpdateLayout; only toggle visibility here.
+        if self.winnerTrophy then self.winnerTrophy:Show() end
     else
         self.winnerText:Hide()
+        if self.winnerTrophy then self.winnerTrophy:Hide() end
     end
 end
 
@@ -423,6 +438,7 @@ function ItemRowMixin:Clear()
     self.statusText:SetText("")
     self.infoText:SetText("")
     self.winnerText:Hide()
+    if self.winnerTrophy then self.winnerTrophy:Hide() end
     self.actionButton:Hide()
     self:ApplyDefaultLayout()
 end

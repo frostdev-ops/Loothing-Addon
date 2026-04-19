@@ -8,6 +8,14 @@ local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local L = ns.Locale
 local Utils = ns.Utils
+local SkinningMixin = ns.SkinningMixin
+
+local AnimationUtil = Loolib.AnimationUtil
+local AnimationPresets = Loolib.AnimationPresets
+local PixelUtil = Loolib.PixelUtil
+
+local ApplyAccentGlow = ns.FramePolish.ApplyAccentGlow
+local AttachIconButtonPolish = ns.FramePolish.AttachIconButtonPolish
 
 --[[--------------------------------------------------------------------
     VotePanelMixin
@@ -38,6 +46,7 @@ function VotePanelMixin:Init()
 
     self:CreateFrame()
     self:CreateElements()
+    self:ApplyTheme()
 
     -- Close panel when session ends (prevent stale UI)
     if Loothing.Session then
@@ -72,6 +81,23 @@ function VotePanelMixin:CreateFrame()
         edgeSize = 32,
         insets = { left = 11, right = 12, top = 12, bottom = 11 },
     })
+
+    -- Start hidden-alpha so the first Show() can fade in.
+    frame:SetAlpha(0)
+
+    -- Gradient accent strip behind the title (dynamic from SkinningMixin).
+    local headerStrip = frame:CreateTexture(nil, "BACKGROUND", nil, 2)
+    headerStrip:SetPoint("TOPLEFT", 14, -14)
+    headerStrip:SetPoint("TOPRIGHT", -14, -14)
+    headerStrip:SetHeight(32)
+    headerStrip:SetColorTexture(1, 1, 1, 1)
+    self.headerStrip = headerStrip
+    ApplyAccentGlow(headerStrip, 0.18)
+
+    -- Pixel-perfect outer border: color refreshed from SkinningMixin in ApplyTheme.
+    if PixelUtil and type(PixelUtil.SetThinBorder) == "function" and SkinningMixin then
+        self.pixelBorder = PixelUtil.SetThinBorder(frame, SkinningMixin:GetColor("borderStrong"))
+    end
 
     -- Title bar for dragging
     local titleBar = CreateFrame("Frame", nil, frame)
@@ -108,6 +134,7 @@ function VotePanelMixin:CreateElements()
         self:Hide()
         self:TriggerEvent("OnVoteCancelled")
     end)
+    AttachIconButtonPolish(self.closeButton, { hoverScale = 1.15, pressScale = 0.90 })
 
     -- Item display area
     self:CreateItemDisplay()
@@ -478,6 +505,7 @@ function VotePanelMixin:CreateRankRow(parent, _index)
     upBtn:SetScript("OnClick", function()
         self:MoveRank(row.rankIndex, row.rankIndex - 1)
     end)
+    AttachIconButtonPolish(upBtn, { hoverScale = 1.18, pressScale = 0.88 })
     row.upBtn = upBtn
 
     -- Down arrow button
@@ -489,6 +517,7 @@ function VotePanelMixin:CreateRankRow(parent, _index)
     downBtn:SetScript("OnClick", function()
         self:MoveRank(row.rankIndex, row.rankIndex + 1)
     end)
+    AttachIconButtonPolish(downBtn, { hoverScale = 1.18, pressScale = 0.88 })
     row.downBtn = downBtn
 
     -- Remove button
@@ -502,6 +531,7 @@ function VotePanelMixin:CreateRankRow(parent, _index)
         self:RefreshRankDisplay()
         self:UpdateResponseButtons()
     end)
+    AttachIconButtonPolish(removeBtn, { hoverScale = 1.18, pressScale = 0.88 })
     row.removeBtn = removeBtn
 
     return row
@@ -956,19 +986,68 @@ function VotePanelMixin:UpdateTimer()
 end
 
 --[[--------------------------------------------------------------------
+    Theme Refresh
+----------------------------------------------------------------------]]
+
+--- Re-apply custom accents (gradient strip, pixel border) from current theme.
+--- Called from Init and from Show so that accent/theme changes propagate the
+--- next time the panel appears.
+function VotePanelMixin:ApplyTheme()
+    if not self.frame then return end
+
+    if self.headerStrip then
+        ApplyAccentGlow(self.headerStrip, 0.18)
+        self.headerStrip:SetAlpha(1)
+    end
+
+    if self.pixelBorder and PixelUtil and SkinningMixin then
+        local c = SkinningMixin:GetColor("borderStrong") or { 0, 0, 0, 1 }
+        for _, tex in pairs(self.pixelBorder) do
+            if type(tex) == "table" and type(tex.SetColorTexture) == "function" then
+                tex:SetColorTexture(c[1] or 0, c[2] or 0, c[3] or 0, c[4] or 1)
+            end
+        end
+    end
+
+    if self.submitButton and SkinningMixin and SkinningMixin.StylePlainButton then
+        SkinningMixin:StylePlainButton(self.submitButton, "primary")
+    end
+end
+
+--[[--------------------------------------------------------------------
     Visibility
 ----------------------------------------------------------------------]]
 
 --- Show the panel
 function VotePanelMixin:Show()
+    if self.frame._loothingFadeGroup then self.frame._loothingFadeGroup:Stop() end
+
+    -- Refresh theme-driven accents in case the user changed skin/accent while hidden.
+    self:ApplyTheme()
+
     self.frame:Show()
     self.frame:Raise()
+
+    if AnimationPresets then
+        self.frame._loothingFadeGroup = AnimationPresets.FadeIn(self.frame, 0.22, "outCubic")
+    else
+        self.frame:SetAlpha(1)
+    end
 end
 
 --- Hide the panel
 function VotePanelMixin:Hide()
     self:StopTimer()
-    self.frame:Hide()
+
+    if self.frame._loothingFadeGroup then self.frame._loothingFadeGroup:Stop() end
+
+    if AnimationPresets and self.frame:IsVisible() then
+        self.frame._loothingFadeGroup = AnimationPresets.FadeOut(self.frame, 0.13, "inCubic", true, function()
+            self.frame:SetAlpha(0)
+        end)
+    else
+        self.frame:Hide()
+    end
 end
 
 --- Toggle visibility

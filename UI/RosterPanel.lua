@@ -12,6 +12,10 @@ local VersionCheck = ns.VersionCheck
 local C_Timer = C_Timer
 local SkinningMixin = ns.SkinningMixin
 
+local PixelUtil = Loolib.PixelUtil
+
+local ApplyAccentGlow = ns.FramePolish.ApplyAccentGlow
+
 --[[--------------------------------------------------------------------
     RosterPanelMixin
 ----------------------------------------------------------------------]]
@@ -26,6 +30,10 @@ local HEADER_HEIGHT = 28
 local COLUMN_HEADER_HEIGHT = 22
 local FOOTER_HEIGHT = 36
 
+-- Even long "Name-Realm" strings fit in ~220px at GameFontNormalSmall.
+-- Capping here prevents the fill column from grabbing all excess width.
+local MAX_NAME_WIDTH = 220
+
 -- Column definitions: { id, width (nil = FILL), labelKey }
 -- Labels are resolved at display time via L[labelKey] in CreateColumnButtons
 local COLUMNS = {
@@ -36,7 +44,7 @@ local COLUMNS = {
     { id = "version", width = 90,  label = "Loothing" },
     { id = "council", width = 58,  labelKey = "ROSTER_COLUMN_COUNCIL" },
     { id = "loot",    width = 44,  labelKey = "ROSTER_COLUMN_LOOT" },
-    { id = "rank",    width = 60,  labelKey = "ROSTER_COLUMN_RANK" },
+    { id = "rank",    width = 84,  labelKey = "ROSTER_COLUMN_RANK" },
 }
 
 local FIXED_WIDTH_TOTAL = 0
@@ -153,6 +161,15 @@ function RosterPanelMixin:CreateHeader()
     header:SetPoint("TOPRIGHT", -8, -4)
     header:SetHeight(HEADER_HEIGHT)
 
+    -- Soft accent glow across the summary band. Tracks SkinningMixin accent color.
+    local headerStrip = header:CreateTexture(nil, "BACKGROUND", nil, 2)
+    headerStrip:SetPoint("TOPLEFT", 0, 0)
+    headerStrip:SetPoint("TOPRIGHT", 0, 0)
+    headerStrip:SetHeight(HEADER_HEIGHT)
+    headerStrip:SetColorTexture(1, 1, 1, 1)
+    self.headerStrip = headerStrip
+    ApplyAccentGlow(headerStrip, 0.18)
+
     self.summaryText = header:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     self.summaryText:SetPoint("LEFT")
 
@@ -236,7 +253,7 @@ function RosterPanelMixin:LayoutColumns()
     end
 
     local containerWidth = self:GetContentWidth()
-    local fillWidth = math.max(60, containerWidth - FIXED_WIDTH_TOTAL)
+    local fillWidth = math.min(MAX_NAME_WIDTH, math.max(60, containerWidth - FIXED_WIDTH_TOTAL))
     local xOffset = 0
 
     for _, btn in ipairs(self.columnButtons) do
@@ -296,6 +313,11 @@ function RosterPanelMixin:CreateScrollList()
     })
     container:SetBackdropColor(0.05, 0.05, 0.05, 0.9)
     container:SetBackdropBorderColor(0.2, 0.2, 0.2, 1)
+
+    -- Pixel-perfect inner border
+    if PixelUtil and type(PixelUtil.SetThinBorder) == "function" then
+        self.listPixelBorder = PixelUtil.SetThinBorder(container, SkinningMixin:GetColor("borderStrong"))
+    end
 
     local scrollFrame = CreateFrame("ScrollFrame", nil, container, "UIPanelScrollFrameTemplate")
     scrollFrame:SetPoint("TOPLEFT", 2, -2)
@@ -411,6 +433,20 @@ function RosterPanelMixin:ApplyTheme()
 
     if self.queryButton then
         SkinningMixin:StylePlainButton(self.queryButton, "primary")
+    end
+
+    -- Re-apply custom accents so skin/accent switches take effect.
+    if self.headerStrip then
+        ApplyAccentGlow(self.headerStrip, 0.18)
+        self.headerStrip:SetAlpha(1)
+    end
+    if self.listPixelBorder and PixelUtil then
+        local c = SkinningMixin:GetColor("borderStrong") or { 0, 0, 0, 1 }
+        for _, tex in pairs(self.listPixelBorder) do
+            if type(tex) == "table" and type(tex.SetColorTexture) == "function" then
+                tex:SetColorTexture(c[1] or 0, c[2] or 0, c[3] or 0, c[4] or 1)
+            end
+        end
     end
 end
 
@@ -622,7 +658,7 @@ function RosterPanelMixin:DisplayRows()
     self.emptyText:Hide()
 
     local containerWidth = self:GetContentWidth()
-    local fillWidth = math.max(60, containerWidth - FIXED_WIDTH_TOTAL)
+    local fillWidth = math.min(MAX_NAME_WIDTH, math.max(60, containerWidth - FIXED_WIDTH_TOTAL))
     local yOffset = 0
 
     for _, entry in ipairs(self.rosterData) do
@@ -653,6 +689,13 @@ local function InitRowElements(row)
     -- Class icon
     row.classIcon = row:CreateTexture(nil, "ARTWORK")
     row.classIcon:SetSize(16, 16)
+
+    -- Master Looter crown glyph (icon font; shown only when entry.isMasterLooter).
+    row.mlCrown = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    Loolib.Fonts:SetIconFont(row.mlCrown, 10, "")
+    row.mlCrown:SetText(Loolib.Fonts:Icon("crown"))
+    row.mlCrown:SetTextColor(1.0, 0.82, 0.0)
+    row.mlCrown:Hide()
 
     -- Name text
     row.nameText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -691,6 +734,7 @@ end
 local function ClearRowChildPoints(row)
     row.statusDot:ClearAllPoints()
     row.classIcon:ClearAllPoints()
+    if row.mlCrown then row.mlCrown:ClearAllPoints() end
     row.nameText:ClearAllPoints()
     row.roleIcon:ClearAllPoints()
     row.ilvlText:ClearAllPoints()
@@ -752,17 +796,24 @@ function RosterPanelMixin:SetupRow(row, entry, yOffset, fillWidth)
     end
     row.classIcon:SetAlpha(alpha)
 
-    row.nameText:SetPoint("LEFT", xPos + 20, 0)
-    row.nameText:SetWidth(fillWidth - 24)
+    local nameStartX = xPos + 20
     local displayName = entry.shortName or entry.name
-    local mlTag = entry.isMasterLooter and " |cffffd100[ML]|r" or ""
+    if entry.isMasterLooter and row.mlCrown then
+        row.mlCrown:SetPoint("LEFT", nameStartX, 0)
+        row.mlCrown:Show()
+        row.mlCrown:SetAlpha(alpha)
+        nameStartX = nameStartX + 14
+    elseif row.mlCrown then
+        row.mlCrown:Hide()
+    end
+    row.nameText:SetPoint("LEFT", nameStartX, 0)
+    row.nameText:SetWidth(fillWidth - (nameStartX - xPos) - 4)
     local classColor = RAID_CLASS_COLORS and entry.classFile and RAID_CLASS_COLORS[entry.classFile]
     if classColor then
-        row.nameText:SetText(string.format("|cff%02x%02x%02x%s|r%s",
-            classColor.r * 255, classColor.g * 255, classColor.b * 255,
-            displayName, mlTag))
+        row.nameText:SetText(string.format("|cff%02x%02x%02x%s|r",
+            classColor.r * 255, classColor.g * 255, classColor.b * 255, displayName))
     else
-        row.nameText:SetText(displayName .. mlTag)
+        row.nameText:SetText(displayName)
     end
     row.nameText:SetAlpha(alpha)
     xPos = xPos + fillWidth
@@ -812,15 +863,17 @@ function RosterPanelMixin:SetupRow(row, entry, yOffset, fillWidth)
     row.versionText:SetAlpha(alpha)
     xPos = xPos + 90
 
-    -- Council (58px)
+    -- Council (58px). isCouncil shows a check glyph via the icon font;
+    -- non-council rows show nothing (the icon font has no Latin, so a
+    -- "--" placeholder would render as tofu).
     row.councilText:SetPoint("LEFT", xPos, 0)
     row.councilText:SetWidth(58)
+    Loolib.Fonts:SetIconFont(row.councilText, 12, "")
     if entry.isCouncil then
-        row.councilText:SetText("|cff00ff00\226\156\147|r")
-        row.councilText:SetTextColor(1, 1, 1)
+        row.councilText:SetText(Loolib.Fonts:Icon("check"))
+        row.councilText:SetTextColor(0.2, 0.93, 0.2)
     else
-        row.councilText:SetText("--")
-        row.councilText:SetTextColor(0.4, 0.4, 0.4)
+        row.councilText:SetText("")
     end
     row.councilText:SetAlpha(alpha)
     xPos = xPos + 58
@@ -838,9 +891,9 @@ function RosterPanelMixin:SetupRow(row, entry, yOffset, fillWidth)
     row.lootText:SetAlpha(alpha)
     xPos = xPos + 44
 
-    -- Rank (60px)
+    -- Rank (84px)
     row.rankText:SetPoint("LEFT", xPos + 2, 0)
-    row.rankText:SetWidth(56)
+    row.rankText:SetWidth(80)
     row.rankText:SetText(RANK_KEYS[entry.rank] and L[RANK_KEYS[entry.rank]] or L["ROSTER_RANK_MEMBER"])
     if entry.rank == 2 then
         row.rankText:SetTextColor(1, 0.82, 0)
