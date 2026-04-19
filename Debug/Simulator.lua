@@ -176,16 +176,6 @@ function Simulator:Enable(force)
     -- is called mid-flight, late-firing timers can detect they're stale.
     self._gen = (self._gen or 0) + 1
 
-    -- Seed math.random once per enable so the Fisher-Yates shuffle in
-    -- GenerateItemsForBoss produces varied picks. WoW seeds math.random
-    -- at login but we seed explicitly to ensure variety even when Enable
-    -- is called before any other RNG consumer has perturbed the state.
-    if not self._seededRNG then
-        self._seededRNG = true
-        local t = (GetTime and GetTime() or time()) * 1000
-        math.randomseed(math.floor(t))
-    end
-
     self:InstallMLState()
     self:HookRaidRoster()
     if not self.fakeRaiders then
