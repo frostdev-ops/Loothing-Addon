@@ -1022,6 +1022,8 @@ function SkinningMixin:RefreshTheme()
         -- Frames stored on ns with metatable proxy / direct Mixin() (ApplyTheme lives on the frame itself)
         { ns,          "LootPickerFrame" },
         { ns,          "IconPickerFrame" },
+        -- SimulatorPanel is a mixin-as-singleton; ApplyTheme no-ops if the frame hasn't been built yet
+        { ns,          "SimulatorPanelMixin" },
     }
     for _, entry in ipairs(dispatchTargets) do
         local owner, key = entry[1], entry[2]
@@ -1032,6 +1034,12 @@ function SkinningMixin:RefreshTheme()
     end
 
     self:RefreshStyledButtons()
+
+    -- Re-tint every themed scrollbar (thumb + track) so accent/skin
+    -- changes take effect on currently-visible scroll views.
+    if type(ns.RefreshThemedScrollBars) == "function" then
+        ns.RefreshThemedScrollBars()
+    end
 end
 
 --- Apply per-frame overrides (bgColor, borderColor)

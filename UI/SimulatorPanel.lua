@@ -12,8 +12,14 @@ local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local SkinningMixin = ns.SkinningMixin
 
-local PANEL_WIDTH = 380
-local PANEL_HEIGHT = 488
+local AnimationPresets = Loolib.AnimationPresets
+local PixelUtil = Loolib.PixelUtil
+local ApplyAccentGlow = ns.FramePolish and ns.FramePolish.ApplyAccentGlow
+local AttachIconButtonPolish = ns.FramePolish and ns.FramePolish.AttachIconButtonPolish
+
+local PANEL_WIDTH = 420    -- widened from 380; ListRaids raid names need the room
+local PANEL_HEIGHT = 540   -- +52 over original to give each row proper breathing space
+local HEADER_HEIGHT = 36
 local QUEUE_ROW_HEIGHT = 22
 
 local SimulatorPanelMixin = ns.SimulatorPanelMixin or {}
@@ -107,14 +113,30 @@ function SimulatorPanelMixin:BuildFrame()
     frame:SetScript("OnDragStop", function(f) f:StopMovingOrSizing() end)
     styleSurface(frame)
     frame:Hide()
+    frame:SetAlpha(0)   -- fade in from 0 on first Show()
     self.frame = frame
 
     local WM = Loolib:GetModule("WindowManager")
     if WM and WM.Register then WM:Register(frame) end
 
+    -- Accent glow strip behind the title (dynamic from SkinningMixin accent)
+    local headerStrip = frame:CreateTexture(nil, "BACKGROUND", nil, 2)
+    headerStrip:SetPoint("TOPLEFT", 2, -2)
+    headerStrip:SetPoint("TOPRIGHT", -2, -2)
+    headerStrip:SetHeight(HEADER_HEIGHT)
+    headerStrip:SetColorTexture(1, 1, 1, 1)
+    self.headerStrip = headerStrip
+    if ApplyAccentGlow then ApplyAccentGlow(headerStrip, 0.18) end
+
+    -- Pixel-perfect outer border
+    if PixelUtil and type(PixelUtil.SetThinBorder) == "function" then
+        local bc = (SkinningMixin and SkinningMixin:GetColor("borderStrong")) or { 0, 0, 0, 1 }
+        self.pixelBorder = PixelUtil.SetThinBorder(frame, bc)
+    end
+
     -- Title
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    title:SetPoint("TOPLEFT", 10, -10)
+    title:SetPoint("TOPLEFT", 12, -12)
     title:SetText("Loothing Simulator")
     title:SetTextColor(1, 0.82, 0)
 
@@ -123,11 +145,14 @@ function SimulatorPanelMixin:BuildFrame()
     closeBtn:SetSize(22, 22)
     closeBtn:SetPoint("TOPRIGHT", -2, -2)
     closeBtn:SetScript("OnClick", function() self:Hide() end)
+    if AttachIconButtonPolish then
+        AttachIconButtonPolish(closeBtn, { hoverScale = 1.15, pressScale = 0.90 })
+    end
 
-    -- Status row
+    -- Status row (below the 36-px accent header band)
     local statusRow = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-    statusRow:SetPoint("TOPLEFT", 8, -32)
-    statusRow:SetPoint("TOPRIGHT", -8, -32)
+    statusRow:SetPoint("TOPLEFT", 8, -44)
+    statusRow:SetPoint("TOPRIGHT", -8, -44)
     statusRow:SetHeight(24)
     styleSurface(statusRow, { 0.06, 0.06, 0.08, 1 }, { 0.25, 0.25, 0.3, 1 })
 
@@ -163,9 +188,9 @@ end
 
 function SimulatorPanelMixin:BuildKillSection()
     local section = CreateFrame("Frame", nil, self.frame, "BackdropTemplate")
-    section:SetPoint("TOPLEFT", 8, -62)
-    section:SetPoint("TOPRIGHT", -8, -62)
-    section:SetHeight(124)   -- +28 over the previous 96 to fit the raid row
+    section:SetPoint("TOPLEFT", 8, -74)
+    section:SetPoint("TOPRIGHT", -8, -74)
+    section:SetHeight(156)   -- room for 4 rows at 28px + label + bottom buttons
     styleSurface(section, { 0.05, 0.05, 0.07, 1 }, { 0.2, 0.2, 0.25, 1 })
 
     local label = section:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -173,44 +198,48 @@ function SimulatorPanelMixin:BuildKillSection()
     label:SetText("Fire / Queue Kill")
     label:SetTextColor(0.7, 0.7, 0.85)
 
-    -- Raid dropdown (picks any raid from any tier)
+    local LABEL_COL = 56  -- pixel offset where dropdowns start (past the "Raid:/Boss:" labels)
+    local ROW_Y = { -30, -60, -90 }   -- Raid, Boss, Items/Looter
+
+    -- Raid row
     local raidLabel = section:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    raidLabel:SetPoint("TOPLEFT", 8, -26)
+    raidLabel:SetPoint("TOPLEFT", 8, ROW_Y[1])
     raidLabel:SetText("Raid:")
     raidLabel:SetTextColor(0.8, 0.8, 0.8)
 
-    self.raidDropdown = CreateFrame("Frame", "LoothingSimRaidDropdown", section, "UIDropDownMenuTemplate")
-    self.raidDropdown:SetPoint("LEFT", raidLabel, "RIGHT", -8, -2)
-    -- Width generous enough for long raid names (e.g., "Amirdrassil, the
-    -- Dream's Hope") without truncation. PANEL_WIDTH is 380; 260 leaves
-    -- enough room for the label + margins.
-    UIDropDownMenu_SetWidth(self.raidDropdown, 260)
-    UIDropDownMenu_Initialize(self.raidDropdown,
-        function(_, level, menuList) self:PopulateRaidDropdown(level, menuList) end,
-        "MENU")  -- MENU mode allows nested tier submenus
-    UIDropDownMenu_SetText(self.raidDropdown, getCurrentRaidName())
+    self.raidDropdown = ns.CreateThemedDropdown(section, {
+        width = 336,
+        placeholder = getCurrentRaidName(),
+        getOptions = function() return self:BuildRaidOptions() end,
+        getSelected = function() return getSelectedRaidID() end,
+        onSelect = function(_, value) self:OnRaidSelected(value) end,
+    })
+    self.raidDropdown:SetPoint("TOPLEFT", section, "TOPLEFT", LABEL_COL, ROW_Y[1] - 2)
 
-    -- Boss dropdown
+    -- Boss row
     local bossLabel = section:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    bossLabel:SetPoint("TOPLEFT", 8, -54)
+    bossLabel:SetPoint("TOPLEFT", 8, ROW_Y[2])
     bossLabel:SetText("Boss:")
     bossLabel:SetTextColor(0.8, 0.8, 0.8)
 
-    self.bossDropdown = CreateFrame("Frame", "LoothingSimBossDropdown", section, "UIDropDownMenuTemplate")
-    self.bossDropdown:SetPoint("LEFT", bossLabel, "RIGHT", -8, -2)
-    UIDropDownMenu_SetWidth(self.bossDropdown, 200)
-    UIDropDownMenu_Initialize(self.bossDropdown, function(_, _, _) self:PopulateBossDropdown() end)
-    UIDropDownMenu_SetText(self.bossDropdown, "Random")
+    self.bossDropdown = ns.CreateThemedDropdown(section, {
+        width = 336,
+        placeholder = "Random",
+        getOptions = function() return self:BuildBossOptions() end,
+        getSelected = function() return self:GetBossToken() end,
+        onSelect = function(_, value) self:OnBossSelected(value) end,
+    })
+    self.bossDropdown:SetPoint("TOPLEFT", section, "TOPLEFT", LABEL_COL, ROW_Y[2] - 2)
 
-    -- Item count
+    -- Items + Looter row
     local countLabel = section:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    countLabel:SetPoint("TOPLEFT", 8, -80)
+    countLabel:SetPoint("TOPLEFT", 8, ROW_Y[3])
     countLabel:SetText("Items:")
     countLabel:SetTextColor(0.8, 0.8, 0.8)
 
     local countBox = CreateFrame("EditBox", nil, section, "InputBoxTemplate")
-    countBox:SetSize(40, 22)
-    countBox:SetPoint("LEFT", countLabel, "RIGHT", 8, 0)
+    countBox:SetSize(36, 22)
+    countBox:SetPoint("TOPLEFT", section, "TOPLEFT", LABEL_COL, ROW_Y[3] - 2)
     countBox:SetAutoFocus(false)
     countBox:SetNumeric(true)
     countBox:SetMaxLetters(2)
@@ -220,22 +249,26 @@ function SimulatorPanelMixin:BuildKillSection()
     end)
     self.countBox = countBox
 
-    -- Looter dropdown
     local looterLabel = section:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    looterLabel:SetPoint("LEFT", countBox, "RIGHT", 12, 0)
+    looterLabel:SetPoint("LEFT", countBox, "RIGHT", 14, 0)
     looterLabel:SetText("Looter:")
     looterLabel:SetTextColor(0.8, 0.8, 0.8)
 
-    self.looterDropdown = CreateFrame("Frame", "LoothingSimLooterDropdown", section, "UIDropDownMenuTemplate")
-    self.looterDropdown:SetPoint("LEFT", looterLabel, "RIGHT", -8, -2)
-    UIDropDownMenu_SetWidth(self.looterDropdown, 130)
-    UIDropDownMenu_Initialize(self.looterDropdown, function(_, _, _) self:PopulateLooterDropdown() end)
-    UIDropDownMenu_SetText(self.looterDropdown, "Random")
+    self.looterDropdown = ns.CreateThemedDropdown(section, {
+        width = 220,
+        placeholder = "Random",
+        getOptions = function() return self:BuildLooterOptions() end,
+        -- The Random row uses sentinel "_random" so the check-mark lines up
+        -- when no looter is picked (GetLooterToken returns nil for random).
+        getSelected = function() return self.selectedLooter or "_random" end,
+        onSelect = function(_, value) self:OnLooterSelected(value) end,
+    })
+    self.looterDropdown:SetPoint("LEFT", looterLabel, "RIGHT", 6, 0)
 
-    -- Buttons
+    -- Buttons (dropdowns' popups render over them so put them at the bottom safely)
     self.fireKillBtn = ns.CreateThemedButton(section)
     self.fireKillBtn:SetSize(90, 22)
-    self.fireKillBtn:SetPoint("BOTTOMLEFT", 8, 6)
+    self.fireKillBtn:SetPoint("BOTTOMLEFT", 8, 8)
     self.fireKillBtn:SetText("Fire Kill")
     self.fireKillBtn:SetScript("OnClick", function() self:OnFireKill() end)
     SkinningMixin:StylePlainButton(self.fireKillBtn, "primary")
@@ -250,9 +283,9 @@ end
 
 function SimulatorPanelMixin:BuildLootSection()
     local section = CreateFrame("Frame", nil, self.frame, "BackdropTemplate")
-    section:SetPoint("TOPLEFT", 8, -192)
-    section:SetPoint("TOPRIGHT", -8, -192)
-    section:SetHeight(58)
+    section:SetPoint("TOPLEFT", 8, -236)
+    section:SetPoint("TOPRIGHT", -8, -236)
+    section:SetHeight(78)   -- taller so the hint text has its own line below the editbox
     styleSurface(section, { 0.05, 0.05, 0.07, 1 }, { 0.2, 0.2, 0.25, 1 })
 
     local label = section:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -303,7 +336,7 @@ end
 
 function SimulatorPanelMixin:BuildQueueSection()
     local section = CreateFrame("Frame", nil, self.frame, "BackdropTemplate")
-    section:SetPoint("TOPLEFT", 8, -256)
+    section:SetPoint("TOPLEFT", 8, -320)
     section:SetPoint("BOTTOMRIGHT", -8, 60)
     styleSurface(section, { 0.05, 0.05, 0.07, 1 }, { 0.2, 0.2, 0.25, 1 })
 
@@ -314,13 +347,21 @@ function SimulatorPanelMixin:BuildQueueSection()
 
     local scroll = CreateFrame("ScrollFrame", nil, section, "UIPanelScrollFrameTemplate")
     scroll:SetPoint("TOPLEFT", 6, -22)
-    scroll:SetPoint("BOTTOMRIGHT", -24, 6)
+    scroll:SetPoint("BOTTOMRIGHT", -14, 6)    -- tighter right inset since the themed bar is thinner
     self.queueScroll = scroll
 
     local content = CreateFrame("Frame", nil, scroll)
     content:SetSize(1, 1)
     scroll:SetScrollChild(content)
     self.queueContent = content
+
+    if ns.ApplyThemedScrollBar then
+        ns.ApplyThemedScrollBar(scroll, {
+            autoHide = true,
+            showButtons = true,   -- chevron-up/chevron-down glyphs from Loolib Font Awesome
+            thickness = 12,
+        })
+    end
 
     scroll:SetScript("OnSizeChanged", function(_sf, w)
         content:SetWidth(w)
@@ -391,135 +432,84 @@ function SimulatorPanelMixin:BuildFooter()
 end
 
 --[[--------------------------------------------------------------------
-    Dropdown population
+    Themed dropdown option builders
+
+    The themed dropdowns (ns.CreateThemedDropdown) expect a flat list of
+    options where each entry is either:
+      { header = "Tier Name" }                        -- group header
+      { value = <unique>, label = "Display Text" }    -- selectable row
 ----------------------------------------------------------------------]]
 
-function SimulatorPanelMixin:PopulateRaidDropdown(level, menuList)
-    level = level or 1
-    local selectedID = getSelectedRaidID()
-
-    if level == 1 then
-        -- Top-level list: tier headers. Each tier gets a submenu with
-        -- its raids. "MENU" mode gives us the ► arrow + cascaded child.
-        local raids = getRaids()
-        if #raids == 0 then
-            local info = UIDropDownMenu_CreateInfo()
-            info.text = "(no raids — EJ not loaded)"
-            info.isTitle = true
-            info.notCheckable = true
-            UIDropDownMenu_AddButton(info, level)
-            return
-        end
-
-        -- Group by tier in the order ListRaids returns (latest tier first).
-        local tiers = {}
-        local seenTier = {}
-        for _, r in ipairs(raids) do
-            if not seenTier[r.tierIndex] then
-                seenTier[r.tierIndex] = true
-                tiers[#tiers + 1] = { index = r.tierIndex, name = r.tierName }
-            end
-        end
-
-        for _, t in ipairs(tiers) do
-            local info = UIDropDownMenu_CreateInfo()
-            info.text             = t.name
-            info.hasArrow         = true
-            info.notCheckable     = true
-            info.menuList         = t.index   -- passed back in level==2
-            info.keepShownOnClick = true
-            UIDropDownMenu_AddButton(info, level)
-        end
-        return
+function SimulatorPanelMixin:BuildRaidOptions()
+    local out = {}
+    local raids = getRaids()
+    if #raids == 0 then
+        out[#out + 1] = { value = nil, label = "(no raids — EJ not loaded)" }
+        return out
     end
-
-    -- Level 2: raids within the chosen tier.
-    local tierIndex = menuList
-    for _, r in ipairs(getRaids()) do
-        if r.tierIndex == tierIndex then
-            local info = UIDropDownMenu_CreateInfo()
-            local label = r.instanceName
-            if r.isLatest then
-                -- "latest" rather than "current" to disambiguate from the
-                -- selection checkmark — this marker indicates the raid
-                -- Blizzard considers the current live tier's finale, not
-                -- the user's selection.
-                label = label .. "  |cff888888(latest)|r"
-            end
-            info.text    = label
-            info.checked = (r.instanceID == selectedID)
-            info.func    = function()
-                if ns.Simulator and ns.Simulator.SelectRaid then
-                    ns.Simulator:SelectRaid(r.instanceID)
-                end
-                self.selectedBoss = nil  -- raid changed; clear boss
-                UIDropDownMenu_SetText(self.raidDropdown, r.instanceName)
-                UIDropDownMenu_SetText(self.bossDropdown, "Random")
-                CloseDropDownMenus()
-            end
-            UIDropDownMenu_AddButton(info, level)
+    local lastTier
+    for _, r in ipairs(raids) do
+        if r.tierIndex ~= lastTier then
+            out[#out + 1] = { header = r.tierName or ("Tier " .. tostring(r.tierIndex)) }
+            lastTier = r.tierIndex
         end
+        local label = r.instanceName
+        if r.isLatest then label = label .. "  |cff888888(latest)|r" end
+        out[#out + 1] = { value = r.instanceID, label = label, raid = r }
     end
+    return out
 end
 
-function SimulatorPanelMixin:PopulateBossDropdown()
-    local info = UIDropDownMenu_CreateInfo()
-
-    info.text = "Random"
-    info.checked = (self.selectedBoss == nil)
-    info.func = function()
-        self.selectedBoss = nil
-        UIDropDownMenu_SetText(self.bossDropdown, "Random")
-        CloseDropDownMenus()
+function SimulatorPanelMixin:OnRaidSelected(instanceID)
+    if ns.Simulator and ns.Simulator.SelectRaid then
+        ns.Simulator:SelectRaid(instanceID)
     end
-    UIDropDownMenu_AddButton(info)
+    self.selectedBoss = nil  -- raid changed; clear boss
+    if self.raidDropdown then self.raidDropdown:Refresh() end
+    if self.bossDropdown then self.bossDropdown:Refresh() end
+end
 
+function SimulatorPanelMixin:BuildBossOptions()
+    local out = { { value = "random", label = "Random" } }
     for _, b in ipairs(getBosses()) do
-        info = UIDropDownMenu_CreateInfo()
-        info.text = string.format("%d. %s", b.order, b.name)
-        info.checked = (self.selectedBoss and self.selectedBoss.id == b.id) or false
-        info.func = function()
-            self.selectedBoss = b
-            UIDropDownMenu_SetText(self.bossDropdown, b.name)
-            CloseDropDownMenus()
-        end
-        UIDropDownMenu_AddButton(info)
+        out[#out + 1] = {
+            value = tostring(b.id),
+            label = string.format("%d. %s", b.order, b.name),
+            boss = b,
+        }
     end
+    return out
 end
 
-function SimulatorPanelMixin:PopulateLooterDropdown()
-    local info = UIDropDownMenu_CreateInfo()
-
-    info.text = "Random"
-    info.checked = (self.selectedLooter == nil)
-    info.func = function()
-        self.selectedLooter = nil
-        UIDropDownMenu_SetText(self.looterDropdown, "Random")
-        CloseDropDownMenus()
-    end
-    UIDropDownMenu_AddButton(info)
-
-    info = UIDropDownMenu_CreateInfo()
-    info.text = "Player (you)"
-    info.checked = (self.selectedLooter == "self")
-    info.func = function()
-        self.selectedLooter = "self"
-        UIDropDownMenu_SetText(self.looterDropdown, "You")
-        CloseDropDownMenus()
-    end
-    UIDropDownMenu_AddButton(info)
-
-    for _, m in ipairs(getCouncil()) do
-        info = UIDropDownMenu_CreateInfo()
-        info.text = m.shortName or m.name
-        info.checked = (self.selectedLooter == m.name)
-        info.func = function()
-            self.selectedLooter = m.name
-            UIDropDownMenu_SetText(self.looterDropdown, info.text)
-            CloseDropDownMenus()
+function SimulatorPanelMixin:OnBossSelected(value)
+    if value == "random" or value == nil then
+        self.selectedBoss = nil
+    else
+        for _, b in ipairs(getBosses()) do
+            if tostring(b.id) == value then self.selectedBoss = b break end
         end
-        UIDropDownMenu_AddButton(info)
     end
+    if self.bossDropdown then self.bossDropdown:Refresh() end
+end
+
+function SimulatorPanelMixin:BuildLooterOptions()
+    local out = {
+        { value = "_random", label = "Random" },
+        { value = "self", label = "Player (you)" },
+    }
+    for _, m in ipairs(getCouncil()) do
+        out[#out + 1] = { value = m.name, label = m.shortName or m.name }
+    end
+    return out
+end
+
+function SimulatorPanelMixin:OnLooterSelected(value)
+    if value == "_random" or value == nil then
+        self.selectedLooter = nil
+    else
+        self.selectedLooter = value
+    end
+    if self.looterDropdown then self.looterDropdown:Refresh() end
 end
 
 --[[--------------------------------------------------------------------
@@ -585,9 +575,8 @@ function SimulatorPanelMixin:RegisterCallbacks()
 end
 
 function SimulatorPanelMixin:RefreshRaidDropdown()
-    if self.raidDropdown then
-        UIDropDownMenu_SetText(self.raidDropdown, getCurrentRaidName())
-    end
+    if self.raidDropdown then self.raidDropdown:Refresh() end
+    if self.bossDropdown then self.bossDropdown:Refresh() end
 end
 
 function SimulatorPanelMixin:RefreshAll()
@@ -670,12 +659,45 @@ end
 
 function SimulatorPanelMixin:Show()
     self:Init()
+    if self.frame._loothingFadeGroup then self.frame._loothingFadeGroup:Stop() end
     self.frame:Show()
+    -- Pick up any theme/accent change that happened while the panel was closed.
+    if type(self.ApplyTheme) == "function" then self:ApplyTheme() end
     self:RefreshAll()
+    if AnimationPresets then
+        self.frame._loothingFadeGroup = AnimationPresets.FadeIn(self.frame, 0.22, "outCubic")
+    else
+        self.frame:SetAlpha(1)
+    end
 end
 
 function SimulatorPanelMixin:Hide()
-    if self.frame then self.frame:Hide() end
+    if not self.frame then return end
+    if self.frame._loothingFadeGroup then self.frame._loothingFadeGroup:Stop() end
+    if AnimationPresets and self.frame:IsVisible() then
+        self.frame._loothingFadeGroup = AnimationPresets.FadeOut(self.frame, 0.13, "inCubic", true, function()
+            if self.frame then self.frame:SetAlpha(0) end
+        end)
+    else
+        self.frame:Hide()
+    end
+end
+
+--- Re-apply accent glow and pixel border color on theme/accent change.
+function SimulatorPanelMixin:ApplyTheme()
+    if not self.frame then return end
+    if self.headerStrip and ApplyAccentGlow then
+        ApplyAccentGlow(self.headerStrip, 0.18)
+        self.headerStrip:SetAlpha(1)
+    end
+    if self.pixelBorder and PixelUtil then
+        local c = (SkinningMixin and SkinningMixin:GetColor("borderStrong")) or { 0, 0, 0, 1 }
+        for _, tex in pairs(self.pixelBorder) do
+            if type(tex) == "table" and type(tex.SetColorTexture) == "function" then
+                tex:SetColorTexture(c[1] or 0, c[2] or 0, c[3] or 0, c[4] or 1)
+            end
+        end
+    end
 end
 
 function SimulatorPanelMixin:Toggle()

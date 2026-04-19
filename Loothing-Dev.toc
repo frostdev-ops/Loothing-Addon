@@ -3,7 +3,7 @@
 ## Title: Loothing (Dev)
 ## Notes: Development build with test harness and debug tooling
 ## Author: James Kueller
-## Version: 2.0.21
+## Version: 2.0.22
 ## SavedVariables: LoolibDB
 ## Dependencies: Loolib
 ## IconTexture: Interface\AddOns\Loothing\Media\logo
@@ -116,6 +116,8 @@ UI\IconPickerFrame.lua
 UI\ResponseButtonSettingsFrame.lua
 UI\AwardReasonsSettingsFrame.lua
 UI\Skinning.lua
+UI\ThemedDropdown.lua
+UI\ThemedScrollBar.lua
 UI\Minimap.lua
 UI\Filters.lua
 UI\Popups.lua
