@@ -1,3 +1,4 @@
+local _, ns = ...
 --[[--------------------------------------------------------------------
     Loothing - Loot Council Addon for WoW 12.0+
     ThemedScrollBar - Orientation-aware custom scrollbar widget
@@ -42,7 +43,6 @@
           automatically from SkinningMixin:RefreshTheme.
 ----------------------------------------------------------------------]]
 
-local _, ns = ...
 local Loolib = LibStub("Loolib")
 
 local AnimationUtil = Loolib.AnimationUtil

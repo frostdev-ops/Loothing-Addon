@@ -286,16 +286,23 @@ function LootPickerFrameMixin:BuildFrame()
     styleSurface(listFrame, "inset")
     self.listFrame = listFrame
 
-    local scroll = CreateFrame("ScrollFrame", "LoothingLootPickerScroll", listFrame,
-        "UIPanelScrollFrameTemplate")
+    local scroll = CreateFrame("ScrollFrame", "LoothingLootPickerScroll", listFrame)
     scroll:SetPoint("TOPLEFT", 4, -4)
-    scroll:SetPoint("BOTTOMRIGHT", -26, 4)
+    scroll:SetPoint("BOTTOMRIGHT", -14, 4)
     self.scrollFrame = scroll
 
     local content = CreateFrame("Frame", nil, scroll)
     content:SetSize(PANEL_WIDTH - 50, 1)
     scroll:SetScrollChild(content)
     self.scrollContent = content
+
+    if ns.ApplyThemedScrollBar then
+        ns.ApplyThemedScrollBar(scroll, {
+            autoHide = true,
+            showButtons = true,
+            thickness = 10,
+        })
+    end
 
     self.emptyText = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     self.emptyText:SetPoint("CENTER", scroll, "CENTER", 0, 0)

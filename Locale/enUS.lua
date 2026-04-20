@@ -1175,4 +1175,217 @@ L["SLASH_DESC_SHARE"] = "Share or manage desktop intel"
 L["INTEL_SHARE_GROUP"] = "Group"
 L["INTEL_SHARE_GUILD"] = "Guild"
 
+-- History row click hint and detail-modal menu entries (v2.0.22)
+L["HISTORY_ROW_CLICK_HINT"] = "Click for full details  |cff888888•|r  Shift-Click to link"
+L["VIEW_DETAILS"] = "View Details"
+L["VIEW_SESSION"] = "View Session"
+L["VIEW_PROFILE_FMT"] = "Profile: %s"
+
+-- History detail modal strings (v2.0.22)
+L["HISTORY_DETAIL_TITLE"] = "Loot Detail"
+L["HISTORY_DETAIL_SESSION_TITLE"] = "Session Summary"
+L["HISTORY_DETAIL_CANDIDATE_PROFILE"] = "Candidate Profile"
+L["HISTORY_DETAIL_VOTER_PROFILE"] = "Voter Profile"
+L["HISTORY_DETAIL_TAB_OVERVIEW"] = "Overview"
+L["HISTORY_DETAIL_TAB_CANDIDATES"] = "Candidates"
+L["HISTORY_DETAIL_TAB_VOTES"] = "Council Votes"
+L["HISTORY_DETAIL_TAB_AWARDS"] = "Awards"
+L["HISTORY_DETAIL_TAB_ALL_ROLLS"] = "All Rolls"
+L["HISTORY_DETAIL_VIEW_SESSION"] = "View Session"
+L["HISTORY_DETAIL_CLOSE"] = "Close"
+L["HISTORY_DETAIL_LINK_IN_CHAT"] = "Link in Chat"
+L["HISTORY_DETAIL_WINNER"] = "Winner"
+L["HISTORY_DETAIL_RESPONSE"] = "Response"
+L["HISTORY_DETAIL_ROLL"] = "Roll"
+L["HISTORY_DETAIL_ILVL_DIFF"] = "Item Level Difference"
+L["HISTORY_DETAIL_EQUIPPED_GEAR"] = "Equipped Gear (at time of roll)"
+L["HISTORY_DETAIL_EQUIPPED_AT_ROLL"] = "Equipped at time of roll"
+L["HISTORY_DETAIL_NO_GEAR_SLOT"] = "(empty slot)"
+L["HISTORY_DETAIL_AWARD_REASON"] = "Award Reason"
+L["HISTORY_DETAIL_NO_REASON"] = "(no reason recorded)"
+L["HISTORY_DETAIL_WINNER_NOTE"] = "Winner Note"
+L["HISTORY_DETAIL_NO_NOTE"] = "(no note)"
+L["HISTORY_DETAIL_LOOTER"] = "Looter / Item Owner"
+L["HISTORY_DETAIL_NO_OWNER"] = "—"
+L["HISTORY_DETAIL_TOTAL_VOTES"] = "Council Votes Cast"
+L["HISTORY_DETAIL_UNKNOWN_ITEM"] = "Unknown item"
+L["HISTORY_DETAIL_VOTER_NOTE"] = "Voter Note:"
+
+L["HISTORY_DETAIL_COL_PLAYER"] = "Player"
+L["HISTORY_DETAIL_COL_RESPONSE"] = "Response"
+L["HISTORY_DETAIL_COL_ROLL"] = "Roll"
+L["HISTORY_DETAIL_COL_ILVL"] = "iLvl Δ"
+L["HISTORY_DETAIL_COL_VOTES"] = "Votes"
+L["HISTORY_DETAIL_COL_NOTE"] = "Note"
+L["HISTORY_DETAIL_COL_VOTER"] = "Voter"
+L["HISTORY_DETAIL_COL_PICKS"] = "Picks (Ranked)"
+L["HISTORY_DETAIL_COL_VOTER_NOTE"] = "Note"
+L["HISTORY_DETAIL_COL_ITEM"] = "Item"
+L["HISTORY_DETAIL_COL_WINNER"] = "Winner"
+L["HISTORY_DETAIL_COL_DATE"] = "Date"
+L["HISTORY_DETAIL_COL_WON_BY"] = "Won By"
+
+L["HISTORY_DETAIL_NO_CANDIDATES"] = "No candidate data captured for this entry.\n(Entry predates the candidate snapshot feature.)"
+L["HISTORY_DETAIL_NO_COUNCIL_VOTES"] = "No council votes were cast on this item (or the entry predates the voter snapshot feature)."
+L["HISTORY_DETAIL_NO_SESSION_ITEMS"] = "No other items from this session were found."
+L["HISTORY_DETAIL_NO_PLAYER_HISTORY"] = "No history entries found for this player."
+L["HISTORY_DETAIL_NO_VOTER_HISTORY"] = "No council votes recorded for this voter."
+L["HISTORY_DETAIL_NO_DATA"] = "No data captured for this entry."
+L["HISTORY_DETAIL_NO_RESPONSES"] = "no responses"
+
+L["HISTORY_DETAIL_OPEN_PROFILE_HINT"] = "Click to view player profile"
+L["HISTORY_DETAIL_OPEN_VOTER_HINT"] = "Click to view voter profile"
+L["HISTORY_DETAIL_CLICK_FOR_DETAILS"] = "Click for full details"
+
+L["HISTORY_DETAIL_PROFILE_STATS"] = "Awards: %d   •   Items Rolled: %d   •   Win Rate: %s   •   Avg Roll: %s   •   %s"
+L["HISTORY_DETAIL_VOTER_STATS_FMT"] = "Votes Cast: %d   •   Top Picks: %s"
+
+-- Scope summary modals (Raid / Boss / Season) + history browser hub (v2.0.22)
+L["HISTORY_BROWSE"] = "Browse"
+L["HISTORY_BROWSE_BY_RAID"] = "By Raid"
+L["HISTORY_BROWSE_BY_BOSS"] = "By Boss"
+L["HISTORY_BROWSE_BY_SEASON"] = "By Season"
+L["HISTORY_BROWSE_BY_PLAYER"] = "By Player"
+L["HISTORY_BROWSE_BY_ITEM"] = "By Item"
+
+-- Item summary modal + items tab + resize/view-item (v2.0.22)
+L["HISTORY_DETAIL_ITEM_SUMMARY_TITLE"] = "Item Summary"
+L["HISTORY_DETAIL_NO_ITEM_HISTORY"] = "No award history recorded for this item."
+L["HISTORY_DETAIL_ITEM_LEVEL_FMT"] = "iLvl %d"
+L["HISTORY_DETAIL_ITEM_SUMMARY_FROM_FMT"] = "from %d bosses"
+L["HISTORY_DETAIL_TAB_ITEMS"] = "Items"
+L["HISTORY_DETAIL_RESIZE_HINT"] = "Drag to resize"
+L["VIEW_ITEM_SUMMARY"] = "View item history"
+
+-- =====================================================================
+-- Player Intel modal (UI/PlayerIntelFrame.lua)
+-- =====================================================================
+L["VIEW_PLAYER_INTEL"]           = "View player intel"
+L["INTEL_NO_DATA"]               = "Sync from desktop for intel"
+L["INTEL_TITLE"]                 = "Player Intel"
+L["INTEL_TAB_OVERVIEW"]          = "Overview"
+L["INTEL_TAB_MPLUS"]             = "M+"
+L["INTEL_TAB_PARSES"]            = "Parses"
+L["INTEL_TAB_RAID"]              = "Raid"
+L["INTEL_TAB_LOOT"]              = "Loot"
+L["INTEL_TAB_SIMS"]              = "Sims"
+L["INTEL_TAB_WISHLIST"]          = "Wishlist"
+
+-- Sims tab
+L["INTEL_SIMS_TRINKET"]          = "Bloodmallet"
+L["INTEL_SIMS_DROPT"]            = "Droptimizer"
+L["INTEL_SIMS_TRINKET_NO_DATA"]  = "No sim data loaded"
+L["INTEL_SIMS_TRINKET_NO_SPEC"]  = "Spec unknown"
+L["INTEL_SIMS_TRINKET_MISS"]     = "Not in the simmed set"
+L["INTEL_SIMS_DROPT_NO_DATA"]    = "No droptimizer data loaded"
+L["INTEL_SIMS_DROPT_MISS"]       = "Not in the sim report"
+L["INTEL_SIMS_DROPT_SRC"]        = "raidbots.com"
+L["INTEL_SIMS_WISH_PREFIX"]      = "On wishlist:"
+L["INTEL_SIMS_WISH_NONE"]        = "Not on wishlist."
+L["INTEL_SIMS_HINT"]             = "Bloodmallet projections are keyed by spec; Droptimizer is a Raidbots SimulationCraft run. Both come from your desktop app's nightly sync."
+L["INTEL_SIMS_EMPTY"]            = "Open the intel modal from the council voting table to see sim results for the current item."
+
+-- Wishlist tab
+L["INTEL_WISH_EMPTY"]            = "No wishlist entries for this player."
+L["INTEL_WISH_DEFAULT_LIST"]     = "Wishlist"
+
+-- Council voting table column
+L["COLUMN_INTEL"]                = "Intel"
+
+-- Overview card labels
+L["INTEL_CARD_MPLUS"]            = "Mythic+"
+L["INTEL_CARD_PARSES"]           = "Parses"
+L["INTEL_CARD_ATTENDANCE"]       = "Attendance"
+L["INTEL_CARD_TIER"]             = "Tier set"
+L["INTEL_CARD_VAULT"]            = "Vault"
+L["INTEL_CARD_LOOT"]             = "Recent loot"
+
+-- Captions / empty states
+L["INTEL_NO_KEYS"]               = "No keys this week"
+L["INTEL_NO_PARSES"]             = "No logged parses"
+L["INTEL_NO_ATTENDANCE"]         = "No records"
+L["INTEL_NO_GEAR"]               = "Gear status unknown"
+L["INTEL_NO_PROGRESSION"]        = "Progression unknown"
+L["INTEL_NO_LOOT_TIER"]          = "No loot this tier"
+L["INTEL_LOOT_THIS_TIER"]        = "items this tier"
+
+-- M+ tab
+L["INTEL_MPLUS_SCORE"]           = "Rating"
+L["INTEL_MPLUS_KEYS"]            = "Keys this week"
+L["INTEL_MPLUS_HIGHEST"]         = "Highest key"
+L["INTEL_MPLUS_RATING_CAPTION"]  = "raider.io / detail"
+L["INTEL_MPLUS_WEEK_CAPTION"]    = "completed this reset"
+L["INTEL_MPLUS_HIGHEST_CAPTION"] = "key completed"
+L["INTEL_MPLUS_EMPTY"]           = "No Mythic+ activity recorded this week."
+
+-- Parses tab
+L["INTEL_PARSE_AVG"]             = "Average parse"
+L["INTEL_PARSE_BEST"]            = "Best parse"
+L["INTEL_PARSE_AVG_CAPTION"]     = "across tracked bosses"
+L["INTEL_PARSE_BEST_CAPTION"]    = "single-pull peak"
+L["INTEL_PARSE_HINT"]            = "Averages and bests come from Warcraft Logs. Trend indicates whether recent parses are trending up, holding steady, or dropping."
+L["INTEL_PARSES_EMPTY"]          = "No parse data uploaded yet."
+
+-- Raid tab
+L["INTEL_ATTENDANCE"]            = "Attendance"
+L["INTEL_GEAR_READINESS"]        = "Gear readiness"
+L["INTEL_RAID_EMPTY"]            = "No raid data recorded yet."
+
+-- Loot tab
+L["INTEL_LOOT_EMPTY"]            = "No loot received this tier."
+
+-- Footer
+L["INTEL_SYNCED_FMT"]            = "Synced %s"
+L["INTEL_SHARED_BY_FMT"]         = "Shared by %s"
+L["INTEL_NEVER_SYNCED"]          = "Never synced"
+
+L["HISTORY_DETAIL_VIEW_RAID"] = "View Raid"
+L["HISTORY_DETAIL_VIEW_BOSS"] = "View Boss"
+
+L["HISTORY_DETAIL_RAID_SUMMARY_TITLE"] = "Raid Summary"
+L["HISTORY_DETAIL_BOSS_SUMMARY_TITLE"] = "Boss Summary"
+L["HISTORY_DETAIL_SEASON_SUMMARY_TITLE"] = "Season Summary"
+L["HISTORY_DETAIL_BROWSER_TITLE"] = "Browse History"
+L["HISTORY_DETAIL_BROWSER_HINT"] = "Pick a dimension to drill into. Click any row to open its summary."
+
+L["HISTORY_DETAIL_TAB_RAIDS"] = "Raids"
+L["HISTORY_DETAIL_TAB_BOSSES"] = "Bosses"
+L["HISTORY_DETAIL_TAB_SEASONS"] = "Seasons"
+L["HISTORY_DETAIL_TAB_PLAYERS"] = "Players"
+
+L["HISTORY_DETAIL_COL_BOSS"] = "Boss"
+L["HISTORY_DETAIL_NO_RAID_HISTORY"] = "No awards recorded for this raid."
+L["HISTORY_DETAIL_NO_BOSS_HISTORY"] = "No awards recorded for this encounter."
+L["HISTORY_DETAIL_NO_SEASON_HISTORY"] = "No awards recorded for this season."
+L["HISTORY_DETAIL_NO_SCOPE_MATCHES"] = "No history entries found for this scope."
+L["HISTORY_DETAIL_BROWSER_EMPTY"] = "No entries found for this dimension."
+L["HISTORY_DETAIL_BROWSER_OPEN_HINT"] = "Click to open summary"
+
+L["HISTORY_DETAIL_ITEMS_COUNT_FMT"] = "%d items"
+L["HISTORY_DETAIL_SCOPE_STATS_FMT"] = "Awards: %d   •   Unique Winners: %d   •   Most Recent: %s"
+L["HISTORY_DETAIL_SEASON_SUBTITLE_FMT"] = "%d raids  •  %d awards"
+L["HISTORY_DETAIL_BROWSER_COUNT_FMT"] = "%d awards"
+L["HISTORY_DETAIL_LINK_LABEL"] = "Loothing Entry"
+
+-- Award Matrix modal (per-player response-type leaderboard) (v2.0.22)
+L["HISTORY_BROWSE_AWARD_MATRIX"] = "Award Matrix (Response Breakdown)"
+L["HISTORY_DETAIL_MATRIX_TITLE"] = "Awards by Response Type"
+L["HISTORY_DETAIL_MATRIX_SUBTITLE"] = "Per-player totals. Filter and sort by raid, boss, or season."
+L["HISTORY_DETAIL_MATRIX_EMPTY"] = "No awards match the current filters."
+L["HISTORY_DETAIL_MATRIX_COL_OTHER"] = "Other"
+L["HISTORY_DETAIL_MATRIX_COL_WON"] = "Won"
+L["HISTORY_DETAIL_MATRIX_COL_TOTAL"] = "Total"
+L["HISTORY_DETAIL_MATRIX_FILTER_RAID_LABEL"] = "Raid"
+L["HISTORY_DETAIL_MATRIX_FILTER_BOSS_LABEL"] = "Boss"
+L["HISTORY_DETAIL_MATRIX_FILTER_SEASON_LABEL"] = "Season"
+L["HISTORY_DETAIL_MATRIX_FILTER_RAID"] = "Filter by Raid"
+L["HISTORY_DETAIL_MATRIX_FILTER_BOSS"] = "Filter by Boss"
+L["HISTORY_DETAIL_MATRIX_FILTER_SEASON"] = "Filter by Season"
+L["HISTORY_DETAIL_MATRIX_FILTER_RAID_ALL"] = "Raid: All"
+L["HISTORY_DETAIL_MATRIX_FILTER_BOSS_ALL"] = "Boss: All"
+L["HISTORY_DETAIL_MATRIX_FILTER_SEASON_ALL"] = "Season: All"
+L["HISTORY_DETAIL_MATRIX_FILTER_ALL"] = "All"
+L["HISTORY_DETAIL_MATRIX_STATUS_FMT"] = "%d players   •   %d responses   •   %d awards"
+L["HISTORY_DETAIL_MATRIX_TOOLTIP_ROLLS_FMT"] = "%d total rolls   •   %d awards won"
+
 return L

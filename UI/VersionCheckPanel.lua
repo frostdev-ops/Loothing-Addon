@@ -215,14 +215,29 @@ function VersionCheckPanelMixin:CreateScrollArea()
     container:SetBackdropColor(0.05, 0.05, 0.05, 0.9)
     container:SetBackdropBorderColor(0.2, 0.2, 0.2, 1)
 
-    local scrollFrame = CreateFrame("ScrollFrame", nil, container, "UIPanelScrollFrameTemplate")
+    local scrollFrame = CreateFrame("ScrollFrame", nil, container)
     scrollFrame:SetPoint("TOPLEFT", 4, -4)
-    scrollFrame:SetPoint("BOTTOMRIGHT", -24, 4)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -14, 4)
 
     local content = CreateFrame("Frame", nil, scrollFrame)
     content:SetWidth(scrollFrame:GetWidth())
     content:SetHeight(1)
     scrollFrame:SetScrollChild(content)
+
+    -- Track scroll-frame width so rows laid out via content:GetWidth()
+    -- aren't clipped to zero when the initial scrollFrame:GetWidth()
+    -- returns 0 (unresolved layout at creation time).
+    scrollFrame:SetScript("OnSizeChanged", function(_sf, w)
+        content:SetWidth(w)
+    end)
+
+    if ns.ApplyThemedScrollBar then
+        ns.ApplyThemedScrollBar(scrollFrame, {
+            autoHide = true,
+            showButtons = true,
+            thickness = 10,
+        })
+    end
 
     self.scrollContainer = container
     self.scrollContent = content

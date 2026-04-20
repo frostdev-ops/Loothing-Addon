@@ -1024,6 +1024,13 @@ function SkinningMixin:RefreshTheme()
         { ns,          "IconPickerFrame" },
         -- SimulatorPanel is a mixin-as-singleton; ApplyTheme no-ops if the frame hasn't been built yet
         { ns,          "SimulatorPanelMixin" },
+        -- HistoryDetailFrames is a dispatch table that fans ApplyTheme to all
+        -- four lazy history-detail modals (item detail, session summary,
+        -- candidate profile, voter profile). No-op if none have been opened yet.
+        { ns,          "HistoryDetailFrames" },
+        -- PlayerIntelFrames dispatches to the lazy PlayerIntelFrame singleton
+        -- (UI/PlayerIntelFrame.lua). No-op until the user opens the modal once.
+        { ns,          "PlayerIntelFrames" },
     }
     for _, entry in ipairs(dispatchTargets) do
         local owner, key = entry[1], entry[2]

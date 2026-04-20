@@ -482,33 +482,22 @@ function HistoryImportMixin:ImportEntries(entries, overwrite)
             end
 
             local success, entryErr = pcall(function()
-                Loothing.History:AddEntry({
-                    guid = entry.guid,
-                    itemLink = entry.itemLink,
-                    itemID = entry.itemID,
-                    itemName = entry.itemName,
-                    itemLevel = entry.itemLevel,
-                    quality = entry.quality,
-                    winner = entry.winner,
-                    winnerResponse = entry.winnerResponse,
-                    encounterID = entry.encounterID,
-                    encounterName = entry.encounterName,
-                    votes = entry.votes,
-                    timestamp = entry.timestamp,
-                    notes = entry.notes,
-                    class = entry.class or entry.winnerClass,
-                    winnerClass = entry.winnerClass,
-                    instance = entry.instance,
-                    difficultyID = entry.difficultyID,
-                    mapID = entry.mapID,
-                    groupSize = entry.groupSize,
-                    winnerGear1 = entry.winnerGear1,
-                    winnerGear2 = entry.winnerGear2,
-                    winnerNote = entry.winnerNote,
-                    subType = entry.subType,
-                    equipSlot = entry.equipSlot,
-                    owner = entry.owner,
-                })
+                -- Preserve every field from the source row. The previous
+                -- whitelist silently dropped the v2.0.18 candidate /
+                -- councilVote snapshots plus award-reason, gear ilvl, and
+                -- response-text metadata — so history round-tripped via
+                -- export/import lost its entire audit trail. Copy the
+                -- whole table and let History:AddEntry apply its own
+                -- backfill / validation.
+                local copy = {}
+                for k, v in pairs(entry) do
+                    copy[k] = v
+                end
+                -- Keep the legacy `class` alias in sync for older importers.
+                if not copy.class and copy.winnerClass then
+                    copy.class = copy.winnerClass
+                end
+                Loothing.History:AddEntry(copy)
             end)
 
             if success then

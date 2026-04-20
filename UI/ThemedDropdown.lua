@@ -77,16 +77,32 @@ local function ensurePopup()
     f:SetBackdropColor(bg[1], bg[2], bg[3], 0.98)
     f:SetBackdropBorderColor(border[1], border[2], border[3], border[4] or 1)
 
-    -- Scroll frame for long option lists.
-    local scroll = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
+    -- Scroll frame for long option lists. Use a plain ScrollFrame (no
+    -- UIPanelScrollFrameTemplate) so the stock WoW up/down arrow
+    -- textures never render inside the popup; we attach a themed
+    -- scrollbar that draws its own chevrons from Loolib Font Awesome.
+    local scroll = CreateFrame("ScrollFrame", nil, f)
     scroll:SetPoint("TOPLEFT", POPUP_PADDING, -POPUP_PADDING)
-    scroll:SetPoint("BOTTOMRIGHT", -22, POPUP_PADDING)
+    scroll:SetPoint("BOTTOMRIGHT", -18, POPUP_PADDING)
+    scroll:EnableMouseWheel(true)
     f.scroll = scroll
 
     local content = CreateFrame("Frame", nil, scroll)
     content:SetSize(1, 1)
     scroll:SetScrollChild(content)
     f.content = content
+
+    -- Themed scrollbar outside the scroll view to the right.
+    -- ThemedScrollBar loads after ThemedDropdown in the TOC, so grab it
+    -- lazily at popup-create time (which runs on first dropdown open,
+    -- long after file-load order matters).
+    if ns.ApplyThemedScrollBar then
+        f.scrollBar = ns.ApplyThemedScrollBar(scroll, {
+            autoHide = true,
+            thickness = 8,
+            showButtons = false,  -- tight popups don't need chevron end-buttons
+        })
+    end
 
     -- Pool of row buttons we reuse across dropdowns.
     f.rows = {}
@@ -311,9 +327,17 @@ local function openDropdown(dd)
     f:ClearAllPoints()
     f:SetPoint("TOPLEFT", dd, "BOTTOMLEFT", 0, -2)
 
-    -- Scroll reset.
-    if f.scroll and f.scroll.ScrollBar then
+    -- Scroll reset. The popup is a singleton recycled across every
+    -- dropdown, so a previous dropdown's scroll position would persist
+    -- (and would be outside the new content's range when the next
+    -- dropdown has fewer rows) unless we reset here.
+    if f.scroll then
+        f.scroll:UpdateScrollChildRect()   -- force the scroll range to re-sync with new content height
         f.scroll:SetVerticalScroll(0)
+    end
+    if f.scrollBar and f.scrollBar.SetValue then
+        f.scrollBar:SetValue(0)
+        if f.scrollBar.Refresh then f.scrollBar:Refresh() end
     end
 
     -- Animate open.

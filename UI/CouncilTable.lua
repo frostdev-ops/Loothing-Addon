@@ -188,11 +188,11 @@ function CouncilTableMixin:CreateElements()
     headerDivider:SetPoint("TOPRIGHT", -16, -90)
     self.headerDivider = headerDivider
 
-    -- Candidate list (scrollable)
+    -- Candidate list (scrollable). The floating detail tooltip that used
+    -- to hang off the right edge has been retired — intel / sims / wishlist
+    -- now live in the dedicated LoothingPlayerIntelFrame modal, launched
+    -- per-candidate via the "Intel" column button.
     self:CreateCandidateList()
-
-    -- Floating detail tooltip (anchored outside frame, right edge)
-    self:CreateDetailTooltip()
 
     -- Action buttons (bottom right)
     self:CreateActionButtons()
@@ -515,7 +515,22 @@ function CouncilTableMixin:SelectItemTab(itemGUID)
 
     self.currentItem = targetItem
     self.selectedCandidate = nil
-    self:HideDetailTooltip()
+
+    -- Push the new item context into the PlayerIntel modal so its Sims
+    -- tab stays in sync if it's already open for any candidate. No-op
+    -- when the modal isn't built or isn't visible. We DON'T pass
+    -- candidateClass/Spec here — the modal's internal bind path remembers
+    -- the player it was opened for, and it'll re-resolve class/spec from
+    -- intel / PlayerCache / Roster on its own.
+    if ns.PlayerIntelFrames and ns.PlayerIntelFrames.UpdateItemContext then
+        ns.PlayerIntelFrames.UpdateItemContext(targetItem and {
+            itemID    = targetItem.itemID,
+            itemLink  = targetItem.itemLink,
+            itemName  = targetItem.name,
+            itemLevel = targetItem.itemLevel,
+            equipSlot = targetItem.equipSlot,
+        } or nil)
+    end
 
     -- Update tab visuals based on selection + item state
     for i, tab in ipairs(self.itemTabs) do
@@ -663,382 +678,33 @@ function CouncilTableMixin:CreateCandidateList()
     container:SetPoint("BOTTOMRIGHT", -16, 50)
     SkinningMixin:StyleSurface(container, "inset")
 
-    local scrollFrame = CreateFrame("ScrollFrame", nil, container, "UIPanelScrollFrameTemplate")
+    local scrollFrame = CreateFrame("ScrollFrame", nil, container)
     scrollFrame:SetPoint("TOPLEFT", 2, -2)
-    scrollFrame:SetPoint("BOTTOMRIGHT", -22, 2)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -14, 2)
 
     local content = CreateFrame("Frame", nil, scrollFrame)
     content:SetSize(1, 800) -- width managed by OnSizeChanged below
     scrollFrame:SetScrollChild(content)
 
-    -- Keep scroll child width in sync with scroll frame
+    -- Keep scroll child width in sync with scroll frame. MUST run before
+    -- ApplyThemedScrollBar so the widget's HookScript chains on top of
+    -- this SetScript (otherwise ApplyThemedScrollBar's resize sync gets
+    -- wiped by a later SetScript call).
     scrollFrame:SetScript("OnSizeChanged", function(_, w)
         content:SetWidth(w)
     end)
 
+    if ns.ApplyThemedScrollBar then
+        ns.ApplyThemedScrollBar(scrollFrame, {
+            autoHide = true,
+            showButtons = true,
+            thickness = 10,
+        })
+    end
+
     self.listContainer = container
     self.listContent = content
     self.scrollFrame = scrollFrame
-end
-
---[[--------------------------------------------------------------------
-    Detail Tooltip (floating panel, anchored to right edge of frame)
-----------------------------------------------------------------------]]
-
-local DETAIL_TOOLTIP_WIDTH = 280
-
-function CouncilTableMixin:CreateDetailTooltip()
-    local tooltip = CreateFrame("Frame", nil, self.frame, "BackdropTemplate")
-    tooltip:SetWidth(DETAIL_TOOLTIP_WIDTH)
-    tooltip:SetPoint("TOPLEFT", self.frame, "TOPRIGHT", 6, 0)
-    tooltip:SetPoint("BOTTOMLEFT", self.frame, "BOTTOMRIGHT", 6, 0)
-    tooltip:SetFrameStrata("DIALOG")
-    tooltip:SetFrameLevel(self.frame:GetFrameLevel() + 10)
-    SkinningMixin:StyleSurface(tooltip, "alt")
-    tooltip:SetClampedToScreen(true)
-    tooltip:Hide()
-
-    -- Close/unpin button (top-right corner)
-    local closeBtn = CreateFrame("Button", nil, tooltip)
-    closeBtn:SetSize(14, 14)
-    closeBtn:SetPoint("TOPRIGHT", -4, -4)
-    closeBtn:SetNormalTexture("Interface\\Buttons\\UI-StopButton")
-    closeBtn:SetHighlightTexture("Interface\\Buttons\\UI-StopButton", "ADD")
-    closeBtn:SetScript("OnClick", function()
-        self:HideDetailTooltip()
-        self.selectedCandidate = nil
-        self:RefreshCandidates()
-    end)
-    AttachIconButtonPolish(closeBtn, { hoverScale = 1.18, pressScale = 0.90 })
-
-    -- Scroll frame so content can exceed tooltip height
-    local scrollFrame = CreateFrame("ScrollFrame", nil, tooltip, "UIPanelScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT", 2, -2)
-    scrollFrame:SetPoint("BOTTOMRIGHT", -18, 2)
-
-    local content = CreateFrame("Frame", nil, scrollFrame)
-    content:SetWidth(DETAIL_TOOLTIP_WIDTH - 40)
-    content:SetHeight(1) -- dynamic
-    scrollFrame:SetScrollChild(content)
-    self.detailContent = content
-    self.detailScrollFrame = scrollFrame
-
-    -- Name
-    local name = content:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    name:SetPoint("TOPLEFT", 6, -6)
-    name:SetPoint("RIGHT", -6, 0)
-    name:SetWordWrap(false)
-    self.moreInfoName = name
-    SkinningMixin:StyleText(name, "title", "text")
-
-    -- Response
-    local response = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    response:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -2)
-    response:SetPoint("RIGHT", -6, 0)
-    self.moreInfoResponse = response
-    SkinningMixin:StyleText(response, "header", "textMuted")
-
-    -- Details (ilvl, role, rank)
-    local details = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    details:SetPoint("TOPLEFT", response, "BOTTOMLEFT", 0, -2)
-    details:SetPoint("RIGHT", -6, 0)
-    SkinningMixin:StyleText(details, "bodySmall", "textMuted")
-    details:SetWordWrap(true)
-    self.moreInfoDetails = details
-
-    -- Note
-    local note = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    note:SetPoint("TOPLEFT", details, "BOTTOMLEFT", 0, -4)
-    note:SetPoint("RIGHT", -6, 0)
-    note:SetJustifyH("LEFT")
-    note:SetWordWrap(true)
-    self.moreInfoNote = note
-    SkinningMixin:StyleText(note, "highlightSmall", "text")
-
-    -- Separator: identity block -> gear
-    local gearSep = content:CreateTexture(nil, "ARTWORK")
-    gearSep:SetPoint("TOPLEFT", note, "BOTTOMLEFT", 0, -6)
-    gearSep:SetPoint("RIGHT", -6, 0)
-    gearSep:SetHeight(1)
-    gearSep:SetColorTexture(unpack(SkinningMixin:GetColor("border")))
-    self.moreInfoGearSep = gearSep
-
-    -- Gear text
-    local gear = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    gear:SetPoint("TOPLEFT", gearSep, "BOTTOMLEFT", 0, -4)
-    gear:SetPoint("RIGHT", -6, 0)
-    gear:SetJustifyH("LEFT")
-    SkinningMixin:StyleText(gear, "bodySmall", "textMuted")
-    gear:SetWordWrap(true)
-    self.moreInfoGear = gear
-
-    -- Vote breakdown
-    local voteBreakdown = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    voteBreakdown:SetPoint("TOPLEFT", gear, "BOTTOMLEFT", 0, -4)
-    voteBreakdown:SetPoint("RIGHT", -6, 0)
-    voteBreakdown:SetJustifyH("LEFT")
-    SkinningMixin:StyleText(voteBreakdown, "bodySmall", "success")
-    voteBreakdown:SetWordWrap(true)
-    self.moreInfoVoteBreakdown = voteBreakdown
-
-    -- Wishlist info
-    local wishlistInfo = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    wishlistInfo:SetPoint("TOPLEFT", voteBreakdown, "BOTTOMLEFT", 0, -4)
-    wishlistInfo:SetPoint("RIGHT", -6, 0)
-    wishlistInfo:SetJustifyH("LEFT")
-    wishlistInfo:SetWordWrap(true)
-    self.moreInfoWishlist = wishlistInfo
-
-    -- Item source
-    local sourceInfo = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    sourceInfo:SetPoint("TOPLEFT", wishlistInfo, "BOTTOMLEFT", 0, -2)
-    sourceInfo:SetPoint("RIGHT", -6, 0)
-    sourceInfo:SetJustifyH("LEFT")
-    SkinningMixin:StyleText(sourceInfo, "bodySmall", "textSubtle")
-    sourceInfo:SetWordWrap(true)
-    self.moreInfoSource = sourceInfo
-
-    -- ===== Player Intel Section (from desktop sync) =====
-
-    -- Separator line
-    local intelSep = content:CreateTexture(nil, "ARTWORK")
-    intelSep:SetPoint("TOPLEFT", sourceInfo, "BOTTOMLEFT", 0, -6)
-    intelSep:SetPoint("RIGHT", -6, 0)
-    intelSep:SetHeight(1)
-    intelSep:SetColorTexture(unpack(SkinningMixin:GetColor("borderStrong")))
-    self.moreInfoIntelSep = intelSep
-
-    -- M+ Activity
-    local mpInfo = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    mpInfo:SetPoint("TOPLEFT", intelSep, "BOTTOMLEFT", 0, -4)
-    mpInfo:SetPoint("RIGHT", -6, 0)
-    mpInfo:SetJustifyH("LEFT")
-    SkinningMixin:StyleText(mpInfo, "bodySmall", "accentCool")
-    mpInfo:SetWordWrap(true)
-    self.moreInfoMythicPlus = mpInfo
-
-    -- Parse Performance. Text renders in the default font; the trend
-    -- indicator is a sibling FontString in the icon font (FA is
-    -- icons-only and would tofu any Latin on the main line).
-    local parseInfo = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    parseInfo:SetPoint("TOPLEFT", mpInfo, "BOTTOMLEFT", 0, -2)
-    parseInfo:SetPoint("RIGHT", -20, 0)
-    parseInfo:SetJustifyH("LEFT")
-    SkinningMixin:StyleText(parseInfo, "bodySmall", "warning")
-    parseInfo:SetWordWrap(true)
-    self.moreInfoParses = parseInfo
-
-    -- Anchor to parseInfo's TOPRIGHT (not mpInfo's) so the trend glyph
-    -- stays on line 1 of the parse row even if M+ text above wraps.
-    local parseTrend = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    parseTrend:SetPoint("TOPRIGHT", parseInfo, "TOPRIGHT", 14, 0)
-    Loolib.Fonts:SetIconFont(parseTrend, 12, "")
-    parseTrend:Hide()
-    self.moreInfoParsesTrend = parseTrend
-
-    -- Attendance
-    local attendInfo = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    attendInfo:SetPoint("TOPLEFT", parseInfo, "BOTTOMLEFT", 0, -2)
-    attendInfo:SetPoint("RIGHT", -6, 0)
-    attendInfo:SetJustifyH("LEFT")
-    SkinningMixin:StyleText(attendInfo, "bodySmall", "textMuted")
-    attendInfo:SetWordWrap(true)
-    self.moreInfoAttendance = attendInfo
-
-    -- Gear Readiness
-    local gearReady = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    gearReady:SetPoint("TOPLEFT", attendInfo, "BOTTOMLEFT", 0, -2)
-    gearReady:SetPoint("RIGHT", -6, 0)
-    gearReady:SetJustifyH("LEFT")
-    SkinningMixin:StyleText(gearReady, "bodySmall", "success")
-    gearReady:SetWordWrap(true)
-    self.moreInfoGearReady = gearReady
-
-    -- ===== Simulations Card (trinket sims + droptimizer) =====
-    local simCard = CreateFrame("Frame", nil, content, "BackdropTemplate")
-    simCard:SetPoint("TOPLEFT", gearReady, "BOTTOMLEFT", -4, -8)
-    simCard:SetPoint("RIGHT", -2, 0)
-    simCard:SetHeight(1) -- resized dynamically
-    if simCard.SetBackdrop then
-        simCard:SetBackdrop({
-            bgFile = "Interface\\Buttons\\WHITE8x8",
-            edgeFile = "Interface\\Buttons\\WHITE8x8",
-            tile = false,
-            edgeSize = 1,
-            insets = { left = 1, right = 1, top = 1, bottom = 1 },
-        })
-        simCard:SetBackdropColor(unpack(SkinningMixin:GetColor("panelInset")))
-        simCard:SetBackdropBorderColor(unpack(SkinningMixin:GetColor("border")))
-    end
-    self.simCard = simCard
-
-    -- Left accent bar
-    local simAccent = simCard:CreateTexture(nil, "ARTWORK", nil, 2)
-    simAccent:SetPoint("TOPLEFT", 0, 0)
-    simAccent:SetPoint("BOTTOMLEFT", 0, 0)
-    simAccent:SetWidth(2)
-    simAccent:SetColorTexture(unpack(SkinningMixin:GetColor("accentCool")))
-    self.simCardAccent = simAccent
-
-    -- Section label
-    local simLabel = simCard:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    simLabel:SetPoint("TOPLEFT", 10, -6)
-    simLabel:SetPoint("RIGHT", -8, 0)
-    simLabel:SetJustifyH("LEFT")
-    SkinningMixin:StyleText(simLabel, "bodySmall", "textSubtle")
-    simLabel:SetText("SIMULATIONS")
-    self.simCardLabel = simLabel
-
-    -- Trinket Sim (bloodmallet.com via desktop sync)
-    local trinketSim = simCard:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    trinketSim:SetPoint("TOPLEFT", simLabel, "BOTTOMLEFT", 0, -4)
-    trinketSim:SetPoint("RIGHT", -8, 0)
-    trinketSim:SetJustifyH("LEFT")
-    SkinningMixin:StyleText(trinketSim, "bodySmall", "accentCool")
-    trinketSim:SetWordWrap(true)
-    self.moreInfoTrinketSim = trinketSim
-
-    -- Inner divider between trinket sims and droptimizer
-    local simInnerSep = simCard:CreateTexture(nil, "ARTWORK")
-    simInnerSep:SetPoint("TOPLEFT", trinketSim, "BOTTOMLEFT", -2, -4)
-    simInnerSep:SetPoint("RIGHT", -8, 0)
-    simInnerSep:SetHeight(1)
-    simInnerSep:SetColorTexture(unpack(SkinningMixin:GetColor("border")))
-    self.simCardInnerSep = simInnerSep
-
-    -- Droptimizer DPS Upgrade (Raidbots via desktop sync)
-    local droptimizerSim = simCard:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    droptimizerSim:SetPoint("TOPLEFT", simInnerSep, "BOTTOMLEFT", 2, -4)
-    droptimizerSim:SetPoint("RIGHT", -8, 0)
-    droptimizerSim:SetJustifyH("LEFT")
-    SkinningMixin:StyleText(droptimizerSim, "bodySmall", "accentWarm")
-    droptimizerSim:SetWordWrap(true)
-    self.moreInfoDroptimizer = droptimizerSim
-
-    -- Separator: sim card -> loot history
-    local lootSep = content:CreateTexture(nil, "ARTWORK")
-    lootSep:SetPoint("TOPLEFT", simCard, "BOTTOMLEFT", 4, -6)
-    lootSep:SetPoint("RIGHT", -6, 0)
-    lootSep:SetHeight(1)
-    lootSep:SetColorTexture(unpack(SkinningMixin:GetColor("border")))
-    self.moreInfoLootSep = lootSep
-
-    -- Recent Loot History
-    local lootHistory = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    lootHistory:SetPoint("TOPLEFT", lootSep, "BOTTOMLEFT", 0, -4)
-    lootHistory:SetPoint("RIGHT", -6, 0)
-    lootHistory:SetJustifyH("LEFT")
-    lootHistory:SetWordWrap(true)
-    SkinningMixin:StyleText(lootHistory, "bodySmall", "textMuted")
-    self.moreInfoLootHistory = lootHistory
-
-    -- Alt Loot Summary
-    local altLoot = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    altLoot:SetPoint("TOPLEFT", lootHistory, "BOTTOMLEFT", 0, -2)
-    altLoot:SetPoint("RIGHT", -6, 0)
-    altLoot:SetJustifyH("LEFT")
-    altLoot:SetWordWrap(true)
-    SkinningMixin:StyleText(altLoot, "bodySmall", "accentCool")
-    self.moreInfoAltLoot = altLoot
-
-    -- Staleness indicator
-    local staleness = content:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    staleness:SetPoint("TOPLEFT", altLoot, "BOTTOMLEFT", 0, -4)
-    staleness:SetPoint("RIGHT", -6, 0)
-    staleness:SetJustifyH("RIGHT")
-    SkinningMixin:StyleText(staleness, "bodySmall", "textSubtle")
-    self.moreInfoStaleness = staleness
-
-    self.detailTooltip = tooltip
-    self.tooltipPinned = false
-end
-
---- Resize the simulations card to fit its content, or collapse it
---- when neither trinket sims nor droptimizer have data.
---- Called from within ResizeDetailTooltip's deferred callback so that
---- font string layouts are finalized and the card height is set before
---- the overall content height is computed.
-function CouncilTableMixin:ResizeSimCard()
-    if not self.simCard then return end
-
-    local hasTrinket = self.moreInfoTrinketSim
-        and self.moreInfoTrinketSim:GetText()
-        and self.moreInfoTrinketSim:GetText() ~= ""
-    local hasDroptimizer = self.moreInfoDroptimizer
-        and self.moreInfoDroptimizer:GetText()
-        and self.moreInfoDroptimizer:GetText() ~= ""
-    local hasAny = hasTrinket or hasDroptimizer
-
-    -- Toggle visual elements
-    self.simCardLabel:SetShown(hasAny)
-    self.simCardAccent:SetShown(hasAny)
-    self.simCardInnerSep:SetShown(hasTrinket and hasDroptimizer)
-
-    -- Toggle backdrop visibility
-    if self.simCard.SetBackdropColor then
-        if hasAny then
-            self.simCard:SetBackdropColor(unpack(SkinningMixin:GetColor("panelInset")))
-            self.simCard:SetBackdropBorderColor(unpack(SkinningMixin:GetColor("border")))
-        else
-            self.simCard:SetBackdropColor(0, 0, 0, 0)
-            self.simCard:SetBackdropBorderColor(0, 0, 0, 0)
-        end
-    end
-
-    if not hasAny then
-        self.simCard:SetHeight(1)
-        return
-    end
-
-    -- Compute height from content (this is called deferred, so layouts are ready)
-    local top = self.simCardLabel:GetTop()
-    local bottom
-    if hasDroptimizer then
-        bottom = self.moreInfoDroptimizer:GetBottom()
-    elseif hasTrinket then
-        bottom = self.moreInfoTrinketSim:GetBottom()
-    end
-    if top and bottom then
-        self.simCard:SetHeight(top - bottom + 12) -- 6px padding top + 6px bottom
-    else
-        -- Layout not ready yet — collapse to minimum; next resize pass will correct
-        self.simCard:SetHeight(1)
-    end
-end
-
---- Recalculate the scroll content height so the scroll frame
---- can accommodate all visible text. Deferred one frame so
---- font string layouts are finalized.
-function CouncilTableMixin:ResizeDetailTooltip()
-    if not self.detailTooltip or not self.detailContent then return end
-
-    C_Timer.After(0, function()
-        if not self.detailTooltip:IsShown() then return end
-
-        -- Resize sim card first — its height affects downstream anchors
-        self:ResizeSimCard()
-
-        local contentTop = self.detailContent:GetTop()
-        local lastBottom = self.moreInfoStaleness and self.moreInfoStaleness:GetBottom()
-
-        local contentHeight
-        if contentTop and lastBottom then
-            contentHeight = contentTop - lastBottom + 12
-        else
-            contentHeight = 600
-        end
-        self.detailContent:SetHeight(math.max(contentHeight, 100))
-    end)
-end
-
-function CouncilTableMixin:HideDetailTooltip()
-    if self.detailTooltip then
-        self.detailTooltip:Hide()
-    end
-    if self.detailScrollFrame then
-        self.detailScrollFrame:SetVerticalScroll(0)
-    end
-    self.tooltipPinned = false
 end
 
 --[[--------------------------------------------------------------------
@@ -1150,29 +816,6 @@ function CouncilTableMixin:ApplyTheme()
     if self.listContainer then
         SkinningMixin:StyleSurface(self.listContainer, "inset")
     end
-    if self.detailTooltip then
-        SkinningMixin:StyleSurface(self.detailTooltip, "alt")
-    end
-
-    SkinningMixin:StyleText(self.moreInfoName, "title", "text")
-    SkinningMixin:StyleText(self.moreInfoResponse, "header", "textMuted")
-    SkinningMixin:StyleText(self.moreInfoDetails, "bodySmall", "textMuted")
-    SkinningMixin:StyleText(self.moreInfoNote, "highlightSmall", "text")
-    SkinningMixin:StyleText(self.moreInfoGear, "bodySmall", "textMuted")
-    SkinningMixin:StyleText(self.moreInfoVoteBreakdown, "bodySmall", "success")
-    SkinningMixin:StyleText(self.moreInfoSource, "bodySmall", "textSubtle")
-    SkinningMixin:StyleText(self.moreInfoMythicPlus, "bodySmall", "accentCool")
-    SkinningMixin:StyleText(self.moreInfoParses, "bodySmall", "warning")
-    SkinningMixin:StyleText(self.moreInfoAttendance, "bodySmall", "textMuted")
-    SkinningMixin:StyleText(self.moreInfoGearReady, "bodySmall", "success")
-    SkinningMixin:StyleText(self.moreInfoLootHistory, "bodySmall", "textMuted")
-    SkinningMixin:StyleText(self.moreInfoAltLoot, "bodySmall", "accentCool")
-    SkinningMixin:StyleText(self.moreInfoStaleness, "bodySmall", "textSubtle")
-
-    if self.moreInfoIntelSep then
-        self.moreInfoIntelSep:SetColorTexture(unpack(SkinningMixin:GetColor("borderStrong")))
-    end
-
     SkinningMixin:StylePlainButton(self.awardButton, "primary")
     SkinningMixin:StylePlainButton(self.revoteButton)
     SkinningMixin:StylePlainButton(self.skipButton)
@@ -1468,7 +1111,6 @@ function CouncilTableMixin:Clear()
     if self.emptyText then
         self.emptyText:Show()
     end
-    self:HideDetailTooltip()
 
     self:UpdateActionButtons()
 end
@@ -1500,7 +1142,6 @@ function CouncilTableMixin:Show()
     -- Stop any in-flight open/close fade before starting a new one.
     if self.frame._loothingFadeGroup then self.frame._loothingFadeGroup:Stop() end
 
-    self:HideDetailTooltip()
     self:LoadPosition()
     self.frame:Show()
     self.frame:Raise()

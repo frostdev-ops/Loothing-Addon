@@ -355,6 +355,14 @@ function SimulatorPanelMixin:BuildQueueSection()
     scroll:SetScrollChild(content)
     self.queueContent = content
 
+    -- Set the caller's resize handler FIRST, then ApplyThemedScrollBar.
+    -- ApplyThemedScrollBar uses HookScript("OnSizeChanged", ...) so it
+    -- chains on top of this SetScript. Running them in the opposite
+    -- order would make SetScript wipe the themed bar's resize sync.
+    scroll:SetScript("OnSizeChanged", function(_sf, w)
+        content:SetWidth(w)
+    end)
+
     if ns.ApplyThemedScrollBar then
         ns.ApplyThemedScrollBar(scroll, {
             autoHide = true,
@@ -362,10 +370,6 @@ function SimulatorPanelMixin:BuildQueueSection()
             thickness = 12,
         })
     end
-
-    scroll:SetScript("OnSizeChanged", function(_sf, w)
-        content:SetWidth(w)
-    end)
 
     self.queueEmpty = section:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     self.queueEmpty:SetPoint("CENTER")

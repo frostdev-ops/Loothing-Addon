@@ -195,15 +195,23 @@ function DiagPanelMixin:BuildFrame()
     end)
 
     -- ScrollFrame for content
-    local scrollFrame = CreateFrame("ScrollFrame", nil, frame, "UIPanelScrollFrameTemplate")
+    local scrollFrame = CreateFrame("ScrollFrame", nil, frame)
     scrollFrame:SetPoint("TOPLEFT", PADDING, -36)
-    scrollFrame:SetPoint("BOTTOMRIGHT", -PADDING - 22, PADDING)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -PADDING - 14, PADDING)
     self.scrollFrame = scrollFrame
 
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
-    scrollChild:SetWidth(PANEL_WIDTH - PADDING * 2 - 22)
+    scrollChild:SetWidth(PANEL_WIDTH - PADDING * 2 - 14)
     scrollFrame:SetScrollChild(scrollChild)
     self.scrollChild = scrollChild
+
+    if ns.ApplyThemedScrollBar then
+        ns.ApplyThemedScrollBar(scrollFrame, {
+            autoHide = true,
+            showButtons = true,
+            thickness = 10,
+        })
+    end
 
     -- Show/Hide hooks
     frame:SetScript("OnShow", function()
@@ -247,9 +255,9 @@ function DiagPanelMixin:BuildCopyDialog()
     local close = CreateFrame("Button", nil, dialog, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", -2, -2)
 
-    local scrollFrame = CreateFrame("ScrollFrame", nil, dialog, "UIPanelScrollFrameTemplate")
+    local scrollFrame = CreateFrame("ScrollFrame", nil, dialog)
     scrollFrame:SetPoint("TOPLEFT", 12, -30)
-    scrollFrame:SetPoint("BOTTOMRIGHT", -32, 12)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -22, 12)
 
     local editBox = CreateFrame("EditBox", nil, scrollFrame)
     editBox:SetMultiLine(true)
@@ -263,6 +271,14 @@ function DiagPanelMixin:BuildCopyDialog()
     end)
 
     scrollFrame:SetScrollChild(editBox)
+
+    if ns.ApplyThemedScrollBar then
+        ns.ApplyThemedScrollBar(scrollFrame, {
+            autoHide = true,
+            showButtons = false,
+            thickness = 10,
+        })
+    end
 
     editBoxRef = editBox
     self.copyDialog = dialog

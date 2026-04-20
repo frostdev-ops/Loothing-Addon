@@ -402,6 +402,8 @@ function ResponseButtonSettingsMixin:BuildFrame()
 
     local tcHeader = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     tcHeader:SetPoint("BOTTOMLEFT", tcContainer, "TOPLEFT", 0, 6)
+    tcHeader:SetPoint("BOTTOMRIGHT", tcContainer, "TOPRIGHT", 0, 6)
+    tcHeader:SetJustifyH("LEFT")
     tcHeader:SetText("|cffffcc00" .. L["CONFIG_TYPECODE_ASSIGNMENT"] .. "|r")
     self.tcHeader = tcHeader
 
@@ -436,11 +438,11 @@ function ResponseButtonSettingsMixin:BuildFrame()
     -- ----------------------------------------------------------------
     -- Scroll frame (button list)
     -- ----------------------------------------------------------------
-    local scrollFrame = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
+    local scrollFrame = CreateFrame("ScrollFrame", nil, f)
     scrollFrame:SetPoint("TOPLEFT", 12, -80)
-    scrollFrame:SetPoint("TOPRIGHT", -30, -80)
+    scrollFrame:SetPoint("TOPRIGHT", -18, -80)
     scrollFrame:SetPoint("BOTTOMLEFT", addBtnContainer, "TOPLEFT", 0, SECTION_PAD)
-    scrollFrame:SetPoint("BOTTOMRIGHT", addBtnContainer, "TOPRIGHT", -18, SECTION_PAD)
+    scrollFrame:SetPoint("BOTTOMRIGHT", addBtnContainer, "TOPRIGHT", -6, SECTION_PAD)
     self.scrollFrame = scrollFrame
 
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
@@ -448,6 +450,14 @@ function ResponseButtonSettingsMixin:BuildFrame()
     scrollChild:SetHeight(1)  -- will be grown dynamically
     scrollFrame:SetScrollChild(scrollChild)
     self.scrollChild = scrollChild
+
+    if ns.ApplyThemedScrollBar then
+        ns.ApplyThemedScrollBar(scrollFrame, {
+            autoHide = true,
+            showButtons = true,
+            thickness = 10,
+        })
+    end
 end
 
 --[[--------------------------------------------------------------------

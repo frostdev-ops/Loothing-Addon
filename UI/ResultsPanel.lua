@@ -200,9 +200,9 @@ function ResultsPanelMixin:CreateResultsArea()
     container:SetBackdropBorderColor(0.2, 0.2, 0.2, 1)
 
     -- Scroll frame for results
-    local scrollFrame = CreateFrame("ScrollFrame", nil, container, "UIPanelScrollFrameTemplate")
+    local scrollFrame = CreateFrame("ScrollFrame", nil, container)
     scrollFrame:SetPoint("TOPLEFT", 8, -8)
-    scrollFrame:SetPoint("BOTTOMRIGHT", -28, 8)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -14, 8)
 
     local content = CreateFrame("Frame", nil, scrollFrame)
     content:SetSize(1, 400)
@@ -211,6 +211,14 @@ function ResultsPanelMixin:CreateResultsArea()
     scrollFrame:SetScript("OnSizeChanged", function(_, w)
         content:SetWidth(w)
     end)
+
+    if ns.ApplyThemedScrollBar then
+        ns.ApplyThemedScrollBar(scrollFrame, {
+            autoHide = true,
+            showButtons = true,
+            thickness = 10,
+        })
+    end
 
     -- Winner header text
     self.winnerText = content:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")

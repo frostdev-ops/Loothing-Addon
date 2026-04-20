@@ -79,6 +79,18 @@ function HistoryMixin:AddEntry(entry)
         return
     end
 
+    -- Reject entries with a missing or non-string winner. Remote HISTORY_ENTRY
+    -- payloads are only field-validated at the comm layer for sender identity,
+    -- not for shape — a broken peer sending {winner=nil} or {winner=42} would
+    -- otherwise pollute saved history and break downstream consumers (CSV
+    -- export, GetUniqueWinners, filter widgets) that assume string winners.
+    if type(entry.winner) ~= "string" or Utils.NormalizeName(entry.winner) == nil then
+        if Loothing.Debug then
+            Loothing:Debug("History: rejecting entry with invalid winner:", tostring(entry.winner))
+        end
+        return
+    end
+
     -- Ensure required fields
     entry.timestamp = entry.timestamp or time()
     entry.guid = entry.guid or Utils.GenerateGUID()
@@ -582,7 +594,12 @@ end
 --- Get the timestamp of the last weekly reset
 -- @return number - Unix timestamp of the most recent weekly reset
 function HistoryMixin:GetLastWeeklyResetTime()
-    local secondsUntil = C_DateAndTime.GetSecondsUntilWeeklyReset()
+    -- C_DateAndTime.GetSecondsUntilWeeklyReset can be missing on very early
+    -- boot (pre-PLAYER_LOGIN) or on trimmed test harnesses; treat nil as 0 so
+    -- the function returns a monotonically-valid "one week before now" lower
+    -- bound rather than erroring.
+    local api = C_DateAndTime and C_DateAndTime.GetSecondsUntilWeeklyReset
+    local secondsUntil = (api and api()) or 0
     return time() + secondsUntil - (7 * 86400)
 end
 
@@ -594,6 +611,11 @@ end
 -- @return table - { [normalizedPlayerName] = { instance = N, weekly = N } }
 function HistoryMixin:BuildPlayerCountCache(instanceName, difficultyID, weeklyResetTime)
     local cache = {}
+
+    -- Coerce once to defend against legacy saved entries or CSV imports that
+    -- stored difficultyID as a string — strict `==` between "3" and 3 would
+    -- fail silently and zero every candidate's instance counter.
+    local wantDifficulty = tonumber(difficultyID)
 
     for _, entry in self.entries:Enumerate() do
         local winner = entry.winner
@@ -607,9 +629,9 @@ function HistoryMixin:BuildPlayerCountCache(instanceName, difficultyID, weeklyRe
                 local ts = entry.timestamp or 0
 
                 -- Instance + difficulty match
-                if instanceName and difficultyID
+                if instanceName and wantDifficulty
                     and entry.instance == instanceName
-                    and entry.difficultyID == difficultyID then
+                    and tonumber(entry.difficultyID) == wantDifficulty then
                     cache[normalized].instance = cache[normalized].instance + 1
                 end
 

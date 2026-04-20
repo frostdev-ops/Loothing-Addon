@@ -33,6 +33,27 @@ function CouncilTableMixin:RegisterEvents()
         end
         self:RefreshItemTabs()
     end, self)
+
+    -- Rebuild the "items won (instance/weekly)" counters when a remote award
+    -- lands while the voting frame is open. The columns read from a per-refresh
+    -- cache (Rows.lua EnrichCandidates -> History:BuildPlayerCountCache); without
+    -- this hook, council members saw stale zeros until they clicked a sort header
+    -- or switched items.
+    if Loothing.History and Loothing.History.RegisterCallback then
+        Loothing.History:RegisterCallback("OnHistoryChanged", function()
+            if self.ThrottledRefresh then self:ThrottledRefresh() end
+        end, self)
+    end
+
+    -- Refresh the Intel column when desktop intel arrives. Each row's
+    -- button visibility is gated on PlayerIntel:Get(candidate) and so
+    -- needs a DoCellUpdate pass whenever the set of intel-bearing
+    -- players changes (own desktop sync, `/lt share` merge, etc.).
+    if Loothing.PlayerIntel and Loothing.PlayerIntel.RegisterCallback then
+        Loothing.PlayerIntel:RegisterCallback("OnPlayerIntelLoaded", function()
+            if self.ThrottledRefresh then self:ThrottledRefresh() end
+        end, self)
+    end
 end
 
 function CouncilTableMixin:OnSessionStarted()

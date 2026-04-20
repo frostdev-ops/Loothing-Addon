@@ -257,7 +257,7 @@ function IconPickerMixin:OnLoad()
     clearBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
     -- Scroll frame for the icon grid
-    local scrollFrame = CreateFrame("ScrollFrame", nil, self, "UIPanelScrollFrameTemplate")
+    local scrollFrame = CreateFrame("ScrollFrame", nil, self)
     scrollFrame:SetPoint("TOPLEFT", FRAME_PADDING, -(FRAME_PADDING + SEARCH_HEIGHT + 4))
     scrollFrame:SetPoint("BOTTOMRIGHT", -FRAME_PADDING, FRAME_PADDING)
     self.scrollFrame = scrollFrame
@@ -267,6 +267,14 @@ function IconPickerMixin:OnLoad()
     scrollChild:SetHeight(1)
     scrollFrame:SetScrollChild(scrollChild)
     self.scrollChild = scrollChild
+
+    if ns.ApplyThemedScrollBar then
+        ns.ApplyThemedScrollBar(scrollFrame, {
+            autoHide = true,
+            showButtons = true,
+            thickness = 10,
+        })
+    end
 
     self.iconButtons = {}
 

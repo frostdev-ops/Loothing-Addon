@@ -165,9 +165,9 @@ function TradePanelMixin:CreateList()
     self.listSeparator = sep
 
     -- Scroll frame
-    local scrollFrame = CreateFrame("ScrollFrame", nil, container, "UIPanelScrollFrameTemplate")
+    local scrollFrame = CreateFrame("ScrollFrame", nil, container)
     scrollFrame:SetPoint("TOPLEFT", 4, -28)
-    scrollFrame:SetPoint("BOTTOMRIGHT", -24, 4)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -14, 4)
 
     local content = CreateFrame("Frame", nil, scrollFrame)
     content:SetSize(1, 800)
@@ -176,6 +176,14 @@ function TradePanelMixin:CreateList()
     scrollFrame:SetScript("OnSizeChanged", function(_sf, w, _h)
         content:SetWidth(w)
     end)
+
+    if ns.ApplyThemedScrollBar then
+        ns.ApplyThemedScrollBar(scrollFrame, {
+            autoHide = true,
+            showButtons = true,
+            thickness = 10,
+        })
+    end
 
     self.listContainer = container
     self.listContent = content

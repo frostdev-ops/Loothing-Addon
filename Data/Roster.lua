@@ -7,7 +7,15 @@
 local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
+local Utils = ns.Utils
 local time = time
+
+local function normalizeKey(name)
+    if Utils and Utils.NormalizeName then
+        return Utils.NormalizeName(name)
+    end
+    return name
+end
 
 --[[--------------------------------------------------------------------
     RosterMixin
@@ -37,7 +45,9 @@ end
     Persistence
 ----------------------------------------------------------------------]]
 
---- Load roster data from SavedVariables (written by Tauri desktop app)
+--- Load roster data from SavedVariables (written by Tauri desktop app).
+-- Keys are normalized on load for parity with the other desktopExchange
+-- readers (see PlayerIntel.lua for rationale).
 function RosterMixin:LoadFromSaved()
     if not Loothing.Settings then return end
 
@@ -45,7 +55,12 @@ function RosterMixin:LoadFromSaved()
     if not exchange or not exchange.roster then return end
 
     local r = exchange.roster
-    self.members = r.members or {}
+    local raw = r.members or {}
+    self.members = {}
+    for key, value in pairs(raw) do
+        local normalized = normalizeKey(key)
+        if normalized then self.members[normalized] = value end
+    end
     self.rosterName = r.rosterName
     self.updatedAt = r.updatedAt
     self.sharedBy = r.sharedBy     -- nil if from own desktop app
@@ -72,11 +87,11 @@ end
 ----------------------------------------------------------------------]]
 
 --- Get roster data for a specific member
--- @param playerName string - "Name-Realm" format
+-- @param playerName string - "Name-Realm" format (any casing)
 -- @return table|nil - { cls, spec, role, status, alts }
 function RosterMixin:GetMember(playerName)
     if not playerName then return nil end
-    return self.members[playerName]
+    return self.members[normalizeKey(playerName)]
 end
 
 --- Get alt names for a player
@@ -89,10 +104,11 @@ function RosterMixin:GetAlts(playerName)
 end
 
 --- Check if a player is on the synced roster
--- @param playerName string - "Name-Realm" format
+-- @param playerName string - "Name-Realm" format (any casing)
 -- @return boolean
 function RosterMixin:IsOnRoster(playerName)
-    return self.members[playerName] ~= nil
+    if not playerName then return false end
+    return self.members[normalizeKey(playerName)] ~= nil
 end
 
 --- Check if roster data has been loaded from the desktop app

@@ -319,9 +319,9 @@ function RosterPanelMixin:CreateScrollList()
         self.listPixelBorder = PixelUtil.SetThinBorder(container, SkinningMixin:GetColor("borderStrong"))
     end
 
-    local scrollFrame = CreateFrame("ScrollFrame", nil, container, "UIPanelScrollFrameTemplate")
+    local scrollFrame = CreateFrame("ScrollFrame", nil, container)
     scrollFrame:SetPoint("TOPLEFT", 2, -2)
-    scrollFrame:SetPoint("BOTTOMRIGHT", -22, 2)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -14, 2)
 
     local content = CreateFrame("Frame", nil, scrollFrame)
     content:SetSize(1, 1)
@@ -330,6 +330,14 @@ function RosterPanelMixin:CreateScrollList()
     scrollFrame:SetScript("OnSizeChanged", function(_, w)
         content:SetWidth(w)
     end)
+
+    if ns.ApplyThemedScrollBar then
+        ns.ApplyThemedScrollBar(scrollFrame, {
+            autoHide = true,
+            showButtons = true,
+            thickness = 10,
+        })
+    end
 
     self.listContainer = container
     self.scrollFrame = scrollFrame
@@ -904,10 +912,14 @@ function RosterPanelMixin:SetupRow(row, entry, yOffset, fillWidth)
     end
     row.rankText:SetAlpha(alpha)
 
-    -- Tooltip + right-click context menu
+    -- Tooltip + left-click opens candidate profile, right-click context menu
     local panel = self
     row:SetScript("OnClick", function(_, button)
-        if button == "RightButton" then
+        if button == "LeftButton" then
+            if entry.name and ns.ShowCandidateProfile then
+                ns.ShowCandidateProfile(entry.name)
+            end
+        elseif button == "RightButton" then
             panel:ShowRowContextMenu(row, entry)
         end
     end)

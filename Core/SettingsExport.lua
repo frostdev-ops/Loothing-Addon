@@ -583,9 +583,9 @@ function SettingsExportMixin:GetOrCreateExportFrame()
     desc:SetPoint("TOP", title, "BOTTOM", 0, -4)
     desc:SetText(L["EXPORT_DESC"])
 
-    local scrollFrame = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
+    local scrollFrame = CreateFrame("ScrollFrame", nil, f)
     scrollFrame:SetPoint("TOPLEFT", 16, -56)
-    scrollFrame:SetPoint("BOTTOMRIGHT", -32, 48)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -22, 48)
 
     local editBox = CreateFrame("EditBox", nil, scrollFrame)
     editBox:SetMultiLine(true)
@@ -595,6 +595,14 @@ function SettingsExportMixin:GetOrCreateExportFrame()
     editBox:SetScript("OnEscapePressed", function(eb) eb:ClearFocus(); f:Hide() end)
     scrollFrame:SetScrollChild(editBox)
     f.editBox = editBox
+
+    if ns.ApplyThemedScrollBar then
+        ns.ApplyThemedScrollBar(scrollFrame, {
+            autoHide = true,
+            showButtons = false,
+            thickness = 10,
+        })
+    end
 
     local closeBtn = ns.CreateThemedButton(f)
     closeBtn:SetSize(80, 24)
@@ -653,9 +661,9 @@ function SettingsExportMixin:GetOrCreateImportFrame()
     desc:SetPoint("TOP", title, "BOTTOM", 0, -4)
     desc:SetText(L["IMPORT_DESC"])
 
-    local scrollFrame = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
+    local scrollFrame = CreateFrame("ScrollFrame", nil, f)
     scrollFrame:SetPoint("TOPLEFT", 16, -56)
-    scrollFrame:SetPoint("BOTTOMRIGHT", -32, 48)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -22, 48)
 
     local editBox = CreateFrame("EditBox", nil, scrollFrame)
     editBox:SetMultiLine(true)
@@ -665,6 +673,14 @@ function SettingsExportMixin:GetOrCreateImportFrame()
     editBox:SetScript("OnEscapePressed", function(eb) eb:ClearFocus(); f:Hide() end)
     scrollFrame:SetScrollChild(editBox)
     f.editBox = editBox
+
+    if ns.ApplyThemedScrollBar then
+        ns.ApplyThemedScrollBar(scrollFrame, {
+            autoHide = true,
+            showButtons = false,
+            thickness = 10,
+        })
+    end
 
     local importBtn = ns.CreateThemedButton(f)
     importBtn:SetSize(100, 24)

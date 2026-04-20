@@ -8,10 +8,18 @@
 local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
+local Utils = ns.Utils
 local time = time
 local tostring = tostring
 local floor = math.floor
 local format = string.format
+
+local function normalizeKey(name)
+    if Utils and Utils.NormalizeName then
+        return Utils.NormalizeName(name)
+    end
+    return name
+end
 
 --[[--------------------------------------------------------------------
     DroptimizerMixin
@@ -49,7 +57,9 @@ end
     Persistence
 ----------------------------------------------------------------------]]
 
---- Load droptimizer data from SavedVariables (written by Tauri desktop app)
+--- Load droptimizer data from SavedVariables (written by Tauri desktop app).
+-- Keys are normalized on load so `GetUpgrade(candidate.playerName)` hits
+-- regardless of source casing. See PlayerIntel.lua for the same pattern.
 function DroptimizerMixin:LoadFromSaved()
     if not Loothing.Settings then return end
 
@@ -57,7 +67,12 @@ function DroptimizerMixin:LoadFromSaved()
     if not exchange or not exchange.droptimizer then return end
 
     local dt = exchange.droptimizer
-    self.characters = dt.characters or {}
+    local raw = dt.characters or {}
+    self.characters = {}
+    for key, value in pairs(raw) do
+        local normalized = normalizeKey(key)
+        if normalized then self.characters[normalized] = value end
+    end
     self.generatedAt = dt.generatedAt
     self.source = dt.source
     self.version = dt.version
@@ -127,7 +142,7 @@ end
 function DroptimizerMixin:GetUpgrade(playerName, itemID)
     if not self:HasData() or not playerName or not itemID then return nil end
 
-    local charData = self.characters[playerName]
+    local charData = self.characters[normalizeKey(playerName)]
     if not charData or not charData.upgrades then return nil end
 
     return GetItemEntry(charData.upgrades, itemID)
@@ -156,7 +171,7 @@ end
 -- @return boolean - true if stale or no data
 function DroptimizerMixin:IsCharStale(playerName)
     if not playerName then return true end
-    local charData = self.characters[playerName]
+    local charData = self.characters[normalizeKey(playerName)]
     if not charData then return true end
     if charData.stale then return true end
     if charData.fetchedAt then
@@ -170,7 +185,7 @@ end
 -- @return string|nil - Spec name (e.g. "Shadow")
 function DroptimizerMixin:GetCharSpec(playerName)
     if not playerName then return nil end
-    local charData = self.characters[playerName]
+    local charData = self.characters[normalizeKey(playerName)]
     return charData and charData.spec or nil
 end
 
@@ -179,7 +194,7 @@ end
 -- @return number|nil
 function DroptimizerMixin:GetCharBaseline(playerName)
     if not playerName then return nil end
-    local charData = self.characters[playerName]
+    local charData = self.characters[normalizeKey(playerName)]
     return charData and charData.baseline or nil
 end
 

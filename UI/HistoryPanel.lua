@@ -192,6 +192,19 @@ function HistoryPanelMixin:CreateFilterBar()
     SkinningMixin:StylePlainButton(classButton)
     self.classFilterButton = classButton
 
+    -- Browse button — opens the history browser modal (Raids / Bosses /
+    -- Seasons / Players). Top-level entry point to the scope-summary
+    -- modal family introduced in v2.0.22.
+    local browseButton = ns.CreateThemedButton(filterBar)
+    browseButton:SetSize(70, 20)
+    browseButton:SetPoint("LEFT", classButton, "RIGHT", 4, 0)
+    browseButton:SetText(L["HISTORY_BROWSE"] or "Browse")
+    browseButton:SetScript("OnClick", function()
+        self:ShowBrowseMenu(browseButton)
+    end)
+    SkinningMixin:StylePlainButton(browseButton)
+    self.browseButton = browseButton
+
     -- Clear filters button
     local clearButton = ns.CreateThemedButton(filterBar)
     clearButton:SetSize(50, 20)
@@ -209,6 +222,31 @@ function HistoryPanelMixin:CreateFilterBar()
 
     filterBar.mixin = self
     self.filterBar = filterBar
+end
+
+--- Show the Browse menu: opens ns.ShowHistoryBrowser on the chosen tab.
+-- Each menu entry maps to one dimension in the browser modal (raid /
+-- boss / season / player). The browser lists distinct values + award
+-- counts + most-recent date per row; clicking a row opens the matching
+-- summary modal.
+-- @param owner Frame - the button the menu is anchored to
+function HistoryPanelMixin:ShowBrowseMenu(owner)
+    if not MenuUtil or not ns.ShowHistoryBrowser then return end
+
+    MenuUtil.CreateContextMenu(owner, function(_ownerRegion, rootDescription)
+        rootDescription:CreateTitle(Loothing.Locale["HISTORY_BROWSE"] or "Browse")
+        rootDescription:CreateButton(Loothing.Locale["HISTORY_BROWSE_BY_RAID"]   or "By Raid",   function() ns.ShowHistoryBrowser("raid")   end)
+        rootDescription:CreateButton(Loothing.Locale["HISTORY_BROWSE_BY_BOSS"]   or "By Boss",   function() ns.ShowHistoryBrowser("boss")   end)
+        rootDescription:CreateButton(Loothing.Locale["HISTORY_BROWSE_BY_SEASON"] or "By Season", function() ns.ShowHistoryBrowser("season") end)
+        rootDescription:CreateButton(Loothing.Locale["HISTORY_BROWSE_BY_ITEM"]   or "By Item",   function() ns.ShowHistoryBrowser("item")   end)
+        rootDescription:CreateButton(Loothing.Locale["HISTORY_BROWSE_BY_PLAYER"] or "By Player", function() ns.ShowHistoryBrowser("player") end)
+        rootDescription:CreateDivider()
+        rootDescription:CreateButton(Loothing.Locale["HISTORY_BROWSE_AWARD_MATRIX"]
+            or "Award Matrix (Response Breakdown)",
+            function()
+                if ns.ShowAwardMatrix then ns.ShowAwardMatrix() end
+            end)
+    end)
 end
 
 --- Show response filter dropdown
@@ -323,9 +361,9 @@ function HistoryPanelMixin:CreateHistoryList()
     self.listSeparator = sep
 
     -- Scroll frame
-    local scrollFrame = CreateFrame("ScrollFrame", nil, container, "UIPanelScrollFrameTemplate")
+    local scrollFrame = CreateFrame("ScrollFrame", nil, container)
     scrollFrame:SetPoint("TOPLEFT", 4, -28)
-    scrollFrame:SetPoint("BOTTOMRIGHT", -24, 4)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -14, 4)
 
     local content = CreateFrame("Frame", nil, scrollFrame)
     content:SetSize(1, 800)
@@ -334,6 +372,14 @@ function HistoryPanelMixin:CreateHistoryList()
     scrollFrame:SetScript("OnSizeChanged", function(_sf, w, _h)
         content:SetWidth(w)
     end)
+
+    if ns.ApplyThemedScrollBar then
+        ns.ApplyThemedScrollBar(scrollFrame, {
+            autoHide = true,
+            showButtons = true,
+            thickness = 10,
+        })
+    end
 
     self.listContainer = container
     self.listContent = content
@@ -433,6 +479,7 @@ function HistoryPanelMixin:ApplyTheme()
     SkinningMixin:StylePlainButton(self.winnerButton)
     SkinningMixin:StylePlainButton(self.responseFilterButton)
     SkinningMixin:StylePlainButton(self.classFilterButton)
+    if self.browseButton then SkinningMixin:StylePlainButton(self.browseButton) end
     SkinningMixin:StylePlainButton(self.exportButton)
     SkinningMixin:StylePlainButton(self.clearButton, "primary")
     SkinningMixin:StyleText(self.countText, "bodySmall", "textMuted")
@@ -458,6 +505,19 @@ function HistoryPanelMixin:ApplyTheme()
             end
         end
     end
+
+    -- Re-tint each row's hover accent bar so theme / accent changes
+    -- propagate live to already-created rows instead of only to freshly
+    -- initialized ones.
+    if self.historyRows then
+        local accentColor = SkinningMixin:GetColor("accent") or { 1, 0.82, 0, 1 }
+        for _, row in ipairs(self.historyRows) do
+            if row.hoverAccent and row.hoverAccent.SetColorTexture then
+                row.hoverAccent:SetColorTexture(
+                    accentColor[1], accentColor[2], accentColor[3], accentColor[4] or 1)
+            end
+        end
+    end
 end
 
 --- Create date list in the left pane
@@ -468,9 +528,9 @@ function HistoryPanelMixin:CreateDateList()
     header:SetText("Dates")
 
     -- Scroll frame
-    local scroll = CreateFrame("ScrollFrame", nil, self.datePane, "UIPanelScrollFrameTemplate")
+    local scroll = CreateFrame("ScrollFrame", nil, self.datePane)
     scroll:SetPoint("TOPLEFT", 4, -20)
-    scroll:SetPoint("BOTTOMRIGHT", -22, 4)
+    scroll:SetPoint("BOTTOMRIGHT", -14, 4)
 
     local content = CreateFrame("Frame", nil, scroll)
     content:SetWidth(scroll:GetWidth())
@@ -479,6 +539,14 @@ function HistoryPanelMixin:CreateDateList()
     scroll:SetScript("OnSizeChanged", function(_sf, w)
         content:SetWidth(w)
     end)
+
+    if ns.ApplyThemedScrollBar then
+        ns.ApplyThemedScrollBar(scroll, {
+            autoHide = true,
+            showButtons = true,
+            thickness = 10,
+        })
+    end
 
     self.dateScroll = scroll
     self.dateContent = content
@@ -505,9 +573,9 @@ function HistoryPanelMixin:CreatePlayerList()
     header:SetText("Players")
 
     -- Scroll frame
-    local scroll = CreateFrame("ScrollFrame", nil, self.playerPane, "UIPanelScrollFrameTemplate")
+    local scroll = CreateFrame("ScrollFrame", nil, self.playerPane)
     scroll:SetPoint("TOPLEFT", 4, -20)
-    scroll:SetPoint("BOTTOMRIGHT", -22, 4)
+    scroll:SetPoint("BOTTOMRIGHT", -14, 4)
 
     local content = CreateFrame("Frame", nil, scroll)
     content:SetWidth(scroll:GetWidth())
@@ -516,6 +584,14 @@ function HistoryPanelMixin:CreatePlayerList()
     scroll:SetScript("OnSizeChanged", function(_sf, w)
         content:SetWidth(w)
     end)
+
+    if ns.ApplyThemedScrollBar then
+        ns.ApplyThemedScrollBar(scroll, {
+            autoHide = true,
+            showButtons = true,
+            thickness = 10,
+        })
+    end
 
     self.playerScroll = scroll
     self.playerContent = content
@@ -773,6 +849,15 @@ local function InitHistoryRowElements(row)
     row.hl:SetAllPoints()
     row.hl:SetColorTexture(1, 1, 1, 0.1)
 
+    -- Left-edge accent bar, only drawn on hover (HIGHLIGHT draw-layer).
+    -- Reads clearly as "this row is clickable and will open the detail modal".
+    local accentColor = SkinningMixin:GetColor("accent") or { 1, 0.82, 0, 1 }
+    row.hoverAccent = row:CreateTexture(nil, "HIGHLIGHT")
+    row.hoverAccent:SetWidth(3)
+    row.hoverAccent:SetPoint("TOPLEFT", 0, 0)
+    row.hoverAccent:SetPoint("BOTTOMLEFT", 0, 0)
+    row.hoverAccent:SetColorTexture(accentColor[1], accentColor[2], accentColor[3], accentColor[4] or 1)
+
     -- Date
     row.dateText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     row.dateText:SetPoint("LEFT", 4, 0)
@@ -888,6 +973,12 @@ function HistoryPanelMixin:SetupHistoryRow(row, entry, yOffset)
             GameTooltip:AddLine(string.format(Loothing.Locale["WITH_VOTES"], entry.votes), 0.7, 0.7, 0.7)
         end
 
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine(
+            Loothing.Locale["HISTORY_ROW_CLICK_HINT"]
+                or "Click for full details  |cff888888•|r  Shift-Click to link",
+            0.55, 0.75, 1)
+
         GameTooltip:Show()
     end)
 
@@ -895,11 +986,16 @@ function HistoryPanelMixin:SetupHistoryRow(row, entry, yOffset)
         GameTooltip:Hide()
     end)
 
-    -- Click handling (left = shift-link, right = context menu)
+    -- Click handling:
+    --   Left-click        -> open the detail modal
+    --   Shift+Left-click  -> insert the itemLink into chat
+    --   Right-click       -> context menu (View Details / filters / delete)
     row:SetScript("OnClick", function(_, button)
-        if button == "LeftButton" and entry.itemLink then
-            if IsShiftKeyDown() then
+        if button == "LeftButton" then
+            if IsShiftKeyDown() and entry.itemLink then
                 ChatEdit_InsertLink(entry.itemLink)
+            elseif ns.ShowHistoryDetail then
+                ns.ShowHistoryDetail(entry)
             end
         elseif button == "RightButton" then
             self:ShowHistoryRowContextMenu(row, entry)
@@ -918,6 +1014,26 @@ function HistoryPanelMixin:ShowHistoryRowContextMenu(row, entry)
 
     MenuUtil.CreateContextMenu(row, function(_ownerRegion, rootDescription)
         rootDescription:CreateTitle(entry.itemName or "Unknown")
+
+        -- View detail / session / profile modals (top of menu for discoverability)
+        rootDescription:CreateButton(L["VIEW_DETAILS"] or "View Details", function()
+            if ns.ShowHistoryDetail then ns.ShowHistoryDetail(entry) end
+        end)
+        if entry.encounterID and entry.timestamp then
+            rootDescription:CreateButton(L["VIEW_SESSION"] or "View Session", function()
+                if ns.ShowSessionSummary then ns.ShowSessionSummary(entry) end
+            end)
+        end
+        if entry.winner then
+            rootDescription:CreateButton(
+                string.format(L["VIEW_PROFILE_FMT"] or "Profile: %s", Utils.GetShortName(entry.winner) or entry.winner),
+                function()
+                    if ns.ShowCandidateProfile then ns.ShowCandidateProfile(entry.winner) end
+                end
+            )
+        end
+
+        rootDescription:CreateDivider()
 
         -- Link in chat
         if entry.itemLink then
@@ -1175,9 +1291,9 @@ function HistoryPanelMixin:ShowExportDialog()
         end)
         AttachIconButtonPolish(close, { hoverScale = 1.15, pressScale = 0.90 })
 
-        local scrollFrame = CreateFrame("ScrollFrame", nil, frame, "UIPanelScrollFrameTemplate")
+        local scrollFrame = CreateFrame("ScrollFrame", nil, frame)
         scrollFrame:SetPoint("TOPLEFT", 16, -40)
-        scrollFrame:SetPoint("BOTTOMRIGHT", -32, 50)
+        scrollFrame:SetPoint("BOTTOMRIGHT", -22, 50)
 
         local editBox = CreateFrame("EditBox", nil, scrollFrame)
         editBox:SetMultiLine(true)
@@ -1189,6 +1305,14 @@ function HistoryPanelMixin:ShowExportDialog()
         scrollFrame:SetScript("OnSizeChanged", function(_sf, w, _h)
             editBox:SetWidth(w)
         end)
+
+        if ns.ApplyThemedScrollBar then
+            ns.ApplyThemedScrollBar(scrollFrame, {
+                autoHide = true,
+                showButtons = false,
+                thickness = 10,
+            })
+        end
 
         -- Format buttons
         local csvButton = ns.CreateThemedButton(frame)

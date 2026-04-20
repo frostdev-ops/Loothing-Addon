@@ -290,9 +290,9 @@ function AddItemFrameMixin:BuildEnterItemPanel()
 end
 
 function AddItemFrameMixin:BuildQueueList(panel)
-    local scroll = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
+    local scroll = CreateFrame("ScrollFrame", nil, panel)
     scroll:SetPoint("TOPLEFT", 0, -102)
-    scroll:SetPoint("BOTTOMRIGHT", -20, 0)
+    scroll:SetPoint("BOTTOMRIGHT", -14, 0)
     self.queueScroll = scroll
 
     local sc = CreateFrame("Frame", nil, scroll)
@@ -300,6 +300,18 @@ function AddItemFrameMixin:BuildQueueList(panel)
     sc:SetHeight(1)
     scroll:SetScrollChild(sc)
     self.queueContent = sc
+
+    scroll:SetScript("OnSizeChanged", function(_sf, w)
+        sc:SetWidth(w)
+    end)
+
+    if ns.ApplyThemedScrollBar then
+        ns.ApplyThemedScrollBar(scroll, {
+            autoHide = true,
+            showButtons = false,
+            thickness = 10,
+        })
+    end
 
     -- Empty hint
     local emptyHint = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -470,9 +482,9 @@ function AddItemFrameMixin:BuildRecentDropsPanel()
     empty:SetTextColor(0.5, 0.5, 0.5)
     self.recentEmpty = empty
 
-    local scroll = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
+    local scroll = CreateFrame("ScrollFrame", nil, panel)
     scroll:SetPoint("TOPLEFT")
-    scroll:SetPoint("BOTTOMRIGHT", -20, 0)
+    scroll:SetPoint("BOTTOMRIGHT", -14, 0)
     self.recentScroll = scroll
 
     local sc = CreateFrame("Frame", nil, scroll)
@@ -480,6 +492,18 @@ function AddItemFrameMixin:BuildRecentDropsPanel()
     sc:SetHeight(600)
     scroll:SetScrollChild(sc)
     self.recentContent = sc
+
+    scroll:SetScript("OnSizeChanged", function(_sf, w)
+        sc:SetWidth(w)
+    end)
+
+    if ns.ApplyThemedScrollBar then
+        ns.ApplyThemedScrollBar(scroll, {
+            autoHide = true,
+            showButtons = true,
+            thickness = 10,
+        })
+    end
 end
 
 function AddItemFrameMixin:RefreshRecentDrops()
@@ -570,9 +594,9 @@ function AddItemFrameMixin:BuildFromBagsPanel()
     empty:SetTextColor(0.5, 0.5, 0.5)
     self.bagsEmpty = empty
 
-    local scroll = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
+    local scroll = CreateFrame("ScrollFrame", nil, panel)
     scroll:SetPoint("TOPLEFT", 0, -24)
-    scroll:SetPoint("BOTTOMRIGHT", -20, 0)
+    scroll:SetPoint("BOTTOMRIGHT", -14, 0)
     self.bagsScroll = scroll
 
     local sc = CreateFrame("Frame", nil, scroll)
@@ -580,6 +604,18 @@ function AddItemFrameMixin:BuildFromBagsPanel()
     sc:SetHeight(600)
     scroll:SetScrollChild(sc)
     self.bagsContent = sc
+
+    scroll:SetScript("OnSizeChanged", function(_sf, w)
+        sc:SetWidth(w)
+    end)
+
+    if ns.ApplyThemedScrollBar then
+        ns.ApplyThemedScrollBar(scroll, {
+            autoHide = true,
+            showButtons = true,
+            thickness = 10,
+        })
+    end
 end
 
 function AddItemFrameMixin:RefreshBagList()

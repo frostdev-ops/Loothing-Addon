@@ -245,6 +245,8 @@ function CandidateMixin:Serialize()
         gear2ilvl = self.gear2ilvl,
         ilvlDiff = self.ilvlDiff,
         itemsWonThisSession = self.itemsWonThisSession,
+        itemsWonInstance = self.itemsWonInstance,
+        itemsWonWeekly = self.itemsWonWeekly,
         councilVotes = self.councilVotes,
     }
 end
@@ -265,6 +267,8 @@ function CandidateMixin:Deserialize(data)
     self.gear2ilvl = data.gear2ilvl or 0
     self.ilvlDiff = data.ilvlDiff or 0
     self.itemsWonThisSession = data.itemsWonThisSession or 0
+    self.itemsWonInstance = data.itemsWonInstance or 0
+    self.itemsWonWeekly = data.itemsWonWeekly or 0
     self.councilVotes = data.councilVotes or 0
 end
 

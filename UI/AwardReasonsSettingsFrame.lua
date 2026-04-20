@@ -350,11 +350,11 @@ function AwardReasonsSettingsMixin:BuildFrame()
     -- ----------------------------------------------------------------
     -- Scroll frame (reason list)
     -- ----------------------------------------------------------------
-    local scrollFrame = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
+    local scrollFrame = CreateFrame("ScrollFrame", nil, f)
     scrollFrame:SetPoint("TOPLEFT", 12, -86)
-    scrollFrame:SetPoint("TOPRIGHT", -30, -86)
+    scrollFrame:SetPoint("TOPRIGHT", -18, -86)
     scrollFrame:SetPoint("BOTTOMLEFT", addBtnContainer, "TOPLEFT", 0, SECTION_PAD)
-    scrollFrame:SetPoint("BOTTOMRIGHT", addBtnContainer, "TOPRIGHT", -18, SECTION_PAD)
+    scrollFrame:SetPoint("BOTTOMRIGHT", addBtnContainer, "TOPRIGHT", -6, SECTION_PAD)
     self.scrollFrame = scrollFrame
 
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
@@ -362,6 +362,14 @@ function AwardReasonsSettingsMixin:BuildFrame()
     scrollChild:SetHeight(1)
     scrollFrame:SetScrollChild(scrollChild)
     self.scrollChild = scrollChild
+
+    if ns.ApplyThemedScrollBar then
+        ns.ApplyThemedScrollBar(scrollFrame, {
+            autoHide = true,
+            showButtons = true,
+            thickness = 10,
+        })
+    end
 end
 
 --[[--------------------------------------------------------------------

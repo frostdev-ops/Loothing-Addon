@@ -31,6 +31,7 @@ CouncilTableMixin.COLUMNS = {
     { id = "roll",         name = L["COUNCIL_COLUMN_ROLL"],         width = 40,  maxWidth = 55,  flex = 1, sortable = true,  settingsKey = "roll" },
     { id = "note",         name = L["COUNCIL_COLUMN_NOTE"],         width = 24,  maxWidth = 28,  flex = 0, sortable = false, settingsKey = "note" },
     { id = "vote",         name = L["COLUMN_VOTE"],                 width = 55,  maxWidth = 70,  flex = 1, sortable = true,  settingsKey = "vote" },
+    { id = "intel",        name = L["COLUMN_INTEL"] or "Intel",     width = 50,  maxWidth = 60,  flex = 0, sortable = false, settingsKey = "intel" },
 }
 
 CouncilTableMixin.COLUMN_SORT_MAP = {
@@ -693,6 +694,24 @@ CouncilTableMixin.CellUpdaters.note = function(_, cell, candidate)
 end
 
 -- Vote button / vote count
+-- Intel button — opens the LoothingPlayerIntelFrame modal for the
+-- candidate. Button visibility is gated on the player having an intel
+-- record so the column stays visually quiet for raiders without one.
+-- Lives in its own CellUpdater (not nested inside `vote`) so that
+-- toggling the vote column off doesn't strand the Intel button in a
+-- stale show/hide state.
+CouncilTableMixin.CellUpdaters.intel = function(_, cell, candidate)
+    if not cell.intelButton then return end
+    cell.candidate = candidate
+    local hasIntel = Loothing.PlayerIntel
+        and Loothing.PlayerIntel:Get(candidate.playerName or candidate.name)
+    if hasIntel then
+        cell.intelButton:Show()
+    else
+        cell.intelButton:Hide()
+    end
+end
+
 CouncilTableMixin.CellUpdaters.vote = function(_, cell, candidate)
     local voteCount = candidate.councilVotes or 0
     local isML = Loothing.Session and Loothing.Session:IsMasterLooter()

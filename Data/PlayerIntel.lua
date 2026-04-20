@@ -8,6 +8,7 @@
 local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
+local Utils = ns.Utils
 local time = time
 local floor = math.floor
 local format = string.format
@@ -45,7 +46,11 @@ end
     Persistence
 ----------------------------------------------------------------------]]
 
---- Load player intel data from SavedVariables (written by Tauri desktop app)
+--- Load player intel data from SavedVariables (written by Tauri desktop app).
+-- The desktop writes keys in Blizzard-canonical casing ("Name-Realm"), but
+-- Utils.NormalizeName lowercases the realm segment so every in-addon cache
+-- can use direct key lookups. Build a normalized-key map at load time so
+-- `Get(candidate.playerName)` (whose input is already normalized) hits.
 function PlayerIntelMixin:LoadFromSaved()
     if not Loothing.Settings then return end
 
@@ -53,7 +58,12 @@ function PlayerIntelMixin:LoadFromSaved()
     if not exchange or not exchange.playerIntel then return end
 
     local pi = exchange.playerIntel
-    self.players = pi.players or {}
+    local raw = pi.players or {}
+    self.players = {}
+    for key, value in pairs(raw) do
+        local normalized = Utils and Utils.NormalizeName and Utils.NormalizeName(key) or key
+        if normalized then self.players[normalized] = value end
+    end
     self.generatedAt = pi.generatedAt
     self.raidTier = pi.raidTier
     self.version = pi.version
@@ -81,11 +91,12 @@ end
 ----------------------------------------------------------------------]]
 
 --- Get player intel for a specific player
--- @param playerName string - "Name-Realm" format
+-- @param playerName string - "Name-Realm" format (any casing; lowercased before lookup)
 -- @return table|nil - Player intel data or nil
 function PlayerIntelMixin:Get(playerName)
     if not playerName then return nil end
-    return self.players[playerName]
+    local key = Utils and Utils.NormalizeName and Utils.NormalizeName(playerName) or playerName
+    return self.players[key]
 end
 
 --- Check if player intel data has been loaded from the desktop app

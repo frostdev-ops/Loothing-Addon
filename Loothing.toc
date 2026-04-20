@@ -62,6 +62,7 @@ Core\AutoAward.lua
 Core\Announcer.lua
 Core\TooltipScan.lua
 Core\Diagnostics.lua
+Core\Seasons.lua
 
 # Utilities
 Utils\AutoPass.lua
@@ -128,6 +129,7 @@ UI\AwardReasonsSettingsFrame.lua
 UI\Skinning.lua
 UI\ThemedDropdown.lua
 UI\ThemedScrollBar.lua
+UI\ModalFactory.lua
 UI\Minimap.lua
 UI\Filters.lua
 UI\Popups.lua
@@ -140,6 +142,8 @@ UI\SessionPanel.lua
 UI\AddItemFrame.lua
 UI\LootPickerFrame.lua
 UI\HistoryPanel.lua
+UI\HistoryDetailFrame.lua
+UI\PlayerIntelFrame.lua
 UI\TradePanel.lua
 UI\RosterPanel.lua
 UI\RollFrame.lua

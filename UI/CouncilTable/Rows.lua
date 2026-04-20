@@ -136,6 +136,64 @@ function CouncilTableMixin:CreateCell(parent, col)
         text:SetPoint("LEFT", 2, 0)
     end
 
+    -- Intel button — opens the per-candidate intel modal for the player
+    -- on this row. Hidden when the player has no intel record (keeps the
+    -- column visually quiet for council members without desktop sync).
+    -- Column text is hidden; the whole cell is the button's clickable area.
+    if col.id == "intel" then
+        text:Hide()
+        local intelBtn = ns.CreateThemedButton(cell)
+        intelBtn:SetSize(44, 18)
+        intelBtn:SetPoint("CENTER", cell, "CENTER", 0, 0)
+        intelBtn:SetText(Loothing.Locale and Loothing.Locale["COLUMN_INTEL"] or "Intel")
+        intelBtn:Hide()
+        cell.intelButton = intelBtn
+        if SkinningMixin then
+            SkinningMixin:StylePlainButton(intelBtn)
+        end
+    end
+
+    -- Player column: left-click opens the candidate's history profile;
+    -- right-click forwards to the row's context menu so the existing
+    -- ML actions still work. Motion is enabled so the HIGHLIGHT-layer
+    -- underline can show on hover as a clickability affordance.
+    if col.id == "player" then
+        cell:SetMouseClickEnabled(true)
+        cell:SetMouseMotionEnabled(true)
+        cell:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+
+        -- Hover underline, HIGHLIGHT draw-layer so it only renders on mouseover
+        local underline = cell:CreateTexture(nil, "HIGHLIGHT")
+        underline:SetHeight(1)
+        underline:SetPoint("BOTTOMLEFT", text, "BOTTOMLEFT", 0, -1)
+        underline:SetPoint("BOTTOMRIGHT", text, "BOTTOMRIGHT", 0, -1)
+        underline:SetColorTexture(1, 1, 1, 0.55)
+
+        cell:SetScript("OnClick", function(_, button)
+            local row = cell:GetParent()
+            local candidate = row and row.candidate
+            if button == "LeftButton" then
+                -- Preserve the row-level ML shortcut: Alt+Left on the
+                -- Player cell opens the context menu just like it does
+                -- on every other cell in the row. Falls through to the
+                -- profile open when no modifier is held.
+                if IsAltKeyDown() and Loothing.Session and Loothing.Session:IsMasterLooter() then
+                    if row and row._councilTable and candidate then
+                        row._councilTable:ShowCandidateContextMenu(row, candidate)
+                    end
+                    return
+                end
+                if candidate and candidate.name and ns.ShowCandidateProfile then
+                    ns.ShowCandidateProfile(candidate.name)
+                end
+            elseif button == "RightButton" then
+                if row and row._councilTable and candidate then
+                    row._councilTable:ShowCandidateContextMenu(row, candidate)
+                end
+            end
+        end)
+    end
+
     cell.columnId = col.id
     return cell
 end
@@ -217,45 +275,6 @@ function CouncilTableMixin:CreateCandidateRow(_parent)
         row._clickHooked = true
     end
 
-    -- Hover handlers for detail tooltip (show on enter, hide on leave unless pinned)
-    if not row._hoverHooked then
-        row:SetScript("OnEnter", function(r)
-            if not r.candidate then return end
-            if not r._councilTable.tooltipPinned then
-                r._councilTable:UpdateDetailTooltip(r.candidate)
-            end
-        end)
-        row:SetScript("OnLeave", function(r)
-            if not r._councilTable.tooltipPinned then
-                r._councilTable:HideDetailTooltip()
-            end
-        end)
-        row._hoverHooked = true
-    end
-
-    -- Hook cells that have mouse motion enabled (tooltips) to also propagate
-    -- hover to the row for the detail tooltip. Cells with mouse motion disabled
-    -- pass events through to the row automatically.
-    for _, cell in pairs(row.cells) do
-        if not cell._hoverForwarded then
-            cell:HookScript("OnEnter", function()
-                local r = cell:GetParent()
-                if r and r.candidate and r._councilTable then
-                    if not r._councilTable.tooltipPinned then
-                        r._councilTable:UpdateDetailTooltip(r.candidate)
-                    end
-                end
-            end)
-            cell:HookScript("OnLeave", function()
-                local r = cell:GetParent()
-                if r and r._councilTable and not r._councilTable.tooltipPinned then
-                    r._councilTable:HideDetailTooltip()
-                end
-            end)
-            cell._hoverForwarded = true
-        end
-    end
-
     return row
 end
 
@@ -298,6 +317,45 @@ function CouncilTableMixin:UpdateRow(row, candidate, index)
                 btn._parentRow._councilTable:OnVoteClick(btn._parentRow.candidate)
             end)
             voteCell.voteButton._voteHooked = true
+        end
+    end
+
+    -- Intel button click handler — opens the PlayerIntel modal for this
+    -- candidate, threading the current item through as context so the
+    -- Sims tab can render trinket + droptimizer projections for it.
+    local intelCell = row.cells.intel
+    if intelCell and intelCell.intelButton then
+        intelCell.intelButton._parentRow = row
+        if not intelCell.intelButton._intelHooked then
+            intelCell.intelButton:SetScript("OnClick", function(btn)
+                local r = btn._parentRow
+                local ct = r and r._councilTable
+                local cand = r and r.candidate
+                if not (ct and cand and cand.playerName and ns.ShowPlayerIntel) then return end
+                local item = ct.currentItem
+                -- Candidate class + spec come from the voting session layer
+                -- where they're already resolved to the Blizzard class
+                -- token (PALADIN / DEMONHUNTER / …) that TrinketSims
+                -- expects. Pull from PlayerCache for spec when the
+                -- candidate doesn't carry it directly.
+                local cls = cand.class
+                local spc = cand.spec
+                if not spc and Loothing.PlayerCache and Loothing.PlayerCache.Get then
+                    local cached = Loothing.PlayerCache:Get(cand.playerName or cand.name)
+                    if cached then spc = spc or cached.spec; cls = cls or cached.class end
+                end
+                local ctx = item and {
+                    itemID         = item.itemID,
+                    itemLink       = item.itemLink,
+                    itemName       = item.name,
+                    itemLevel      = item.itemLevel,
+                    equipSlot      = item.equipSlot,
+                    candidateClass = cls,
+                    candidateSpec  = spc,
+                } or nil
+                ns.ShowPlayerIntel(cand.playerName, { item = ctx })
+            end)
+            intelCell.intelButton._intelHooked = true
         end
     end
 end
@@ -372,7 +430,7 @@ function CouncilTableMixin:EnrichCandidates(candidates)
     if Loothing.History then
         local instanceName, difficultyID
         if self.currentItem and self.currentItem.instanceData then
-            instanceName = self.currentItem.instanceData.instance
+            instanceName = self.currentItem.instanceData.name
             difficultyID = self.currentItem.instanceData.difficultyID
         end
         local resetTime = Loothing.History:GetLastWeeklyResetTime()
@@ -412,13 +470,19 @@ function CouncilTableMixin:EnrichCandidates(candidates)
         local g2 = candidate.gear2ilvl or 0
         candidate.equippedIlvl = math.max(g1, g2)
 
-        -- Loot count enrichment from history cache
-        if countCache and not (TestMode and TestMode.enabled) then
-            local normalized = Utils.NormalizeName(candidate.playerName or candidate.name)
-            local counts = normalized and countCache[normalized]
-            if counts then
-                candidate.itemsWonInstance = counts.instance
-                candidate.itemsWonWeekly = counts.weekly
+        -- Loot count enrichment from history cache.
+        -- Three branches, ordered by precedence:
+        --   1. TestMode is on — leave whatever AddFakeCandidatesToItem seeded.
+        --   2. TestMode is off AND we have a cache — assign from history.
+        --   3. TestMode is off AND cache is unavailable — zero the counters so
+        --      stale random values from a prior TestMode run cannot persist
+        --      after `/lt test` is disabled mid-session.
+        if not (TestMode and TestMode.enabled) then
+            if countCache then
+                local normalized = Utils.NormalizeName(candidate.playerName or candidate.name)
+                local counts = normalized and countCache[normalized]
+                candidate.itemsWonInstance = counts and counts.instance or 0
+                candidate.itemsWonWeekly = counts and counts.weekly or 0
             else
                 candidate.itemsWonInstance = 0
                 candidate.itemsWonWeekly = 0
@@ -473,461 +537,23 @@ end
     Candidate Selection & Detail Tooltip
 ----------------------------------------------------------------------]]
 
+--- Select a candidate row — drives the row-selection highlight via
+--- `self.selectedCandidate` (read by UpdateRow when painting the bg).
+--- The detail tooltip was retired in v2.0.22; per-candidate intel /
+--- sims / wishlist now live in the LoothingPlayerIntelFrame modal,
+--- launched from the "Intel" column button on each row.
+---
+--- Also refreshes the action footer so the Award button enables the
+--- moment a candidate is picked — the tooltip used to give the ML
+--- visible feedback that the pick "took", and the footer state is the
+--- remaining cue that confirmation landed.
 function CouncilTableMixin:SelectCandidate(candidate)
     self.selectedCandidate = candidate
-    self.tooltipPinned = true
     self:RefreshCandidates()
-    self:UpdateDetailTooltip(candidate)
+    if self.UpdateActionButtons then self:UpdateActionButtons() end
     self:TriggerEvent("OnCandidateSelected", candidate)
 end
 
-function CouncilTableMixin:UpdateDetailTooltip(candidate)
-    if not self.detailTooltip then return end
-    if not candidate then
-        self:HideDetailTooltip()
-        return
-    end
-
-    self.detailTooltip:Show()
-
-    -- Player name with class color
-    local class = candidate.class
-    local name = candidate.name or "Unknown"
-    if class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class] then
-        local cc = RAID_CLASS_COLORS[class]
-        self.moreInfoName:SetText(name)
-        self.moreInfoName:SetTextColor(cc.r, cc.g, cc.b)
-    else
-        self.moreInfoName:SetText(name)
-        self.moreInfoName:SetTextColor(1, 1, 1)
-    end
-
-    -- Response
-    local responseInfo = candidate.response and (Loothing.ResponseInfo[candidate.response] or Loothing.SystemResponseInfo[candidate.response])
-    if responseInfo then
-        self.moreInfoResponse:SetText(responseInfo.name)
-        self.moreInfoResponse:SetTextColor(responseInfo.color.r, responseInfo.color.g, responseInfo.color.b)
-    else
-        self.moreInfoResponse:SetText(tostring(candidate.response or "Waiting"))
-        self.moreInfoResponse:SetTextColor(0.7, 0.7, 0.7)
-    end
-
-    -- Note
-    self.moreInfoNote:SetText(candidate.note or "")
-
-    -- Item level & role
-    local infoLines = {}
-    if candidate.equippedIlvl and candidate.equippedIlvl > 0 then
-        infoLines[#infoLines + 1] = string.format("iLvl: |cffffffff%d|r", candidate.equippedIlvl)
-    end
-    if candidate.role and candidate.role ~= "NONE" then
-        infoLines[#infoLines + 1] = string.format("Role: |cffffffff%s|r", candidate.role)
-    end
-    self.moreInfoDetails:SetText(table.concat(infoLines, "  \194\183  "))
-
-    -- Gear comparison
-    local gearLines = {}
-    if candidate.gear1Link then
-        local _, link = C_Item.GetItemInfo(candidate.gear1Link)
-        gearLines[#gearLines + 1] = "Slot 1: " .. (link or candidate.gear1Link)
-    end
-    if candidate.gear2Link then
-        local _, link = C_Item.GetItemInfo(candidate.gear2Link)
-        gearLines[#gearLines + 1] = "Slot 2: " .. (link or candidate.gear2Link)
-    end
-    self.moreInfoGear:SetText(table.concat(gearLines, "\n"))
-
-    -- Vote breakdown
-    if self.moreInfoVoteBreakdown then
-        local breakdownParts = {}
-        local totalVotes = candidate.councilVotes or 0
-        if totalVotes > 0 then
-            breakdownParts[#breakdownParts + 1] = string.format("Votes: %d", totalVotes)
-        end
-
-        -- Show vote counts per response across all candidates for this item
-        if self.currentItem and self.currentItem.candidateManager then
-            local allCandidates = self.currentItem.candidateManager:GetAllCandidates()
-            local responseCounts = {}
-            for _, c in ipairs(allCandidates) do
-                local resp = c.response
-                if resp and (c.councilVotes or 0) > 0 then
-                    local info = Loothing.ResponseInfo[resp]
-                    local respName = info and info.name or tostring(resp)
-                    responseCounts[respName] = (responseCounts[respName] or 0) + c.councilVotes
-                end
-            end
-            for respName, count in pairs(responseCounts) do
-                breakdownParts[#breakdownParts + 1] = string.format("%s: %d", respName, count)
-            end
-        end
-
-        if #breakdownParts > 0 then
-            self.moreInfoVoteBreakdown:SetText(table.concat(breakdownParts, "  \194\183  "))
-        else
-            self.moreInfoVoteBreakdown:SetText("")
-        end
-    end
-
-    -- Wishlist section
-    if self.moreInfoWishlist then
-        local wishEntry = candidate.wishlistEntry
-        if wishEntry then
-            local nlInfo = Loothing.NeedLevel[wishEntry.needLevel]
-            local label = nlInfo and nlInfo.label or (wishEntry.needLevel or "?")
-            local c = nlInfo and nlInfo.color or { r = 1, g = 1, b = 1 }
-
-            local wishParts = {}
-            wishParts[#wishParts + 1] = string.format("Wishlist: %s  \194\183  Priority %d", label, wishEntry.priority or 0)
-
-            -- Character progress
-            local charInfo = Loothing.Wishlist and Loothing.Wishlist:GetCharacterInfo(candidate.playerName)
-            if charInfo and charInfo.totalItems and charInfo.totalItems > 0 then
-                local fulfilled = charInfo.fulfilledItems or 0
-                wishParts[#wishParts + 1] = string.format("  \194\183  Progress: %d/%d", fulfilled, charInfo.totalItems)
-            end
-
-            -- Notes from wishlist entry
-            if wishEntry.notes and wishEntry.notes ~= "" then
-                wishParts[#wishParts + 1] = "\n" .. wishEntry.notes
-            end
-
-            self.moreInfoWishlist:SetText(table.concat(wishParts))
-            self.moreInfoWishlist:SetTextColor(c.r, c.g, c.b)
-        else
-            self.moreInfoWishlist:SetText("")
-        end
-    end
-
-    -- Item source (from itemDetails, loaded via desktop sync)
-    if self.moreInfoSource then
-        local itemID = self.currentItem and self.currentItem.itemID
-        local details = itemID and Loothing.Wishlist and Loothing.Wishlist:GetItemDetails(itemID)
-        if details and details.sourceBoss then
-            local sourceText = string.format("Drops from: %s", details.sourceBoss)
-            if details.source then
-                sourceText = sourceText .. " \194\183 " .. details.source
-            end
-            if details.difficulty then
-                sourceText = sourceText .. " (" .. details.difficulty .. ")"
-            end
-            self.moreInfoSource:SetText(sourceText)
-        else
-            self.moreInfoSource:SetText("")
-        end
-    end
-
-    -- Player Intel section (from desktop sync)
-    local intel = Loothing.PlayerIntel and Loothing.PlayerIntel:Get(candidate.playerName)
-    if intel then
-        self:UpdatePlayerIntelSection(intel)
-    else
-        self:ClearPlayerIntelSection()
-    end
-
-    -- Trinket Sim DPS Gain (bloodmallet.com) — runs independently of PlayerIntel
-    if self.moreInfoTrinketSim then
-        local currentItemID = self.currentItem and self.currentItem.itemID
-        if currentItemID and Loothing.TrinketSims and Loothing.TrinketSims:HasData() then
-            local candidateClass = candidate.class
-            local candidateSpec = nil
-            -- Try intel first, then PlayerCache
-            if intel and intel.spec then
-                candidateSpec = intel.spec
-            elseif Loothing.PlayerCache then
-                local cached = Loothing.PlayerCache:Get(candidate.playerName or candidate.name)
-                if cached then
-                    candidateSpec = cached.spec
-                end
-            end
-            -- For local player, use live spec info
-            if not candidateSpec and Utils.IsSamePlayer(candidate.playerName or candidate.name, Utils.GetPlayerFullName()) then
-                local specIndex = GetSpecialization and GetSpecialization()
-                if specIndex then
-                    local getInfo = C_SpecializationInfo and C_SpecializationInfo.GetSpecializationInfo or GetSpecializationInfo
-                    if getInfo then
-                        local _, specName = getInfo(specIndex)
-                        candidateSpec = specName
-                    end
-                end
-            end
-            local simText = candidateClass and candidateSpec and Loothing.TrinketSims:GetSimText(currentItemID, candidateClass, candidateSpec)
-            if simText then
-                local specLabel = Loothing.TrinketSims:GetColoredSpecLabel(candidateClass, candidateSpec)
-                self.moreInfoTrinketSim:SetText(
-                    "|cffAAAAAABloodmallet|r  " .. simText
-                    .. "\n" .. specLabel
-                )
-                self.moreInfoTrinketSim:SetTextColor(0.6, 0.9, 1.0)
-            else
-                self.moreInfoTrinketSim:SetText("")
-            end
-        else
-            self.moreInfoTrinketSim:SetText("")
-        end
-    end
-
-    -- Droptimizer DPS Upgrade (Raidbots) — runs independently of PlayerIntel and TrinketSims
-    if self.moreInfoDroptimizer then
-        local currentItemID = self.currentItem and self.currentItem.itemID
-        if currentItemID and Loothing.Droptimizer and Loothing.Droptimizer:HasData() then
-            local candidateName = candidate.playerName or candidate.name
-            local upgradeText = Loothing.Droptimizer:GetUpgradeText(candidateName, currentItemID)
-            if upgradeText then
-                local isStale = Loothing.Droptimizer:IsCharStale(candidateName)
-                local staleTag = isStale and "  |cffFF6600[stale]|r" or ""
-                self.moreInfoDroptimizer:SetText(
-                    "|cffAAAAAADroptimizer|r  " .. upgradeText .. staleTag
-                )
-                self.moreInfoDroptimizer:SetTextColor(0.3, 0.9, 0.3)
-            else
-                self.moreInfoDroptimizer:SetText("")
-            end
-        else
-            self.moreInfoDroptimizer:SetText("")
-        end
-    end
-
-    -- Resize tooltip to fit content
-    self:ResizeDetailTooltip()
-end
-
---[[--------------------------------------------------------------------
-    Player Intel Display (Desktop-synced data)
-----------------------------------------------------------------------]]
-
-function CouncilTableMixin:UpdatePlayerIntelSection(intel)
-    -- Show separators
-    if self.moreInfoIntelSep then
-        self.moreInfoIntelSep:Show()
-    end
-    if self.moreInfoLootSep then
-        self.moreInfoLootSep:Show()
-    end
-
-    -- M+ Activity
-    if self.moreInfoMythicPlus then
-        local parts = {}
-        if intel.mpWeek and intel.mpWeek.count and intel.mpWeek.count > 0 then
-            parts[#parts + 1] = string.format("%d keys", intel.mpWeek.count)
-        end
-        if intel.mpWeek and intel.mpWeek.highest and intel.mpWeek.highest > 0 then
-            parts[#parts + 1] = string.format("+%d best", intel.mpWeek.highest)
-        end
-        if intel.mpScore and intel.mpScore > 0 then
-            parts[#parts + 1] = string.format("%.0f score", intel.mpScore)
-        end
-        if #parts > 0 then
-            self.moreInfoMythicPlus:SetText("|cff66ccffM+|r  " .. table.concat(parts, "  \194\183  "))
-            self.moreInfoMythicPlus:SetTextColor(0.6, 0.85, 1.0)
-        else
-            self.moreInfoMythicPlus:SetText("|cff666666M+  No data|r")
-            self.moreInfoMythicPlus:SetTextColor(0.5, 0.5, 0.5)
-        end
-    end
-
-    -- Parse Performance
-    if self.moreInfoParses then
-        local hasData = false
-        local line1Parts = {}
-        if intel.parseAvg then
-            line1Parts[#line1Parts + 1] = string.format("Avg |cffffffff%.0f|r", intel.parseAvg)
-            hasData = true
-        end
-        if intel.parseBest then
-            line1Parts[#line1Parts + 1] = string.format("Best |cffffffff%.0f|r", intel.parseBest)
-            hasData = true
-        end
-        -- Trend indicator goes into its own icon-font FontString (the
-        -- icon font is icons-only, so it can't share a FontString with
-        -- the Latin text on line1Parts).
-        if self.moreInfoParsesTrend then
-            if intel.parseTrend == "up" then
-                self.moreInfoParsesTrend:SetText(Loolib.Fonts:Icon("arrow-up"))
-                self.moreInfoParsesTrend:SetTextColor(0.2, 0.93, 0.2)
-                self.moreInfoParsesTrend:Show()
-            elseif intel.parseTrend == "down" then
-                self.moreInfoParsesTrend:SetText(Loolib.Fonts:Icon("arrow-down"))
-                self.moreInfoParsesTrend:SetTextColor(0.93, 0.2, 0.2)
-                self.moreInfoParsesTrend:Show()
-            elseif intel.parseTrend == "stable" then
-                self.moreInfoParsesTrend:SetText(Loolib.Fonts:Icon("minus"))
-                self.moreInfoParsesTrend:SetTextColor(0.6, 0.6, 0.6)
-                self.moreInfoParsesTrend:Show()
-            else
-                self.moreInfoParsesTrend:Hide()
-            end
-        end
-
-        if hasData then
-            local text = "|cffffcc66Parses|r  " .. table.concat(line1Parts, "  \194\183  ")
-            -- Boss name on its own line if present (these can be very long)
-            if intel.parseBestBoss then
-                text = text .. "\n  |cff888888" .. intel.parseBestBoss .. "|r"
-            end
-            self.moreInfoParses:SetText(text)
-            self.moreInfoParses:SetTextColor(1.0, 0.85, 0.5)
-        else
-            self.moreInfoParses:SetText("|cff666666Parses  No data|r")
-            self.moreInfoParses:SetTextColor(0.5, 0.5, 0.5)
-        end
-    end
-
-    -- Attendance
-    if self.moreInfoAttendance then
-        local parts = {}
-        if intel.eventAttendPct then
-            parts[#parts + 1] = string.format("|cffffffff%.0f%%|r", intel.eventAttendPct)
-            if intel.eventAttended and intel.eventEligible then
-                parts[#parts + 1] = string.format("%d/%d events", intel.eventAttended, intel.eventEligible)
-            end
-        elseif intel.attendance then
-            parts[#parts + 1] = string.format("|cffffffff%.0f%%|r", intel.attendance * 100)
-        end
-        if intel.raidCount and intel.raidCount > 0 then
-            local label = intel.raidCount == 1 and "raid date" or "raid dates"
-            parts[#parts + 1] = string.format("%d %s", intel.raidCount, label)
-        end
-        if #parts > 0 then
-            self.moreInfoAttendance:SetText("Attendance  " .. table.concat(parts, "  \194\183  "))
-        else
-            self.moreInfoAttendance:SetText("")
-        end
-    end
-
-    -- Gear Readiness (from audit data merged into intel)
-    if self.moreInfoGearReady then
-        local line1 = {}  -- tier + enchants + gems
-        local line2 = {}  -- vault + raid progression
-        -- Tier set
-        if intel.tierCount then
-            local tierText = string.format("%dpc", intel.tierCount)
-            if intel.has4pc then
-                tierText = "|cffa335ee" .. tierText .. "|r"
-            elseif intel.has2pc then
-                tierText = "|cff0070dd" .. tierText .. "|r"
-            end
-            line1[#line1 + 1] = tierText
-        end
-        -- Enchants
-        if intel.enchMissing then
-            if intel.enchMissing == 0 then
-                line1[#line1 + 1] = "|cff33ee33Enchanted|r"
-            else
-                line1[#line1 + 1] = string.format("|cffee3333%d missing enchants|r", intel.enchMissing)
-            end
-        end
-        -- Gems
-        if intel.gemMissing then
-            if intel.gemMissing == 0 then
-                line1[#line1 + 1] = "|cff33ee33Gemmed|r"
-            else
-                line1[#line1 + 1] = string.format("|cffee3333%d missing gems|r", intel.gemMissing)
-            end
-        end
-        -- Vault
-        if intel.vaultSlots then
-            line2[#line2 + 1] = string.format("Vault %d/9", intel.vaultSlots)
-        end
-        -- Raid progression
-        if intel.raidProg and intel.raidProg ~= "" then
-            line2[#line2 + 1] = intel.raidProg
-        end
-        local lines = {}
-        if #line1 > 0 then lines[#lines + 1] = table.concat(line1, "  \194\183  ") end
-        if #line2 > 0 then lines[#lines + 1] = table.concat(line2, "  \194\183  ") end
-        if #lines > 0 then
-            self.moreInfoGearReady:SetText(table.concat(lines, "\n"))
-            self.moreInfoGearReady:SetTextColor(0.7, 0.8, 0.7)
-        else
-            self.moreInfoGearReady:SetText("")
-        end
-    end
-
-    -- Recent Loot History (compact, last 3 items)
-    if self.moreInfoLootHistory then
-        if intel.loot and #intel.loot > 0 then
-            local lines = { "|cffbbbbbbRecent Loot|r" }
-            local maxShow = math.min(#intel.loot, 3)
-            for i = 1, maxShow do
-                local item = intel.loot[i]
-                -- Shorten date: "2026-04-07" -> "Apr 07"
-                local dateStr = item.date or "?"
-                local y, m, d = dateStr:match("(%d+)-(%d+)-(%d+)")
-                if m and d then
-                    local monthNames = { "Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec" }
-                    local mi = tonumber(m)
-                    dateStr = (monthNames[mi] or m) .. " " .. d
-                end
-                lines[#lines + 1] = string.format("  |cff888888%s|r  %s |cff888888(%s)|r",
-                    dateStr, item.name or "?", item.resp or "?")
-            end
-            if #intel.loot > maxShow then
-                lines[#lines + 1] = string.format("  |cff666666...and %d more|r", #intel.loot - maxShow)
-            end
-            self.moreInfoLootHistory:SetText(table.concat(lines, "\n"))
-            self.moreInfoLootHistory:SetTextColor(0.8, 0.8, 0.8)
-        else
-            self.moreInfoLootHistory:SetText("|cff666666Recent Loot  None this tier|r")
-            self.moreInfoLootHistory:SetTextColor(0.5, 0.5, 0.5)
-        end
-    end
-
-    -- Alt Loot Summary
-    if self.moreInfoAltLoot then
-        if intel.altLoot and #intel.altLoot > 0 then
-            local parts = {}
-            for _, alt in ipairs(intel.altLoot) do
-                local altName = alt.alt or "?"
-                -- Strip realm from display
-                local dashIdx = altName:find("-")
-                local shortName = dashIdx and altName:sub(1, dashIdx - 1) or altName
-                parts[#parts + 1] = string.format("%s (%s): %d items", shortName, alt.cls or "?", alt.count or 0)
-            end
-            self.moreInfoAltLoot:SetText("|cff66ccffAlt Loot|r  " .. table.concat(parts, "  \194\183  "))
-        else
-            self.moreInfoAltLoot:SetText("")
-        end
-    end
-
-    -- Staleness indicator
-    if self.moreInfoStaleness then
-        local staleText, r, g, b = Loothing.PlayerIntel:GetStalenessInfo()
-        if staleText then
-            self.moreInfoStaleness:SetText("Synced " .. staleText)
-            self.moreInfoStaleness:SetTextColor(r, g, b)
-        else
-            self.moreInfoStaleness:SetText("")
-        end
-    end
-end
-
-function CouncilTableMixin:ClearPlayerIntelSection()
-    -- Hide separators
-    if self.moreInfoIntelSep then
-        self.moreInfoIntelSep:Hide()
-    end
-    if self.moreInfoLootSep then
-        self.moreInfoLootSep:Hide()
-    end
-
-    local noDataMsg = Loothing.PlayerIntel and not Loothing.PlayerIntel:HasData()
-        and "Sync from desktop app for player intel" or ""
-
-    if self.moreInfoMythicPlus then
-        self.moreInfoMythicPlus:SetText(noDataMsg)
-        self.moreInfoMythicPlus:SetTextColor(0.5, 0.5, 0.5)
-    end
-    if self.moreInfoParses then self.moreInfoParses:SetText("") end
-    if self.moreInfoParsesTrend then self.moreInfoParsesTrend:Hide() end
-    if self.moreInfoAttendance then self.moreInfoAttendance:SetText("") end
-    if self.moreInfoGearReady then self.moreInfoGearReady:SetText("") end
-    if self.moreInfoTrinketSim then self.moreInfoTrinketSim:SetText("") end
-    if self.moreInfoDroptimizer then self.moreInfoDroptimizer:SetText("") end
-    if self.moreInfoLootHistory then self.moreInfoLootHistory:SetText("") end
-    if self.moreInfoAltLoot then self.moreInfoAltLoot:SetText("") end
-    if self.moreInfoStaleness then self.moreInfoStaleness:SetText("") end
-end
 
 --[[--------------------------------------------------------------------
     Context Menu
@@ -939,6 +565,56 @@ function CouncilTableMixin:ShowCandidateContextMenu(row, candidate)
 
     MenuUtil.CreateContextMenu(row, function(_, rootDescription)
         rootDescription:CreateTitle(candidate.name or "Unknown")
+
+        -- Everyone-facing quick-nav: jump into this candidate's lifetime
+        -- history profile. Available regardless of ML status. Label uses
+        -- the short (realm-stripped) name for consistency with the rest
+        -- of the addon's display conventions.
+        if candidate.name and ns.ShowCandidateProfile then
+            local short = Utils.GetShortName(candidate.name) or candidate.name
+            rootDescription:CreateButton(
+                L["VIEW_PROFILE_FMT"] and string.format(L["VIEW_PROFILE_FMT"], short)
+                    or ("Profile: " .. short),
+                function() ns.ShowCandidateProfile(candidate.name) end)
+        end
+        -- Item summary — where else has this item dropped and who won it?
+        if self.currentItem and (self.currentItem.itemID or self.currentItem.itemLink)
+            and ns.ShowItemSummary
+        then
+            local itemID = self.currentItem.itemID or self.currentItem.itemLink
+            rootDescription:CreateButton(
+                L["VIEW_ITEM_SUMMARY"] or "View item history",
+                function() ns.ShowItemSummary(itemID) end)
+        end
+        -- Player intel modal (M+ / parses / attendance / loot / sims / wishlist).
+        -- The item context is built at click-time (not menu-open-time) so
+        -- the modal always opens against whatever item is currently
+        -- selected — if a remote award switches items while the menu is
+        -- sitting open, the user still gets fresh sim data.
+        if candidate.playerName and ns.ShowPlayerIntel then
+            rootDescription:CreateButton(
+                L["VIEW_PLAYER_INTEL"] or "View player intel",
+                function()
+                    local cur = self.currentItem
+                    local cls = candidate.class
+                    local spc = candidate.spec
+                    if not spc and Loothing.PlayerCache and Loothing.PlayerCache.Get then
+                        local cached = Loothing.PlayerCache:Get(candidate.playerName or candidate.name)
+                        if cached then spc = spc or cached.spec; cls = cls or cached.class end
+                    end
+                    local ctx = cur and {
+                        itemID         = cur.itemID,
+                        itemLink       = cur.itemLink,
+                        itemName       = cur.name,
+                        itemLevel      = cur.itemLevel,
+                        equipSlot      = cur.equipSlot,
+                        candidateClass = cls,
+                        candidateSpec  = spc,
+                    } or nil
+                    ns.ShowPlayerIntel(candidate.playerName, { item = ctx })
+                end)
+        end
+        rootDescription:CreateDivider()
 
         -- ML-only actions
         if isML and self.currentItem then

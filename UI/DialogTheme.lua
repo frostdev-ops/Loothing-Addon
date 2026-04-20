@@ -136,3 +136,41 @@ function DialogTheme:HookSkinningRefresh()
         return result
     end
 end
+
+--- Attach Loothing's themed scrollbar to the ConfigDialog's scroll frames
+--- when the dialog is opened. Loolib's ConfigDialog still creates scroll
+--- frames with UIPanelScrollFrameTemplate so its non-Loothing consumers
+--- keep Blizzard chrome; `ns.ApplyThemedScrollBar` hides that chrome and
+--- attaches a themed bar outside the scroll area. Idempotent — a flag on
+--- the ScrollFrame prevents double-application if the dialog re-opens.
+function DialogTheme:HookDialogScrollbars()
+    local Config = Loolib and Loolib.Config
+    if not Config or type(Config.RegisterCallback) ~= "function" then
+        return
+    end
+    if self._scrollHookInstalled then return end
+    self._scrollHookInstalled = true
+
+    local function apply(scroll)
+        -- Tab / simple layouts leave `treeScroll` unset. Iterate via
+        -- explicit nil-safe applies rather than ipairs — a nil hole in
+        -- a sequence would halt ipairs and silently skip later entries.
+        if not scroll then return end
+        if scroll._loothingThemedBar then return end
+        local ok, bar = pcall(ns.ApplyThemedScrollBar, scroll, {
+            autoHide = true,
+            showButtons = true,
+            thickness = 10,
+        })
+        if ok then scroll._loothingThemedBar = bar end
+    end
+
+    Config:RegisterCallback("OnDialogOpened", function(_, appName)
+        if appName ~= APP_NAME then return end
+        if type(ns.ApplyThemedScrollBar) ~= "function" then return end
+        local dialog = Config.dialogs and Config.dialogs[appName]
+        if not dialog then return end
+        apply(dialog.treeScroll)
+        apply(dialog.optionsScroll)
+    end)
+end

@@ -9,6 +9,16 @@ local Loothing = ns.Addon
 local Utils = ns.Utils
 local time = time
 
+--- Local shim mirroring the pattern used by PlayerIntel/Droptimizer/Roster.
+-- Returns nil if Utils or NormalizeName is unavailable (early init) or the
+-- input normalizes to nil (secret-value detection in NormalizeName).
+local function normalizeKey(name)
+    if Utils and Utils.NormalizeName then
+        return Utils.NormalizeName(name)
+    end
+    return name
+end
+
 --[[--------------------------------------------------------------------
     WishlistMixin
 ----------------------------------------------------------------------]]
@@ -38,7 +48,10 @@ end
     Persistence
 ----------------------------------------------------------------------]]
 
---- Load wishlist data from SavedVariables (written by Tauri desktop app)
+--- Load wishlist data from SavedVariables (written by Tauri desktop app).
+-- `self.characters` is keyed by player name; normalize on load so
+-- GetCharacterInfo (which normalizes its input) always hits. See
+-- PlayerIntel.lua for the same pattern.
 function WishlistMixin:LoadFromSaved()
     if not Loothing.Settings then return end
 
@@ -47,7 +60,12 @@ function WishlistMixin:LoadFromSaved()
 
     local wl = exchange.wishlists
     self.byItemID = wl.byItemID or {}
-    self.characters = wl.characters or {}
+    local rawCharacters = wl.characters or {}
+    self.characters = {}
+    for key, value in pairs(rawCharacters) do
+        local normalized = normalizeKey(key)
+        if normalized then self.characters[normalized] = value end
+    end
     self.itemDetails = wl.itemDetails or {}
     self.updatedAt = wl.updatedAt
     self.sharedBy = wl.sharedBy     -- nil if from own desktop app
@@ -85,12 +103,14 @@ end
 -- @param playerName string - Player name (will be normalized)
 -- @return table|nil - Entry or nil
 function WishlistMixin:GetPlayerEntryForItem(itemID, playerName)
+    if not playerName then return nil end
     local entries = self.byItemID[itemID]
     if not entries then return nil end
 
-    playerName = Utils.NormalizeName(playerName)
+    local target = normalizeKey(playerName)
+    if not target then return nil end
     for _, entry in ipairs(entries) do
-        if Utils.NormalizeName(entry.playerName) == playerName then
+        if normalizeKey(entry.playerName) == target then
             return entry
         end
     end
@@ -115,8 +135,9 @@ end
 -- @return table|nil - {characterId, listName, totalItems, fulfilledItems}
 function WishlistMixin:GetCharacterInfo(playerName)
     if not playerName then return nil end
-    playerName = Utils.NormalizeName(playerName)
-    return self.characters[playerName]
+    local key = normalizeKey(playerName)
+    if not key then return nil end
+    return self.characters[key]
 end
 
 --- Get item details from the desktop app data (name, quality, source, etc.)
@@ -127,15 +148,51 @@ function WishlistMixin:GetItemDetails(itemID)
     return self.itemDetails[tostring(itemID)] or self.itemDetails[itemID]
 end
 
+--- Get every item on a player's wishlist with its entry metadata.
+-- Iterates `byItemID` once and collects entries matching the normalized
+-- player name. Returns an array sorted by priority ascending (1 is highest).
+-- @param playerName string - Player name (will be normalized)
+-- @return table - Array of { itemID, priority, needLevel, isBiS, isOffspec, notes }
+function WishlistMixin:GetItemsForPlayer(playerName)
+    if not playerName then return {} end
+    local target = normalizeKey(playerName)
+    if not target then return {} end
+    local items = {}
+    for itemID, entries in pairs(self.byItemID) do
+        for _, entry in ipairs(entries) do
+            if normalizeKey(entry.playerName) == target then
+                items[#items + 1] = {
+                    itemID    = itemID,
+                    priority  = entry.priority,
+                    needLevel = entry.needLevel,
+                    isBiS     = entry.isBiS,
+                    isOffspec = entry.isOffspec,
+                    notes     = entry.notes,
+                }
+                break
+            end
+        end
+    end
+    table.sort(items, function(a, b)
+        local pa = a.priority or 999
+        local pb = b.priority or 999
+        if pa ~= pb then return pa < pb end
+        return (a.itemID or 0) < (b.itemID or 0)
+    end)
+    return items
+end
+
 --- Get count of items with wishlist entries for a given player
 -- @param playerName string - Player name (will be normalized)
 -- @return number
 function WishlistMixin:GetPlayerItemCount(playerName)
-    playerName = Utils.NormalizeName(playerName)
+    if not playerName then return 0 end
+    playerName = normalizeKey(playerName)
+    if not playerName then return 0 end
     local count = 0
     for _, entries in pairs(self.byItemID) do
         for _, entry in ipairs(entries) do
-            if Utils.NormalizeName(entry.playerName) == playerName then
+            if normalizeKey(entry.playerName) == playerName then
                 count = count + 1
                 break
             end

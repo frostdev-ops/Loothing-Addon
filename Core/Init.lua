@@ -2428,6 +2428,7 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             if ns.LoothingDialogTheme then
                 ns.LoothingDialogTheme:Register()
                 ns.LoothingDialogTheme:HookSkinningRefresh()
+                ns.LoothingDialogTheme:HookDialogScrollbars()
             end
 
             if Loothing.Diagnostics then
