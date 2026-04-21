@@ -3,7 +3,7 @@
 ## Title: Loothing
 ## Notes: Loot council addon for WoW 12.0+ — syncs to loothing.xyz. Discord: discord.gg/nNRfxQApEB
 ## Author: James Kueller
-## Version: 2.0.24
+## Version: 2.0.25
 ## SavedVariables: LoolibDB
 ## Dependencies: Loolib
 ## IconTexture: Interface\AddOns\Loothing\Media\logo
@@ -166,7 +166,6 @@ Core\Init.lua
 Debug\ErrorHandler.lua
 Debug\TestMode.lua
 
-# Simulator (TEMPORARY: in production TOC for testing — move back to Dev TOC before release)
-Debug\Tests\TestData.lua
+# Simulator (user-facing /lt simulator)
 Debug\Simulator.lua
 UI\SimulatorPanel.lua
