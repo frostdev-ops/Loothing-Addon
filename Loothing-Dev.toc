@@ -1,9 +1,9 @@
-## Interface: 120000
+## Interface: 120005
 ## AllowLoadGameType: standard
 ## Title: Loothing (Dev)
 ## Notes: Development build with test harness and debug tooling
 ## Author: James Kueller
-## Version: 2.0.23
+## Version: 2.0.24
 ## SavedVariables: LoolibDB
 ## Dependencies: Loolib
 ## IconTexture: Interface\AddOns\Loothing\Media\logo
@@ -112,6 +112,7 @@ Comm\IntelShare.lua
 
 # UI Implementation
 UI\FramePolish.lua
+UI\ItemTooltipHover.lua
 UI\IconList.lua
 UI\IconPickerFrame.lua
 UI\ResponseButtonSettingsFrame.lua

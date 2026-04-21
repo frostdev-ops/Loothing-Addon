@@ -631,16 +631,8 @@ function LootPickerFrameMixin:CreateRow()
     reasonText:SetWordWrap(false)
     row.reasonText = reasonText
 
-    -- Hover/tooltip
-    row:EnableMouse(true)
-    row:SetScript("OnEnter", function(r)
-        if r._link then
-            GameTooltip:SetOwner(r, "ANCHOR_RIGHT")
-            GameTooltip:SetHyperlink(r._link)
-            GameTooltip:Show()
-        end
-    end)
-    row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    -- Hover/tooltip — shift-gated, strata-aware. r._link is rebound per row in BindRow.
+    ns.AttachItemTooltip(row, function() return row._link end)
 
     return row
 end

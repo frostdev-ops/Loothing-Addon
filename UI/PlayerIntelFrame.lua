@@ -1379,22 +1379,18 @@ local function BuildWishlistTab(panel, refs)
             row.badgeFS:SetJustifyH("RIGHT")
             row.badgeFS:SetWordWrap(false)
 
-            -- Tooltip on hover of the whole row. Malformed desktop payloads
-            -- have shipped non-string `notes` in the past (arrays, numbers);
-            -- the type-guard prevents a GameTooltip concat crash.
-            row:EnableMouse(true)
-            row:SetScript("OnEnter", function(self)
-                if self._itemLink then
-                    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-                    GameTooltip:SetHyperlink(self._itemLink)
-                    if type(self._notes) == "string" and self._notes ~= "" then
-                        GameTooltip:AddLine(" ")
-                        GameTooltip:AddLine("|cffbbbbbbNote:|r " .. self._notes, 1, 1, 1, true)
-                    end
-                    GameTooltip:Show()
+            -- Tooltip on hover of the whole row — shift-gated, strata-aware.
+            -- Malformed desktop payloads have shipped non-string `notes` in
+            -- the past (arrays, numbers); the type-guard prevents a
+            -- GameTooltip concat crash.
+            ns.AttachShiftTooltip(row, function(tt, self)
+                if not self._itemLink then return false end
+                tt:SetHyperlink(self._itemLink)
+                if type(self._notes) == "string" and self._notes ~= "" then
+                    tt:AddLine(" ")
+                    tt:AddLine("|cffbbbbbbNote:|r " .. self._notes, 1, 1, 1, true)
                 end
             end)
-            row:SetScript("OnLeave", function() GameTooltip:Hide() end)
         end,
         bindRow = function(row, data)
             local details = Loothing.Wishlist

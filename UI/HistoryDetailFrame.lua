@@ -393,23 +393,10 @@ function ns.MakeResponseClickable(region, getResponseId)
     addClickableUnderline(region)
 end
 
---- Anchor a tooltip on a region and show an item link.
+--- Anchor a shift-gated, strata-aware item tooltip on a region.
+-- See UI/ItemTooltipHover.lua for the underlying contract.
 local function attachItemTooltip(region, getLink, extraLines)
-    region:EnableMouse(true)
-    region:SetScript("OnEnter", function(r)
-        local link = type(getLink) == "function" and getLink() or getLink
-        GameTooltip:SetOwner(r, "ANCHOR_RIGHT")
-        if link then
-            GameTooltip:SetHyperlink(link)
-        end
-        if extraLines then
-            for _, line in ipairs(extraLines) do
-                GameTooltip:AddLine(line, 1, 0.82, 0)
-            end
-        end
-        GameTooltip:Show()
-    end)
-    region:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    ns.AttachItemTooltip(region, getLink, extraLines)
 end
 
 --[[--------------------------------------------------------------------
@@ -1375,21 +1362,14 @@ local function getDetailInstance()
 
             row.noteText:SetText(data.note or "")
 
-            -- Hover shows gear tooltip (combined gear1 + gear2)
+            -- Hover shows gear tooltip (combined gear1 + gear2) — shift-gated.
             local gear1, gear2 = data.gear1Link, data.gear2Link
-            row:SetScript("OnEnter", function(r)
-                if not (gear1 or gear2) then return end
-                GameTooltip:SetOwner(r, "ANCHOR_RIGHT")
-                GameTooltip:AddLine(L("HISTORY_DETAIL_EQUIPPED_AT_ROLL", "Equipped at time of roll"), 1, 0.82, 0)
-                if gear1 then
-                    GameTooltip:AddLine(gear1)
-                end
-                if gear2 then
-                    GameTooltip:AddLine(gear2)
-                end
-                GameTooltip:Show()
+            ns.AttachShiftTooltip(row, function(tt)
+                if not (gear1 or gear2) then return false end
+                tt:AddLine(L("HISTORY_DETAIL_EQUIPPED_AT_ROLL", "Equipped at time of roll"), 1, 0.82, 0)
+                if gear1 then tt:AddLine(gear1) end
+                if gear2 then tt:AddLine(gear2) end
             end)
-            row:SetScript("OnLeave", function() GameTooltip:Hide() end)
         end,
     })
     candList.container:SetPoint("TOPLEFT", candHeader, "BOTTOMLEFT", 0, -2)
@@ -1852,16 +1832,11 @@ local function getSummaryInstance()
             else
                 row.rollText:SetText("—")
             end
-            row:SetScript("OnEnter", function(r)
-                GameTooltip:SetOwner(r, "ANCHOR_RIGHT")
-                if entry.itemLink then
-                    GameTooltip:SetHyperlink(entry.itemLink)
-                end
-                GameTooltip:AddLine(" ")
-                GameTooltip:AddLine(L("HISTORY_DETAIL_CLICK_FOR_DETAILS", "Click for full details"), 0.8, 0.8, 0.8)
-                GameTooltip:Show()
+            ns.AttachShiftTooltip(row, function(tt)
+                if entry.itemLink then tt:SetHyperlink(entry.itemLink) end
+                tt:AddLine(" ")
+                tt:AddLine(L("HISTORY_DETAIL_CLICK_FOR_DETAILS", "Click for full details"), 0.8, 0.8, 0.8)
             end)
-            row:SetScript("OnLeave", function() GameTooltip:Hide() end)
             row:SetScript("OnClick", function()
                 ns.ShowHistoryDetail(entry)
             end)
@@ -2121,14 +2096,11 @@ local function getCandidateInstance()
                     end
                 end
 
-                row:SetScript("OnEnter", function(r)
-                    GameTooltip:SetOwner(r, "ANCHOR_RIGHT")
-                    if entry.itemLink then GameTooltip:SetHyperlink(entry.itemLink) end
-                    GameTooltip:AddLine(" ")
-                    GameTooltip:AddLine(L("HISTORY_DETAIL_CLICK_FOR_DETAILS", "Click for full details"), 0.8, 0.8, 0.8)
-                    GameTooltip:Show()
+                ns.AttachShiftTooltip(row, function(tt)
+                    if entry.itemLink then tt:SetHyperlink(entry.itemLink) end
+                    tt:AddLine(" ")
+                    tt:AddLine(L("HISTORY_DETAIL_CLICK_FOR_DETAILS", "Click for full details"), 0.8, 0.8, 0.8)
                 end)
-                row:SetScript("OnLeave", function() GameTooltip:Hide() end)
                 row:SetScript("OnClick", function() ns.ShowHistoryDetail(entry) end)
             end,
         })
@@ -2437,19 +2409,16 @@ local function getVoterInstance()
             row.picksText:SetText(picks)
             row.winnerText:SetText(classColoredName(entry.winner, entry.winnerClass))
 
-            row:SetScript("OnEnter", function(r)
-                GameTooltip:SetOwner(r, "ANCHOR_RIGHT")
-                if entry.itemLink then GameTooltip:SetHyperlink(entry.itemLink) end
+            ns.AttachShiftTooltip(row, function(tt)
+                if entry.itemLink then tt:SetHyperlink(entry.itemLink) end
                 if vote.note and vote.note ~= "" then
-                    GameTooltip:AddLine(" ")
-                    GameTooltip:AddLine(L("HISTORY_DETAIL_VOTER_NOTE", "Voter Note:"), 1, 0.82, 0)
-                    GameTooltip:AddLine(vote.note, 1, 1, 1, true)
+                    tt:AddLine(" ")
+                    tt:AddLine(L("HISTORY_DETAIL_VOTER_NOTE", "Voter Note:"), 1, 0.82, 0)
+                    tt:AddLine(vote.note, 1, 1, 1, true)
                 end
-                GameTooltip:AddLine(" ")
-                GameTooltip:AddLine(L("HISTORY_DETAIL_CLICK_FOR_DETAILS", "Click for full details"), 0.8, 0.8, 0.8)
-                GameTooltip:Show()
+                tt:AddLine(" ")
+                tt:AddLine(L("HISTORY_DETAIL_CLICK_FOR_DETAILS", "Click for full details"), 0.8, 0.8, 0.8)
             end)
-            row:SetScript("OnLeave", function() GameTooltip:Hide() end)
             row:SetScript("OnClick", function() ns.ShowHistoryDetail(entry) end)
         end,
     })
@@ -2730,15 +2699,12 @@ local function buildScopeSummary(opts)
             row.responseText:SetText(
                 responseColoredText(getWinnerResponse(entry)) or entry.response or "—")
 
-            row:SetScript("OnEnter", function(r)
-                GameTooltip:SetOwner(r, "ANCHOR_RIGHT")
-                if entry.itemLink then GameTooltip:SetHyperlink(entry.itemLink) end
-                GameTooltip:AddLine(" ")
-                GameTooltip:AddLine(L("HISTORY_DETAIL_CLICK_FOR_DETAILS",
+            ns.AttachShiftTooltip(row, function(tt)
+                if entry.itemLink then tt:SetHyperlink(entry.itemLink) end
+                tt:AddLine(" ")
+                tt:AddLine(L("HISTORY_DETAIL_CLICK_FOR_DETAILS",
                     "Click for full details"), 0.8, 0.8, 0.8)
-                GameTooltip:Show()
             end)
-            row:SetScript("OnLeave", function() GameTooltip:Hide() end)
             row:SetScript("OnClick", function() ns.ShowHistoryDetail(entry) end)
         end,
     })

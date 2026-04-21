@@ -949,41 +949,33 @@ function HistoryPanelMixin:SetupHistoryRow(row, entry, yOffset)
         row.colorBar:Hide()
     end
 
-    -- Tooltip
-    row:SetScript("OnEnter", function()
-        GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
-
+    -- Tooltip — shift-gated, strata-aware. Hold Shift to peek the item.
+    ns.AttachShiftTooltip(row, function(tt)
         if entry.itemLink then
-            GameTooltip:SetHyperlink(entry.itemLink)
+            tt:SetHyperlink(entry.itemLink)
         else
-            GameTooltip:AddLine(entry.itemName or "Unknown Item")
+            tt:AddLine(entry.itemName or "Unknown Item")
         end
 
-        GameTooltip:AddLine(" ")
+        tt:AddLine(" ")
 
         if entry.winner then
-            GameTooltip:AddLine(string.format(Loothing.Locale["AWARDED_TO"], entry.winner), 1, 0.82, 0)
+            tt:AddLine(string.format(Loothing.Locale["AWARDED_TO"], entry.winner), 1, 0.82, 0)
         end
 
         if entry.encounterName then
-            GameTooltip:AddLine(string.format(Loothing.Locale["FROM_ENCOUNTER"], entry.encounterName), 0.7, 0.7, 0.7)
+            tt:AddLine(string.format(Loothing.Locale["FROM_ENCOUNTER"], entry.encounterName), 0.7, 0.7, 0.7)
         end
 
         if entry.votes then
-            GameTooltip:AddLine(string.format(Loothing.Locale["WITH_VOTES"], entry.votes), 0.7, 0.7, 0.7)
+            tt:AddLine(string.format(Loothing.Locale["WITH_VOTES"], entry.votes), 0.7, 0.7, 0.7)
         end
 
-        GameTooltip:AddLine(" ")
-        GameTooltip:AddLine(
+        tt:AddLine(" ")
+        tt:AddLine(
             Loothing.Locale["HISTORY_ROW_CLICK_HINT"]
                 or "Click for full details  |cff888888•|r  Shift-Click to link",
             0.55, 0.75, 1)
-
-        GameTooltip:Show()
-    end)
-
-    row:SetScript("OnLeave", function()
-        GameTooltip:Hide()
     end)
 
     -- Click handling:
