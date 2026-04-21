@@ -24,8 +24,18 @@ local instanceCache = {}       -- [instanceID] = { name, encounters, isRaid }
 local currentRaidCache = nil   -- Current raid tier encounter data
 local initialized = false
 
--- Current expansion raid tier ID (The War Within)
-local CURRENT_TIER = 11 -- TWW expansion
+--- Resolve the highest/current Encounter Journal tier index at call time.
+--- `EJ_GetNumTiers()` returns the total tier count; the highest index is
+--- always the active expansion (Midnight on 12.0+). This avoids the
+--- previous hardcoded tier that left the addon stuck on TWW after the
+--- expansion flip.
+local function GetCurrentTier()
+    if EJ_GetNumTiers then
+        local n = EJ_GetNumTiers() or 0
+        if n > 0 then return n end
+    end
+    return 11 -- TWW fallback if the journal isn't ready yet
+end
 
 -- Difficulty mapping
 local DIFFICULTY_IDS = {
@@ -64,7 +74,7 @@ function EncounterData:GetCurrentTierInstances(isRaid)
 
     local instances = {}
 
-    EJ_SelectTier(CURRENT_TIER)
+    EJ_SelectTier(GetCurrentTier())
 
     local index = 1
     while EJ_GetInstanceByIndex(index, isRaid) do
@@ -444,8 +454,8 @@ end
     Static Encounter ID Mappings (Common bosses for quick reference)
 ----------------------------------------------------------------------]]
 
--- Current tier (TWW Season 1) encounter IDs
--- These are populated on first access from the Encounter Journal
+-- Current tier encounter IDs — populated on first access from the
+-- Encounter Journal via EJ_GetNumTiers (auto-tracks the live expansion).
 Loothing.Encounters = Loothing.Encounters or {}
 
 --- Populate common encounter IDs from the journal

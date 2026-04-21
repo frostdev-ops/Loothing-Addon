@@ -59,6 +59,36 @@ Loothing.TrinketCategories = {
 
 Loothing.TrinketSpecs = {
     -- ================================================================
+    -- Midnight Season 1 Trinkets
+    -- Sourced from RCLootCouncil/Utils/EncounterJournalData.lua
+    -- ================================================================
+
+    -- Midnight world/zone trinket
+    [250462] = "77F7777777777", -- Forgotten Farstrider's Insignia (All)
+
+    -- The Dreamrift (id: 1314)
+    [249343] = "77F7777777777", -- Gaze of the Alnseer (All)
+    [249805] = "0124002607743", -- Undreamt God's Oozing Vestige (DPS Str/Agi)
+
+    -- The Voidspire (id: 1307)
+    [249339] = "0241000100024", -- Gloom-Spattered Dreadscale (Tank)
+    [249342] = "0000000700067", -- Heart of Ancient Hunger (Str)
+    [249344] = "0124002607743", -- Light Company Guidon (DPS Str/Agi)
+    [249808] = "2082004030010", -- Litany of Lightblind Wrath (Healer)
+    [249809] = "7492775070010", -- Locus-Walker's Ribbon (Int)
+    [249345] = "0124002007700", -- Ranger-Captain's Iridescent Insignia (DPS Agi)
+    [249346] = "7492775070010", -- Vaelgor's Final Stare (Int)
+    [249341] = "2082004030010", -- Volatile Void Suffuser (Healer)
+    [249340] = "5410771040000", -- Wraps of Cosmic Madness (DPS Int)
+
+    -- March on Quel'Danas (id: 1308)
+    [249811] = "2082004030010", -- Light of the Cosmic Crescendo (Healer)
+    [249806] = "0365002707767", -- Radiant Plume (Str/Agi)
+    [249810] = "5410771040000", -- Shadow of the Empyrean Requiem (DPS Int)
+    [249807] = "0241000100024", -- The Eternal Egg (Tank)
+    [260235] = "0365002707767", -- Umbral Plume (Str/Agi)
+
+    -- ================================================================
     -- The War Within Season 1 Trinkets
     -- ================================================================
 

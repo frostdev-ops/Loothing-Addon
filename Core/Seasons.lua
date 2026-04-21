@@ -30,6 +30,17 @@ local Loothing = ns.Addon
 -- timestamp-range resolution.
 local SEASONS_TABLE = {
     {
+        id       = "MIDNIGHT_S1",
+        name     = "Midnight Season 1",
+        order    = 0,
+        -- Three concurrent raids ship as a single season under Midnight.
+        instances = {
+            "The Voidspire",
+            "The Dreamrift",
+            "March on Quel'Danas",
+        },
+    },
+    {
         id       = "TWW_S3",
         name     = "The War Within Season 3",
         order    = 1,
@@ -55,9 +66,21 @@ local SEASONS_TABLE = {
             "Nerub-ar Palace",
         },
     },
-    -- Midnight seasons will be added here once Blizzard announces the
-    -- Season 1 raid and subsequent tiers.
+    -- Midnight S2+ will slot in above MIDNIGHT_S1 with a lower `order`
+    -- (e.g., order = -1) as each new tier is announced.
 }
+
+--- Normalize punctuation that WoW may return from `GetInstanceInfo()` in
+--- variant forms across clients or patches. Currently collapses the
+--- typographic apostrophe (U+2019) to an ASCII apostrophe so that
+--- "March on Quel<U+2019>Danas" matches the table entry "March on Quel'Danas".
+--- Applied on both sides of the lookup so index and query agree.
+local function normalizeInstanceName(name)
+    if type(name) ~= "string" then return name end
+    -- \xE2\x80\x99 == U+2019 RIGHT SINGLE QUOTATION MARK
+    local out = name:gsub("\226\128\153", "'")
+    return out
+end
 
 -- Build a reverse lookup: instance name -> {season row, ...}. An
 -- instance can appear in multiple season rows (Undermine spans TWW S2
@@ -69,8 +92,9 @@ local function buildInstanceIndex()
     _instanceIndex = {}
     for _, season in ipairs(SEASONS_TABLE) do
         for _, inst in ipairs(season.instances or {}) do
-            _instanceIndex[inst] = _instanceIndex[inst] or {}
-            table.insert(_instanceIndex[inst], season)
+            local key = normalizeInstanceName(inst)
+            _instanceIndex[key] = _instanceIndex[key] or {}
+            table.insert(_instanceIndex[key], season)
         end
     end
     for _, list in pairs(_instanceIndex) do
@@ -89,7 +113,7 @@ function Seasons:GetForEntry(entry)
     if not entry or not entry.instance then return nil end
     if not _instanceIndex then buildInstanceIndex() end
 
-    local matches = _instanceIndex[entry.instance]
+    local matches = _instanceIndex[normalizeInstanceName(entry.instance)]
     if not matches or #matches == 0 then return nil end
     -- First match wins; extend with timestamp-based disambiguation if a
     -- single instance ever gets re-used across multiple seasons.
