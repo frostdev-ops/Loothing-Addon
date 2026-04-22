@@ -681,9 +681,43 @@ function TradeQueueMixin:SendNonTradableComm(itemLink)
     Loothing:Debug("Sent NON_TRADABLE comm for", itemLink)
 end
 
+--- Decide whether broadcasting a TRADABLE / NON_TRADABLE notification is
+--- actually useful, or whether it's pure channel noise under the current
+--- MLDB configuration. Suppress in the "auto-roll raid" case:
+---   * Caller is not the ML, AND
+---   * MLDB signals the ML is handling loot with active group-loot auto-roll
+--- In that mode non-ML raiders win essentially nothing, so TRADABLE from
+--- them is noise; ML detects own wins via LOOT_ITEM_ROLL_WON + bag scan.
+--- Also suppress the ML's own self-announcement — the ML already has the
+--- item in a session; broadcasting to the raid about "I have this" adds
+--- nothing useful.
+--- @return boolean - true if the broadcast should be skipped.
+local function shouldSuppressTradeBroadcast()
+    local mldb = Loothing.MLDB and Loothing.MLDB:Get()
+    if not mldb then return false end                  -- MLDB absent: broadcast as before
+    if mldb.handleLoot ~= true then return false end   -- ML not handling: broadcast
+    if mldb.groupLootMode ~= "active" then return false end
+
+    -- ML's own broadcast is self-referential noise: the item is already
+    -- in the ML's session pipeline via HandleTradable's active-session
+    -- branch or the buffer path. Other raiders don't need to be told.
+    local Session = Loothing.Session
+    local isMLSelf = Session and Session.IsMasterLooter and Session:IsMasterLooter()
+    if isMLSelf then return true end
+
+    -- Non-ML raider: suppress — their bag should be empty of new wins in
+    -- auto-roll mode, and any item that DID land (e.g. legendary hard-skip
+    -- or quality below threshold) is player-personal, not council-relevant.
+    return true
+end
+
 --- Handle a recently looted item - determine if tradable and broadcast
 -- @param itemLink string - Item link that was just looted
 function TradeQueueMixin:UpdateAndSendRecentTradableItem(itemLink)
+    if shouldSuppressTradeBroadcast() then
+        Loothing:Debug("TRADABLE suppressed (auto-roll raid):", itemLink)
+        return
+    end
     self:WatchForItemInBags(itemLink,
         function(_bag, _slot, timeRemaining)
             if timeRemaining and timeRemaining > 0 then

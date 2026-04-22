@@ -2762,26 +2762,54 @@ function SessionMixin:OnLootReceived(encounterID, _itemID, itemLink, _quantity, 
             if enforceFilters and Loothing.ItemFilter and Loothing.ItemFilter:ShouldIgnoreItem(itemLink) then
                 Loothing:Debug("Item filtered (buffer):", itemLink)
             else
-                -- Dedup: bag scanner and HandleTradable can also buffer the same item
-                local alreadyBuffered = false
-                for _, entry in ipairs(self.lootBuffer) do
-                    if entry.itemLink == itemLink and entry.playerName == playerName then
-                        alreadyBuffered = true
-                        break
+                -- Tradability gate. ENCOUNTER_LOOT_RECEIVED fires for
+                -- soulbound-at-pickup crafting reagents (Spark of Radiance,
+                -- Sparks of Omens, etc.) as well as actual distributable
+                -- loot. Buffering non-tradeables leaks them into the picker
+                -- even though the ML can't actually award them to other
+                -- raiders — the pre-2.0.28 picker would show Spark rows
+                -- but nothing else because the real gear arrived via
+                -- LOOT_ITEM_ROLL_WON instead.
+                --
+                -- Probe bindType + classID synchronously. If the item is
+                -- BoP AND a non-equippable reagent/consumable (classes 0
+                -- Consumable, 7 Tradegoods, 15 Misc, 17 Profession) AND
+                -- carries no trade window, it's personal — skip.
+                local skipNonTradeable = false
+                local _, _, _, _, _, _, _, _, _, _, _, classID, _, bindType = C_Item.GetItemInfo(itemLink)
+                if bindType == 1 and classID and
+                    (classID == 0 or classID == 7 or classID == 15 or classID == 17) then
+                    -- Reagent / consumable / misc bound-on-pickup. These
+                    -- never leave the owner's bag and shouldn't populate
+                    -- a loot-council picker. (Raid gear is classID 2 / 4
+                    -- and passes through.)
+                    skipNonTradeable = true
+                    Loothing:Debug("Skipping non-distributable loot:",
+                        itemLink, "bindType=1 classID=" .. tostring(classID))
+                end
+
+                if not skipNonTradeable then
+                    -- Dedup: bag scanner and HandleTradable can also buffer the same item
+                    local alreadyBuffered = false
+                    for _, entry in ipairs(self.lootBuffer) do
+                        if entry.itemLink == itemLink and entry.playerName == playerName then
+                            alreadyBuffered = true
+                            break
+                        end
                     end
-                end
-                if not alreadyBuffered then
-                    table.insert(self.lootBuffer, {
-                        itemLink = itemLink,
-                        playerName = playerName,
-                        encounterID = encounterID,
-                        timestamp = time(),
-                    })
-                    Loothing:Debug("Buffered loot item:", itemLink, "from", playerName, "encounter", encounterID)
-                    self:TriggerEvent("OnLootBufferChanged", self.lootBuffer)
-                end
-                if Utils.IsSamePlayer(playerName, Utils.GetPlayerFullName()) and Loothing.TradeQueue then
-                    Loothing.TradeQueue:UpdateAndSendRecentTradableItem(itemLink)
+                    if not alreadyBuffered then
+                        table.insert(self.lootBuffer, {
+                            itemLink = itemLink,
+                            playerName = playerName,
+                            encounterID = encounterID,
+                            timestamp = time(),
+                        })
+                        Loothing:Debug("Buffered loot item:", itemLink, "from", playerName, "encounter", encounterID)
+                        self:TriggerEvent("OnLootBufferChanged", self.lootBuffer)
+                    end
+                    if Utils.IsSamePlayer(playerName, Utils.GetPlayerFullName()) and Loothing.TradeQueue then
+                        Loothing.TradeQueue:UpdateAndSendRecentTradableItem(itemLink)
+                    end
                 end
             end
         end

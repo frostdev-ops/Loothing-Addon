@@ -461,16 +461,37 @@ local migrations = {
 -- Iterates every profile and brings it forward to the current
 -- schemaVersion. Wraps each step in pcall so that a single bad
 -- profile cannot block other profiles from migrating.
--- @param sv table - Loolib SavedVariables instance (must expose .profiles)
+--
+-- @param sv table - Loolib SavedVariables accessor. The actual data lives
+--   at `sv.data` (see Loolib/Data/SavedVariables.lua:231,258: `self.data`
+--   holds `.profiles`, `.profileKeys`, scope tables). Pre-2.0.28 this code
+--   read `sv.profiles` directly, which silently returned nil because the
+--   accessor doesn't proxy through to `sv.data` for arbitrary keys — so
+--   ALL migrations since schemaVersion introduction have been no-ops.
+--   Legacy keys (settings.sessionTrigger*, ml.onlyUseInRaids, etc.) have
+--   been persisting unchanged in users' SV for the entire life of the
+--   migration system. Fixed in 2.0.28 by walking `sv.data.profiles`.
 function SchemaMigration:Run(sv)
-    if not sv or type(sv.profiles) ~= "table" then
-        return
-    end
+    local data = sv and sv.data
+    if type(data) ~= "table" then return end
+    if type(data.profiles) ~= "table" then return end
+
     local target = (Loothing.DefaultSettings and Loothing.DefaultSettings.schemaVersion) or 1
 
-    for profileName, profile in pairs(sv.profiles) do
+    for profileName, profile in pairs(data.profiles) do
         if type(profile) == "table" then
-            local current = tonumber(profile.schemaVersion) or 1
+            -- CRITICAL: Loolib's SavedVariables attaches a __index metatable
+            -- to each profile that falls through to PROFILE_DEFAULTS. Since
+            -- PROFILE_DEFAULTS.schemaVersion == target, a naive
+            -- `profile.schemaVersion` read on a legacy profile that has
+            -- never actually stored a schemaVersion returns the DEFAULT
+            -- (= target), making the migration loop think "already
+            -- migrated" and skipping every step. We must rawget to
+            -- distinguish a stored-version number from the metatable
+            -- fallback. Fixes the root-cause of "migrations have never
+            -- actually run for any user" — the partnered fix to 2.0.28's
+            -- sv.data.profiles accessor correction above.
+            local current = tonumber(rawget(profile, "schemaVersion")) or 1
             for v = current + 1, target do
                 local fn = migrations[v]
                 if fn then
