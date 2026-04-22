@@ -126,6 +126,13 @@ function CommStateMixin:RegisterEvents()
     Events.Registry:RegisterEventCallback("GROUP_LEFT", function()
         self:OnGroupLeft()
     end, self)
+
+    -- Safety net: if we ended up DISCONNECTED while still in a group
+    -- (e.g., raid-dissolves-to-party transition where GROUP_LEFT fires
+    -- but the player never actually leaves the party), recover here.
+    Events.Registry:RegisterEventCallback("GROUP_ROSTER_UPDATE", function()
+        self:OnGroupRosterUpdate()
+    end, self)
 end
 
 --- Wire up sync circuit breaker callbacks (call after Loothing.Sync is initialized)
@@ -152,6 +159,14 @@ local function TransitionTo(self, newState)
     self.state = newState
 
     Loothing:Debug("CommState:", STATE_NAMES[oldState] or "?", "->", STATE_NAMES[newState] or "?")
+
+    -- When transitioning to DISCONNECTED, flush our own queued messages from
+    -- Loolib.Comm. They're addressed to a group we're no longer in and will
+    -- only consume the shared WoW addon-channel budget if they somehow drain.
+    if newState == STATE_DISCONNECTED and Loolib.Comm and Loothing.ADDON_PREFIX then
+        Loolib.Comm:ClearSendQueueForPrefix(Loothing.ADDON_PREFIX)
+    end
+
     self:TriggerEvent("OnStateChanged", oldState, newState)
 end
 
@@ -171,6 +186,15 @@ function CommStateMixin:OnRestrictionLifted()
 end
 
 function CommStateMixin:OnGroupLeft()
+    -- GROUP_LEFT fires for raid→party transitions too (leaving the raid while
+    -- still in a pre-existing party). If we're still in a group, stay CONNECTED;
+    -- GROUP_JOINED will not fire to recover us otherwise. Only truly-solo drops
+    -- us to DISCONNECTED.
+    if IsInGroup() then
+        Loothing:Debug("CommState: GROUP_LEFT but IsInGroup() still true — staying CONNECTED")
+        return
+    end
+
     TransitionTo(self, STATE_DISCONNECTED)
     if Loothing.Restrictions then
         Loothing.Restrictions:ClearQueue()
@@ -179,6 +203,17 @@ end
 
 function CommStateMixin:OnGroupJoined()
     if self.state == STATE_DISCONNECTED then
+        TransitionTo(self, STATE_CONNECTED)
+        self:StartGracePeriod()
+    end
+end
+
+--- GROUP_ROSTER_UPDATE safety net: if we're DISCONNECTED but IsInGroup() is
+--- true, we missed a transition (spurious GROUP_LEFT, or raid-dissolve race).
+--- Recover without waiting for a GROUP_JOINED event that may never fire.
+function CommStateMixin:OnGroupRosterUpdate()
+    if self.state == STATE_DISCONNECTED and IsInGroup() then
+        Loothing:Debug("CommState: recovering DISCONNECTED→CONNECTED via GROUP_ROSTER_UPDATE")
         TransitionTo(self, STATE_CONNECTED)
         self:StartGracePeriod()
     end

@@ -855,9 +855,12 @@ function Addon:StartHandleLoot()
     self:Debug("StartHandleLoot - now handling loot")
     self:Print(L["ML_HANDLING_LOOT"])
 
-    -- Broadcast MLDB settings first (so candidates know our config)
+    -- Broadcast MLDB settings first (so candidates know our config).
+    -- force=true because this is an ML-state transition — a stale cache from
+    -- a previous ML stint with identical settings would silently suppress the
+    -- initial push to the new audience.
     if self.MLDB then
-        self.MLDB:BroadcastToRaid()
+        self.MLDB:BroadcastToRaid(true)
     end
 
     -- Broadcast council roster
@@ -1018,21 +1021,23 @@ local function RegisterEvents()
                 if not (Loothing.handleLoot and Loothing.MLDB and Loothing.MLDB:IsML()) then
                     return
                 end
-                -- MLDB (settings + handleLoot flag)
-                Loothing.MLDB:BroadcastToRaid()
-                -- Active session announcement (duplicate-safe: existing members ignore same sessionID)
+                -- This re-broadcast exists specifically to reach new members
+                -- who joined since the last push — the audience has changed
+                -- even if the payload hasn't, so every helper here must
+                -- bypass its payload-only dirty-check via force=true.
+                Loothing.MLDB:BroadcastToRaid(true)
                 local session = Loothing.Session
                 if session and session:IsActive() and session.sessionID then
                     Loothing.Comm:BroadcastSessionStart(
                         session.encounterID,
                         session.encounterName,
-                        session.sessionID
+                        session.sessionID,
+                        true  -- force: new-member audience
                     )
                 end
-                -- Council + observer rosters
                 if Loothing.Sync then
-                    Loothing.Sync:BroadcastCouncilRoster()
-                    Loothing.Sync:BroadcastObserverRoster()
+                    Loothing.Sync:BroadcastCouncilRoster(true)
+                    Loothing.Sync:BroadcastObserverRoster(true)
                 end
             end)
         end
@@ -2916,10 +2921,13 @@ function Addon:RestoreFromCache()
             C_Timer.After(3, doReconnectSync)
         end
     elseif cache.isMasterLooter and cache.handleLoot then
-        -- We ARE the ML - re-broadcast MLDB and council after grace period
+        -- We ARE the ML — re-broadcast MLDB and council after grace period.
+        -- Post-reconnect the audience may have changed (members who joined
+        -- while we were disconnected); force=true bypasses the payload-only
+        -- dirty cache so these always push state.
         local function doMLBroadcast()
             if self.MLDB then
-                self.MLDB:BroadcastToRaid()
+                self.MLDB:BroadcastToRaid(true)
             end
             if self.Council and self.Comm then
                 local members = self.Council:GetAllMembers()

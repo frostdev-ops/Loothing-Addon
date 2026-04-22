@@ -635,6 +635,22 @@ function SessionMixin:EndSession()
         if Popups then
             Popups:Hide("LOOTHING_CONFIRM_START_SESSION")
         end
+
+        -- Invalidate broadcast dirty-check caches even on the no-active-session
+        -- early-return. A caller reached EndSession in an already-INACTIVE
+        -- state typically because the group or ML state changed; the audience
+        -- for any future broadcast is probably different, so caches from a
+        -- prior ML stint must not outlive this call.
+        if Loothing.MLDB and Loothing.MLDB.InvalidateBroadcastCache then
+            Loothing.MLDB:InvalidateBroadcastCache()
+        end
+        if Loothing.Sync and Loothing.Sync.InvalidateBroadcastCaches then
+            Loothing.Sync:InvalidateBroadcastCaches()
+        end
+        if Loothing.Comm and Loothing.Comm.InvalidateSessionStartCache then
+            Loothing.Comm:InvalidateSessionStartCache()
+        end
+
         return false
     end
 
@@ -785,6 +801,21 @@ function SessionMixin:EndSession()
     -- session ended cannot block the next session's sync.
     if Loothing.Sync and Loothing.Sync.ResetSessionState then
         Loothing.Sync:ResetSessionState()
+    end
+
+    -- Invalidate broadcast dirty-check caches. The next BroadcastToRaid /
+    -- BroadcastCouncilRoster / BroadcastObserverRoster / BroadcastSessionStart
+    -- should fire unconditionally — a fresh session is a fresh audience
+    -- (new join, ML handoff, encounter transition), even if the payload
+    -- happens to be byte-identical to the prior session's last send.
+    if Loothing.MLDB and Loothing.MLDB.InvalidateBroadcastCache then
+        Loothing.MLDB:InvalidateBroadcastCache()
+    end
+    if Loothing.Sync and Loothing.Sync.InvalidateBroadcastCaches then
+        Loothing.Sync:InvalidateBroadcastCaches()
+    end
+    if Loothing.Comm and Loothing.Comm.InvalidateSessionStartCache then
+        Loothing.Comm:InvalidateSessionStartCache()
     end
 
     -- Drop any messages queued while restrictions were active. Once the

@@ -986,6 +986,31 @@ function DiagPanelMixin:BuildClipboardText()
         L(format("  Batch Accum: %d", commObj:GetBatchAccumulatorCount()))
         L(format("  Dedup Entries: %d", commObj:GetSeenIDCount()))
     end
+
+    -- Send-rate budget (token bucket) + queue coalesce counter, from Loolib.Comm.
+    local Loolib_Comm = Loolib and Loolib.Comm
+    if Loolib_Comm and Loolib_Comm.GetMsgBudgetState then
+        local tokens, burst, coalesced = Loolib_Comm:GetMsgBudgetState()
+        L(format("  Send Budget: %.1f/%d tokens (coalesced: %d)",
+            tokens, burst, coalesced or 0))
+    end
+
+    -- Last N decode-failure entries with context — so next time decode errors
+    -- spike we can see cause (sender / reason / bytes) instead of just a count.
+    if commObj and commObj.GetDecodeErrorRing then
+        local ring = commObj:GetDecodeErrorRing()
+        if #ring > 0 then
+            L(format("  Recent Decode Errors (%d):", #ring))
+            for _, entry in ipairs(ring) do
+                L(format("    [%s] %s %s %db %s",
+                    date("%H:%M:%S", entry.ts),
+                    entry.reason or "?",
+                    entry.sender or "?",
+                    entry.bytes or 0,
+                    entry.distribution or "?"))
+            end
+        end
+    end
     Sep()
 
     -- Group

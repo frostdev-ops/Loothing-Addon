@@ -98,6 +98,31 @@ local commStats = {
     dropped = {},    -- [wireCode] = count
 }
 
+-- Decode error ring buffer — the last N failures from Protocol:Decode(), with
+-- context (sender, reason, bytes, timestamp). Lets /lt diag expose the CAUSE
+-- of decode errors instead of only a count. Bounded-size circular buffer.
+local DECODE_RING_SIZE = 20
+local decodeRing       = {}  -- array; [1..size] hold entries, wraps via decodeRingHead
+local decodeRingHead   = 1   -- 1-based index of the next slot to write
+local decodeRingCount  = 0   -- number of valid entries (<= DECODE_RING_SIZE)
+
+local function RecordDecodeFailure(sender, reason, bytes, distribution)
+    -- time() is wall-clock epoch seconds; GetTime() is session-relative and
+    -- would print as 1970 under date(). The diag panel formats this with
+    -- date("%H:%M:%S") so both values must agree on the "epoch" definition.
+    decodeRing[decodeRingHead] = {
+        ts           = time(),
+        sender       = sender or "?",
+        reason       = reason or "unknown",
+        bytes        = bytes or 0,
+        distribution = distribution or "?",
+    }
+    decodeRingHead = (decodeRingHead % DECODE_RING_SIZE) + 1
+    if decodeRingCount < DECODE_RING_SIZE then
+        decodeRingCount = decodeRingCount + 1
+    end
+end
+
 local function GetBatchKey(target, priority)
     return (target or "_broadcast") .. ":" .. (priority or "NORMAL")
 end
@@ -128,6 +153,35 @@ local CRITICAL_COMMANDS = {
     [Loothing.MsgType.RESPONSE_BATCH]      = true,
     [Loothing.MsgType.TRADABLE]            = true,
     [Loothing.MsgType.NON_TRADABLE]        = true,
+}
+
+--[[--------------------------------------------------------------------
+    Coalescable Commands (replace-in-queue for idempotent whole-state)
+
+    Commands listed here carry whole-state payloads where only the most
+    recent send matters. When a new outbound message for the same
+    (coalesceKey, target) is enqueued and an earlier send is still queued
+    but has not yet begun transmitting, the earlier item is marked
+    superseded and the drain will skip it. This keeps us inside WoW's
+    per-message-count send budget under request floods (e.g., 20 raiders
+    reload and each triggers an MLDB sync within the same second).
+
+    NOT listed here (must append, never supersede):
+    - ITEM_ADD / ITEM_REMOVE (session mutation, each adds distinct state)
+    - PLAYER_RESPONSE (per-item per-player response, each is distinct)
+    - VOTE_REQUEST / VOTE_CANCEL / VOTE_AWARD / VOTE_COMMIT / VOTE_RESULTS
+    - BATCH / RESPONSE_BATCH (aggregate content, already batched upstream)
+    - VOTE_POLL / RESPONSE_POLL (poll-at-time-T semantics)
+    - SESSION_START / SESSION_END (lifecycle transitions)
+    - TRADABLE / NON_TRADABLE (per-item notifications)
+----------------------------------------------------------------------]]
+local COALESCE_COMMANDS = {
+    [Loothing.MsgType.MLDB_BROADCAST]    = true,
+    [Loothing.MsgType.COUNCIL_ROSTER]    = true,
+    [Loothing.MsgType.OBSERVER_ROSTER]   = true,
+    [Loothing.MsgType.HEARTBEAT]         = true,
+    [Loothing.MsgType.SESSION_INIT]      = true,
+    [Loothing.MsgType.VERSION_RESPONSE]  = true,
 }
 
 --- Command → handler method name dispatch table
@@ -226,6 +280,30 @@ function CommMixin:GetBatchAccumulatorCount()
         count = count + 1
     end
     return count
+end
+
+--- Return a chronologically-ordered list (oldest first) of recent decode
+--- failures for /lt diag display. Bounded to DECODE_RING_SIZE entries.
+--- @return table[] - { { ts, sender, reason, bytes, distribution }, ... }
+function CommMixin:GetDecodeErrorRing()
+    local out = {}
+    if decodeRingCount == 0 then return out end
+
+    -- Read in chronological order. decodeRingHead points at the next-write
+    -- slot, so the oldest entry is at head when the ring is full, or at
+    -- index 1 when still filling. Walk `count` entries from the oldest.
+    local start
+    if decodeRingCount < DECODE_RING_SIZE then
+        start = 1
+    else
+        start = decodeRingHead  -- oldest: next overwrite target
+    end
+
+    for i = 0, decodeRingCount - 1 do
+        local idx = ((start - 1 + i) % DECODE_RING_SIZE) + 1
+        out[#out + 1] = decodeRing[idx]
+    end
+    return out
 end
 
 --[[--------------------------------------------------------------------
@@ -332,6 +410,15 @@ function CommMixin.Send(self, command, data, target, priority)
         return
     end
 
+    -- Compute a coalesceKey for idempotent whole-state messages so a fresh
+    -- send supersedes any prior copy still in the Loolib queue. WHISPERs include
+    -- the target so unicasts to different recipients don't collapse; broadcasts
+    -- key on the command alone. See COALESCE_COMMANDS above for the allowlist.
+    local coalesceKey = nil
+    if COALESCE_COMMANDS[command] then
+        coalesceKey = target and (command .. "|" .. target) or command
+    end
+
     local queued
     if target then
         -- Resolve target to its roster-canonical casing. Utils.NormalizeName
@@ -340,10 +427,12 @@ function CommMixin.Send(self, command, data, target, priority)
         -- non-canonical realm casing with "No player named 'X' is currently
         -- playing". The canonical form comes from the raid/party roster API.
         local whisperTarget = Utils.CanonicalizeGroupMemberName(target) or target
-        queued = Comm:SendCommMessage(Loothing.ADDON_PREFIX, encoded, "WHISPER", whisperTarget, prio)
+        queued = Comm:SendCommMessage(Loothing.ADDON_PREFIX, encoded, "WHISPER",
+            whisperTarget, prio, nil, nil, coalesceKey)
     else
         local channel = IsInRaid() and "RAID" or "PARTY"
-        queued = Comm:SendCommMessage(Loothing.ADDON_PREFIX, encoded, channel, nil, prio)
+        queued = Comm:SendCommMessage(Loothing.ADDON_PREFIX, encoded, channel,
+            nil, prio, nil, nil, coalesceKey)
     end
 
     -- Loolib.Comm returns false when it drops under queue pressure (BULK only
@@ -500,7 +589,15 @@ function CommMixin:SendGuild(command, data, priority)
         return
     end
 
-    local queued = Comm:SendCommMessage(Loothing.ADDON_PREFIX, encoded, "GUILD", nil, prio)
+    -- Guild channel supports coalescing on the same allowlist. VERSION_RESPONSE
+    -- broadcasts to guild often arrive as bursts (many clients requesting at once).
+    local coalesceKey = nil
+    if COALESCE_COMMANDS[command] then
+        coalesceKey = "GUILD|" .. command
+    end
+
+    local queued = Comm:SendCommMessage(Loothing.ADDON_PREFIX, encoded, "GUILD",
+        nil, prio, nil, nil, coalesceKey)
     if queued == false then
         commStats.dropped[command] = (commStats.dropped[command] or 0) + 1
         -- Parity with CommMixin.Send: emit OnMessageDropped so subscribers
@@ -544,10 +641,14 @@ end
 function CommMixin:OnMessage(message, distribution, sender)
     -- Decode message (msgID is nil for v3 senders — dedup key falls back to
     -- a content hash so a forged v3-formatted replay still dedups)
-    local version, command, data, msgID = ns.Protocol:Decode(message)
+    local version, command, data, msgID, failReason = ns.Protocol:Decode(message)
 
     if not version or not command then
-        Loothing:Debug("Failed to decode message from", sender)
+        -- Record a structured entry for /lt diag. Just counting errors leaves
+        -- us blind to whether 126 drops were from one spammer or a system-wide
+        -- corruption problem; the ring answers that next time.
+        RecordDecodeFailure(sender, failReason, message and #message or 0, distribution)
+        Loothing:Debug("Failed to decode message from", sender, "reason=" .. tostring(failReason))
         return
     end
 
@@ -695,12 +796,32 @@ function CommMixin:BroadcastSessionInit(sessionData)
     self:Send(Loothing.MsgType.SESSION_INIT, sessionData)
 end
 
-function CommMixin:BroadcastSessionStart(encounterID, encounterName, sessionID)
+--- Broadcast SESSION_START. Dirty-checks by sessionID to prevent duplicate
+--- steady-state broadcasts, but new raid members joining mid-session need
+--- the announcement — roster-driven callers MUST pass force=true because
+--- the cache is payload-only, not recipient-aware.
+--- @param encounterID number
+--- @param encounterName string
+--- @param sessionID string
+--- @param force boolean? - Bypass the dirty check (new-member audience)
+function CommMixin:BroadcastSessionStart(encounterID, encounterName, sessionID, force)
+    if not force and sessionID and self._lastSessionStartID == sessionID then
+        Loothing:Debug("BroadcastSessionStart skipped: sessionID", sessionID, "already announced")
+        return
+    end
+    self._lastSessionStartID = sessionID
+
     self:Send(Loothing.MsgType.SESSION_START, {
         encounterID = encounterID,
         encounterName = encounterName,
         sessionID = sessionID,
     })
+end
+
+--- Clear the SESSION_START dirty-check cache. Call when session ends so the
+--- next SessionStart goes out regardless.
+function CommMixin:InvalidateSessionStartCache()
+    self._lastSessionStartID = nil
 end
 
 --- Broadcast session end

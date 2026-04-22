@@ -358,7 +358,12 @@ function SyncMixin:HandleSyncRequest(data)
     end
 end
 
---- Flush all coalesced sync requests: gather state once, send to each requester
+--- Flush all coalesced sync requests: gather state once, send minimally.
+--- With ≥2 still-valid requesters, broadcast a single SYNC_DATA to the group
+--- instead of sending N WHISPERs. Non-requesters drop the broadcast in
+--- HandleSyncData's `syncInProgress` guard, so it's safe. This turns a
+--- 20-requester flood (previously 20 WHISPERs = 20 outbound messages, mostly
+--- throttled by WoW) into a single raid broadcast.
 function SyncMixin:FlushSyncRequests()
     self.syncCoalesceTimer = nil
 
@@ -367,18 +372,38 @@ function SyncMixin:FlushSyncRequests()
     local requesters = self.pendingSyncRequesters
     self.pendingSyncRequesters = nil
 
-    -- Gather state once for all requesters
-    local syncData = self:GatherSyncData()
-
-    local count = 0
+    -- Re-validate requesters; drop any that left during the coalesce window.
+    local validCount = 0
     for requester in pairs(requesters) do
-        -- Re-validate: requester may have left during the coalesce window
         if Utils.IsGroupMember(requester) then
-            Loothing.Comm:SendSyncData(syncData, requester)
-            count = count + 1
+            validCount = validCount + 1
+        else
+            requesters[requester] = nil
         end
     end
-    Loothing:Debug("Sync: flushed coalesced sync to", count, "requesters")
+
+    if validCount == 0 then
+        Loothing:Debug("Sync: coalesce flush — no valid requesters remain")
+        return
+    end
+
+    -- Gather state once for all requesters.
+    local syncData = self:GatherSyncData()
+
+    if validCount >= 2 then
+        -- Broadcast once; 2+ WHISPERs would cost 2+ against the message-count
+        -- budget. Receivers drop at the syncInProgress guard (Sync.lua:238).
+        Loothing.Comm:Send(Loothing.MsgType.SYNC_DATA, syncData, nil)
+        Loothing:Debug("Sync: broadcast coalesced sync_data to group,",
+            validCount, "requesters satisfied by 1 send")
+    else
+        -- Single requester: WHISPER preserves targeted semantics (no extra
+        -- raid members spend CPU decoding and guard-dropping).
+        for requester in pairs(requesters) do
+            Loothing.Comm:SendSyncData(syncData, requester)
+        end
+        Loothing:Debug("Sync: whisper sync_data to 1 requester")
+    end
 end
 
 --- Gather current session state for sync (full reconnect packet)
@@ -544,8 +569,41 @@ end
     Observer Roster Sync
 ----------------------------------------------------------------------]]
 
---- Broadcast observer roster to raid (ML-only)
-function SyncMixin:BroadcastObserverRoster()
+--- Compute a cheap stable signature of a roster-like table for dirty-tracking.
+--- Recurses one level into observer sublists but hashes to a flat string so
+--- equal payloads compare equal. Sorted keys for stability across iterations.
+local function rosterSignature(tbl)
+    if type(tbl) ~= "table" then return tostring(tbl) end
+    local keys = {}
+    for k in pairs(tbl) do keys[#keys + 1] = tostring(k) end
+    table.sort(keys)
+    local parts = {}
+    for _, k in ipairs(keys) do
+        local v = tbl[k]
+        if type(v) == "table" then
+            -- One-level-deep concat (enough for roster rows of {name, rank, ...})
+            local subkeys = {}
+            for sk in pairs(v) do subkeys[#subkeys + 1] = tostring(sk) end
+            table.sort(subkeys)
+            local sub = {}
+            for _, sk in ipairs(subkeys) do
+                sub[#sub + 1] = sk .. "=" .. tostring(v[sk])
+            end
+            parts[#parts + 1] = k .. ":{" .. table.concat(sub, ",") .. "}"
+        else
+            parts[#parts + 1] = k .. "=" .. tostring(v)
+        end
+    end
+    return table.concat(parts, "|")
+end
+
+--- Broadcast observer roster to raid (ML-only). Skips send when payload is
+--- unchanged from the previous broadcast — prevents ObserverManager's multiple
+--- add/remove paths from firing back-to-back identical broadcasts.
+--- @param force boolean? - Bypass the dirty check (new raid audience, member
+---   join). Callers pushing state to a fresh audience MUST pass force=true
+---   because the signature check is payload-only, not recipient-aware.
+function SyncMixin:BroadcastObserverRoster(force)
     if not Loothing.Session or not Loothing.Session:IsMasterLooter() then return end
     if not Loothing.Observer then return end
 
@@ -555,6 +613,14 @@ function SyncMixin:BroadcastObserverRoster()
         openObservation = Loothing.Settings and Loothing.Settings:GetOpenObservation() or false,
         mlIsObserver = Loothing.Settings and Loothing.Settings:GetMLIsObserver() or false,
     }
+
+    local sig = rosterSignature(data)
+    if not force and self._lastObserverSig == sig then
+        Loothing:Debug("ObserverRoster broadcast skipped: unchanged")
+        return
+    end
+    self._lastObserverSig = sig
+
     Loothing.Comm:Send(Loothing.MsgType.OBSERVER_ROSTER, data)
 end
 
@@ -574,13 +640,34 @@ end
     Council Roster Sync
 ----------------------------------------------------------------------]]
 
---- Sync council roster to raid
-function SyncMixin:BroadcastCouncilRoster()
+--- Sync council roster to raid. Skips send when member list is unchanged
+--- from previous broadcast — CouncilMembers can fire BroadcastCouncilRoster
+--- repeatedly on roster-unchanged events (e.g., spec updates that didn't
+--- actually modify membership).
+--- @param force boolean? - Bypass the dirty check (new raid audience, member
+---   join). The signature check is payload-only; callers pushing state to a
+---   fresh audience MUST pass force=true.
+function SyncMixin:BroadcastCouncilRoster(force)
     if not (Loothing.Session and Loothing.Session:IsMasterLooter()) then return end
     if not Loothing.Council then return end
 
     local members = Loothing.Council:GetAllMembers()
+
+    local sig = rosterSignature(members or {})
+    if not force and self._lastCouncilSig == sig then
+        Loothing:Debug("CouncilRoster broadcast skipped: unchanged")
+        return
+    end
+    self._lastCouncilSig = sig
+
     Loothing.Comm:BroadcastCouncilRoster(members)
+end
+
+--- Clear broadcast dirty-check caches. Call on session end / ML handoff / new
+--- group so the next broadcast unconditionally sends to the fresh audience.
+function SyncMixin:InvalidateBroadcastCaches()
+    self._lastCouncilSig  = nil
+    self._lastObserverSig = nil
 end
 
 --- Handle received council roster

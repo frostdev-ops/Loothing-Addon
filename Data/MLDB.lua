@@ -434,9 +434,14 @@ end
 ----------------------------------------------------------------------]]
 
 --- Broadcast settings to raid
--- Only the ML should call this.
--- @param force boolean? - Skip IsML check (used during ML reassignment where
---   the caller has already verified authority but IsML() would re-evaluate)
+-- Only the ML should call this. Skips the actual send if the compressed
+-- payload is identical to the last broadcast — settings UIs often call this
+-- reflexively on any change, and sending the same state 10× in 30 seconds
+-- wastes WoW's per-message channel budget. Queue-level coalesce (Loolib) is
+-- a second-line defense; this is the primary dirty check.
+-- @param force boolean? - Skip IsML check AND dirty check (used during ML
+--   reassignment where the caller has already verified authority, and where
+--   the same-payload case legitimately needs to go out to the new raid).
 function MLDBMixin:BroadcastToRaid(force)
     if not force and not self:IsML() then
         Loothing:Debug("Only ML can broadcast MLDB")
@@ -462,6 +467,18 @@ function MLDBMixin:BroadcastToRaid(force)
         return
     end
 
+    -- Dirty-track: skip send when nothing has changed. `compressed` is a
+    -- TABLE (key-replacement output), so `==` would be identity-only and
+    -- always false. Serialize to a deterministic string for content equality.
+    -- Equal serialized bytes mean no new information for recipients. Force
+    -- bypasses (fresh raid audience or post-ML-reassignment resend).
+    local serialized = Loolib.Serializer and Loolib.Serializer:Serialize(compressed)
+    if not force and serialized and self._lastBroadcastSerialized == serialized then
+        Loothing:Debug("MLDB broadcast skipped: payload unchanged")
+        return
+    end
+    self._lastBroadcastSerialized = serialized
+
     -- Send to raid
     Loothing.Comm:BroadcastMLDB(compressed)
 
@@ -469,6 +486,12 @@ function MLDBMixin:BroadcastToRaid(force)
     self:TriggerEvent("OnMLDBBroadcast", settings)
 
     Loothing:Debug("Broadcast MLDB to raid")
+end
+
+--- Clear the MLDB broadcast dirty-check cache. Call on session end / ML
+--- handoff / roster change so the next BroadcastToRaid unconditionally sends.
+function MLDBMixin:InvalidateBroadcastCache()
+    self._lastBroadcastSerialized = nil
 end
 
 --[[--------------------------------------------------------------------
@@ -739,10 +762,14 @@ function MLDBMixin:Get()
 end
 
 --- Clear MLDB (called on session end or StopHandleLoot)
--- Restores non-ML client settings from the pre-session snapshot.
+-- Restores non-ML client settings from the pre-session snapshot. Also clears
+-- the broadcast dirty-check cache so the next BroadcastToRaid is authoritative
+-- for whatever audience follows (new raid, ML re-acquisition, etc.) — the
+-- cache must not outlive the ML-state transition it was built against.
 function MLDBMixin:Clear()
     self.mldb = nil
     self.recentMLDBSenders = {}
+    self._lastBroadcastSerialized = nil
     self:RestoreSettings()
 end
 

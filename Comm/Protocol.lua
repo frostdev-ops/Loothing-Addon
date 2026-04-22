@@ -146,18 +146,22 @@ end
 --- Decode a received message
 -- Pipeline: DecodeForAddonChannel → split checksum → Decompress → verify → Deserialize
 -- @param encoded string - Encoded message from Loolib.Comm callback
--- @return number|nil, string|nil, table|nil, number|nil - version, command, data, msgID
---   msgID is nil when sender uses protocol v3 (no replay protection for legacy peers)
+-- @return number|nil, string|nil, table|nil, number|nil, string|nil
+--   version, command, data, msgID, failReason.
+--   msgID is nil when sender uses protocol v3 (no replay protection for legacy peers).
+--   failReason is one of: "empty", "too_short", "decompress", "checksum",
+--   "deserialize", or nil on success. Callers use this for diagnostic
+--   instrumentation (e.g., /lt diag decode ring).
 function ProtocolMixin:Decode(encoded)
     if not encoded or encoded == "" then
-        return nil, nil, nil, nil
+        return nil, nil, nil, nil, "empty"
     end
 
     -- Step 1: Decode from addon channel encoding
     local withChecksum = self.Compressor:DecodeForAddonChannel(encoded)
     if not withChecksum or #withChecksum < 5 then
         -- Need at least 4 bytes checksum + 1 byte compressed data
-        return nil, nil, nil, nil
+        return nil, nil, nil, nil, "too_short"
     end
 
     -- Step 2: Split off the 4-byte checksum appended at the end
@@ -168,7 +172,7 @@ function ProtocolMixin:Decode(encoded)
     local decompressed, success = self.Compressor:Decompress(compressedPart)
     if not success or not decompressed then
         self.decodeErrors = (self.decodeErrors or 0) + 1
-        return nil, nil, nil, nil
+        return nil, nil, nil, nil, "decompress"
     end
 
     -- Step 4: Verify Adler-32 integrity (computed on decompressed = serialized)
@@ -177,7 +181,7 @@ function ProtocolMixin:Decode(encoded)
         self.checksumFailures = (self.checksumFailures or 0) + 1
         Loothing:Debug("Protocol: Adler-32 mismatch — message may be corrupt",
             string.format("(stored=0x%08X actual=0x%08X)", storedChecksum, actualChecksum))
-        return nil, nil, nil, nil
+        return nil, nil, nil, nil, "checksum"
     end
 
     -- Step 5: Deserialize back to Lua values
@@ -185,10 +189,10 @@ function ProtocolMixin:Decode(encoded)
     local ok, version, command, msgData, msgID = self.Serializer:Deserialize(decompressed)
     if not ok then
         self.decodeErrors = (self.decodeErrors or 0) + 1
-        return nil, nil, nil, nil
+        return nil, nil, nil, nil, "deserialize"
     end
 
-    return version, command, msgData, msgID
+    return version, command, msgData, msgID, nil
 end
 
 --[[--------------------------------------------------------------------
