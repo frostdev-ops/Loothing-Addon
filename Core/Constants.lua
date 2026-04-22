@@ -8,7 +8,7 @@ local _, ns = ...
 local Loothing = ns.Addon
 
 -- Addon info
-Loothing.VERSION = "2.0.26"
+Loothing.VERSION = "2.0.27"
 Loothing.PROTOCOL_VERSION = 4
 -- Minimum accepted protocol version on receive. v2 and earlier predate the
 -- current serializer/compressor pipeline and cannot be parsed safely; v3
@@ -284,7 +284,7 @@ Loothing.DefaultSettings = {
     --   v4 = 2.0.20 configurable loot filter (loot.filter.* namespace
     --        seeded from the old hardcoded BLACKLISTED_ITEM_CLASSES
     --        and Loothing.MinQuality)
-    schemaVersion = 4,
+    schemaVersion = 5,
 
     council = {
         members = {},

@@ -293,11 +293,168 @@ local function migrateV4(profile)
     end
 end
 
+--[[--------------------------------------------------------------------
+    migrateV5: idempotent cleanup of stale keys from earlier migrations.
+
+    Over iterations of v2.x some profiles ended up with BOTH the old key
+    and the new key populated (e.g., `settings.sessionTriggerAction="auto"`
+    alongside `session.triggerAction="prompt"`). Readers use the new key,
+    but settings exporters / pretty-printers / debug dumps confuse users
+    by showing the stale value. migrateV2 was supposed to wipe
+    `profile.settings` entirely after copying, but a pcall failure or an
+    intermediate write between schema bumps left some profiles in the
+    half-migrated state.
+
+    Also purges test-mode council members — they end up persisted when
+    a user enables Test Mode, adds synthetic players, then disables Test
+    Mode without cleaning up. The `isTestMode` flag on each row is
+    authoritative; we just remove every row that carries it.
+
+    Sources dropped:
+      settings.*             -> nil (fully superseded by category namespaces)
+      ui.*                   -> nil (fully superseded by frame.*)
+      historySettings.*      -> nil (fully superseded by history.*)
+      ml.onlyUseInRaids      -> nil (superseded by ml.scope in migrateV2)
+      ml.allowOutOfRaid      -> nil (same)
+      voting.hideVotes       -> nil (superseded by voting.privacy)
+      voting.anonymousVoting -> nil (same)
+      voting.observe         -> nil (observers.openObservation is canonical)
+      council members with isTestMode=true -> removed
+----------------------------------------------------------------------]]
+local function migrateV5(profile)
+    -- Dead namespaces — superseded in v2 but may have survived a partial
+    -- migration run. Null only if empty / fully migrated; if somehow a
+    -- user has data only in the OLD key, preserve it for forensics rather
+    -- than silently discard.
+    if type(profile.settings) == "table" then
+        -- Legacy keys that are now guaranteed to have new-key counterparts
+        -- populated (by migrateV2 if it ran, or by default-fill). Nil them.
+        profile.settings.sessionTriggerAction   = nil
+        profile.settings.sessionTriggerTiming   = nil
+        profile.settings.sessionTriggerRaid     = nil
+        profile.settings.sessionTriggerDungeon  = nil
+        profile.settings.sessionTriggerOpenWorld = nil
+        profile.settings.sessionTriggerMode     = nil  -- deleted entirely in migrateV2
+        profile.settings.groupLootMode          = nil
+        profile.settings.autoGroupLootGuildOnly = nil
+        profile.settings.votingMode             = nil
+        profile.settings.votingTimeout          = nil
+        profile.settings.autoTrade              = nil
+        profile.settings.uiScale                = nil
+        profile.settings.mainFramePosition      = nil
+        profile.settings.showMinimapButton      = nil
+        profile.settings.autoStartSession       = nil  -- superseded by session.triggerAction
+        -- If settings is now empty (all cleaned), drop it entirely.
+        if next(profile.settings) == nil then
+            profile.settings = nil
+        end
+    end
+
+    if type(profile.ui) == "table" then
+        profile.ui.showMinimapButton  = nil
+        profile.ui.minimapButtonAngle = nil
+        if next(profile.ui) == nil then profile.ui = nil end
+    end
+
+    -- historySettings: docblock promises cleanup here; migrateV2 would have
+    -- copied these to profile.history.* and nilled profile.historySettings,
+    -- but a partial-migration run can leave it behind. Drop the subkeys only
+    -- if their target (profile.history.X) is already populated — preserve
+    -- orphan data as forensic if history.* is still nil.
+    if type(profile.historySettings) == "table" then
+        local hs = profile.historySettings
+        profile.history = profile.history or {}
+        local h = profile.history
+        if h.share == nil and (hs.sendHistory ~= nil or hs.sendToGuild ~= nil) then
+            if hs.sendHistory == true and hs.sendToGuild == true then
+                h.share = "guild"
+            elseif hs.sendHistory == true then
+                h.share = "group"
+            else
+                h.share = "off"
+            end
+        end
+        if h.enabled        == nil and hs.enabled        ~= nil then h.enabled        = hs.enabled end
+        if h.savePersonalLoot == nil and hs.savePersonalLoot ~= nil then h.savePersonalLoot = hs.savePersonalLoot end
+        if h.maxEntries     == nil and hs.maxEntries     ~= nil then h.maxEntries     = hs.maxEntries end
+        if h.autoExportWeb  == nil and hs.autoExportWeb  ~= nil then h.autoExportWeb  = hs.autoExportWeb end
+        profile.historySettings = nil
+    end
+
+    if type(profile.ml) == "table" then
+        -- If migrateV2 never derived ml.scope (e.g., it threw and the
+        -- pcall isolator bailed before the derivation), recompute it now
+        -- BEFORE nilling the legacy fields. Otherwise nilling loses the
+        -- signal and the profile silently falls to the "raids_only"
+        -- default at the Settings:Get site.
+        if profile.ml.scope == nil then
+            if profile.ml.allowOutOfRaid == true then
+                profile.ml.scope = "anywhere"
+            elseif profile.ml.onlyUseInRaids == false then
+                profile.ml.scope = "raids_and_dungeons"
+            elseif profile.ml.onlyUseInRaids ~= nil or profile.ml.allowOutOfRaid ~= nil then
+                -- Legacy flags present but both default — use "raids_only"
+                profile.ml.scope = "raids_only"
+            end
+            -- If both legacy flags are nil, leave scope nil so Settings:Get
+            -- falls back to the default. Don't invent a value.
+        end
+        profile.ml.onlyUseInRaids = nil
+        profile.ml.allowOutOfRaid = nil
+    end
+
+    if type(profile.voting) == "table" then
+        -- Same pattern: derive voting.privacy before nilling legacy fields.
+        if profile.voting.privacy == nil then
+            if profile.voting.anonymousVoting == true then
+                profile.voting.privacy = "anonymous"
+            elseif profile.voting.hideVotes == true then
+                profile.voting.privacy = "hide_counts"
+            elseif profile.voting.anonymousVoting ~= nil or profile.voting.hideVotes ~= nil then
+                profile.voting.privacy = "open"
+            end
+        end
+        profile.voting.hideVotes       = nil
+        profile.voting.anonymousVoting = nil
+        profile.voting.observe         = nil
+    end
+
+    -- Additional legacy keys from migrateV3 / removed-feature cleanups.
+    if type(profile.winnerDetermination) == "table" then
+        profile.winnerDetermination.requireConfirmation = nil
+    end
+    if type(profile.autoAward) == "table" then
+        profile.autoAward.reason = nil
+    end
+    profile.buttonSets = nil  -- superseded by responseSets
+
+    -- Test-mode council members: purge. These land in the profile when a
+    -- user runs /lt test council or the equivalent UI. Without cleanup
+    -- they bleed into real sessions as phantom voters.
+    if type(profile.council) == "table" then
+        -- Council rows may live under `members` or directly as array entries;
+        -- handle both shapes defensively.
+        local function purgeTestRows(list)
+            if type(list) ~= "table" then return end
+            -- Walk backwards so removals don't disturb iteration indices.
+            for i = #list, 1, -1 do
+                local row = list[i]
+                if type(row) == "table" and row.isTestMode then
+                    table.remove(list, i)
+                end
+            end
+        end
+        purgeTestRows(profile.council)
+        purgeTestRows(profile.council.members)
+    end
+end
+
 --- All migration functions, indexed by the target schemaVersion.
 local migrations = {
     [2] = migrateV2,
     [3] = migrateV3,
     [4] = migrateV4,
+    [5] = migrateV5,
 }
 
 --- Run all pending migrations on a SavedVariables store.

@@ -1,6 +1,22 @@
 --[[--------------------------------------------------------------------
     Loothing - Group Loot Events
     Event registration and roll handling entry point.
+
+    WoW 12.0 event landscape for loot rolls:
+      START_LOOT_ROLL (rollID, rollTime)       — roll window opens
+      LOOT_ITEM_ROLL_WON (itemLink, qty, ...)  — winner's client only, fires
+                                                 at ~T+30s when roll resolves
+      ENCOUNTER_LOOT_RECEIVED                  — personal loot ONLY; does NOT
+                                                 fire for group-loot wins
+                                                 (BossBannerToast.lua:183 is
+                                                  the sole Blizzard consumer)
+
+    Key insight: group-loot wins arrive in the ML's bag ~30s after
+    ENCOUNTER_END (the roll window equals our old bag-scan window, so the
+    scan consistently raced the delivery). LOOT_ITEM_ROLL_WON fires on the
+    winner's client the moment the roll resolves — feeding straight into
+    the session buffer avoids the 30s timing race and the link-drift bugs
+    in bag-slot matching.
 ----------------------------------------------------------------------]]
 
 local _, ns = ...
@@ -18,25 +34,112 @@ ns.GroupLootRoll = ns.GroupLootRoll or {}
 local GroupLootMixin = ns.GroupLootMixin
 local GroupLootRoll = ns.GroupLootRoll
 
---- Enable the group loot handler.
--- Registers for START_LOOT_ROLL event (setting controls actual behavior)
+--- Enable the group loot handler. Registers for:
+---   START_LOOT_ROLL      — drives auto-roll behavior
+---   LOOT_ITEM_ROLL_WON   — drives ML-self item detection (fires on winner)
 function GroupLootMixin:Enable()
     if not self.eventFrame then
         self.eventFrame = CreateFrame("Frame")
         self.eventFrame:SetScript("OnEvent", function(_, event, ...)
             if event == "START_LOOT_ROLL" then
                 self:OnStartLootRoll(event, ...)
+            elseif event == "LOOT_ITEM_ROLL_WON" then
+                self:OnLootItemRollWon(event, ...)
             end
         end)
     end
 
     self.eventFrame:RegisterEvent("START_LOOT_ROLL")
+    self.eventFrame:RegisterEvent("LOOT_ITEM_ROLL_WON")
 end
 
 --- Disable the group loot handler.
 function GroupLootMixin:Disable()
     if self.eventFrame then
         self.eventFrame:UnregisterEvent("START_LOOT_ROLL")
+        self.eventFrame:UnregisterEvent("LOOT_ITEM_ROLL_WON")
+    end
+end
+
+--- Handle LOOT_ITEM_ROLL_WON event — fires on the winning client the moment
+--- a group-loot roll resolves (typically ~30s after START_LOOT_ROLL, i.e.
+--- right at the edge of the post-encounter bag-scan window).
+---
+--- This is the authoritative event for "you just won a group-loot item";
+--- the itemLink is already in the payload, the item is landing in the bag
+--- right now, and we don't have to scan bags or guess trade time. When the
+--- winning client is the ML (or has handleLoot=true), route the win into
+--- the session pipeline directly via HandleTradable's self-loopback shape.
+---
+--- @param _event string
+--- @param itemLink string - Full hyperlink of the won item
+--- @param rollQuantity number - 1 for most items; >1 for stackables
+--- @param rollType number - 1=NEED, 2=GREED, 4=TRANSMOG (matches GroupLootRoll)
+--- @param roll number - The roll value the player got
+--- @param _upgraded any - Upgrade-track / bonus info (unused here)
+function GroupLootMixin:OnLootItemRollWon(_event, itemLink, rollQuantity, rollType, roll, _upgraded)
+    if not itemLink or itemLink == "" then return end
+
+    -- Gate: we only care when this client is acting as ML and is handling
+    -- loot. Non-ML wins (e.g., legendary rolls where Loothing deliberately
+    -- stays out, or quality-gated items below threshold) remain the user's
+    -- personal drop and should not enter a council session.
+    local isML = Loothing.handleLoot and (Loothing.isMasterLooter
+        or (Loothing.Session and Loothing.Session:IsMasterLooter())
+        or (Loothing.IsCanonicalML and Loothing:IsCanonicalML()))
+    if not isML then
+        Loothing:Debug("LOOT_ITEM_ROLL_WON: not ML/handleLoot, ignoring",
+            itemLink, "(roll", tostring(roll) .. ")")
+        return
+    end
+
+    local session = Loothing.Session
+    if not session then return end
+
+    Loothing:Debug("LOOT_ITEM_ROLL_WON: ML win via rollType", tostring(rollType),
+        itemLink, "(roll", tostring(roll) .. ")")
+
+    -- Route through the canonical buffer-or-add pathway so item flow is
+    -- identical to a bag-scan discovery: HandleTradable dedupes, adds to
+    -- active session (with batching) if one exists, else buffers for the
+    -- picker. playerName = self — this is our own win.
+    --
+    -- timeRemaining=0 is harmless: the buffer path (inactive session) does
+    -- not read it; the active-session path stores it on the item and a
+    -- subsequent bag scan will update it once the tooltip resolver reads
+    -- the trade line.
+    --
+    -- Derive itemID once so HandleTradable's matcher can hit the identity
+    -- branch (rather than falling back to raw-link equality which is
+    -- unreliable for post-roll links). C_Item.GetItemInfoInstant is
+    -- synchronous and cache-warm immediately after LOOT_ITEM_ROLL_WON.
+    local itemID
+    if C_Item and C_Item.GetItemInfoInstant then
+        itemID = C_Item.GetItemInfoInstant(itemLink)
+    end
+
+    local ok, err = pcall(session.HandleTradable, session, {
+        itemLink      = itemLink,
+        itemID        = itemID,
+        timeRemaining = 0,
+        playerName    = Utils.GetPlayerFullName(),
+        rollType      = rollType,
+        quantity      = rollQuantity,
+        source        = "roll_won",       -- diagnostic breadcrumb
+    })
+    if not ok then
+        Loothing:Error("LOOT_ITEM_ROLL_WON: HandleTradable threw for",
+            itemLink, "err=", tostring(err),
+            "— falling back to bag-scan backstop (60s window)")
+        return
+    end
+
+    -- Seed the bag-scan dedup table so the post-encounter ticker doesn't
+    -- re-buffer this item when it finds the same itemID in the bag on the
+    -- next tick. Without this, the ML would see two picker rows for a
+    -- single roll win (one from the event, one from the next bag scan).
+    if itemID and session.reportedTradeableItems then
+        session.reportedTradeableItems[itemID] = true
     end
 end
 

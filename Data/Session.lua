@@ -142,7 +142,7 @@ function SessionMixin:Init()
 
     -- Post-encounter bag scanner (RCLC-style distributed item collection)
     self.bagScanTimer = nil
-    self.reportedTradeableItems = {}  -- { [itemLink] = true } dedup
+    self.reportedTradeableItems = {}  -- { [itemID] = true } dedup (was keyed by itemLink pre-2.0.27)
     self.preEncounterBagSnapshot = {} -- { [itemLink] = count } taken at ENCOUNTER_START
 
     -- Legacy aliases (kept for any external reads)
@@ -318,21 +318,37 @@ function SessionMixin:HandleTradable(data)
     local playerName = data.playerName
     local isML = self:IsMasterLooter() or (Loothing.handleLoot and Loothing.isMasterLooter)
 
-    -- Try to match an existing item first (update tradability)
+    -- Try to match an existing item first (update tradability). Identity
+    -- checks are in increasing-cost order: GUID (cheapest, most specific)
+    -- → itemID+looter → raw link equality fallback. The raw-link fallback
+    -- is unreliable for group-loot wins because bonusIDs drift between
+    -- the ENCOUNTER_LOOT_RECEIVED / LOOT_ITEM_ROLL_WON payload and the
+    -- bag-slot's canonicalized link, so we derive itemID from the link
+    -- if the caller didn't pass one and prefer that over link equality.
+    local itemID = data.itemID
+    if not itemID and itemLink then
+        itemID = C_Item and C_Item.GetItemInfoInstant
+            and C_Item.GetItemInfoInstant(itemLink)
+            or nil
+    end
+
     local matched = nil
     if self:IsActive() then
         if data.guid then
             matched = self:GetItemByGUID(data.guid)
         end
-        if not matched and data.itemID then
+        if not matched and itemID then
             for _, item in self.items:Enumerate() do
-                if item.itemID == data.itemID and playerName and Utils.IsSamePlayer(item.looter, playerName) then
+                if item.itemID == itemID and playerName and Utils.IsSamePlayer(item.looter, playerName) then
                     matched = item
                     break
                 end
             end
         end
         if not matched then
+            -- Raw-link fallback for legacy callers that don't surface itemID
+            -- and items added pre-2.0.27 that lack item.itemID. Kept as last
+            -- resort; primary match is via itemID above.
             for _, item in self.items:Enumerate() do
                 if item.itemLink == itemLink and (not playerName or Utils.IsSamePlayer(item.looter, playerName)) then
                     matched = item
@@ -2112,25 +2128,42 @@ function SessionMixin:OnEncounterStart()
     -- Stop any in-progress bag scan from previous encounter
     self:StopPostEncounterBagScan()
 
+    -- Reset the per-encounter "already reported" dedup. Normally
+    -- StartPostEncounterBagScan wipes this at the NEXT ENCOUNTER_END, but
+    -- if the prior encounter was a wipe (success ~= 1), OnEncounterEnd
+    -- bailed before scheduling the scan — and any entries from an even
+    -- earlier kill would persist into this next kill, silently skipping
+    -- legitimate re-drops. Wipe here as well to guarantee a clean slate
+    -- per fresh encounter.
+    wipe(self.reportedTradeableItems)
+
     -- Snapshot current bag contents so post-encounter scan can distinguish
     -- newly looted items from old inventory still in the trade window.
     self:SnapshotBags()
 end
 
---- Take a snapshot of all tradeable item links currently in bags.
--- Used to diff against post-encounter scan to find only NEW items.
+--- Take a snapshot of items currently in bags, keyed by itemID (not raw
+--- link). Post-encounter group-loot wins arrive with bonusID-augmented
+--- links that do NOT string-match the pre-encounter version of the same
+--- base item, so a link-keyed snapshot would classify every post-roll
+--- delivery as "new" (or fail to dedup correctly across scan ticks). The
+--- canonical identity is itemID, resolved once via GetItemInfoInstant.
+--- Map value is the count, so a stacked consumable going from 5→6
+--- still registers as +1 new drop.
 function SessionMixin:SnapshotBags()
     wipe(self.preEncounterBagSnapshot)
     for bag = 0, NUM_BAG_SLOTS do
         local numSlots = C_Container.GetContainerNumSlots(bag)
         for slot = 1, numSlots or 0 do
-            local itemLink = C_Container.GetContainerItemLink(bag, slot)
-            if itemLink then
-                self.preEncounterBagSnapshot[itemLink] = (self.preEncounterBagSnapshot[itemLink] or 0) + 1
+            local itemID = C_Container.GetContainerItemID(bag, slot)
+            if itemID then
+                self.preEncounterBagSnapshot[itemID] = (self.preEncounterBagSnapshot[itemID] or 0) + 1
             end
         end
     end
-    Loothing:Debug("BagSnapshot: captured", next(self.preEncounterBagSnapshot) and "items" or "empty bags")
+    local keyCount = 0
+    for _ in pairs(self.preEncounterBagSnapshot) do keyCount = keyCount + 1 end
+    Loothing:Debug("BagSnapshot: captured", keyCount, "unique itemIDs")
 end
 
 --[[--------------------------------------------------------------------
@@ -2315,9 +2348,17 @@ function SessionMixin:StartPostEncounterBagScan()
     wipe(self.reportedTradeableItems)
 
     local scanCount = 0
-    local maxScans = 15  -- 15 scans × 2s = 30s window
+    -- 30 scans × 2s = 60s window. The previous 30s window exactly matched
+    -- WoW's default group-loot roll timer, so items delivered immediately
+    -- after the roll closed (T+30-33s) arrived AFTER the final scan tick
+    -- at T+29s. 60s covers the full roll-resolution + bag-delivery latency
+    -- with margin. The LOOT_ITEM_ROLL_WON hook in GroupLootEvents.lua
+    -- catches items the moment the roll resolves; this scan is the
+    -- backstop for items won by raiders without Loothing or items that
+    -- somehow bypass the event (e.g., trade-award transfers).
+    local maxScans = 30
 
-    Loothing:Debug("BagScan: starting post-encounter scan")
+    Loothing:Debug("BagScan: starting post-encounter scan (60s window)")
 
     self.bagScanTimer = C_Timer.NewTicker(2, function()
         scanCount = scanCount + 1
@@ -2348,8 +2389,20 @@ function SessionMixin:StopPostEncounterBagScan()
     end
 end
 
---- Scan all bags for NEW tradeable items and report them via TRADABLE comm.
--- Compares against the pre-encounter snapshot to exclude old inventory.
+--- Scan all bags for NEW tradeable items and either (ML) add them to the
+--- session buffer or (non-ML) broadcast TRADABLE to the ML.
+---
+--- Identity by itemID, not raw itemLink: group-loot wins arrive with
+--- bonusID-augmented links that do not string-match the pre-encounter
+--- snapshot's link for the same base item. Keying on itemID makes the
+--- diff, dedup, and trade-time lookup robust against that drift.
+---
+--- Non-ML TRADABLE gating: when the MLDB signals the raid is using
+--- Loothing's group-loot auto-roll (ML auto-NEEDs, non-ML auto-PASS),
+--- non-ML raiders win essentially nothing, so sending TRADABLE from their
+--- bags is pure channel noise — the ML's LOOT_ITEM_ROLL_WON hook + their
+--- own bag scan catch all wins directly. We suppress TRADABLE sends from
+--- non-ML clients in that mode.
 function SessionMixin:ScanBagsForTradeableItems()
     if not IsInGroup() then return end
     if not Loothing.Comm then return end
@@ -2357,142 +2410,143 @@ function SessionMixin:ScanBagsForTradeableItems()
     local TradeQueue = Loothing.TradeQueue
     if not TradeQueue then return end
 
-    -- Build a count of current bag contents to diff against snapshot
-    local currentBags = {}
+    -- First pass: walk every bag slot once. Build an aggregate count
+    -- keyed by itemID and remember one (bag, slot, link) exemplar per
+    -- itemID so we can look up trade time and report the full link.
+    -- A later discovery slot overwrites — acceptable because the trade
+    -- time is read from the slot we store last (most recently seen).
+    local currentCounts = {}
+    local exemplar = {}  -- exemplar[itemID] = { bag, slot, link }
     for bag = 0, NUM_BAG_SLOTS do
         local numSlots = C_Container.GetContainerNumSlots(bag)
         for slot = 1, numSlots or 0 do
-            local itemLink = C_Container.GetContainerItemLink(bag, slot)
-            if itemLink then
-                currentBags[itemLink] = (currentBags[itemLink] or 0) + 1
+            local itemID = C_Container.GetContainerItemID(bag, slot)
+            if itemID then
+                currentCounts[itemID] = (currentCounts[itemID] or 0) + 1
+                exemplar[itemID] = exemplar[itemID] or {
+                    bag  = bag,
+                    slot = slot,
+                    link = C_Container.GetContainerItemLink(bag, slot),
+                }
             end
         end
     end
 
     -- In `prompt` mode the ML's Loot Picker is the canonical override
-    -- gate — the bag scan must surface EVERY new tradeable so the picker
-    -- has a complete list, including BoEs, low-quality drops, ignored
-    -- items, and class-blocked items (consumables, reagents, etc.). Each
-    -- of those still gets a "BLOCKED" chip in the picker with its reason,
-    -- so the ML can opt them in per-kill. `auto` and `manual` retain the
-    -- pre-2.0.20 behavior of silently dropping filter rejections.
-    --
-    -- Note: this honors the LOCAL client's triggerAction. If the ML uses
-    -- prompt mode but a candidate's setting is auto, that candidate's bag
-    -- scan still filters before TRADABLE is sent. Universal prompt-mode
-    -- coverage requires the whole raid to share the setting; document
-    -- this in release notes and revisit by broadcasting MLDB-side later.
+    -- gate — the bag scan surfaces EVERY new tradeable so the picker has
+    -- a complete list (BoE, low-quality, ignored, class-blocked all get
+    -- a "BLOCKED" chip for per-kill opt-in). `auto` and `manual` retain
+    -- pre-2.0.20 silent filter-rejection behavior.
     local triggerAction = (Loothing.Settings and Loothing.Settings:GetSessionTriggerAction())
         or "auto"
     local enforceFilters = (triggerAction ~= "prompt")
 
-    -- Find items that are NEW since the pre-encounter snapshot.
-    -- Each filter rejection emits a TraceLoot line so the failing gate is
-    -- visible in /lt debug output — silent drops are the primary debug
-    -- blocker for "items never auto-add" bug reports.
+    -- Pre-compute ML authority + non-ML TRADABLE gating flags once.
+    local isML = self:IsMasterLooter()
+        or (Loothing.handleLoot and Loothing.isMasterLooter)
+        or (Loothing.IsCanonicalML and Loothing:IsCanonicalML())
+
+    -- TRADABLE-suppression gate for non-ML clients. Suppress when:
+    --   1. We are NOT the ML (we have no self-loopback path to use), AND
+    --   2. The ML's MLDB says it's actively handling loot, AND
+    --   3. Group loot mode is "active" (auto-roll) — meaning non-ML
+    --      clients auto-pass and don't win items, so TRADABLE from
+    --      them is pure channel noise.
+    --
+    -- When this gate closes we skip the TRADABLE send entirely. The ML
+    -- detects their own wins via LOOT_ITEM_ROLL_WON + their own bag scan.
+    -- Drops that somehow land in a non-ML bag (e.g., legendary hard-skip,
+    -- quality below threshold) remain the player's personal item and are
+    -- not council-relevant under this mode.
+    local suppressNonMLTradable = false
+    if not isML then
+        local mldb = Loothing.MLDB and Loothing.MLDB:Get()
+        if mldb and mldb.handleLoot and mldb.groupLootMode == "active" then
+            suppressNonMLTradable = true
+        end
+    end
+
+    -- Diff against snapshot — new drops only.
     local snapshot = self.preEncounterBagSnapshot
-    for itemLink, currentCount in pairs(currentBags) do
-        local preCount = snapshot[itemLink] or 0
+    for itemID, currentCount in pairs(currentCounts) do
+        local preCount = snapshot[itemID] or 0
         if currentCount <= preCount then
-            -- Pre-existing item — not a new drop. Skipped silently (too
-            -- noisy to trace every non-new bag entry per 2s tick).
-        elseif self.reportedTradeableItems[itemLink] then
-            TraceLoot("already-reported", itemLink)
+            -- Not a new drop.
+        elseif self.reportedTradeableItems[itemID] then
+            -- Already reported in this post-encounter window.
         else
-            local rejected = false
-            if enforceFilters then
-                local minQ = GetMinQuality()
-                local quality = Utils.GetItemQuality(itemLink)
-                if not quality or quality < minQ then
-                    TraceLoot("quality-low", itemLink,
-                        "got=" .. tostring(quality) .. " min=" .. tostring(minQ))
-                    rejected = true
-                elseif IsItemClassBlocked(itemLink) then
-                    local _, _, _, _, _, classID, subClassID = C_Item.GetItemInfoInstant(itemLink)
-                    TraceLoot("class-blocked", itemLink,
-                        "class=" .. tostring(classID) .. " sub=" .. tostring(subClassID))
-                    rejected = true
-                else
-                    local boe = IsItemBoE(itemLink)
-                    local autoAddBoEs = Loothing.Settings and Loothing.Settings:Get("ml.autoAddBoEs", false)
-                    if boe and not autoAddBoEs then
-                        TraceLoot("boe-excluded", itemLink, "autoAddBoEs=false")
+            local ex = exemplar[itemID]
+            local itemLink = ex and ex.link
+            if itemLink then
+                local rejected = false
+                if enforceFilters then
+                    local minQ = GetMinQuality()
+                    local quality = Utils.GetItemQuality(itemLink)
+                    if not quality or quality < minQ then
+                        TraceLoot("quality-low", itemLink,
+                            "got=" .. tostring(quality) .. " min=" .. tostring(minQ))
                         rejected = true
-                    elseif Loothing.ItemFilter and Loothing.ItemFilter:ShouldIgnoreItem(itemLink) then
-                        TraceLoot("in-ignore-list", itemLink)
+                    elseif IsItemClassBlocked(itemLink) then
+                        local _, _, _, _, _, classID, subClassID = C_Item.GetItemInfoInstant(itemLink)
+                        TraceLoot("class-blocked", itemLink,
+                            "class=" .. tostring(classID) .. " sub=" .. tostring(subClassID))
                         rejected = true
-                    end
-                end
-            end
-
-            if not rejected then
-                local tradeTime = self:FindTradeTimeForItem(itemLink, TradeQueue)
-                if not tradeTime or tradeTime <= 0 then
-                    TraceLoot("no-trade-time", itemLink,
-                        "returned=" .. tostring(tradeTime))
-                else
-                    local isML = self:IsMasterLooter()
-                        or (Loothing.handleLoot and Loothing.isMasterLooter)
-                    TraceLoot("candidate", itemLink, "isML=" .. tostring(isML))
-
-                    if isML then
-                        -- ML self-loopback: process locally, bypass comm layer.
-                        -- HandleTradable is idempotent (matches existing items
-                        -- before adding new ones).
-                        self:HandleTradable({
-                            itemLink = itemLink,
-                            timeRemaining = tradeTime,
-                            playerName = Utils.GetPlayerFullName(),
-                        })
-                        self.reportedTradeableItems[itemLink] = true
                     else
-                        Loothing.Comm:Send(Loothing.MsgType.TRADABLE, {
-                            itemLink = itemLink,
-                            timeRemaining = tradeTime,
-                        })
-                        self.reportedTradeableItems[itemLink] = true
+                        local boe = IsItemBoE(itemLink)
+                        local autoAddBoEs = Loothing.Settings and Loothing.Settings:Get("ml.autoAddBoEs", false)
+                        if boe and not autoAddBoEs then
+                            TraceLoot("boe-excluded", itemLink, "autoAddBoEs=false")
+                            rejected = true
+                        elseif Loothing.ItemFilter and Loothing.ItemFilter:ShouldIgnoreItem(itemLink) then
+                            TraceLoot("in-ignore-list", itemLink)
+                            rejected = true
+                        end
+                    end
+                end
+
+                if not rejected then
+                    -- Trade time by (bag, slot) from the exemplar — avoids
+                    -- the link-equality bug the old code had when iterating
+                    -- bags a second time to match an itemLink.
+                    local tradeTime = TradeQueue.GetContainerItemTradeTimeRemaining
+                        and TradeQueue:GetContainerItemTradeTimeRemaining(ex.bag, ex.slot)
+                        or nil
+
+                    if not tradeTime or tradeTime <= 0 or tradeTime == math.huge then
+                        TraceLoot("no-trade-time", itemLink,
+                            "bag=" .. ex.bag .. " slot=" .. ex.slot
+                            .. " returned=" .. tostring(tradeTime))
+                    else
+                        TraceLoot("candidate", itemLink,
+                            "isML=" .. tostring(isML) .. " tt=" .. tradeTime)
+
+                        if isML then
+                            -- ML self-loopback: buffer (or add to session)
+                            -- directly. HandleTradable is idempotent.
+                            self:HandleTradable({
+                                itemLink      = itemLink,
+                                timeRemaining = tradeTime,
+                                playerName    = Utils.GetPlayerFullName(),
+                                source        = "bag_scan",
+                            })
+                            self.reportedTradeableItems[itemID] = true
+                        elseif suppressNonMLTradable then
+                            -- Auto-roll raid: non-ML doesn't broadcast.
+                            TraceLoot("suppressed-nonml-tradable", itemLink,
+                                "groupLoot=active handleLoot=true")
+                            self.reportedTradeableItems[itemID] = true
+                        else
+                            Loothing.Comm:Send(Loothing.MsgType.TRADABLE, {
+                                itemLink      = itemLink,
+                                timeRemaining = tradeTime,
+                            })
+                            self.reportedTradeableItems[itemID] = true
+                        end
                     end
                 end
             end
         end
     end
-end
-
---- Find the trade time remaining for an item link by scanning bags.
--- @param itemLink string
--- @param TradeQueue table
--- @return number|nil
-function SessionMixin:FindTradeTimeForItem(itemLink, TradeQueue)
-    local sawMatch = false
-    local sawInfinite = false
-    local sawZero = false
-    for bag = 0, NUM_BAG_SLOTS do
-        local numSlots = C_Container.GetContainerNumSlots(bag)
-        for slot = 1, numSlots or 0 do
-            local slotLink = C_Container.GetContainerItemLink(bag, slot)
-            if slotLink == itemLink then
-                sawMatch = true
-                local t = TradeQueue:GetContainerItemTradeTimeRemaining(bag, slot)
-                if t == math.huge then
-                    sawInfinite = true
-                elseif not t or t <= 0 then
-                    sawZero = true
-                else
-                    return t
-                end
-            end
-        end
-    end
-    if not sawMatch then
-        TraceLoot("findTrade:no-bag-slot-matches", itemLink)
-    elseif sawInfinite then
-        TraceLoot("findTrade:all-infinite", itemLink,
-            "tooltip reports no trade line; item is untradable or parse failed")
-    elseif sawZero then
-        TraceLoot("findTrade:all-bound-or-zero", itemLink,
-            "tooltip reports soulbound without trade window")
-    end
-    return nil
 end
 
 --- Show the loot-picker dialog to the ML so they can choose which items
