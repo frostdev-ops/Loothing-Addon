@@ -163,8 +163,16 @@ function LootPickerFrameMixin:BuildFrame()
     -- route through the same cancellation cleanup that OnCancel runs.
     -- Gated on `_suppressOnHideCleanup` so OnStart / OnCancel (which
     -- call Hide themselves as part of their own cleanup) don't re-enter.
+    -- Hide may fade asynchronously, so the flag is cleared inside OnHide,
+    -- not immediately after Hide() returns.
     frame:HookScript("OnHide", function()
-        if self._suppressOnHideCleanup then return end
+        if self._suppressOnHideCleanup then
+            self._suppressOnHideCleanup = false
+            if Loothing.Session and Loothing.Session.OnLootPickerHidden then
+                Loothing.Session:OnLootPickerHidden()
+            end
+            return
+        end
         self:_DoCleanupOnHide()
     end)
 
@@ -306,7 +314,7 @@ function LootPickerFrameMixin:BuildFrame()
 
     self.emptyText = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     self.emptyText:SetPoint("CENTER", scroll, "CENTER", 0, 0)
-    self.emptyText:SetText(L("LOOT_PICKER_EMPTY", "No tradable loot detected yet."))
+    self.emptyText:SetText(L("LOOT_PICKER_EMPTY", "No tradable loot detected."))
     applyTextColor(self.emptyText, "textMuted", { 0.6, 0.6, 0.6 })
     self.emptyText:Hide()
 
@@ -346,10 +354,9 @@ function LootPickerFrameMixin:BuildFrame()
         for _, entry in ipairs(self.entries) do
             local link = entry.itemLink
             if link and link:find("|Hitem:" .. itemID .. ":", 1, true) then
-                -- Re-evaluate this entry against the now-cached data
-                if Loothing.ItemFilter and Loothing.ItemFilter.EvaluateItem then
-                    entry.eval = Loothing.ItemFilter:EvaluateItem(link)
-                end
+                -- Keep the first filter decision stable for this picker row.
+                -- Cold item-cache updates may change bind/quality details; do
+                -- not silently flip checkbox defaults after the ML has seen it.
                 self:Render()
                 return
             end
@@ -449,15 +456,7 @@ end
     Empty-state text: distinguish "still waiting" vs "all blocked"
 ----------------------------------------------------------------------]]
 
---- Update the empty-state message based on whether the post-encounter bag
---- scan is still running. Previously the picker showed a flat "No tradable
---- loot detected yet." whether items were still arriving or not, which
---- made users dismiss the picker before group-loot rolls resolved at T+30s.
---- Now:
----   * while `Session.bagScanTimer` is active (scan in progress) — show a
----     countdown like "Waiting for roll results… (27s remaining)"
----   * after scan ends with still-empty buffer — show the static message
----     with a hint about re-triggering
+--- Update the empty-state message based on scan and filter state.
 function LootPickerFrameMixin:UpdateEmptyStateText()
     if not self.emptyText then return end
 
@@ -466,7 +465,12 @@ function LootPickerFrameMixin:UpdateEmptyStateText()
     local startedAt = session and session.bagScanStartedAt
     local SCAN_WINDOW = 60
 
-    if scanActive and startedAt then
+    if self.entries and #self.entries > 0 then
+        self.emptyText:SetText(string.format(
+            L("LOOT_PICKER_ALL_BLOCKED_FMT",
+              "%d items hidden - toggle Show blocked to review."),
+            #self.entries))
+    elseif scanActive and startedAt then
         local elapsed = GetTime() - startedAt
         local remaining = math.max(0, math.ceil(SCAN_WINDOW - elapsed))
         self.emptyText:SetText(string.format(
@@ -476,7 +480,7 @@ function LootPickerFrameMixin:UpdateEmptyStateText()
     else
         self.emptyText:SetText(
             L("LOOT_PICKER_EMPTY",
-              "No tradable loot detected yet."))
+              "No tradable loot detected."))
     end
 end
 
@@ -490,25 +494,42 @@ function LootPickerFrameMixin:RebuildEntries(buffer)
     -- bag scans). Without this snapshot, FindPreviousCheckedState would
     -- always read from the just-cleared list and return nil.
     local prior = self.entries or {}
+    local usedPrior = {}
     self.entries = {}
     if type(buffer) ~= "table" then return end
 
     local filter = Loothing.ItemFilter
     for i, raw in ipairs(buffer) do
-        if raw and raw.itemLink then
-            local eval
-            if filter and filter.EvaluateItem then
-                eval = filter:EvaluateItem(raw.itemLink)
-            else
-                eval = { allowed = true }
+        local sameEncounter = not raw
+            or raw.encounterID == nil
+            or raw.encounterID == 0
+            or self.encounterID == nil
+            or self.encounterID == 0
+            or raw.encounterID == self.encounterID
+        if raw and raw.itemLink and sameEncounter then
+            -- Preserve filter decision + user override across rebuilds for the
+            -- SAME (link, looter). EvaluateItem depends on async item cache
+            -- state; recalculating can flip default checkbox state mid-pick.
+            local previousChecked
+            local previousEval
+            for priorIndex, e in ipairs(prior) do
+                if not usedPrior[priorIndex]
+                    and e.itemLink == raw.itemLink
+                    and e.playerName == raw.playerName
+                    and e.encounterID == raw.encounterID then
+                    previousChecked = e.checked
+                    previousEval = e.eval
+                    usedPrior[priorIndex] = true
+                    break
+                end
             end
 
-            -- Preserve user override across rebuilds for the SAME (link, looter).
-            local previousChecked
-            for _, e in ipairs(prior) do
-                if e.itemLink == raw.itemLink and e.playerName == raw.playerName then
-                    previousChecked = e.checked
-                    break
+            local eval = previousEval
+            if not eval then
+                if filter and filter.EvaluateItem then
+                    eval = filter:EvaluateItem(raw.itemLink)
+                else
+                    eval = { allowed = true }
                 end
             end
 
@@ -572,7 +593,16 @@ function LootPickerFrameMixin:Render()
                     end
                     return
                 end
-                if #self.entries > 0 then
+                local visibleCount = 0
+                for _, entry in ipairs(self.entries) do
+                    if entry.eval.allowed or self.showBlocked then
+                        visibleCount = visibleCount + 1
+                        break
+                    end
+                end
+                local session = Loothing.Session
+                local scanActive = session and session.bagScanTimer ~= nil
+                if visibleCount > 0 then
                     self.emptyText:Hide()
                     if self._emptyTicker then
                         self._emptyTicker:Cancel()
@@ -581,6 +611,10 @@ function LootPickerFrameMixin:Render()
                     return
                 end
                 self:UpdateEmptyStateText()
+                if not scanActive and self._emptyTicker then
+                    self._emptyTicker:Cancel()
+                    self._emptyTicker = nil
+                end
             end)
         end
     else
@@ -814,6 +848,31 @@ end
     Actions
 ----------------------------------------------------------------------]]
 
+function LootPickerFrameMixin:HasCheckedSelections()
+    for _, e in ipairs(self.entries or {}) do
+        if e.checked then
+            return true
+        end
+    end
+    return false
+end
+
+function LootPickerFrameMixin:IsShowingEncounter(encounterID)
+    if not self:IsShown() then return false end
+    if encounterID == nil then return true end
+    return self.encounterID == encounterID
+end
+
+function LootPickerFrameMixin:AutoCommitForEncounterStart(encounterID, encounterName)
+    if not self:IsShown() then return true end
+    if not self:HasCheckedSelections() then return false end
+    if Loothing and Loothing.Debug then
+        Loothing:Debug("LootPicker: auto-committing selections before encounter start:",
+            tostring(encounterName or encounterID or "unknown"))
+    end
+    return self:OnStart()
+end
+
 function LootPickerFrameMixin:SetAll(checked)
     for _, e in ipairs(self.entries) do
         if checked then
@@ -831,22 +890,18 @@ end
 
 function LootPickerFrameMixin:OnStart()
     -- Double-click guard
-    if self._starting then return end
+    if self._starting then return false end
     self._starting = true
 
     if not Loothing.Session or not Loothing.Session.StartSessionWithPickedItems then
         self._starting = false
         self:Hide()
-        return
+        return false
     end
 
     local picked = {}
     for _, e in ipairs(self.entries) do
-        -- Reject any entry whose encounterID drifted (paranoia against the
-        -- next-encounter-mid-render race; CancelPendingPrompt + the
-        -- OnEncounterStart hide-on-show fix should also prevent this.)
-        if e.checked
-            and (e.encounterID == nil or e.encounterID == self.encounterID) then
+        if e.checked then
             picked[#picked + 1] = {
                 itemLink   = e.itemLink,
                 playerName = e.playerName,
@@ -870,14 +925,14 @@ function LootPickerFrameMixin:OnStart()
         if self.frame then
             self.frame:Raise()  -- bring back to top in case another popup grabbed focus
         end
-        return
+        return false
     end
     -- Successful start — suppress the OnHide cleanup path so we don't
     -- wipe the buffer Session already consumed via the replay loop.
     self._suppressOnHideCleanup = true
     self:Hide()
-    self._suppressOnHideCleanup = false
     self._starting = false
+    return true
 end
 
 --- Shared cleanup run when the picker hides WITHOUT a successful Start.
@@ -888,7 +943,7 @@ function LootPickerFrameMixin:_DoCleanupOnHide()
     self._starting = false
     self._suppressEvent = true
     if Loothing.Session and Loothing.Session.CancelPendingPrompt then
-        Loothing.Session:CancelPendingPrompt()
+        Loothing.Session:CancelPendingPrompt(self.encounterID)
     elseif Loothing.Session and Loothing.Session.lootBuffer then
         -- Prefer wipe() to preserve table identity for any module that
         -- might have captured the reference; fall back to assignment if
@@ -910,7 +965,6 @@ function LootPickerFrameMixin:OnCancel()
     -- the Hide call so the hook no-ops.
     self._suppressOnHideCleanup = true
     self:Hide()
-    self._suppressOnHideCleanup = false
     self:_DoCleanupOnHide()
 end
 

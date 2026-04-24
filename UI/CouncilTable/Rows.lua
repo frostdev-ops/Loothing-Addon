@@ -260,6 +260,7 @@ function CouncilTableMixin:CreateCandidateRow(_parent)
     -- _councilTable stores the owning CouncilTable; r.candidate is read dynamically.
     if not row._clickHooked then
         row._councilTable = self
+        row._clickHooked = true
         row:SetScript("OnClick", function(r, button)
             if not r.candidate then return end
             if button == "RightButton" then
@@ -272,7 +273,6 @@ function CouncilTableMixin:CreateCandidateRow(_parent)
                 r._councilTable:SelectCandidate(r.candidate)
             end
         end)
-        row._clickHooked = true
     end
 
     return row
@@ -313,10 +313,10 @@ function CouncilTableMixin:UpdateRow(row, candidate, index)
     if voteCell and voteCell.voteButton then
         voteCell.voteButton._parentRow = row
         if not voteCell.voteButton._voteHooked then
+            voteCell.voteButton._voteHooked = true
             voteCell.voteButton:SetScript("OnClick", function(btn)
                 btn._parentRow._councilTable:OnVoteClick(btn._parentRow.candidate)
             end)
-            voteCell.voteButton._voteHooked = true
         end
     end
 
@@ -327,6 +327,7 @@ function CouncilTableMixin:UpdateRow(row, candidate, index)
     if intelCell and intelCell.intelButton then
         intelCell.intelButton._parentRow = row
         if not intelCell.intelButton._intelHooked then
+            intelCell.intelButton._intelHooked = true
             intelCell.intelButton:SetScript("OnClick", function(btn)
                 local r = btn._parentRow
                 local ct = r and r._councilTable
@@ -355,7 +356,6 @@ function CouncilTableMixin:UpdateRow(row, candidate, index)
                 } or nil
                 ns.ShowPlayerIntel(cand.playerName, { item = ctx })
             end)
-            intelCell.intelButton._intelHooked = true
         end
     end
 end

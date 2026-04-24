@@ -946,10 +946,16 @@ end
 
 --- Validate incoming message data against a field schema
 -- Schema entries are { fieldName, expectedType, required }
--- @param data table - The message data to validate
--- @param schema table - Array of { field, type, required } entries
+-- @param data table|nil - The message data to validate
+-- @param schema table|nil - Array of { field, type, required } entries
 -- @return boolean, string|nil - ok, reason string on failure
 function Utils.ValidateSchema(data, schema)
+    if type(data) ~= "table" then
+        return false, "data must be table"
+    end
+    if type(schema) ~= "table" then
+        return false, "schema must be table"
+    end
     for _, entry in ipairs(schema) do
         local field, expectedType, required = entry[1], entry[2], entry[3]
         local val = data[field]

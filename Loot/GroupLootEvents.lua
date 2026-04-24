@@ -38,7 +38,6 @@ local CreateFrame = CreateFrame
 local GetLootRollItemLink = GetLootRollItemLink
 local IsInGroup = IsInGroup
 local RollOnLoot = RollOnLoot
-local time = time
 
 ns.GroupLootMixin = ns.GroupLootMixin or {}
 ns.GroupLootRoll = ns.GroupLootRoll or {}
@@ -63,6 +62,13 @@ function GroupLootMixin:Enable()
 
     self.eventFrame:RegisterEvent("START_LOOT_ROLL")
     self.eventFrame:RegisterEvent("LOOT_ITEM_ROLL_WON")
+end
+
+local function GetItemID(itemLink)
+    if itemLink and C_Item and C_Item.GetItemInfoInstant then
+        return C_Item.GetItemInfoInstant(itemLink)
+    end
+    return nil
 end
 
 --- Disable the group loot handler.
@@ -120,23 +126,20 @@ function GroupLootMixin:OnLootItemRollWon(_event, itemLink, rollQuantity, rollTy
         itemLink, "(roll", tostring(roll) .. ")")
 
     -- Route through the canonical buffer-or-add pathway so item flow is
-    -- identical to a bag-scan discovery: HandleTradable dedupes, adds to
-    -- active session (with batching) if one exists, else buffers for the
-    -- picker. playerName = self — this is our own win.
+    -- identical to a bag-scan discovery: HandleTradable adds to an active
+    -- session (with batching) if one exists, else buffers for the picker.
+    -- playerName = self — this is our own win.
     --
     -- timeRemaining=0 is harmless: the buffer path (inactive session) does
     -- not read it; the active-session path stores it on the item and a
     -- subsequent bag scan will update it once the tooltip resolver reads
     -- the trade line.
     --
-    -- Derive itemID once so HandleTradable's matcher can hit the identity
-    -- branch (rather than falling back to raw-link equality which is
-    -- unreliable for post-roll links). C_Item.GetItemInfoInstant is
-    -- synchronous and cache-warm immediately after LOOT_ITEM_ROLL_WON.
-    local itemID
-    if C_Item and C_Item.GetItemInfoInstant then
-        itemID = C_Item.GetItemInfoInstant(itemLink)
-    end
+    -- LOOT_ITEM_ROLL_WON does not include the rollID or encounterID, and
+    -- START_LOOT_ROLL context cannot be matched back unambiguously for
+    -- duplicate items. Leave encounterID nil so HandleTradable treats this as
+    -- encounterless loot instead of borrowing stale boss state.
+    local itemID = GetItemID(itemLink)
 
     local ok, err = pcall(session.HandleTradable, session, {
         itemLink      = itemLink,
@@ -154,13 +157,10 @@ function GroupLootMixin:OnLootItemRollWon(_event, itemLink, rollQuantity, rollTy
         return
     end
 
-    -- Seed the bag-scan dedup table so the post-encounter ticker doesn't
-    -- re-buffer this item when it finds the same itemID in the bag on the
-    -- next tick. Without this, the ML would see two picker rows for a
-    -- single roll win (one from the event, one from the next bag scan).
-    if itemID and session.reportedTradeableItems then
-        session.reportedTradeableItems[itemID] = true
-    end
+    -- Do not seed reportedTradeableItems here. The follow-up bag scan may be
+    -- the first path with a real tooltip trade time; HandleTradable treats
+    -- that bag-scan result as a refresh for the roll-won row instead of a
+    -- second physical item.
 end
 
 --- Handle START_LOOT_ROLL event.

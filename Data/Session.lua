@@ -77,6 +77,11 @@ local function TraceLoot(reason, itemLink, extra)
     Loothing:Debug("LootDetect:", reason, itemLink or "", extra or "")
 end
 
+local function L(key, fallback)
+    local locale = Loothing.Locale or {}
+    return locale[key] or fallback or key
+end
+
 local function GetPopups()
     return ns.Popups
 end
@@ -85,6 +90,32 @@ local function IsTestModeEnabled()
     local TestMode = ns.TestMode
     return (Loothing.TestMode and Loothing.TestMode:IsActive())
         or (TestMode and TestMode:IsEnabled())
+end
+
+local function NormalizeEncounterID(id)
+    local n = tonumber(id)
+    if n == nil or n == 0 then return 0 end
+    return n
+end
+
+local function SameEncounterID(a, b)
+    return NormalizeEncounterID(a) == NormalizeEncounterID(b)
+end
+
+local function IsCreationSignal(data)
+    return data and data.source == "roll_won"
+end
+
+local function SameItemIdentity(entry, itemID, itemLink)
+    if not entry then return false end
+    local entryItemID = entry.itemID
+    if not entryItemID and entry.itemLink and C_Item and C_Item.GetItemInfoInstant then
+        entryItemID = C_Item.GetItemInfoInstant(entry.itemLink)
+    end
+    if itemID and entryItemID then
+        return tonumber(entryItemID) == tonumber(itemID)
+    end
+    return entry.itemLink == itemLink
 end
 
 --[[--------------------------------------------------------------------
@@ -137,11 +168,15 @@ function SessionMixin:Init()
     -- Session trigger state
     self.lastEligibleEncounter = nil   -- { id, name } — cached for afterLoot / manual
     self.pendingLootTimer = nil
+    self.pendingBufferedPrompt = nil
     self.receivedLootCount = 0
     self.lootBuffer = {}  -- Pre-session loot buffer (items arrive before session starts)
 
     -- Post-encounter bag scanner (RCLC-style distributed item collection)
     self.bagScanTimer = nil
+    self.bagScanEncounterID = nil
+    self.bagScanEncounterName = nil
+    self.bagScanSnapshot = {}
     self.reportedTradeableItems = {}  -- { [itemID] = true } dedup (was keyed by itemLink pre-2.0.27)
     self.preEncounterBagSnapshot = {} -- { [itemID] = count } taken at ENCOUNTER_START (was itemLink-keyed pre-2.0.27)
 
@@ -331,13 +366,44 @@ function SessionMixin:HandleTradable(data)
             and C_Item.GetItemInfoInstant(itemLink)
             or nil
     end
+    local isCreation = IsCreationSignal(data)
+
+    if data.source == "bag_scan" and type(self.lootBuffer) == "table" then
+        local refreshed = false
+        for _, entry in ipairs(self.lootBuffer) do
+            if entry.source == "roll_won"
+                and playerName
+                and Utils.IsSamePlayer(entry.playerName, playerName)
+                and SameItemIdentity(entry, itemID, itemLink) then
+                entry.itemID = entry.itemID or itemID
+                entry.tradeTimeRemaining = data.timeRemaining
+                refreshed = true
+            end
+        end
+        if refreshed then
+            self:TriggerEvent("OnLootBufferChanged", self.lootBuffer)
+            TraceLoot("handleT:refreshed-roll-won-buffer", itemLink)
+            return
+        end
+    end
+
+    if self:IsActive() and data.encounterID and self.encounterID
+        and not SameEncounterID(data.encounterID, self.encounterID) then
+        self:BufferDeferredLoot(data, data.encounterID, data.encounterName)
+        return
+    end
+
+    if self:IsActive() and isCreation and data.encounterID == nil and self.encounterID ~= nil then
+        self:BufferDeferredLoot(data, 0, data.encounterName or "Loot")
+        return
+    end
 
     local matched = nil
     if self:IsActive() then
         if data.guid then
             matched = self:GetItemByGUID(data.guid)
         end
-        if not matched and itemID then
+        if not matched and itemID and not isCreation then
             for _, item in self.items:Enumerate() do
                 if item.itemID == itemID and playerName and Utils.IsSamePlayer(item.looter, playerName) then
                     matched = item
@@ -345,7 +411,7 @@ function SessionMixin:HandleTradable(data)
                 end
             end
         end
-        if not matched then
+        if not matched and not isCreation then
             -- Raw-link fallback for legacy callers that don't surface itemID
             -- and items added pre-2.0.27 that lack item.itemID. Kept as last
             -- resort; primary match is via itemID above.
@@ -359,7 +425,19 @@ function SessionMixin:HandleTradable(data)
     end
 
     if matched then
-        -- Existing item: update tradability status
+        -- Existing item: update tradability status. itemID+looter is coarse
+        -- when the same player wins two identical items, so refresh every
+        -- matching row instead of only the first one.
+        if itemID then
+            for _, item in self.items:Enumerate() do
+                if item.itemID == itemID and playerName and Utils.IsSamePlayer(item.looter, playerName) then
+                    item.isTradable = true
+                    item.tradeTimeRemaining = data.timeRemaining
+                    self:TriggerEvent("OnItemTradabilityChanged", item)
+                end
+            end
+            return
+        end
         matched.isTradable = true
         matched.tradeTimeRemaining = data.timeRemaining
         self:TriggerEvent("OnItemTradabilityChanged", matched)
@@ -445,12 +523,30 @@ function SessionMixin:HandleTradable(data)
         end
     elseif Loothing.handleLoot then
         -- No active session: buffer item and trigger session start
+        local bufferEncounterID
+        local bufferEncounterName
+        if isCreation and data.encounterID == nil then
+            bufferEncounterID = 0
+            bufferEncounterName = data.encounterName or "Loot"
+        else
+            bufferEncounterID = data.encounterID or self.lastEncounterID
+            bufferEncounterName = data.encounterName or self.lastEncounterName
+        end
+
         -- Dedup: OnLootReceived, bag scanner, and TradeQueue can all buffer the same item
         local alreadyBuffered = false
-        for _, entry in ipairs(self.lootBuffer) do
-            if entry.itemLink == itemLink and entry.playerName == playerName then
-                alreadyBuffered = true
-                break
+        if not isCreation then
+            for _, entry in ipairs(self.lootBuffer) do
+                if SameItemIdentity(entry, itemID, itemLink)
+                    and playerName
+                    and Utils.IsSamePlayer(entry.playerName, playerName)
+                    and (SameEncounterID(entry.encounterID, bufferEncounterID)
+                        or (data.source == "bag_scan" and entry.source == "roll_won")) then
+                    entry.itemID = entry.itemID or itemID
+                    entry.tradeTimeRemaining = data.timeRemaining
+                    alreadyBuffered = true
+                    break
+                end
             end
         end
         if alreadyBuffered then
@@ -461,8 +557,12 @@ function SessionMixin:HandleTradable(data)
         TraceLoot("handleT:buffered", itemLink, "looter=" .. tostring(playerName))
         table.insert(self.lootBuffer, {
             itemLink = itemLink,
+            itemID = itemID,
             playerName = playerName,
-            encounterID = self.lastEncounterID,
+            encounterID = bufferEncounterID,
+            encounterName = bufferEncounterName,
+            source = data.source,
+            tradeTimeRemaining = data.timeRemaining,
             timestamp = time(),
         })
         self:TriggerEvent("OnLootBufferChanged", self.lootBuffer)
@@ -525,6 +625,142 @@ function SessionMixin:HandleNonTradable(data)
     end
 end
 
+--- Find buffered loot for an encounter, preferring the newest row.
+-- @param excludeEncounterID number|nil - encounter to ignore
+-- @return table|nil - { id, name }
+function SessionMixin:FindBufferedEncounter(excludeEncounterID)
+    if type(self.lootBuffer) ~= "table" then return nil end
+
+    for i = #self.lootBuffer, 1, -1 do
+        local entry = self.lootBuffer[i]
+        if entry and entry.itemLink
+            and (excludeEncounterID == nil or not SameEncounterID(entry.encounterID, excludeEncounterID)) then
+            return {
+                id = NormalizeEncounterID(entry.encounterID),
+                name = entry.encounterName or self.lastEncounterName or "Loot",
+            }
+        end
+    end
+    return nil
+end
+
+--- Buffer loot without adding it to the currently active session.
+-- Used when loot from encounter N+1 arrives while encounter N's council
+-- session is still active; mixing those rows into the active session is worse
+-- than delaying the next picker until the current session ends.
+-- @param data table
+-- @param encounterID number|nil
+-- @param encounterName string|nil
+-- @return boolean - true if a new row was inserted
+function SessionMixin:BufferDeferredLoot(data, encounterID, encounterName)
+    if not data or not data.itemLink then return false end
+    self.lootBuffer = self.lootBuffer or {}
+
+    local itemLink = data.itemLink
+    local playerName = data.playerName
+    local itemID = data.itemID
+    if not itemID and itemLink and C_Item and C_Item.GetItemInfoInstant then
+        itemID = C_Item.GetItemInfoInstant(itemLink)
+    end
+    local bufferEncounterID = encounterID or data.encounterID or self.lastEncounterID or 0
+    local bufferEncounterName = encounterName or data.encounterName or self.lastEncounterName or "Loot"
+
+    if not IsCreationSignal(data) then
+        for _, entry in ipairs(self.lootBuffer) do
+            if SameItemIdentity(entry, itemID, itemLink)
+                and playerName
+                and Utils.IsSamePlayer(entry.playerName, playerName)
+                and SameEncounterID(entry.encounterID, bufferEncounterID) then
+                TraceLoot("defer:already-buffered", itemLink,
+                    "encounter=" .. tostring(bufferEncounterID))
+                return false
+            end
+        end
+    end
+
+    table.insert(self.lootBuffer, {
+        itemLink      = itemLink,
+        itemID        = itemID,
+        playerName    = playerName,
+        encounterID   = bufferEncounterID,
+        encounterName = bufferEncounterName,
+        source        = data.source,
+        tradeTimeRemaining = data.timeRemaining,
+        timestamp     = time(),
+    })
+
+    self.lastEligibleEncounter = { id = bufferEncounterID, name = bufferEncounterName }
+    self.lastEncounterID = bufferEncounterID
+    self.lastEncounterName = bufferEncounterName
+    self.receivedLootCount = (self.receivedLootCount or 0) + 1
+    self:TriggerEvent("OnLootBufferChanged", self.lootBuffer)
+    TraceLoot("defer:buffered", itemLink, "encounter=" .. tostring(bufferEncounterID))
+    return true
+end
+
+--- Remove buffered rows for one encounter, preserving other encounters.
+-- Nil/0 are treated as the same "encounterless" bucket; clearAll is the only
+-- path that wipes unrelated future-encounter rows.
+-- @param encounterID number|nil
+-- @param clearAll boolean|nil
+-- @return number - removed row count
+function SessionMixin:ClearLootBufferForEncounter(encounterID, clearAll)
+    if type(self.lootBuffer) ~= "table" or #self.lootBuffer == 0 then return 0 end
+
+    local removed = 0
+    if clearAll then
+        removed = #self.lootBuffer
+        wipe(self.lootBuffer)
+    else
+        for i = #self.lootBuffer, 1, -1 do
+            local entry = self.lootBuffer[i]
+            if not entry or SameEncounterID(entry.encounterID, encounterID) then
+                table.remove(self.lootBuffer, i)
+                removed = removed + 1
+            end
+        end
+    end
+
+    if removed > 0 then
+        self:TriggerEvent("OnLootBufferChanged", self.lootBuffer)
+    end
+    return removed
+end
+
+--- Apply the configured action for buffered loot once no session is active.
+-- @param encounter table|nil - optional { id, name } override
+function SessionMixin:PromptForBufferedLoot(encounter)
+    if self.state ~= Loothing.SessionState.INACTIVE then return end
+    if not Loothing.handleLoot and not IsTestModeEnabled() then return end
+    if not self.lootBuffer or #self.lootBuffer == 0 then return end
+
+    local enc = encounter or self.lastEligibleEncounter or self:FindBufferedEncounter()
+    if not enc then return end
+
+    local picker = ns.LootPickerFrame
+    if picker and picker.IsShown and picker:IsShown() then
+        self.pendingBufferedPrompt = enc
+        return
+    end
+
+    self.lastEligibleEncounter = enc
+    self.lastEncounterID = enc.id
+    self.lastEncounterName = enc.name
+    self.pendingBufferedPrompt = nil
+    self.receivedLootCount = #self.lootBuffer
+    self:ApplyTriggerAction(enc.id, enc.name)
+end
+
+--- Called by LootPickerFrame once the actual frame hide completes.
+function SessionMixin:OnLootPickerHidden()
+    if not self.pendingBufferedPrompt then return end
+    local enc = self.pendingBufferedPrompt
+    self.pendingBufferedPrompt = nil
+    C_Timer.After(0, function()
+        self:PromptForBufferedLoot(enc)
+    end)
+end
+
 --[[--------------------------------------------------------------------
     Session Lifecycle
 ----------------------------------------------------------------------]]
@@ -580,13 +816,18 @@ function SessionMixin:StartSession(encounterID, encounterName)
     local bufferTTL = Loothing.Timing and Loothing.Timing.LOOT_BUFFER_TTL or 60
     local now = time()
     local bufferedItems = {}
+    local remainingBuffer = {}
     for _, entry in ipairs(self.lootBuffer) do
-        if entry.encounterID == encounterID and (now - entry.timestamp) <= bufferTTL then
+        if SameEncounterID(entry.encounterID, encounterID) and (now - entry.timestamp) <= bufferTTL then
             local force = entry._picked == true
             local item = self:AddItem(entry.itemLink, entry.playerName, nil, force, true)
             if item then
                 if force then
                     item.isTradable = true
+                end
+                if entry.tradeTimeRemaining then
+                    item.isTradable = true
+                    item.tradeTimeRemaining = entry.tradeTimeRemaining
                 end
                 bufferedItems[#bufferedItems + 1] = {
                     itemLink = entry.itemLink,
@@ -595,10 +836,15 @@ function SessionMixin:StartSession(encounterID, encounterName)
                     sessionID = self.sessionID,
                 }
             end
+        elseif not SameEncounterID(entry.encounterID, encounterID) then
+            remainingBuffer[#remainingBuffer + 1] = entry
         end
     end
     if #self.lootBuffer > 0 then
         wipe(self.lootBuffer)
+        for _, entry in ipairs(remainingBuffer) do
+            table.insert(self.lootBuffer, entry)
+        end
         self:TriggerEvent("OnLootBufferChanged", self.lootBuffer)
     end
 
@@ -670,6 +916,9 @@ function SessionMixin:EndSession()
         return false
     end
 
+    local endingEncounterID = self.encounterID
+    local bufferedAfterSession
+
     -- Cancel any active voting (handles multiple items)
     local votingItems = self:GetVotingItems()
     if votingItems and #votingItems > 0 then
@@ -709,9 +958,11 @@ function SessionMixin:EndSession()
     -- (not inside StopPostEncounterBagScan) because that function is
     -- also called from StartPostEncounterBagScan after SnapshotBags has
     -- already taken a fresh snapshot, and we must not destroy it.
-    self:StopPostEncounterBagScan()
-    wipe(self.reportedTradeableItems)
-    wipe(self.preEncounterBagSnapshot)
+    if not self.bagScanEncounterID or SameEncounterID(self.bagScanEncounterID, endingEncounterID) then
+        self:StopPostEncounterBagScan()
+        wipe(self.reportedTradeableItems)
+        wipe(self.preEncounterBagSnapshot)
+    end
 
     -- Clear trigger state
     self.receivedLootCount = 0
@@ -730,12 +981,11 @@ function SessionMixin:EndSession()
         and ns.LootPickerFrame:IsShown() then
         ns.LootPickerFrame._suppressOnHideCleanup = true
         ns.LootPickerFrame:Hide()
-        ns.LootPickerFrame._suppressOnHideCleanup = false
     end
     if self.lootBuffer and #self.lootBuffer > 0 then
-        wipe(self.lootBuffer)
-        self:TriggerEvent("OnLootBufferChanged", self.lootBuffer)
+        self:ClearLootBufferForEncounter(endingEncounterID)
     end
+    bufferedAfterSession = self:FindBufferedEncounter()
 
     local sessionID = self.sessionID
     local wasML = self:IsMasterLooter()
@@ -866,6 +1116,12 @@ function SessionMixin:EndSession()
      -- wrong answer when the ML is not the raid leader.
     self:TriggerEvent("OnSessionEnded", sessionID, wasML)
     Loothing:Print(Loothing.Locale["SESSION_ENDED"])
+
+    if bufferedAfterSession and self.lootBuffer and #self.lootBuffer > 0 then
+        C_Timer.After(0, function()
+            self:PromptForBufferedLoot(bufferedAfterSession)
+        end)
+    end
 
     if Loothing.Settings:Get("frame.autoClose") and Loothing.MainFrame then
         -- Show trade tab instead of hiding if ML has pending trades
@@ -2100,45 +2356,65 @@ end
 ----------------------------------------------------------------------]]
 
 --- Handle encounter start
-function SessionMixin:OnEncounterStart()
-    -- If a Loot Picker is open showing the prior encounter's items,
-    -- close it FIRST — before we wipe lootBuffer — so the picker's
-    -- OnLootBufferChanged callback doesn't re-render an empty state
-    -- during its fade-out animation. Suppress the picker's OnHide
-    -- cleanup so it doesn't fight Session's own wipe.
-    if ns.LootPickerFrame and ns.LootPickerFrame.IsShown
-        and ns.LootPickerFrame:IsShown() then
-        ns.LootPickerFrame._suppressOnHideCleanup = true
-        ns.LootPickerFrame:Hide()
-        ns.LootPickerFrame._suppressOnHideCleanup = false
+function SessionMixin:OnEncounterStart(encounterID, encounterName)
+    local preserveOpenPicker = false
+    local pickerHandledBuffer = false
+    local picker = ns.LootPickerFrame
+
+    if picker and picker.IsShown and picker:IsShown() then
+        if picker.HasCheckedSelections and picker:HasCheckedSelections() then
+            local ok = picker.AutoCommitForEncounterStart
+                and picker:AutoCommitForEncounterStart(encounterID, encounterName)
+            pickerHandledBuffer = true
+            if ok ~= true then
+                preserveOpenPicker = true
+                Loothing:Warn(string.format(
+                    L("LOOT_PICKER_AUTOCOMMIT_FAILED_FMT",
+                      "Loot Picker preserved prior selections; could not auto-start before new encounter: %s"),
+                    tostring(encounterName or encounterID or "unknown")))
+            end
+        else
+            -- No selected rows to preserve. Close the stale picker before
+            -- wiping so OnLootBufferChanged does not repaint an empty state
+            -- during its fade-out animation.
+            picker._suppressOnHideCleanup = true
+            picker:Hide()
+        end
     end
-    -- Now wipe stale buffer from previous encounter that never started a session.
-    if self.lootBuffer and #self.lootBuffer > 0 then
+
+    -- Wipe stale buffer from a previous encounter only when the picker is not
+    -- still protecting user choices. Successful auto-commit already consumes
+    -- the buffer through StartSessionWithPickedItems.
+    if not preserveOpenPicker and not pickerHandledBuffer and self.lootBuffer and #self.lootBuffer > 0 then
         wipe(self.lootBuffer)
         self:TriggerEvent("OnLootBufferChanged", self.lootBuffer)
     end
 
-    -- Cancel any stale afterLoot debounce from a previous encounter
-    if self.pendingLootTimer then
-        self.pendingLootTimer:Cancel()
-        self.pendingLootTimer = nil
+    if not preserveOpenPicker then
+        -- Cancel any stale afterLoot debounce from a previous encounter
+        if self.pendingLootTimer then
+            self.pendingLootTimer:Cancel()
+            self.pendingLootTimer = nil
+        end
+        self.receivedLootCount = 0
+
+        -- Stop any in-progress bag scan from previous encounter
+        self:StopPostEncounterBagScan()
+
+        -- Reset the per-encounter "already reported" dedup. Normally
+        -- StartPostEncounterBagScan wipes this at the NEXT ENCOUNTER_END, but
+        -- if the prior encounter was a wipe (success ~= 1), OnEncounterEnd
+        -- bailed before scheduling the scan — and any entries from an even
+        -- earlier kill would persist into this next kill, silently skipping
+        -- legitimate re-drops. Wipe here as well to guarantee a clean slate
+        -- per fresh encounter.
+        wipe(self.reportedTradeableItems)
     end
-    self.receivedLootCount = 0
-
-    -- Stop any in-progress bag scan from previous encounter
-    self:StopPostEncounterBagScan()
-
-    -- Reset the per-encounter "already reported" dedup. Normally
-    -- StartPostEncounterBagScan wipes this at the NEXT ENCOUNTER_END, but
-    -- if the prior encounter was a wipe (success ~= 1), OnEncounterEnd
-    -- bailed before scheduling the scan — and any entries from an even
-    -- earlier kill would persist into this next kill, silently skipping
-    -- legitimate re-drops. Wipe here as well to guarantee a clean slate
-    -- per fresh encounter.
-    wipe(self.reportedTradeableItems)
 
     -- Snapshot current bag contents so post-encounter scan can distinguish
-    -- newly looted items from old inventory still in the trade window.
+    -- newly looted items from old inventory still in the trade window. Active
+    -- scans use a scan-local copy, so this is safe even when a preserved prior
+    -- picker keeps that older scan alive briefly.
     self:SnapshotBags()
 end
 
@@ -2253,6 +2529,16 @@ function SessionMixin:ApplyTriggerAction(encounterID, encounterName)
     if action == "auto" then
         self:StartSession(encounterID, encounterName)
     elseif action == "prompt" then
+        local picker = ns.LootPickerFrame
+        if picker and picker.IsShown and picker:IsShown() then
+            if picker.IsShowingEncounter and not picker:IsShowingEncounter(encounterID) then
+                Loothing:Warn(L("LOOT_PICKER_PREVIOUS_OPEN_WARNING",
+                    "Loot Picker is still open for a previous encounter; resolve it before starting another picker."))
+            else
+                Loothing:Debug("ApplyTriggerAction: picker already open; relying on buffer refresh")
+            end
+            return
+        end
         self:ShowSessionPrompt(encounterID, encounterName)
     end
     -- "manual": do nothing (encounter is cached in lastEligibleEncounter)
@@ -2285,7 +2571,7 @@ function SessionMixin:OnEncounterEnd(encounterID, encounterName, _difficultyID, 
     -- don't yet know the ML's session-trigger preferences and need to report
     -- their bag contents either way; the ML's ApplyTriggerAction gate decides
     -- whether to act on the resulting TRADABLE messages.
-    self:StartPostEncounterBagScan()
+    self:StartPostEncounterBagScan(encounterID, encounterName)
 
     -- Session auto-start gates (ML-only)
     if not Loothing.handleLoot and not IsTestModeEnabled() then
@@ -2342,10 +2628,17 @@ end
 ----------------------------------------------------------------------]]
 
 --- Start periodic bag scanning after an encounter kill.
--- Scans every 2s for up to 30s to catch items arriving in bags.
-function SessionMixin:StartPostEncounterBagScan()
+-- Scans every 2s for up to 60s to catch items arriving in bags.
+function SessionMixin:StartPostEncounterBagScan(encounterID, encounterName)
     self:StopPostEncounterBagScan()
+    self.bagScanEncounterID = encounterID
+    self.bagScanEncounterName = encounterName
+    self.bagScanSnapshot = self.bagScanSnapshot or {}
     wipe(self.reportedTradeableItems)
+    wipe(self.bagScanSnapshot)
+    for itemID, count in pairs(self.preEncounterBagSnapshot or {}) do
+        self.bagScanSnapshot[itemID] = count
+    end
 
     local scanCount = 0
     -- 30 scans × 2s = 60s window. The previous 30s window exactly matched
@@ -2376,22 +2669,28 @@ function SessionMixin:StartPostEncounterBagScan()
 
     -- Also do an immediate scan
     C_Timer.After(1, function()
-        self:ScanBagsForTradeableItems()
+        if self.bagScanTimer
+            and SameEncounterID(self.bagScanEncounterID, encounterID) then
+            self:ScanBagsForTradeableItems()
+        end
     end)
 end
 
 --- Stop the post-encounter bag scanner.
--- Only cancels the scan timer. The dedup + snapshot tables are wiped
--- explicitly in EndSession — we cannot wipe them here because
--- StartPostEncounterBagScan calls StopPostEncounterBagScan first, and
--- wiping preEncounterBagSnapshot there would destroy the snapshot that
--- OnEncounterStart just took.
+-- Only cancels the scan timer and clears scan-local metadata. The
+-- pre-encounter snapshot table is wiped explicitly in EndSession after the
+-- active session is done with it; scan-local snapshots are safe to clear here.
 function SessionMixin:StopPostEncounterBagScan()
     if self.bagScanTimer then
         self.bagScanTimer:Cancel()
         self.bagScanTimer = nil
     end
     self.bagScanStartedAt = nil
+    self.bagScanEncounterID = nil
+    self.bagScanEncounterName = nil
+    if self.bagScanSnapshot then
+        wipe(self.bagScanSnapshot)
+    end
 end
 
 --- Scan all bags for NEW tradeable items and either (ML) add them to the
@@ -2472,7 +2771,7 @@ function SessionMixin:ScanBagsForTradeableItems()
     end
 
     -- Diff against snapshot — new drops only.
-    local snapshot = self.preEncounterBagSnapshot
+    local snapshot = self.bagScanSnapshot or self.preEncounterBagSnapshot
     for itemID, currentCount in pairs(currentCounts) do
         local preCount = snapshot[itemID] or 0
         if currentCount <= preCount then
@@ -2532,6 +2831,8 @@ function SessionMixin:ScanBagsForTradeableItems()
                                 itemLink      = itemLink,
                                 timeRemaining = tradeTime,
                                 playerName    = Utils.GetPlayerFullName(),
+                                encounterID   = self.bagScanEncounterID or self.lastEncounterID,
+                                encounterName = self.bagScanEncounterName or self.lastEncounterName,
                                 source        = "bag_scan",
                             })
                             self.reportedTradeableItems[itemID] = true
@@ -2594,26 +2895,39 @@ end
 --- Cancel any pending prompt-mode debounce so a stale follow-up bag
 --- scan doesn't immediately re-show the picker after the user cancels.
 --- Called from LootPickerFrame:OnCancel.
-function SessionMixin:CancelPendingPrompt()
+-- @param encounterID number|nil - picker encounter to cancel; nil means the encounterless bucket
+function SessionMixin:CancelPendingPrompt(encounterID)
     if self.pendingLootTimer then
         self.pendingLootTimer:Cancel()
         self.pendingLootTimer = nil
     end
-    -- Stop the post-encounter bag scan and clear its dedup table.
-    -- Without this, the 30-second scan would keep firing every 2s and
-    -- buffer additional drops, silently re-arming `pendingLootTimer`
-    -- and re-opening the picker the user just dismissed.
-    self:StopPostEncounterBagScan()
-    if self.reportedTradeableItems then
-        wipe(self.reportedTradeableItems)
+    -- Stop the matching post-encounter bag scan and clear its dedup table.
+    -- If the user is closing an older preserved picker while a newer
+    -- encounter scan is running, keep that scan alive so current loot is not
+    -- lost behind the old dialog.
+    if not self.bagScanEncounterID or SameEncounterID(self.bagScanEncounterID, encounterID) then
+        self:StopPostEncounterBagScan()
+        if self.reportedTradeableItems then
+            wipe(self.reportedTradeableItems)
+        end
     end
     self.receivedLootCount = 0
-    self.lastEligibleEncounter = nil
-    self.lastEncounterID = nil
-    self.lastEncounterName = nil
     if self.lootBuffer and #self.lootBuffer > 0 then
-        wipe(self.lootBuffer)
-        self:TriggerEvent("OnLootBufferChanged", self.lootBuffer)
+        self:ClearLootBufferForEncounter(encounterID)
+    end
+
+    local nextEncounter = self:FindBufferedEncounter()
+    if nextEncounter then
+        self.lastEligibleEncounter = nextEncounter
+        self.lastEncounterID = nextEncounter.id
+        self.lastEncounterName = nextEncounter.name
+        C_Timer.After(0, function()
+            self:PromptForBufferedLoot(nextEncounter)
+        end)
+    else
+        self.lastEligibleEncounter = nil
+        self.lastEncounterID = nil
+        self.lastEncounterName = nil
     end
 end
 
@@ -2660,6 +2974,11 @@ function SessionMixin:StartSessionWithPickedItems(encounterID, encounterName, pi
                 timestamp   = now,
                 _picked     = true,         -- StartSession reads this to force-add
             })
+        end
+    end
+    for _, entry in ipairs(priorBuffer) do
+        if entry and not SameEncounterID(entry.encounterID, encounterID) then
+            table.insert(self.lootBuffer, entry)
         end
     end
     self:TriggerEvent("OnLootBufferChanged", self.lootBuffer)
@@ -2726,6 +3045,15 @@ function SessionMixin:OnLootReceived(encounterID, _itemID, itemLink, _quantity, 
 
     -- Active session + ML: add item and batch-broadcast (not one IA per item)
     if self:IsActive() and self:IsMasterLooter() then
+        if encounterID and self.encounterID and not SameEncounterID(encounterID, self.encounterID) then
+            self:BufferDeferredLoot({
+                itemLink = itemLink,
+                playerName = playerName,
+                encounterID = encounterID,
+                encounterName = self.lastEncounterName,
+            }, encounterID, self.lastEncounterName)
+            return
+        end
         local item = self:AddItem(itemLink, playerName, nil, nil, true)  -- skipBroadcast=true
         if item and Loothing.Comm then
             -- Queue ITEM_ADD for batch delivery instead of individual broadcast
@@ -2796,7 +3124,9 @@ function SessionMixin:OnLootReceived(encounterID, _itemID, itemLink, _quantity, 
                     -- Dedup: bag scanner and HandleTradable can also buffer the same item
                     local alreadyBuffered = false
                     for _, entry in ipairs(self.lootBuffer) do
-                        if entry.itemLink == itemLink and entry.playerName == playerName then
+                        if entry.itemLink == itemLink
+                            and entry.playerName == playerName
+                            and SameEncounterID(entry.encounterID, encounterID) then
                             alreadyBuffered = true
                             break
                         end
@@ -2806,6 +3136,7 @@ function SessionMixin:OnLootReceived(encounterID, _itemID, itemLink, _quantity, 
                             itemLink = itemLink,
                             playerName = playerName,
                             encounterID = encounterID,
+                            encounterName = self.lastEncounterName,
                             timestamp = time(),
                         })
                         Loothing:Debug("Buffered loot item:", itemLink, "from", playerName, "encounter", encounterID)
