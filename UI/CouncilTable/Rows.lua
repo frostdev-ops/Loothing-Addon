@@ -504,6 +504,18 @@ function CouncilTableMixin:SortCandidates(candidates)
     if not self.sortColumn then return end
 
     local sortKey = self.COLUMN_SORT_MAP[self.sortColumn] or self.sortColumn
+    if self.sortColumn == "response"
+        and Loothing.Observer
+        and not Loothing.Observer:CanPlayerSeeResponses() then
+        sortKey = "name"
+    elseif self.sortColumn == "vote" then
+        local isML = HasMasterLooterVisibility()
+        local hideVotes = Loothing.Settings and Loothing.Settings:GetHideVotes() and not isML
+        local canSeeVotes = not Loothing.Observer or Loothing.Observer:CanPlayerSeeVoteCounts()
+        if hideVotes or not canSeeVotes then
+            sortKey = "name"
+        end
+    end
     local asc = self.sortAscending
 
     table.sort(candidates, function(a, b)

@@ -134,7 +134,7 @@ end
 -- @return table - Array of player names
 function CouncilMixin:GetVotingEligibleMembers()
     local members = self:GetMembersInRaid()
-    if not (Loothing.Observer and Loothing.Observer:IsMLObserver()) then
+    if not (Loothing.Observer and Loothing.Observer:IsMasterLooterObserverModeEnabled()) then
         return members
     end
     local ml = Loothing.GetCanonicalML and Loothing:GetCanonicalML()

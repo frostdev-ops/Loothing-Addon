@@ -1392,4 +1392,9 @@ L["HISTORY_DETAIL_MATRIX_FILTER_ALL"] = "All"
 L["HISTORY_DETAIL_MATRIX_STATUS_FMT"] = "%d players   •   %d responses   •   %d awards"
 L["HISTORY_DETAIL_MATRIX_TOOLTIP_ROLLS_FMT"] = "%d total rolls   •   %d awards won"
 
+-- Privacy placeholders
+L["VOTES_HIDDEN"] = "Votes hidden"
+L["RESPONSES_HIDDEN"] = "Responses hidden"
+L["VOTER_HIDDEN"] = "Hidden voter"
+
 return L

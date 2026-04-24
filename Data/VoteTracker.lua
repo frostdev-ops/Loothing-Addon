@@ -27,6 +27,20 @@ local GetTime = GetTime
 
 ns.VoteTrackerMixin = ns.VoteTrackerMixin or {}
 
+local function IsVotingEligibleMember(name)
+    if not name or not Loothing.Council then return false end
+    if Loothing.Council.GetVotingEligibleMembers then
+        local members = Loothing.Council:GetVotingEligibleMembers()
+        for _, member in ipairs(members or {}) do
+            if Utils.IsSamePlayer(member, name) then
+                return true
+            end
+        end
+        return false
+    end
+    return Loothing.Council:IsMember(name)
+end
+
 --[[--------------------------------------------------------------------
     VoteTrackerMixin
 ----------------------------------------------------------------------]]
@@ -148,7 +162,7 @@ function VoteTrackerMixin:HandleVotePoll(data)
     -- Only council members respond to VOTE_POLL
     if not Loothing.Council then return end
     local playerName = Utils.GetPlayerFullName()
-    if not Loothing.Council:IsMember(playerName) then return end
+    if not IsVotingEligibleMember(playerName) then return end
 
     -- Check we are in the missing list
     local inMissing = false
@@ -222,7 +236,7 @@ function VoteTrackerMixin:CheckAndReshowVotePanel()
     if not Loothing.Council then return end
 
     local playerName = Utils.GetPlayerFullName()
-    if not Loothing.Council:IsMember(playerName) then return end
+    if not IsVotingEligibleMember(playerName) then return end
 
     local session = Loothing.Session
     if not session.items then return end

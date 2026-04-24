@@ -876,17 +876,18 @@ function CommMixin:BroadcastVoteRequest(itemGUID, timeout, sessionID)
     })
 end
 
---- Send vote commit (broadcast to group — all council members tally locally)
+--- Send vote commit privately to the ML.
 -- @param itemGUID string
 -- @param responses table
 -- @param masterLooter string (unused, kept for API compat)
 -- @param sessionID string|nil
 function CommMixin:SendVoteCommit(itemGUID, responses, masterLooter, sessionID)
+    local target = masterLooter or (Loothing.GetCanonicalML and Loothing:GetCanonicalML())
     self:Send(Loothing.MsgType.VOTE_COMMIT, {
         itemGUID = itemGUID,
         responses = responses,
         sessionID = sessionID,
-    })
+    }, target, "ALERT")
 end
 
 --- Broadcast vote award
@@ -925,12 +926,12 @@ end
 -- @param itemGUID string
 -- @param results table
 -- @param sessionID string|nil
-function CommMixin:BroadcastVoteResults(itemGUID, results, sessionID)
+function CommMixin:BroadcastVoteResults(itemGUID, results, sessionID, target)
     self:Send(Loothing.MsgType.VOTE_RESULTS, {
         itemGUID = itemGUID,
         results = results,
         sessionID = sessionID,
-    })
+    }, target)
 end
 
 --[[--------------------------------------------------------------------
@@ -1037,7 +1038,8 @@ function CommMixin:SendPlayerResponse(itemGUID, response, note, roll, rollMin, r
         return
     end
 
-    -- Broadcast to group so ML + council all receive immediately
+    -- Send directly to the ML. The ML already batches authoritative candidate
+    -- updates, so passive clients don't need to process every raw response.
     self:Send(Loothing.MsgType.PLAYER_RESPONSE, {
         itemGUID = itemGUID,
         response = response,
@@ -1050,7 +1052,13 @@ function CommMixin:SendPlayerResponse(itemGUID, response, note, roll, rollMin, r
         gear2Link = gear2Link,
         gear1ilvl = gear1ilvl or 0,
         gear2ilvl = gear2ilvl or 0,
-    }, nil, "ALERT")
+    }, masterLooter, "ALERT")
+
+    -- Local echo lets the sender's UI reflect their own choice without putting
+    -- sensitive response data on the group addon channel.
+    if Loothing.Session then
+        Loothing.Session:HandlePlayerResponse(payload)
+    end
 end
 
 --- Send batched player responses (all items in one message)
@@ -1058,12 +1066,37 @@ end
 -- @param masterLooter string
 -- @param sessionID string|nil
 function CommMixin:SendResponseBatch(responses, masterLooter, sessionID)
-    -- Broadcast to group so ML + council all receive immediately
+    local function handleLocalResponses()
+        if not (Loothing.Session and type(responses) == "table") then return end
+        for _, responseData in ipairs(responses) do
+            if type(responseData) == "table" then
+                local payload = {}
+                for k, v in pairs(responseData) do
+                    payload[k] = v
+                end
+                payload.playerName = Utils.GetPlayerFullName()
+                payload.sessionID = payload.sessionID or sessionID
+                Loothing.Session:HandlePlayerResponse(payload)
+            end
+        end
+    end
+
+    local isTestMode = TestMode and TestMode:IsEnabled()
+    local isSelfSend = masterLooter and Utils.IsSamePlayer(masterLooter, Utils.GetPlayerFullName())
+    if isTestMode or isSelfSend then
+        handleLocalResponses()
+        return
+    end
+
+    -- Send directly to the ML; the ML already batches authoritative candidate
+    -- updates back to the raid.
     self:Send(Loothing.MsgType.RESPONSE_BATCH, {
         responses = responses,
         sessionID = sessionID,
         playerName = Utils.GetPlayerFullName(),
-    }, nil, "ALERT")
+    }, masterLooter, "ALERT")
+
+    handleLocalResponses()
 end
 
 --[[--------------------------------------------------------------------

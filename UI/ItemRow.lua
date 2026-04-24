@@ -28,6 +28,14 @@ local function HasMasterLooterVisibility()
         and Loothing:HasMasterLooterVisibility()
 end
 
+local function CanSeeVoteCounts()
+    local isML = HasMasterLooterVisibility()
+    if Loothing.Settings and Loothing.Settings:GetHideVotes() and not isML then
+        return false
+    end
+    return not Loothing.Observer or Loothing.Observer:CanPlayerSeeVoteCounts()
+end
+
 --- Initialize the item row
 -- @param parent Frame - Parent frame
 function ItemRowMixin:Init(parent)
@@ -302,8 +310,7 @@ function ItemRowMixin:UpdateStatus()
         -- Show vote count or time remaining
         local voteCount = self.item:GetVoteCount()
         local timeRemaining = self.item:GetTimeRemaining()
-        local isML = HasMasterLooterVisibility()
-        local hideVotes = Loothing.Settings and Loothing.Settings:GetHideVotes() and not isML
+        local canSeeVotes = CanSeeVoteCounts()
 
         if timeRemaining == math.huge then
             self.infoText:SetText(L["NO_LIMIT"])
@@ -311,7 +318,7 @@ function ItemRowMixin:UpdateStatus()
         elseif timeRemaining > 0 then
             self.infoText:SetText(string.format("%ds", math.ceil(timeRemaining)))
             self.infoText:SetTextColor(1, 1, 0)
-        elseif hideVotes then
+        elseif not canSeeVotes then
             self.infoText:SetText("")
         else
             self.infoText:SetText(string.format("%d %s", voteCount, L["VOTES"]))
@@ -322,10 +329,9 @@ function ItemRowMixin:UpdateStatus()
         self.statusText:SetText(L["STATUS_TALLIED"])
         self.statusText:SetTextColor(1, 0.82, 0)
 
-        local isML = HasMasterLooterVisibility()
-        local hideVotes = Loothing.Settings and Loothing.Settings:GetHideVotes() and not isML
+        local canSeeVotes = CanSeeVoteCounts()
         local voteCount = self.item:GetVoteCount()
-        if hideVotes then
+        if not canSeeVotes then
             self.infoText:SetText("")
         else
             self.infoText:SetText(string.format("%d %s", voteCount, L["VOTES"]))

@@ -33,7 +33,14 @@ local RESULTS_EVENTS = {
 
 local function CanSeeVoteCounts()
     local isML = Loothing.HasMasterLooterVisibility and Loothing:HasMasterLooterVisibility()
-    return not (Loothing.Settings and Loothing.Settings:GetHideVotes() and not isML)
+    if Loothing.Settings and Loothing.Settings:GetHideVotes() and not isML then
+        return false
+    end
+    return not Loothing.Observer or Loothing.Observer:CanPlayerSeeVoteCounts()
+end
+
+local function CanSeeResponses()
+    return not Loothing.Observer or Loothing.Observer:CanPlayerSeeResponses()
 end
 
 local PANEL_WIDTH = 400
@@ -384,15 +391,33 @@ function ResultsPanelMixin:DisplayResults(_results)
     local totalVotes = cm:GetTotalVotes()
     local winner = cm:GetMostVoted()
     local showVoteCounts = CanSeeVoteCounts()
+    local showResponses = CanSeeResponses()
 
-    -- Sort by votes only when vote counts are visible; otherwise row order
-    -- would leak hidden vote ranking.
+    -- Sort by private fields only when the viewer can see those fields;
+    -- otherwise row order itself leaks hidden votes/responses.
     local candidates
     if showVoteCounts and totalVotes > 0 then
         candidates = cm:GetCandidatesSortedBy("votes", false)
+    elseif showResponses then
+        candidates = cm:GetAllCandidates()
+        table.sort(candidates, function(a, b)
+            local ar = a.response or 999
+            local br = b.response or 999
+            local an = a.playerName or a.name or ""
+            local bn = b.playerName or b.name or ""
+            local aNum = type(ar) == "number"
+            local bNum = type(br) == "number"
+            if aNum ~= bNum then return aNum end
+            if ar ~= br then return ar < br end
+            return an < bn
+        end)
     else
         candidates = cm:GetAllCandidates()
-        table.sort(candidates, CandidateSorting.ByResponsePriority)
+        table.sort(candidates, function(a, b)
+            local an = a.playerName or a.name or ""
+            local bn = b.playerName or b.name or ""
+            return an < bn
+        end)
     end
 
     -- Update winner header
@@ -430,13 +455,13 @@ function ResultsPanelMixin:DisplayResults(_results)
         self:SelectCandidate(candidate, rowFrame)
     end
 
-    local autoSelectCandidate = winner or candidates[1]
+    local autoSelectCandidate = (showVoteCounts and winner) or candidates[1]
     local autoSelectRow = nil
 
     for _, candidate in ipairs(candidates) do
-        local isWinner = (winner and candidate == winner and totalVotes > 0)
+        local isWinner = (showVoteCounts and winner and candidate == winner and totalVotes > 0)
         local row = CreateCandidateResultRow(
-            self.resultsContent, candidate, yOffset, totalVotes, isWinner, clickCallback, showVoteCounts
+            self.resultsContent, candidate, yOffset, totalVotes, isWinner, clickCallback, showVoteCounts, showResponses
         )
         row.candidate = candidate
         self.responseRows[#self.responseRows + 1] = row
@@ -496,12 +521,16 @@ end
 -- @param candidates table - All candidates sorted
 function ResultsPanelMixin:UpdateWinnerSection(winner, totalVotes, candidates)
     local L = Loothing.Locale
+    local hideVotes = not CanSeeVoteCounts()
+    if hideVotes then
+        self.winnerText:SetText(L["VOTES_HIDDEN"] or "Votes hidden")
+        return
+    end
+
     if totalVotes == 0 then
         self.winnerText:SetText("|cff888888" .. L["NO_COUNCIL_VOTES"] .. "|r")
         return
     end
-
-    local hideVotes = not CanSeeVoteCounts()
 
     -- Detect ties
     local maxVotes = winner and winner.councilVotes or 0
@@ -521,14 +550,10 @@ function ResultsPanelMixin:UpdateWinnerSection(winner, totalVotes, candidates)
         self.winnerText:SetText("|cffffcc00" .. L["TIE"] .. ":|r " .. table.concat(names, ", "))
     elseif winner then
         local coloredName = winner:GetColoredName()
-        if hideVotes then
-            self.winnerText:SetText(L["RECOMMENDED"] .. ": " .. coloredName)
-        else
-            -- Show "N of M votes" so the majority denominator (ballots cast,
-            -- not council size) is visible inline with the winner's tally.
-            local totalVotes = self.results and self.results.totalVotes or maxVotes
-            self.winnerText:SetText(string.format(L["RECOMMENDED"] .. ": %s (%d/%d " .. L["VOTES_LABEL"] .. ")", coloredName, maxVotes, totalVotes))
-        end
+        -- Show "N of M votes" so the majority denominator (ballots cast,
+        -- not council size) is visible inline with the winner's tally.
+        local totalVotes = self.results and self.results.totalVotes or maxVotes
+        self.winnerText:SetText(string.format(L["RECOMMENDED"] .. ": %s (%d/%d " .. L["VOTES_LABEL"] .. ")", coloredName, maxVotes, totalVotes))
     end
 end
 
@@ -536,6 +561,11 @@ end
 -- @param cm table - CandidateManager
 -- @return number - yOffset after the summary
 function ResultsPanelMixin:UpdateResponseSummary(cm)
+    if not CanSeeResponses() then
+        self.responseSummaryText:SetText(L["RESPONSES_HIDDEN"] or "Responses hidden")
+        return -40
+    end
+
     local counts = cm:GetResponseCounts()
     local parts = {}
 

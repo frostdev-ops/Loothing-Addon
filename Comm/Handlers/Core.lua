@@ -45,6 +45,20 @@ local function isCouncilMember(sender)
     return Loothing.Council:IsMember(sender)
 end
 
+local function isVotingEligible(sender)
+    if not sender or not Loothing.Council then return false end
+    if Loothing.Council.GetVotingEligibleMembers then
+        local members = Loothing.Council:GetVotingEligibleMembers()
+        for _, member in ipairs(members or {}) do
+            if Utils.IsSamePlayer(member, sender) then
+                return true
+            end
+        end
+        return false
+    end
+    return isCouncilMember(sender)
+end
+
 --- Check if sender is a raid/party leader or assistant
 -- @param sender string
 -- @return boolean
@@ -136,6 +150,17 @@ local SCHEMAS = {
         { "type",       "string", true },
         { "data",       "table",  true },
     },
+    CANDIDATE_UPDATE = {
+        { "itemGUID",      "string", true },
+        { "candidateData", "table",  true },
+        { "sessionID",     "string", false },
+    },
+    VOTE_UPDATE = {
+        { "itemGUID",      "string", true },
+        { "candidateName", "string", true },
+        { "voters",        "table",  true },
+        { "sessionID",     "string", false },
+    },
 }
 
 --- Validate data against a schema and log on failure.
@@ -165,7 +190,7 @@ end
 
 function CommMixin:HandleSessionStart(data, sender)
     if not validateHandler("HandleSessionStart", data) then return end
-    -- SESSION_START is the authoritative ML declaration.  Accept from:
+    -- SESSION_START is the authoritative ML declaration. Accept from:
     --   1. Known ML (Session or Settings)
     --   2. Group leader or assistant
     --   3. Any group member — covers explicit ML (/lt ml) who may not be leader.
@@ -251,9 +276,14 @@ end
 
 function CommMixin:HandleVoteCommit(data, sender)
     if not validateHandler("HandleVoteCommit", data, SCHEMAS.VOTE_COMMIT) then return end
-    -- Only council members can vote
-    if not isCouncilMember(sender) then
-        Loothing:Debug("Rejected VOTE_COMMIT from non-council:", sender)
+    if Loothing.Session and not Loothing.Session:IsMasterLooter() then
+        Loothing:Debug("Rejected VOTE_COMMIT on non-ML receiver:", sender)
+        return
+    end
+    -- Only voting-eligible council members can vote. This excludes the ML
+    -- when ML Observer Mode is enabled, matching the displayed voter count.
+    if not isVotingEligible(sender) then
+        Loothing:Debug("Rejected VOTE_COMMIT from non-eligible council:", sender)
         return
     end
     data.voter = sender
@@ -448,6 +478,10 @@ end
 function CommMixin:HandlePlayerResponse(data, sender)
     if not validateHandler("HandlePlayerResponse", data, SCHEMAS.PLAYER_RESPONSE) then return end
     if not Loothing.Session then return end
+    if not Loothing.Session:IsMasterLooter() then
+        Loothing:Debug("Rejected PLAYER_RESPONSE on non-ML receiver:", sender)
+        return
+    end
 
     -- Validate sender is in the group (bypass in test mode)
     local isTestMode = TestMode and TestMode:IsEnabled()
@@ -486,7 +520,9 @@ end
 
 function CommMixin:HandleMLDBBroadcast(data, sender)
     if not validateHandler("HandleMLDBBroadcast", data, SCHEMAS.MLDB_BROADCAST) then return end
-    -- Accept from: known ML, leader/assistant (bootstraps ML), or group member when ML unknown
+    -- Accept from: known ML, leader/assistant (bootstraps ML), or group member
+    -- when ML is unknown. The last case covers explicit ML setups where the
+    -- chosen ML is not raid lead/assistant and MLDB is the first identity signal.
     if not isMasterLooter(sender) then
         local mlUnknown = not Loothing.masterLooter or Loothing.masterLooter == ""
         if not mlUnknown or not isGroupMember(sender) then
@@ -504,7 +540,11 @@ end
 ----------------------------------------------------------------------]]
 
 function CommMixin:HandleCandidateUpdate(data, sender)
-    if not validateHandler("HandleCandidateUpdate", data) then return end
+    if not validateHandler("HandleCandidateUpdate", data, SCHEMAS.CANDIDATE_UPDATE) then return end
+    if type(data.candidateData.name) ~= "string" then
+        Loothing:Debug("Rejected CANDIDATE_UPDATE — candidateData.name missing")
+        return
+    end
     if not isMasterLooter(sender) then
         Loothing:Debug("Rejected CANDIDATE_UPDATE from non-ML:", sender)
         return
@@ -514,7 +554,7 @@ function CommMixin:HandleCandidateUpdate(data, sender)
 end
 
 function CommMixin:HandleVoteUpdate(data, sender)
-    if not validateHandler("HandleVoteUpdate", data) then return end
+    if not validateHandler("HandleVoteUpdate", data, SCHEMAS.VOTE_UPDATE) then return end
     if not isMasterLooter(sender) then
         Loothing:Debug("Rejected VOTE_UPDATE from non-ML:", sender)
         return
@@ -759,6 +799,10 @@ end
 function CommMixin:HandleResponseBatch(data, sender)
     if not validateHandler("HandleResponseBatch", data, SCHEMAS.RESPONSE_BATCH) then return end
     if not Loothing.Session then return end
+    if not Loothing.Session:IsMasterLooter() then
+        Loothing:Debug("Rejected RESPONSE_BATCH on non-ML receiver:", sender)
+        return
+    end
 
     -- Validate sender is in the group
     local isTestMode = TestMode and TestMode:IsEnabled()

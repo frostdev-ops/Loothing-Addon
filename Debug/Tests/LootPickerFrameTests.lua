@@ -19,6 +19,12 @@ if TestRunner and Assert then
         local originalIsMasterLooter
         local originalSettings
         local originalComm
+        local originalCContainer
+        local originalNumBagSlots
+        local originalTooltipScan
+        local originalCItem
+        local originalTradeQueue
+        local originalIsInGroup
 
         TestRunner:BeforeEach(function()
             originalFilter = Loothing.ItemFilter
@@ -29,6 +35,12 @@ if TestRunner and Assert then
             originalIsMasterLooter = Loothing.isMasterLooter
             originalSettings = Loothing.Settings
             originalComm = Loothing.Comm
+            originalCContainer = C_Container
+            originalNumBagSlots = NUM_BAG_SLOTS
+            originalTooltipScan = ns.TooltipScan
+            originalCItem = C_Item
+            originalTradeQueue = Loothing.TradeQueue
+            originalIsInGroup = IsInGroup
         end)
 
         TestRunner:AfterEach(function()
@@ -40,6 +52,12 @@ if TestRunner and Assert then
             Loothing.isMasterLooter = originalIsMasterLooter
             Loothing.Settings = originalSettings
             Loothing.Comm = originalComm
+            C_Container = originalCContainer
+            NUM_BAG_SLOTS = originalNumBagSlots
+            ns.TooltipScan = originalTooltipScan
+            C_Item = originalCItem
+            Loothing.TradeQueue = originalTradeQueue
+            IsInGroup = originalIsInGroup
         end)
 
         local function CreatePicker(encounterID)
@@ -518,6 +536,233 @@ if TestRunner and Assert then
             Assert.Equals(nil, session.pendingLootTimer)
             Assert.Equals(nil, session.pendingBufferedPrompt)
             Assert.Equals(0, session.receivedLootCount)
+        end, { category = "unit" })
+
+        TestRunner:It("counts pre-pull trade-window items as pre-encounter inventory", function()
+            NUM_BAG_SLOTS = 0
+            C_Container = {
+                GetContainerNumSlots = function() return 3 end,
+                GetContainerItemID = function(_, slot)
+                    if slot == 1 or slot == 2 then return 111 end
+                    if slot == 3 then return 222 end
+                    return nil
+                end,
+            }
+            ns.TooltipScan = {
+                GetContainerItemTradeTimeRemaining = function(_, _, slot)
+                    if slot == 2 then return 3600 end
+                    return 0
+                end,
+            }
+
+            local session = setmetatable({
+                preEncounterBagSnapshot = {},
+            }, { __index = ns.SessionMixin })
+
+            session:SnapshotBags()
+
+            Assert.Equals(2, session.preEncounterBagSnapshot[111])
+            Assert.Equals(1, session.preEncounterBagSnapshot[222])
+        end, { category = "unit" })
+
+        TestRunner:It("does count tracked session trade-window items as pre-encounter inventory", function()
+            NUM_BAG_SLOTS = 0
+            C_Container = {
+                GetContainerNumSlots = function() return 2 end,
+                GetContainerItemID = function(_, slot)
+                    if slot == 1 or slot == 2 then return 111 end
+                    return nil
+                end,
+            }
+            ns.TooltipScan = {
+                GetContainerItemTradeTimeRemaining = function(_, _, slot)
+                    if slot == 2 then return 3600 end
+                    return 0
+                end,
+            }
+
+            local session = setmetatable({
+                preEncounterBagSnapshot = {},
+                lootBuffer = {},
+                items = {
+                    Enumerate = function()
+                        local done = false
+                        return function()
+                            if done then return nil end
+                            done = true
+                            return { itemID = 111, isTradable = true }
+                        end
+                    end,
+                },
+            }, { __index = ns.SessionMixin })
+
+            session:SnapshotBags()
+
+            Assert.Equals(2, session.preEncounterBagSnapshot[111])
+        end, { category = "unit" })
+
+        TestRunner:It("adds active roll-won loot without an encounter id to the active session", function()
+            local addCount = 0
+            local deferred = false
+            Loothing.handleLoot = true
+            Loothing.isMasterLooter = true
+            Loothing.Settings = {
+                GetSessionTriggerAction = function() return "prompt" end,
+            }
+            Loothing.Comm = nil
+
+            local session = setmetatable({
+                state = Loothing.SessionState.ACTIVE,
+                encounterID = 101,
+                sessionID = "session",
+                items = {
+                    Enumerate = function()
+                        return function() return nil end
+                    end,
+                },
+                IsMasterLooter = function() return true end,
+                AddItem = function()
+                    addCount = addCount + 1
+                    return { guid = "roll-guid" }
+                end,
+                BufferDeferredLoot = function()
+                    deferred = true
+                    return true
+                end,
+            }, { __index = ns.SessionMixin })
+
+            session:HandleTradable({
+                itemLink = "|cffa335ee|Hitem:777777::::::::80:::::|h[Roll Won Loot]|h|r",
+                itemID = 777777,
+                playerName = "Raider-Realm",
+                source = "roll_won",
+            })
+
+            Assert.Equals(1, addCount)
+            Assert.IsFalse(deferred)
+        end, { category = "unit" })
+
+        TestRunner:It("does not let bag-scan duplicate copies get swallowed by roll-won refresh", function()
+            local addCount = 0
+            local forceArg
+            Loothing.handleLoot = true
+            Loothing.isMasterLooter = true
+            Loothing.Settings = {
+                GetSessionTriggerAction = function() return "prompt" end,
+            }
+
+            local session = setmetatable({
+                state = Loothing.SessionState.ACTIVE,
+                encounterID = 101,
+                sessionID = "session",
+                lootBuffer = {
+                    {
+                        itemLink = "|cffa335ee|Hitem:111::::::::80:::::|h[Same Loot]|h|r",
+                        itemID = 111,
+                        playerName = "Raider-Realm",
+                        source = "roll_won",
+                    },
+                },
+                items = {
+                    Enumerate = function()
+                        return function() return nil end
+                    end,
+                },
+                IsMasterLooter = function() return true end,
+                AddItem = function(_, _, _, _, force)
+                    addCount = addCount + 1
+                    forceArg = force
+                    return { guid = "second-copy" }
+                end,
+                TriggerEvent = function() end,
+            }, { __index = ns.SessionMixin })
+
+            session:HandleTradable({
+                itemLink = "|cffa335ee|Hitem:111::::::::80:::::|h[Same Loot]|h|r",
+                itemID = 111,
+                playerName = "Raider-Realm",
+                source = "bag_scan",
+                timeRemaining = 3500,
+            })
+
+            Assert.Equals(0, addCount)
+            Assert.Equals(3500, session.lootBuffer[1].tradeTimeRemaining)
+
+            session:HandleTradable({
+                itemLink = "|cffa335ee|Hitem:111::::::::80:::::|h[Same Loot]|h|r",
+                itemID = 111,
+                playerName = "Raider-Realm",
+                source = "bag_scan",
+                timeRemaining = 3600,
+                forceCreate = true,
+            })
+
+            Assert.Equals(1, addCount)
+            Assert.IsTrue(forceArg)
+        end, { category = "unit" })
+
+        TestRunner:It("includes encounter metadata on non-ML bag-scan reports", function()
+            local sent = {}
+            IsInGroup = function() return true end
+            NUM_BAG_SLOTS = 0
+            C_Container = {
+                GetContainerNumSlots = function() return 2 end,
+                GetContainerItemID = function(_, slot)
+                    return slot <= 2 and 111 or nil
+                end,
+                GetContainerItemLink = function(_, slot)
+                    return "|cffa335ee|Hitem:111::::::::80:::::|h[Same Loot " .. slot .. "]|h|r"
+                end,
+            }
+            Loothing.TradeQueue = {
+                GetContainerItemTradeTimeRemaining = function(_, _, slot)
+                    return slot == 1 and 3500 or 3600
+                end,
+            }
+            Loothing.Settings = {
+                GetSessionTriggerAction = function() return "prompt" end,
+            }
+            Loothing.Comm = {
+                Send = function(_, command, data)
+                    sent[#sent + 1] = { command = command, data = data }
+                end,
+            }
+
+            local session = setmetatable({
+                preEncounterBagSnapshot = {},
+                bagScanSnapshot = {},
+                reportedTradeableItems = {},
+                bagScanEncounterID = 202,
+                bagScanEncounterName = "Boss Two",
+                IsMasterLooter = function() return false end,
+            }, { __index = ns.SessionMixin })
+
+            session:ScanBagsForTradeableItems()
+
+            Assert.Equals(2, #sent)
+            Assert.Equals(Loothing.MsgType.TRADABLE, sent[1].command)
+            Assert.Equals(202, sent[1].data.encounterID)
+            Assert.Equals("Boss Two", sent[1].data.encounterName)
+            Assert.Equals("bag_scan", sent[1].data.source)
+            Assert.IsFalse(sent[1].data.forceCreate)
+            Assert.IsTrue(sent[2].data.forceCreate)
+        end, { category = "unit" })
+
+        TestRunner:It("does not mix encounter-scoped rows into an encounterless picker", function()
+            Loothing.ItemFilter = {
+                EvaluateItem = function()
+                    return { allowed = true }
+                end,
+            }
+
+            local picker = CreatePicker(0)
+            picker:RebuildEntries({
+                { itemLink = "generic", playerName = "Raider-Realm" },
+                { itemLink = "future", playerName = "Raider-Realm", encounterID = 202 },
+            })
+
+            Assert.Equals(1, #picker.entries)
+            Assert.Equals("generic", picker.entries[1].itemLink)
         end, { category = "unit" })
 
         TestRunner:It("clears only matching encounter rows from mixed buffer", function()

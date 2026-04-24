@@ -17,6 +17,7 @@ if TestRunner and Assert and Loothing and ns.CreateObserver then
         saved.isMasterLooter = Loothing.isMasterLooter
         saved.masterLooter = Loothing.masterLooter
         saved.IsCanonicalML = Loothing.IsCanonicalML
+        saved.GetCanonicalML = Loothing.GetCanonicalML
         saved.mlStateVerified = Loothing.mlStateVerified
         saved.GetPlayerFullName = Utils.GetPlayerFullName
     end
@@ -30,6 +31,7 @@ if TestRunner and Assert and Loothing and ns.CreateObserver then
         Loothing.isMasterLooter = saved.isMasterLooter
         Loothing.masterLooter = saved.masterLooter
         Loothing.IsCanonicalML = saved.IsCanonicalML
+        Loothing.GetCanonicalML = saved.GetCanonicalML
         Loothing.mlStateVerified = saved.mlStateVerified
         Utils.GetPlayerFullName = saved.GetPlayerFullName
     end
@@ -152,6 +154,35 @@ if TestRunner and Assert and Loothing and ns.CreateObserver then
             Assert.IsTrue(observer:CanPlayerSeeResponses(), "ML observer should keep full response visibility")
             Assert.IsTrue(observer:CanPlayerSeeVoteCounts(), "ML observer should keep full vote visibility")
             Assert.IsFalse(council:CanPlayerVote(), "ML observer mode should disable ML council voting")
+        end, { category = "unit" })
+
+        TestRunner:It("uses remote ML observer mode when non-ML clients calculate eligible voters", function()
+            local observer = ns.CreateObserver()
+            observer.remotePrimary = true
+            observer.remoteMlIsObserver = true
+            Loothing.Observer = observer
+            Loothing.GetCanonicalML = function() return "Felbane-Duskwood" end
+            Loothing.Session = {
+                GetMasterLooter = function() return "Felbane-Duskwood" end,
+                IsMasterLooter = function() return false end,
+            }
+
+            local council = {
+                GetMembersInRaid = function()
+                    return {
+                        "Felbane-Duskwood",
+                        "Councilone-Duskwood",
+                        "Counciltwo-Duskwood",
+                    }
+                end,
+            }
+            setmetatable(council, { __index = ns.CouncilMixin })
+
+            local members = council:GetVotingEligibleMembers()
+
+            Assert.Equals(2, #members)
+            Assert.Equals("Councilone-Duskwood", members[1])
+            Assert.Equals("Counciltwo-Duskwood", members[2])
         end, { category = "unit" })
     end)
 end

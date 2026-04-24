@@ -15,8 +15,10 @@ local Loothing = ns.Addon
 -- @param isWinner boolean - Whether this candidate is the winner
 -- @param onClick function|nil - Called with (candidate, row) on click
 -- @param showVotes boolean|nil - Whether to show vote counts and percentages
-local function CreateCandidateResultRow(parent, candidate, yOffset, totalVotes, isWinner, onClick, showVotes)
+-- @param showResponses boolean|nil - Whether to show response text/color
+local function CreateCandidateResultRow(parent, candidate, yOffset, totalVotes, isWinner, onClick, showVotes, showResponses)
     showVotes = showVotes ~= false
+    showResponses = showResponses ~= false
     local row = CreateFrame("Button", nil, parent, "BackdropTemplate")
     row:SetPoint("TOPLEFT", 0, yOffset)
     row:SetPoint("TOPRIGHT", 0, yOffset)
@@ -38,7 +40,7 @@ local function CreateCandidateResultRow(parent, candidate, yOffset, totalVotes, 
         responseInfo = Loothing.ResponseInfo[response] or Loothing.SystemResponseInfo[response]
     end
 
-    local rawColor = (responseInfo and responseInfo.color) or { r = 0.5, g = 0.5, b = 0.5 }
+    local rawColor = (showResponses and responseInfo and responseInfo.color) or { r = 0.5, g = 0.5, b = 0.5 }
     local r, g, b
     if rawColor.r then
         r, g, b = rawColor.r, rawColor.g, rawColor.b
@@ -77,7 +79,8 @@ local function CreateCandidateResultRow(parent, candidate, yOffset, totalVotes, 
     votesText:SetTextColor(1, 1, 1)
 
     -- Response badge (below name)
-    local responseName = (responseInfo and responseInfo.name) or "No Response"
+    local responseName = showResponses and ((responseInfo and responseInfo.name) or "No Response")
+        or (Loothing.Locale and Loothing.Locale["RESPONSES_HIDDEN"] or "Responses hidden")
     local responseText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     responseText:SetPoint("TOPLEFT", nameText, "BOTTOMLEFT", 0, -2)
     responseText:SetText(responseName)

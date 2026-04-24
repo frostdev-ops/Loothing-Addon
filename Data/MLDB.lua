@@ -518,7 +518,7 @@ function MLDBMixin:OnMLDBBroadcast(data)
         end
     end
     -- If ML is unknown, the Core handler already validated the sender as a
-    -- group member. Accept the MLDB so it can bootstrap the ML identity.
+    -- group member. Accept the MLDB so it can bootstrap explicit ML identity.
 
     -- Decompress
     local settings = self:DecompressFromTransmit(compressed)

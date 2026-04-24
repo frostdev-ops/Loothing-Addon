@@ -510,12 +510,11 @@ function LootPickerFrameMixin:RebuildEntries(buffer)
 
     local filter = Loothing.ItemFilter
     for i, raw in ipairs(buffer) do
+        local pickerEncounterID = tonumber(self.encounterID) or 0
+        local rawEncounterID = raw and tonumber(raw.encounterID) or 0
         local sameEncounter = not raw
-            or raw.encounterID == nil
-            or raw.encounterID == 0
-            or self.encounterID == nil
-            or self.encounterID == 0
-            or raw.encounterID == self.encounterID
+            or rawEncounterID == 0
+            or (pickerEncounterID ~= 0 and rawEncounterID == pickerEncounterID)
         if raw and raw.itemLink and sameEncounter then
             -- Preserve filter decision + user override across rebuilds for the
             -- SAME (link, looter). EvaluateItem depends on async item cache

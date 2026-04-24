@@ -294,6 +294,14 @@ function ObserverMixin:IsMLObserver()
     return GetEffectiveMLIsObserver(self)
 end
 
+--- Is the active ML configured as a non-voting observer?
+-- Unlike IsMLObserver(), this is a session-wide policy query used by
+-- non-ML clients when calculating expected council voters.
+-- @return boolean
+function ObserverMixin:IsMasterLooterObserverModeEnabled()
+    return GetEffectiveMLIsObserver(self)
+end
+
 --- Does the current player have privileged council visibility?
 -- ML and council members always have full visibility even if observer
 -- permissions are restrictive or session/global ML state is mid-sync.

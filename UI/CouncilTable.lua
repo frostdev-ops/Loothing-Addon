@@ -46,13 +46,17 @@ local SCROLL_STEP = 124  -- ITEM_TAB_WIDTH + ITEM_TAB_SPACING
 -- Throttle refresh to avoid spam during bulk candidate updates
 local REFRESH_THROTTLE = 0.15
 
+local function HasMasterLooterVisibility()
+    return CouncilTableMixin.HasMasterLooterVisibility
+        and CouncilTableMixin.HasMasterLooterVisibility()
+end
+
 --- Check if the current player should be presented as observing rather than voting.
 -- Observers can see the table when observers.openObservation is enabled,
 -- but cannot perform ML actions or cast votes.
 local function IsObserverOnly()
     local isCouncil = Loothing.Council and Loothing.Council:IsPlayerCouncilMember()
-    local isML = CouncilTableMixin.HasMasterLooterVisibility
-        and CouncilTableMixin.HasMasterLooterVisibility()
+    local isML = HasMasterLooterVisibility()
     if not isCouncil and not isML then
         return true  -- Regular observer
     end
@@ -63,6 +67,28 @@ local function IsObserverOnly()
         return true  -- ML not on council = implicit observer
     end
     return false
+end
+
+local function CanSeeVoteCounts()
+    if Loothing.Settings and Loothing.Settings:GetHideVotes()
+        and not HasMasterLooterVisibility() then
+        return false
+    end
+    return not Loothing.Observer or Loothing.Observer:CanPlayerSeeVoteCounts()
+end
+
+local function CanSeeVoterIdentities()
+    local isML = HasMasterLooterVisibility()
+    local anonymous = Loothing.Settings and Loothing.Settings:GetAnonymousVoting()
+    local mlOverride = isML and Loothing.Settings and Loothing.Settings:GetMlSeesVotes()
+    if anonymous and not mlOverride then
+        return false
+    end
+    return not Loothing.Observer or Loothing.Observer:CanPlayerSeeVoterIdentities()
+end
+
+local function CanSeeResponses()
+    return not Loothing.Observer or Loothing.Observer:CanPlayerSeeResponses()
 end
 
 function CouncilTableMixin:Init(parent)
@@ -985,6 +1011,18 @@ function CouncilTableMixin:UpdateVoterProgress()
         return
     end
 
+    if not CanSeeVoteCounts() then
+        self.voterProgressText:SetText(L["VOTES_HIDDEN"] or "Votes hidden")
+        self.voterProgressText:SetTextColor(0.55, 0.55, 0.55)
+        if self.voterProgressBtn then
+            self.voterProgressBtn:SetSize(
+                self.voterProgressText:GetStringWidth() + 8,
+                self.voterProgressText:GetStringHeight() + 8
+            )
+        end
+        return
+    end
+
     local expectedVoters = Loothing.Council and Loothing.Council:GetVotingEligibleMembers() or {}
     local totalExpected = #expectedVoters
 
@@ -1022,6 +1060,7 @@ end
 
 function CouncilTableMixin:ShowVoterProgressTooltip(anchor)
     if not self.currentItem then return end
+    if not CanSeeVoteCounts() then return end
 
     local expectedVoters = Loothing.Council and Loothing.Council:GetVotingEligibleMembers() or {}
     if #expectedVoters == 0 then return end
@@ -1040,9 +1079,10 @@ function CouncilTableMixin:ShowVoterProgressTooltip(anchor)
         local hasVoted = voterSet[member] or false
         local shortName = member:match("^([^%-]+)") or member
 
-        -- Class-color the name
-        local nameText = shortName
-        if Loothing.PlayerCache then
+        -- Class-color the name only when identities are visible.
+        local canSeeIds = CanSeeVoterIdentities()
+        local nameText = canSeeIds and shortName or L["VOTER_HIDDEN"] or "Hidden voter"
+        if canSeeIds and Loothing.PlayerCache then
             local info = Loothing.PlayerCache:Get(member)
             if info and info.class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[info.class] then
                 local cc = RAID_CLASS_COLORS[info.class]
@@ -1050,9 +1090,9 @@ function CouncilTableMixin:ShowVoterProgressTooltip(anchor)
             end
         end
 
-        local icon = hasVoted
+        local icon = canSeeIds and (hasVoted
             and "|TInterface\\RaidFrame\\ReadyCheck-Ready:0|t "
-            or "|TInterface\\RaidFrame\\ReadyCheck-NotReady:0|t "
+            or "|TInterface\\RaidFrame\\ReadyCheck-NotReady:0|t ") or ""
         GameTooltip:AddLine(icon .. nameText)
     end
 

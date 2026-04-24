@@ -103,7 +103,7 @@ local function SameEncounterID(a, b)
 end
 
 local function IsCreationSignal(data)
-    return data and data.source == "roll_won"
+    return data and (data.source == "roll_won" or data.forceCreate == true)
 end
 
 local function SameItemIdentity(entry, itemID, itemLink)
@@ -116,6 +116,20 @@ local function SameItemIdentity(entry, itemID, itemLink)
         return tonumber(entryItemID) == tonumber(itemID)
     end
     return entry.itemLink == itemLink
+end
+
+local function IsVotingEligibleMember(name)
+    if not name or not Loothing.Council then return false end
+    if Loothing.Council.GetVotingEligibleMembers then
+        local members = Loothing.Council:GetVotingEligibleMembers()
+        for _, member in ipairs(members or {}) do
+            if Utils.IsSamePlayer(member, name) then
+                return true
+            end
+        end
+        return false
+    end
+    return Loothing.Council:IsMember(name)
 end
 
 --[[--------------------------------------------------------------------
@@ -177,7 +191,7 @@ function SessionMixin:Init()
     self.bagScanEncounterID = nil
     self.bagScanEncounterName = nil
     self.bagScanSnapshot = {}
-    self.reportedTradeableItems = {}  -- { [itemID] = true } dedup (was keyed by itemLink pre-2.0.27)
+    self.reportedTradeableItems = {}  -- { [itemID] = reportedCount } dedup (was itemLink-keyed pre-2.0.27)
     self.preEncounterBagSnapshot = {} -- { [itemID] = count } taken at ENCOUNTER_START (was itemLink-keyed pre-2.0.27)
 
     -- Legacy aliases (kept for any external reads)
@@ -368,7 +382,8 @@ function SessionMixin:HandleTradable(data)
     end
     local isCreation = IsCreationSignal(data)
 
-    if data.source == "bag_scan" and type(self.lootBuffer) == "table" then
+    if data.source == "bag_scan" and data.forceCreate ~= true
+        and type(self.lootBuffer) == "table" then
         local refreshed = false
         for _, entry in ipairs(self.lootBuffer) do
             if entry.source == "roll_won"
@@ -393,7 +408,8 @@ function SessionMixin:HandleTradable(data)
         return
     end
 
-    if self:IsActive() and isCreation and data.encounterID == nil and self.encounterID ~= nil then
+    if self:IsActive() and isCreation and data.source ~= "roll_won"
+        and data.encounterID == nil and self.encounterID ~= nil then
         self:BufferDeferredLoot(data, 0, data.encounterName or "Loot")
         return
     end
@@ -494,7 +510,8 @@ function SessionMixin:HandleTradable(data)
 
     if self:IsActive() then
         -- Active session: add item and broadcast
-        local item = self:AddItem(itemLink, playerName, nil, nil, true)
+        local forceAdd = data.force == true or data.source == "roll_won" or data.forceCreate == true
+        local item = self:AddItem(itemLink, playerName, nil, forceAdd or nil, true)
         if not item then
             TraceLoot("handleT:add-returned-nil", itemLink,
                 "looter=" .. tostring(playerName))
@@ -1676,7 +1693,9 @@ function SessionMixin:OnItemVoteTimeout(item)
         local pollDelay = Loothing.Timing.VOTE_POLL_DELAY or 5
         C_Timer.After(pollDelay, function()
             if not self:IsMasterLooter() then return end
-            local members = Loothing.Council:GetAllMembers()
+            local members = Loothing.Council.GetVotingEligibleMembers
+                and Loothing.Council:GetVotingEligibleMembers()
+                or Loothing.Council:GetAllMembers()
             if not members or #members == 0 then return end
 
             local missing = {}
@@ -2025,10 +2044,10 @@ function SessionMixin:SubmitVote(itemGUID, responses)
     -- Use SafeUnitClass to avoid secret value tainting
     local _, class = Loolib.SecretUtil.SafeUnitClass("player")
 
-    -- Only council members should vote (bypass in test mode)
+    -- Only voting-eligible council members should vote (bypass in test mode)
     local isTestMode = ns.TestMode and ns.TestMode:IsEnabled()
-    if Loothing.Council and not Loothing.Council:IsMember(voter) and not isTestMode then
-        Loothing:Debug("SubmitVote: rejected - not a council member:", voter)
+    if Loothing.Council and not IsVotingEligibleMember(voter) and not isTestMode then
+        Loothing:Debug("SubmitVote: rejected - not voting eligible:", voter)
         Loothing:Error("You are not on the council for this session.")
         return false
     end
@@ -2726,27 +2745,39 @@ function SessionMixin:ScanBagsForTradeableItems()
     local TradeQueue = Loothing.TradeQueue
     if not TradeQueue then return end
 
-    -- First pass: walk every bag slot once. Build an aggregate count
-    -- keyed by itemID and remember one (bag, slot, link) exemplar per
-    -- itemID so we can look up trade time and report the full link.
-    -- A later discovery slot overwrites — acceptable because the trade
-    -- time is read from the slot we store last (most recently seen).
+    -- First pass: count only. Avoid per-slot table allocation and tooltip
+    -- work unless the itemID actually increased against the encounter snapshot.
     local currentCounts = {}
-    local exemplar = {}  -- exemplar[itemID] = { bag, slot, link }
     for bag = 0, NUM_BAG_SLOTS do
         local numSlots = C_Container.GetContainerNumSlots(bag)
         for slot = 1, numSlots or 0 do
             local itemID = C_Container.GetContainerItemID(bag, slot)
             if itemID then
                 currentCounts[itemID] = (currentCounts[itemID] or 0) + 1
-                exemplar[itemID] = exemplar[itemID] or {
-                    bag  = bag,
-                    slot = slot,
-                    link = C_Container.GetContainerItemLink(bag, slot),
-                }
             end
         end
     end
+
+    local snapshot = self.bagScanSnapshot or self.preEncounterBagSnapshot or {}
+    local candidatesByItemID = {}
+    local hasCandidates = false
+    for itemID, currentCount in pairs(currentCounts) do
+        local preCount = snapshot[itemID] or 0
+        local newCopies = currentCount - preCount
+        local storedReported = self.reportedTradeableItems[itemID]
+        local reportedCount = tonumber(storedReported) or (storedReported == true and 1 or 0)
+        if newCopies > reportedCount then
+            candidatesByItemID[itemID] = {
+                currentCount = currentCount,
+                preCount = preCount,
+                newCopies = newCopies,
+                reportedCount = reportedCount,
+            }
+            hasCandidates = true
+        end
+    end
+
+    if not hasCandidates then return end
 
     -- In `prompt` mode the ML's Loot Picker is the canonical override
     -- gate — the bag scan surfaces EVERY new tradeable so the picker has
@@ -2782,86 +2813,121 @@ function SessionMixin:ScanBagsForTradeableItems()
         end
     end
 
-    -- Diff against snapshot — new drops only.
-    local snapshot = self.bagScanSnapshot or self.preEncounterBagSnapshot
-    for itemID, currentCount in pairs(currentCounts) do
-        local preCount = snapshot[itemID] or 0
-        if currentCount <= preCount then
-            -- Not a new drop.
-        elseif self.reportedTradeableItems[itemID] then
-            -- Already reported in this post-encounter window.
-        else
-            local ex = exemplar[itemID]
-            local itemLink = ex and ex.link
-            if itemLink then
-                local rejected = false
-                if enforceFilters then
-                    local minQ = GetMinQuality()
-                    local quality = Utils.GetItemQuality(itemLink)
-                    if not quality or quality < minQ then
-                        TraceLoot("quality-low", itemLink,
-                            "got=" .. tostring(quality) .. " min=" .. tostring(minQ))
-                        rejected = true
-                    elseif IsItemClassBlocked(itemLink) then
-                        local _, _, _, _, _, classID, subClassID = C_Item.GetItemInfoInstant(itemLink)
-                        TraceLoot("class-blocked", itemLink,
-                            "class=" .. tostring(classID) .. " sub=" .. tostring(subClassID))
-                        rejected = true
-                    else
-                        local boe = IsItemBoE(itemLink)
-                        local autoAddBoEs = Loothing.Settings and Loothing.Settings:Get("ml.autoAddBoEs", false)
-                        if boe and not autoAddBoEs then
-                            TraceLoot("boe-excluded", itemLink, "autoAddBoEs=false")
-                            rejected = true
-                        elseif Loothing.ItemFilter and Loothing.ItemFilter:ShouldIgnoreItem(itemLink) then
-                            TraceLoot("in-ignore-list", itemLink)
-                            rejected = true
-                        end
-                    end
-                end
-
-                if not rejected then
-                    -- Trade time by (bag, slot) from the exemplar — avoids
-                    -- the link-equality bug the old code had when iterating
-                    -- bags a second time to match an itemLink.
+    -- Second pass: collect links/trade-time only for itemIDs that had new,
+    -- unreported copies. For duplicates, choose the newest trade-window slots
+    -- by sorting finite trade times ascending and skipping the older copies
+    -- already represented by the snapshot.
+    local slotsByItemID = {}
+    for bag = 0, NUM_BAG_SLOTS do
+        local numSlots = C_Container.GetContainerNumSlots(bag)
+        for slot = 1, numSlots or 0 do
+            local itemID = C_Container.GetContainerItemID(bag, slot)
+            if itemID and candidatesByItemID[itemID] then
+                local itemLink = C_Container.GetContainerItemLink(bag, slot)
+                if itemLink then
                     local tradeTime = TradeQueue.GetContainerItemTradeTimeRemaining
-                        and TradeQueue:GetContainerItemTradeTimeRemaining(ex.bag, ex.slot)
+                        and TradeQueue:GetContainerItemTradeTimeRemaining(bag, slot)
                         or nil
-
-                    if not tradeTime or tradeTime <= 0 or tradeTime == math.huge then
-                        TraceLoot("no-trade-time", itemLink,
-                            "bag=" .. ex.bag .. " slot=" .. ex.slot
-                            .. " returned=" .. tostring(tradeTime))
+                    if tradeTime and tradeTime > 0 and tradeTime ~= math.huge then
+                        slotsByItemID[itemID] = slotsByItemID[itemID] or {}
+                        slotsByItemID[itemID][#slotsByItemID[itemID] + 1] = {
+                            bag = bag,
+                            slot = slot,
+                            link = itemLink,
+                            tradeTime = tradeTime,
+                        }
                     else
-                        TraceLoot("candidate", itemLink,
-                            "isML=" .. tostring(isML) .. " tt=" .. tradeTime)
-
-                        if isML then
-                            -- ML self-loopback: buffer (or add to session)
-                            -- directly. HandleTradable is idempotent.
-                            self:HandleTradable({
-                                itemLink      = itemLink,
-                                timeRemaining = tradeTime,
-                                playerName    = Utils.GetPlayerFullName(),
-                                encounterID   = self.bagScanEncounterID or self.lastEncounterID,
-                                encounterName = self.bagScanEncounterName or self.lastEncounterName,
-                                source        = "bag_scan",
-                            })
-                            self.reportedTradeableItems[itemID] = true
-                        elseif suppressNonMLTradable then
-                            -- Auto-roll raid: non-ML doesn't broadcast.
-                            TraceLoot("suppressed-nonml-tradable", itemLink,
-                                "groupLoot=active handleLoot=true")
-                            self.reportedTradeableItems[itemID] = true
-                        else
-                            Loothing.Comm:Send(Loothing.MsgType.TRADABLE, {
-                                itemLink      = itemLink,
-                                timeRemaining = tradeTime,
-                            })
-                            self.reportedTradeableItems[itemID] = true
-                        end
+                        TraceLoot("no-trade-time", itemLink,
+                            "bag=" .. bag .. " slot=" .. slot
+                            .. " returned=" .. tostring(tradeTime))
                     end
                 end
+            end
+        end
+    end
+
+    for itemID, info in pairs(candidatesByItemID) do
+        local newCopies = info.newCopies
+        local reportedCount = info.reportedCount
+        local reportableSlots = slotsByItemID[itemID] or {}
+
+        if #reportableSlots > 1 then
+            table.sort(reportableSlots, function(a, b)
+                return (a.tradeTime or 0) < (b.tradeTime or 0)
+            end)
+        end
+
+        local oldTradeableCopies = #reportableSlots - newCopies
+        if oldTradeableCopies < 0 then oldTradeableCopies = 0 end
+
+        local reportsThisScan = 0
+        local startIndex = oldTradeableCopies + reportedCount + 1
+        for index = startIndex, #reportableSlots do
+            if reportedCount + reportsThisScan >= newCopies then break end
+
+            local ex = reportableSlots[index]
+            local itemLink = ex.link
+            local rejected = false
+
+            if enforceFilters then
+                local minQ = GetMinQuality()
+                local quality = Utils.GetItemQuality(itemLink)
+                if not quality or quality < minQ then
+                    TraceLoot("quality-low", itemLink,
+                        "got=" .. tostring(quality) .. " min=" .. tostring(minQ))
+                    rejected = true
+                elseif IsItemClassBlocked(itemLink) then
+                    local _, _, _, _, _, classID, subClassID = C_Item.GetItemInfoInstant(itemLink)
+                    TraceLoot("class-blocked", itemLink,
+                        "class=" .. tostring(classID) .. " sub=" .. tostring(subClassID))
+                    rejected = true
+                else
+                    local boe = IsItemBoE(itemLink)
+                    local autoAddBoEs = Loothing.Settings and Loothing.Settings:Get("ml.autoAddBoEs", false)
+                    if boe and not autoAddBoEs then
+                        TraceLoot("boe-excluded", itemLink, "autoAddBoEs=false")
+                        rejected = true
+                    elseif Loothing.ItemFilter and Loothing.ItemFilter:ShouldIgnoreItem(itemLink) then
+                        TraceLoot("in-ignore-list", itemLink)
+                        rejected = true
+                    end
+                end
+            end
+
+            if not rejected then
+                local tradeTime = ex.tradeTime
+                local forceCreate = (reportedCount + reportsThisScan) > 0
+                TraceLoot("candidate", itemLink,
+                    "isML=" .. tostring(isML) .. " tt=" .. tradeTime)
+
+                if isML then
+                    self:HandleTradable({
+                        itemLink      = itemLink,
+                        itemID        = itemID,
+                        timeRemaining = tradeTime,
+                        playerName    = Utils.GetPlayerFullName(),
+                        encounterID   = self.bagScanEncounterID or self.lastEncounterID,
+                        encounterName = self.bagScanEncounterName or self.lastEncounterName,
+                        source        = "bag_scan",
+                        forceCreate   = forceCreate,
+                    })
+                elseif suppressNonMLTradable then
+                    TraceLoot("suppressed-nonml-tradable", itemLink,
+                        "groupLoot=active handleLoot=true")
+                else
+                    Loothing.Comm:Send(Loothing.MsgType.TRADABLE, {
+                        itemLink      = itemLink,
+                        itemID        = itemID,
+                        timeRemaining = tradeTime,
+                        encounterID   = self.bagScanEncounterID or self.lastEncounterID,
+                        encounterName = self.bagScanEncounterName or self.lastEncounterName,
+                        source        = "bag_scan",
+                        forceCreate   = forceCreate,
+                    })
+                end
+
+                reportsThisScan = reportsThisScan + 1
+                self.reportedTradeableItems[itemID] = reportedCount + reportsThisScan
             end
         end
     end
@@ -4006,12 +4072,25 @@ function SessionMixin:FlushResponseBroadcasts()
 
     if not Loothing.Comm then return end
 
-    if #buffer == 1 then
-        -- Single update: send directly (no BATCH wrapper overhead)
-        Loothing.Comm:Send(buffer[1].command, buffer[1].data, nil, "ALERT")
-    else
-        -- Multiple updates: wrap in BATCH
-        Loothing.Comm:Send(Loothing.MsgType.BATCH, { messages = buffer }, nil, "ALERT")
+    local maxBatch = Loothing.Comm.MAX_BATCH_SIZE or 20
+    if maxBatch < 2 then maxBatch = 20 end
+
+    local index = 1
+    while index <= #buffer do
+        local remaining = #buffer - index + 1
+        if remaining == 1 then
+            local entry = buffer[index]
+            Loothing.Comm:Send(entry.command, entry.data, nil, "ALERT")
+            index = index + 1
+        else
+            local chunk = {}
+            local chunkSize = math.min(maxBatch, remaining)
+            for i = 0, chunkSize - 1 do
+                chunk[#chunk + 1] = buffer[index + i]
+            end
+            Loothing.Comm:Send(Loothing.MsgType.BATCH, { messages = chunk }, nil, "ALERT")
+            index = index + chunkSize
+        end
     end
 end
 
@@ -4051,6 +4130,9 @@ function SessionMixin:HandleRemoteCandidateUpdate(data)
     -- Don't process if we are ML (we generated it)
     if self:IsMasterLooter() then return end
 
+    if type(data) ~= "table" or type(data.candidateData) ~= "table" then return end
+    if type(data.candidateData.name) ~= "string" then return end
+
     if not self:IsCurrentSession(data.sessionID) then
         return
     end
@@ -4059,39 +4141,48 @@ function SessionMixin:HandleRemoteCandidateUpdate(data)
     if not item then return end
 
     local cData = data.candidateData
+    local candidateName = cData.name
+    local candidateClass = type(cData.class) == "string" and cData.class or "UNKNOWN"
+    local response = cData.response
+    if response ~= nil and not Loothing.ResponseInfo[response] and not Loothing.SystemResponseInfo[response] then
+        response = nil
+    end
+    local note = type(cData.note) == "string" and cData.note or nil
+    local gear1 = type(cData.gear1) == "string" and cData.gear1 or nil
+    local gear2 = type(cData.gear2) == "string" and cData.gear2 or nil
     local candidateManager = item:GetCandidateManager()
     if not candidateManager then
         item.candidateManager = ns.CreateCandidateManager()
         candidateManager = item.candidateManager
     end
 
-    local candidate = candidateManager:GetOrCreateCandidate(cData.name, cData.class)
-    candidate:SetResponse(cData.response, cData.note)
-    if cData.roll and cData.roll > 0 then
+    local candidate = candidateManager:GetOrCreateCandidate(candidateName, candidateClass)
+    candidate:SetResponse(response, note)
+    if type(cData.roll) == "number" and cData.roll > 0 then
         candidate:SetRoll(cData.roll, 1, 100) -- Range assumed 1-100 for now
     end
 
     -- Update gear
-    if cData.gear1 or cData.gear2 then
-        candidate.gear1Link = cData.gear1
-        candidate.gear2Link = cData.gear2
-        candidate.gear1ilvl = cData.ilvl1
-        candidate.gear2ilvl = cData.ilvl2
+    if gear1 or gear2 then
+        candidate.gear1Link = gear1
+        candidate.gear2Link = gear2
+        candidate.gear1ilvl = type(cData.ilvl1) == "number" and cData.ilvl1 or nil
+        candidate.gear2ilvl = type(cData.ilvl2) == "number" and cData.ilvl2 or nil
 
         -- Recalculate ilvl diff if item has ilvl
         if item.itemLevel and item.itemLevel > 0 then
             local avgEquip = 0
-            if cData.ilvl1 and cData.ilvl1 > 0 then
-                avgEquip = cData.ilvl1
-                if cData.ilvl2 and cData.ilvl2 > 0 then
-                    avgEquip = (cData.ilvl1 + cData.ilvl2) / 2
+            if candidate.gear1ilvl and candidate.gear1ilvl > 0 then
+                avgEquip = candidate.gear1ilvl
+                if candidate.gear2ilvl and candidate.gear2ilvl > 0 then
+                    avgEquip = (candidate.gear1ilvl + candidate.gear2ilvl) / 2
                 end
             end
             candidate.ilvlDiff = item.itemLevel - avgEquip
         end
     end
 
-    candidate:SetItemsWon(cData.itemsWon)
+    candidate:SetItemsWon(type(cData.itemsWon) == "number" and cData.itemsWon or 0)
 
     self:TriggerEvent("OnCandidateUpdated", item, candidate)
 end
@@ -4156,6 +4247,10 @@ function SessionMixin:HandleRemoteVoteUpdate(data)
     -- Don't process if we are ML
     if self:IsMasterLooter() then return end
 
+    if type(data) ~= "table" or type(data.candidateName) ~= "string" or type(data.voters) ~= "table" then
+        return
+    end
+
     if not self:IsCurrentSession(data.sessionID) then
         return
     end
@@ -4164,7 +4259,12 @@ function SessionMixin:HandleRemoteVoteUpdate(data)
     if not item then return end
 
     local candidateName = data.candidateName
-    local voters = data.voters
+    local voters = {}
+    for _, voter in ipairs(data.voters) do
+        if type(voter) == "string" then
+            voters[#voters + 1] = voter
+        end
+    end
 
     -- Ensure CandidateManager exists
     local candidateManager = item:GetCandidateManager()
