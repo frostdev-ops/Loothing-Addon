@@ -88,7 +88,7 @@ end
 
 function CouncilTableMixin:OnVotingStarted(item)
     local isCouncil = Loothing.Council and Loothing.Council:IsPlayerCouncilMember()
-    local isML = Loothing.Session and Loothing.Session:IsMasterLooter()
+    local isML = self.HasMasterLooterVisibility and self.HasMasterLooterVisibility()
     local isObserver = Loothing.Observer and Loothing.Observer:IsPlayerObserver()
     local isMLObserver = Loothing.Observer and Loothing.Observer:IsMLObserver()
     if isCouncil or isML or isObserver or isMLObserver then

@@ -508,7 +508,7 @@ end
 function SessionPanelMixin:UpdateBulkBarButtons()
     if not self.bulkBar then return end
 
-    local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
+    local isML = Loothing.HasMasterLooterVisibility and Loothing:HasMasterLooterVisibility() or false
     local count = self:GetSelectedCount()
 
     -- Count label
@@ -693,7 +693,7 @@ end
 -- @param row table - The right-clicked row
 function SessionPanelMixin:ShowBulkContextMenu(row)
 
-    local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
+    local isML = Loothing.HasMasterLooterVisibility and Loothing:HasMasterLooterVisibility() or false
     local count = self:GetSelectedCount()
 
     MenuUtil.CreateContextMenu(row:GetFrame(), function(_ownerRegion, rootDescription)
@@ -1156,7 +1156,7 @@ function SessionPanelMixin:UpdateHeader()
     end
 
     -- ML indicator
-    local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
+    local isML = Loothing.HasMasterLooterVisibility and Loothing:HasMasterLooterVisibility() or false
     if isML then
         self.mlIndicator:SetText(L["YOU_ARE_ML"])
         self.mlIndicator:SetTextColor(1, 0.82, 0)
@@ -1185,7 +1185,7 @@ end
 --- Update footer buttons
 function SessionPanelMixin:UpdateFooter()
 
-    local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
+    local isML = Loothing.HasMasterLooterVisibility and Loothing:HasMasterLooterVisibility() or false
 
     if not Loothing.Session then
         self.handleLootCheck:Hide()
@@ -1365,7 +1365,7 @@ function SessionPanelMixin:RefreshItems()
         end
     end
 
-    local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
+    local isML = Loothing.HasMasterLooterVisibility and Loothing:HasMasterLooterVisibility() or false
     local yOffset = 0
     local rowHeight = 44
     local spacing = 2

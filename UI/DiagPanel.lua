@@ -315,6 +315,8 @@ function DiagPanelMixin:BuildContent()
     self.values.player        = self:AddRow("Player:")
     self.values.handleLoot    = self:AddRow("Handle Loot:")
     self.values.isML          = self:AddRow("Is Master Looter:")
+    self.values.sessionIsML   = self:AddRow("Session Says ML:")
+    self.values.observerVis   = self:AddRow("Visibility:")
     self.values.mlGlobal      = self:AddRow("ML (global):")
     self.values.mlSession     = self:AddRow("ML (session):")
     self.values.mlSettings    = self:AddRow("ML (settings):")
@@ -512,6 +514,19 @@ function DiagPanelMixin:Refresh()
     SetText(v.player, playerName or "<unknown>")
     SetBool(v.handleLoot, Loothing.handleLoot)
     SetBool(v.isML, Loothing.isMasterLooter)
+    local sessionIsML = Loothing.Session
+        and Loothing.Session.IsMasterLooter
+        and Loothing.Session:IsMasterLooter()
+    SetBool(v.sessionIsML, sessionIsML)
+    if Loothing.Observer then
+        local seeResponses = Loothing.Observer:CanPlayerSeeResponses()
+        local seeVotes = Loothing.Observer:CanPlayerSeeVoteCounts()
+        local hasMLVis = Loothing.Observer:HasMasterLooterVisibility()
+        SetText(v.observerVis, format("ml:%s responses:%s votes:%s", tostring(hasMLVis), tostring(seeResponses), tostring(seeVotes)),
+            (seeResponses and seeVotes) and COLOR_OK or COLOR_WARN)
+    else
+        SetText(v.observerVis, "Observer unavailable", COLOR_DIM)
+    end
     SetText(v.mlGlobal, tostring(Loothing.masterLooter or "none"), Loothing.masterLooter and COLOR_VALUE or COLOR_DIM)
 
     local sessionML = Loothing.Session and Loothing.Session:GetMasterLooter() or nil
@@ -914,6 +929,22 @@ function DiagPanelMixin:BuildClipboardText()
     L(format("  Player: %s", playerName))
     L(format("  Handle Loot: %s", tostring(Loothing.handleLoot)))
     L(format("  Is Master Looter: %s", tostring(Loothing.isMasterLooter)))
+    local sessionIsML = Loothing.Session
+        and Loothing.Session.IsMasterLooter
+        and Loothing.Session:IsMasterLooter()
+    L(format("  Session Says ML: %s", tostring(sessionIsML)))
+    if Loothing.Observer then
+        L(format("  ML Visibility: %s", tostring(Loothing.Observer:HasMasterLooterVisibility())))
+        if Loothing.Observer.GetMasterLooterVisibilitySources then
+            local sources = Loothing.Observer:GetMasterLooterVisibilitySources()
+            L(format("  ML Visibility Sources: session=%s canonical=%s global=%s verified=%s",
+                tostring(sources.session), tostring(sources.canonical), tostring(sources.global),
+                tostring(Loothing.mlStateVerified)))
+        end
+        L(format("  See Responses: %s", tostring(Loothing.Observer:CanPlayerSeeResponses())))
+        L(format("  See Vote Counts: %s", tostring(Loothing.Observer:CanPlayerSeeVoteCounts())))
+        L(format("  See Voter IDs: %s", tostring(Loothing.Observer:CanPlayerSeeVoterIdentities())))
+    end
     L(format("  ML (global): %s", tostring(Loothing.masterLooter or "none")))
     local sessionML = Loothing.Session and Loothing.Session:GetMasterLooter() or "none"
     L(format("  ML (session): %s", tostring(sessionML)))

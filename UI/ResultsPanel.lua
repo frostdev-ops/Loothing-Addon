@@ -31,6 +31,11 @@ local RESULTS_EVENTS = {
     "OnSkipClicked",
 }
 
+local function CanSeeVoteCounts()
+    local isML = Loothing.HasMasterLooterVisibility and Loothing:HasMasterLooterVisibility()
+    return not (Loothing.Settings and Loothing.Settings:GetHideVotes() and not isML)
+end
+
 local PANEL_WIDTH = 400
 local PANEL_HEIGHT = 450
 
@@ -338,9 +343,7 @@ function ResultsPanelMixin:SetItem(item, results)
     end
 
     -- Vote summary from candidateManager
-    local isML = Loothing.Session and Loothing.Session:IsMasterLooter()
-    local hideVotes = Loothing.Settings and Loothing.Settings:GetHideVotes() and not isML
-    if hideVotes then
+    if not CanSeeVoteCounts() then
         self.voteSummary:SetText("")
     else
         local cm = item.candidateManager
@@ -380,10 +383,12 @@ function ResultsPanelMixin:DisplayResults(_results)
 
     local totalVotes = cm:GetTotalVotes()
     local winner = cm:GetMostVoted()
+    local showVoteCounts = CanSeeVoteCounts()
 
-    -- Sort candidates: by votes if any votes cast, else by response priority
+    -- Sort by votes only when vote counts are visible; otherwise row order
+    -- would leak hidden vote ranking.
     local candidates
-    if totalVotes > 0 then
+    if showVoteCounts and totalVotes > 0 then
         candidates = cm:GetCandidatesSortedBy("votes", false)
     else
         candidates = cm:GetAllCandidates()
@@ -397,7 +402,7 @@ function ResultsPanelMixin:DisplayResults(_results)
     local summaryOffset = self:UpdateResponseSummary(cm)
 
     -- Build IRV rounds visualization if available
-    if self.results and self.results.rounds and #self.results.rounds > 0 then
+    if showVoteCounts and self.results and self.results.rounds and #self.results.rounds > 0 then
         self:BuildRoundsVisualization(self.results)
         local L = Loothing.Locale
         self.roundsToggle:SetText(string.format(L and L["SHOW_IRV_ROUNDS"], #self.results.rounds))
@@ -431,7 +436,7 @@ function ResultsPanelMixin:DisplayResults(_results)
     for _, candidate in ipairs(candidates) do
         local isWinner = (winner and candidate == winner and totalVotes > 0)
         local row = CreateCandidateResultRow(
-            self.resultsContent, candidate, yOffset, totalVotes, isWinner, clickCallback
+            self.resultsContent, candidate, yOffset, totalVotes, isWinner, clickCallback, showVoteCounts
         )
         row.candidate = candidate
         self.responseRows[#self.responseRows + 1] = row
@@ -496,8 +501,7 @@ function ResultsPanelMixin:UpdateWinnerSection(winner, totalVotes, candidates)
         return
     end
 
-    local isML = Loothing.Session and Loothing.Session:IsMasterLooter()
-    local hideVotes = Loothing.Settings and Loothing.Settings:GetHideVotes() and not isML
+    local hideVotes = not CanSeeVoteCounts()
 
     -- Detect ties
     local maxVotes = winner and winner.councilVotes or 0
@@ -690,7 +694,7 @@ end
 --- Update action buttons based on user permissions
 -- Only ML can award, re-vote, or skip. Observers and non-council see no actions.
 function ResultsPanelMixin:UpdateActionButtons()
-    local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
+    local isML = Loothing.HasMasterLooterVisibility and Loothing:HasMasterLooterVisibility() or false
 
     if isML then
         self.awardButton:Show()

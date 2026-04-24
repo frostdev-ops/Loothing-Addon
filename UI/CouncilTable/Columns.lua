@@ -13,6 +13,21 @@ ns.CouncilTableMixin = CouncilTableMixin
 
 local CELL_PADDING = 2
 
+function CouncilTableMixin.HasMasterLooterVisibility()
+    if Loothing.Observer and Loothing.Observer.HasMasterLooterVisibility then
+        return Loothing.Observer:HasMasterLooterVisibility()
+    end
+    if Loothing.HasMasterLooterVisibility then
+        return Loothing:HasMasterLooterVisibility()
+    end
+    if Loothing.mlStateVerified == false then return false end
+    if Loothing.Session and Loothing.Session.IsMasterLooter and Loothing.Session:IsMasterLooter() then return true end
+    if Loothing.IsCanonicalML and Loothing:IsCanonicalML() then return true end
+    if not (Loothing.handleLoot and Loothing.isMasterLooter) then return false end
+    local playerName = Utils.GetPlayerFullName()
+    return playerName and Loothing.masterLooter and Utils.IsSamePlayer(Loothing.masterLooter, playerName) or false
+end
+
 CouncilTableMixin.COLUMNS = {
     { id = "priority",     name = "#",                              width = 30,  maxWidth = 36,  flex = 0, sortable = true,  settingsKey = "priority" },
     { id = "class",        name = "",                               width = 22,  maxWidth = 22,  flex = 0, sortable = true,  settingsKey = "class" },
@@ -714,8 +729,8 @@ end
 
 CouncilTableMixin.CellUpdaters.vote = function(_, cell, candidate)
     local voteCount = candidate.councilVotes or 0
-    local isML = Loothing.Session and Loothing.Session:IsMasterLooter()
-    local hideVotes = Loothing.Settings and Loothing.Settings:GetHideVotes() and not isML
+    local hasMasterLooterVisibility = CouncilTableMixin.HasMasterLooterVisibility()
+    local hideVotes = Loothing.Settings and Loothing.Settings:GetHideVotes() and not hasMasterLooterVisibility
 
     -- Vote count to the left of the button
     local canSeeVoteCounts = not Loothing.Observer or Loothing.Observer:CanPlayerSeeVoteCounts()
@@ -735,10 +750,10 @@ CouncilTableMixin.CellUpdaters.vote = function(_, cell, candidate)
             if not voters or #voters == 0 then return end
             local canSeeCount = not Loothing.Observer or Loothing.Observer:CanPlayerSeeVoteCounts()
             if not canSeeCount then return end
-            local _isML = Loothing.Session and Loothing.Session:IsMasterLooter()
-            if Loothing.Settings and Loothing.Settings:GetHideVotes() and not _isML then return end
+            local hasTooltipMLVisibility = CouncilTableMixin.HasMasterLooterVisibility()
+            if Loothing.Settings and Loothing.Settings:GetHideVotes() and not hasTooltipMLVisibility then return end
             local anonymous = Loothing.Settings and Loothing.Settings:GetAnonymousVoting()
-            local mlOverride = _isML and Loothing.Settings and Loothing.Settings:GetMlSeesVotes()
+            local mlOverride = hasTooltipMLVisibility and Loothing.Settings and Loothing.Settings:GetMlSeesVotes()
             GameTooltip:SetOwner(c, "ANCHOR_RIGHT")
             GameTooltip:AddLine(string.format(L["TOOLTIP_VOTES"], #voters), 1, 0.82, 0)
             local canSeeIds = not Loothing.Observer or Loothing.Observer:CanPlayerSeeVoterIdentities()

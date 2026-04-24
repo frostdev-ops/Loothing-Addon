@@ -23,6 +23,11 @@ local PADDING = 4
 local ItemRowMixin = ns.ItemRowMixin or {}
 ns.ItemRowMixin = ItemRowMixin
 
+local function HasMasterLooterVisibility()
+    return Loothing.HasMasterLooterVisibility
+        and Loothing:HasMasterLooterVisibility()
+end
+
 --- Initialize the item row
 -- @param parent Frame - Parent frame
 function ItemRowMixin:Init(parent)
@@ -297,7 +302,7 @@ function ItemRowMixin:UpdateStatus()
         -- Show vote count or time remaining
         local voteCount = self.item:GetVoteCount()
         local timeRemaining = self.item:GetTimeRemaining()
-        local isML = Loothing.Session and Loothing.Session:IsMasterLooter()
+        local isML = HasMasterLooterVisibility()
         local hideVotes = Loothing.Settings and Loothing.Settings:GetHideVotes() and not isML
 
         if timeRemaining == math.huge then
@@ -317,7 +322,7 @@ function ItemRowMixin:UpdateStatus()
         self.statusText:SetText(L["STATUS_TALLIED"])
         self.statusText:SetTextColor(1, 0.82, 0)
 
-        local isML = Loothing.Session and Loothing.Session:IsMasterLooter()
+        local isML = HasMasterLooterVisibility()
         local hideVotes = Loothing.Settings and Loothing.Settings:GetHideVotes() and not isML
         local voteCount = self.item:GetVoteCount()
         if hideVotes then
@@ -348,7 +353,7 @@ function ItemRowMixin:UpdateActionButton()
 
     local L = Loothing.Locale
     local state = self.item.state or Loothing.ItemState.PENDING
-    local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
+    local isML = HasMasterLooterVisibility()
     local isCouncil = Loothing.Council and Loothing.Council:IsPlayerCouncilMember()
 
     if state == Loothing.ItemState.PENDING then
@@ -533,7 +538,7 @@ function ItemRowMixin:OnActionClick()
         end
 
     elseif state == Loothing.ItemState.VOTING then
-        local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
+        local isML = HasMasterLooterVisibility()
         if isML then
             -- End voting
             if self.callbacks.onEndVote then
@@ -547,7 +552,7 @@ function ItemRowMixin:OnActionClick()
         end
 
     elseif state == Loothing.ItemState.TALLIED then
-        local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
+        local isML = HasMasterLooterVisibility()
         if isML then
             -- Open award dialog
             if self.callbacks.onAward then
@@ -567,7 +572,7 @@ function ItemRowMixin:ShowContextMenu()
     if not self.item then return end
 
     local L = Loothing.Locale
-    local isML = Loothing.Session and Loothing.Session:IsMasterLooter() or false
+    local isML = HasMasterLooterVisibility()
 
     MenuUtil.CreateContextMenu(self.frame, function(_, rootDescription)
         rootDescription:CreateTitle(self.item.name or "Item")

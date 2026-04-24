@@ -67,6 +67,11 @@ local function iterateOrderedResponses()
     return ordered
 end
 
+local function HasMasterLooterVisibility()
+    return CouncilTableMixin.HasMasterLooterVisibility
+        and CouncilTableMixin.HasMasterLooterVisibility()
+end
+
 --[[--------------------------------------------------------------------
     Row Creation & Cell Factory
 ----------------------------------------------------------------------]]
@@ -177,7 +182,7 @@ function CouncilTableMixin:CreateCell(parent, col)
                 -- Player cell opens the context menu just like it does
                 -- on every other cell in the row. Falls through to the
                 -- profile open when no modifier is held.
-                if IsAltKeyDown() and Loothing.Session and Loothing.Session:IsMasterLooter() then
+                if IsAltKeyDown() and HasMasterLooterVisibility() then
                     if row and row._councilTable and candidate then
                         row._councilTable:ShowCandidateContextMenu(row, candidate)
                     end
@@ -266,7 +271,7 @@ function CouncilTableMixin:CreateCandidateRow(_parent)
             if button == "RightButton" then
                 r._councilTable:ShowCandidateContextMenu(r, r.candidate)
             elseif button == "LeftButton" then
-                if IsAltKeyDown() and Loothing.Session and Loothing.Session:IsMasterLooter() then
+                if IsAltKeyDown() and HasMasterLooterVisibility() then
                     r._councilTable:ShowCandidateContextMenu(r, r.candidate)
                     return
                 end
@@ -561,7 +566,7 @@ end
 
 function CouncilTableMixin:ShowCandidateContextMenu(row, candidate)
     local L = Loothing.Locale or {}
-    local isML = Loothing.Session and Loothing.Session:IsMasterLooter()
+    local isML = HasMasterLooterVisibility()
 
     MenuUtil.CreateContextMenu(row, function(_, rootDescription)
         rootDescription:CreateTitle(candidate.name or "Unknown")

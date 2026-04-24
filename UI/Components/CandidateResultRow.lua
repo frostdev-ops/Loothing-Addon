@@ -14,7 +14,9 @@ local Loothing = ns.Addon
 -- @param totalVotes number - Total council votes for percentage
 -- @param isWinner boolean - Whether this candidate is the winner
 -- @param onClick function|nil - Called with (candidate, row) on click
-local function CreateCandidateResultRow(parent, candidate, yOffset, totalVotes, isWinner, onClick)
+-- @param showVotes boolean|nil - Whether to show vote counts and percentages
+local function CreateCandidateResultRow(parent, candidate, yOffset, totalVotes, isWinner, onClick, showVotes)
+    showVotes = showVotes ~= false
     local row = CreateFrame("Button", nil, parent, "BackdropTemplate")
     row:SetPoint("TOPLEFT", 0, yOffset)
     row:SetPoint("TOPRIGHT", 0, yOffset)
@@ -71,7 +73,7 @@ local function CreateCandidateResultRow(parent, candidate, yOffset, totalVotes, 
     local votesText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     votesText:SetPoint("TOPRIGHT", -8, -4)
     local councilVotes = candidate.councilVotes or 0
-    votesText:SetText(tostring(councilVotes))
+    votesText:SetText(showVotes and tostring(councilVotes) or "")
     votesText:SetTextColor(1, 1, 1)
 
     -- Response badge (below name)
@@ -104,10 +106,14 @@ local function CreateCandidateResultRow(parent, candidate, yOffset, totalVotes, 
     bar:SetSize(math.max(1, (200 - 2) * percentage), 10)
     bar:SetTexture("Interface\\Buttons\\WHITE8X8")
     bar:SetVertexColor(r, g, b, 0.8)
+    if not showVotes then
+        barBg:Hide()
+        bar:Hide()
+    end
 
     local percentText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     percentText:SetPoint("LEFT", barBg, "RIGHT", 4, 0)
-    if total > 0 then
+    if showVotes and total > 0 then
         percentText:SetText(string.format("%.0f%%", percentage * 100))
     else
         percentText:SetText("")

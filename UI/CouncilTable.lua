@@ -46,12 +46,13 @@ local SCROLL_STEP = 124  -- ITEM_TAB_WIDTH + ITEM_TAB_SPACING
 -- Throttle refresh to avoid spam during bulk candidate updates
 local REFRESH_THROTTLE = 0.15
 
---- Check if the current player is an observer (not council, not ML)
+--- Check if the current player should be presented as observing rather than voting.
 -- Observers can see the table when observers.openObservation is enabled,
 -- but cannot perform ML actions or cast votes.
 local function IsObserverOnly()
     local isCouncil = Loothing.Council and Loothing.Council:IsPlayerCouncilMember()
-    local isML = Loothing.Session and Loothing.Session:IsMasterLooter()
+    local isML = CouncilTableMixin.HasMasterLooterVisibility
+        and CouncilTableMixin.HasMasterLooterVisibility()
     if not isCouncil and not isML then
         return true  -- Regular observer
     end
@@ -834,7 +835,7 @@ function CouncilTableMixin:ApplyTheme()
 end
 
 function CouncilTableMixin:UpdateActionButtons()
-    local isML = Loothing.Session and Loothing.Session:IsMasterLooter()
+    local isML = self.HasMasterLooterVisibility and self.HasMasterLooterVisibility()
 
     -- Observer indicator
     if self.observerText then

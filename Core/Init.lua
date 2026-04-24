@@ -45,6 +45,7 @@ Loothing.explicitMasterLooter = nil -- Runtime-only explicit ML (per-session, sy
 Loothing.handleLoot = false         -- Is Loothing actively handling loot?
 Loothing.isInGuildGroup = false     -- Is group leader in our guild?
 Loothing.lootMethod = nil           -- Current loot method from GetLootMethod()
+Loothing.mlStateVerified = true     -- False only during reconnect-cache restore until live ML check runs
 
 -- Reusable GameTooltip for /lt tooltipscan. Frames cannot be garbage-collected
 -- in WoW, so creating one per command invocation would leak a frame each time.
@@ -635,6 +636,7 @@ local function PerformMLCheck()
         Loothing.isMasterLooter = false
         Loothing.masterLooter = nil
         Loothing.isInGuildGroup = false
+        Loothing.mlStateVerified = true
         return
     end
 
@@ -664,6 +666,7 @@ local function PerformMLCheck()
 
     -- Update stored loot method
     Loothing.lootMethod = Loothing.GetLootMethod and Loothing.GetLootMethod() or nil
+    Loothing.mlStateVerified = true
 
     -- Early exit if nothing changed (but re-evaluate if we're ML without handleLoot)
     if ml == oldML and isNowML == wasML and (not isNowML or Loothing.handleLoot) then
@@ -852,6 +855,7 @@ function Addon:StartHandleLoot()
     if self.handleLoot then return end
 
     self.handleLoot = true
+    self.mlStateVerified = true
     self:Debug("StartHandleLoot - now handling loot")
     self:Print(L["ML_HANDLING_LOOT"])
 
@@ -2692,6 +2696,21 @@ function Addon:IsCanonicalML()
     return Utils.IsSamePlayer(ml, Utils.GetPlayerFullName())
 end
 
+--- Check whether the local player should receive Master Looter UI privileges.
+-- This is stricter than IsCanonicalML during reconnect restore: cached ML state
+-- is not trusted for sensitive vote visibility until the live group ML check has
+-- run at least once.
+-- @return boolean
+function Addon:HasMasterLooterVisibility()
+    if self.mlStateVerified == false then return false end
+    if self.Session and self.Session.IsMasterLooter and self.Session:IsMasterLooter() then return true end
+    if self:IsCanonicalML() then return true end
+    if not (self.handleLoot and self.isMasterLooter) then return false end
+
+    local playerName = Utils.GetPlayerFullName()
+    return playerName and self.masterLooter and Utils.IsSamePlayer(self.masterLooter, playerName) or false
+end
+
 --- Get current session
 -- @return table|nil
 function Addon:GetSession()
@@ -2755,6 +2774,11 @@ function Addon:CacheStateForReconnect()
         if members and #members > 0 then
             cache.councilRoster = members
         end
+    end
+
+    -- Cache observer roster
+    if self.Observer then
+        cache.observerRoster = self.Observer:GetReconnectSnapshot()
     end
 
     -- Cache active session state
@@ -2865,6 +2889,7 @@ function Addon:RestoreFromCache()
     self:Debug("Restoring from reconnect cache (age:", age, "s)")
 
     -- Restore ML state
+    self.mlStateVerified = false
     self.handleLoot = cache.handleLoot or false
     self.isMasterLooter = cache.isMasterLooter or false
     self.masterLooter = cache.masterLooter
@@ -2881,8 +2906,24 @@ function Addon:RestoreFromCache()
         self.Council:SetRemoteRoster(cache.councilRoster)
     end
 
+    -- Restore observer roster
+    if cache.observerRoster and self.Observer then
+        self.Observer:SetRemoteObserverList(cache.observerRoster)
+    end
+
     -- Restore session state
     if cache.session and self.Session then
+        local restoredML = self.masterLooter or cache.masterLooter
+        if self.MLDB and self.MLDB:Get() then
+            local mldb = self.MLDB:Get()
+            restoredML = mldb.masterLooter
+                or (self.Settings and self.Settings:GetMasterLooter())
+                or self.masterLooter
+                or cache.masterLooter
+        end
+        if restoredML then
+            cache.session.masterLooter = restoredML
+        end
         self.Session:SyncFromData({
             sessionID = cache.session.sessionID,
             encounterID = cache.session.encounterID,
@@ -2945,6 +2986,15 @@ function Addon:RestoreFromCache()
         else
             C_Timer.After(2, doMLBroadcast)
         end
+    end
+
+    -- Cached ML identity is optimistic. Re-run the live ML resolver immediately
+    -- so restored globals/session state cannot remain authoritative after a
+    -- reload or reconnect if the raid changed ML while the client was gone.
+    if IsInGroup() then
+        ScheduleMLCheck(0.1)
+    else
+        self.mlStateVerified = true
     end
 
     self:Print(L["RECONNECT_RESTORED"])

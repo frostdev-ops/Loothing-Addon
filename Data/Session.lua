@@ -249,7 +249,7 @@ function SessionMixin:ShowResultsPanelForItem(item, results)
 
     -- Check if player is a council member, ML, or observer
     local isCouncil = Loothing.Council and Loothing.Council:IsPlayerCouncilMember()
-    local isML = self:IsMasterLooter()
+    local isML = Loothing.HasMasterLooterVisibility and Loothing:HasMasterLooterVisibility() or false
     local isObserver = Loothing.Observer and Loothing.Observer:IsPlayerObserver()
     local isMLObserver = Loothing.Observer and Loothing.Observer:IsMLObserver()
     if not isCouncil and not isML and not isObserver and not isMLObserver then
@@ -1972,7 +1972,7 @@ function SessionMixin:RetractAllVotes(itemGUID)
             self.masterLooter,
             self.sessionID
         )
-    elseif self:IsMasterLooter() then
+    elseif Loothing.HasMasterLooterVisibility and Loothing:HasMasterLooterVisibility() then
         -- ML: rebuild and broadcast voter lists — batch all affected candidates
         if Loothing.Comm and item.candidateManager and IsInGroup() then
             for _, candidateName in ipairs(affectedCandidates) do
@@ -3337,7 +3337,7 @@ function SessionMixin:HandleRemoteVoteRequest(data)
     local showTable = false
     if Loothing.Council and Loothing.Council:IsPlayerCouncilMember() then
         showTable = true
-    elseif self:IsMasterLooter() then
+    elseif Loothing.HasMasterLooterVisibility and Loothing:HasMasterLooterVisibility() then
         showTable = true
     elseif Loothing.Observer and (Loothing.Observer:IsPlayerObserver() or Loothing.Observer:IsMLObserver()) then
         showTable = true

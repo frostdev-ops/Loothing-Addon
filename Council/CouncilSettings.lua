@@ -137,7 +137,8 @@ function CouncilMixin:GetVotingEligibleMembers()
     if not (Loothing.Observer and Loothing.Observer:IsMLObserver()) then
         return members
     end
-    local ml = Loothing.Session and Loothing.Session:GetMasterLooter()
+    local ml = Loothing.GetCanonicalML and Loothing:GetCanonicalML()
+        or (Loothing.Session and Loothing.Session:GetMasterLooter())
     if not ml then return members end
     local result = {}
     for _, name in ipairs(members) do
