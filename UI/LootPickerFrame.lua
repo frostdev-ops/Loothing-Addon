@@ -269,7 +269,10 @@ function LootPickerFrameMixin:BuildFrame()
         -- silently included in the start payload (the count would lie).
         if not newState and self.showBlocked then
             for _, e in ipairs(self.entries) do
-                if not e.eval.allowed then e.checked = false end
+                if not e.eval.allowed then
+                    e.checked = false
+                    e.userOverride = true
+                end
             end
         end
         self.showBlocked = newState
@@ -354,15 +357,23 @@ function LootPickerFrameMixin:BuildFrame()
         if event ~= "GET_ITEM_INFO_RECEIVED" then return end
         if not frame:IsShown() then return end
         if not itemID then return end
+        local filter = Loothing.ItemFilter
+        local changed = false
         for _, entry in ipairs(self.entries) do
             local link = entry.itemLink
             if link and link:find("|Hitem:" .. itemID .. ":", 1, true) then
-                -- Keep the first filter decision stable for this picker row.
-                -- Cold item-cache updates may change bind/quality details; do
-                -- not silently flip checkbox defaults after the ML has seen it.
-                self:Render()
-                return
+                if entry.eval and entry.eval.cacheIncomplete
+                    and not entry.userOverride
+                    and filter and filter.EvaluateItem then
+                    entry.eval = filter:EvaluateItem(link)
+                    entry.checked = entry.eval.allowed and true or false
+                    changed = true
+                end
+                changed = true
             end
+        end
+        if changed then
+            self:Render()
         end
     end)
 end
@@ -521,6 +532,7 @@ function LootPickerFrameMixin:RebuildEntries(buffer)
             -- state; recalculating can flip default checkbox state mid-pick.
             local previousChecked
             local previousEval
+            local previousUserOverride = false
             for priorIndex, e in ipairs(prior) do
                 if not usedPrior[priorIndex]
                     and e.itemLink == raw.itemLink
@@ -528,13 +540,14 @@ function LootPickerFrameMixin:RebuildEntries(buffer)
                     and e.encounterID == raw.encounterID then
                     previousChecked = e.checked
                     previousEval = e.eval
+                    previousUserOverride = e.userOverride == true
                     usedPrior[priorIndex] = true
                     break
                 end
             end
 
             local eval = previousEval
-            if not eval then
+            if not eval or (eval.cacheIncomplete and not previousUserOverride) then
                 if filter and filter.EvaluateItem then
                     eval = filter:EvaluateItem(raw.itemLink)
                 else
@@ -543,19 +556,23 @@ function LootPickerFrameMixin:RebuildEntries(buffer)
             end
 
             local checked
-            if previousChecked ~= nil then
+            if previousChecked ~= nil and (previousUserOverride or not (previousEval and previousEval.cacheIncomplete)) then
                 checked = previousChecked
             else
                 checked = eval.allowed and true or false
             end
 
             self.entries[#self.entries + 1] = {
-                index       = i,
-                itemLink    = raw.itemLink,
-                playerName  = raw.playerName,
-                encounterID = raw.encounterID,
-                eval        = eval,
-                checked     = checked,
+                index              = i,
+                itemLink           = raw.itemLink,
+                itemID             = raw.itemID,
+                playerName         = raw.playerName,
+                encounterID        = raw.encounterID,
+                source             = raw.source,
+                tradeTimeRemaining = raw.tradeTimeRemaining,
+                eval               = eval,
+                checked            = checked,
+                userOverride       = previousUserOverride,
             }
         end
     end
@@ -798,6 +815,7 @@ function LootPickerFrameMixin:BindRow(row, entry)
     row.check:SetChecked(entry.checked)
     row.check:SetScript("OnClick", function(c)
         entry.checked = c:GetChecked() and true or false
+        entry.userOverride = true
         self:UpdateStartButton()
     end)
 end
@@ -889,9 +907,11 @@ function LootPickerFrameMixin:SetAll(checked)
             -- unless the user has Show Blocked on (then take everything)
             if self.showBlocked or e.eval.allowed then
                 e.checked = true
+                e.userOverride = true
             end
         else
             e.checked = false
+            e.userOverride = true
         end
     end
     self:Render()
@@ -912,8 +932,12 @@ function LootPickerFrameMixin:OnStart()
     for _, e in ipairs(self.entries) do
         if e.checked then
             picked[#picked + 1] = {
-                itemLink   = e.itemLink,
-                playerName = e.playerName,
+                itemLink           = e.itemLink,
+                itemID             = e.itemID,
+                playerName         = e.playerName,
+                encounterID        = e.encounterID,
+                source             = e.source,
+                tradeTimeRemaining = e.tradeTimeRemaining,
             }
         end
     end

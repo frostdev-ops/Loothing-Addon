@@ -87,7 +87,7 @@ local function CreateCandidateResultRow(parent, candidate, yOffset, totalVotes, 
     responseText:SetTextColor(r, g, b)
 
     -- Roll value (right of response)
-    if candidate.roll then
+    if showResponses and candidate.roll then
         local rollText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         rollText:SetPoint("LEFT", responseText, "RIGHT", 8, 0)
         rollText:SetText(string.format("Roll: %d", candidate.roll))

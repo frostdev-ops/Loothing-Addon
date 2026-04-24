@@ -9,6 +9,14 @@ local Loothing = ns.Addon
 local CouncilTableMixin = ns.CouncilTableMixin or {}
 ns.CouncilTableMixin = CouncilTableMixin
 
+local function IsCachedMLObserver()
+    return Loothing.mlStateVerified == false
+        and Loothing.IsCachedMasterLooterCandidate
+        and Loothing:IsCachedMasterLooterCandidate()
+        and Loothing.Observer
+        and Loothing.Observer:IsMasterLooterObserverModeEnabled()
+end
+
 function CouncilTableMixin:RegisterEvents()
     if not Loothing.Session then return end
 
@@ -91,7 +99,7 @@ function CouncilTableMixin:OnVotingStarted(item)
     local isML = self.HasMasterLooterVisibility and self.HasMasterLooterVisibility()
     local isObserver = Loothing.Observer and Loothing.Observer:IsPlayerObserver()
     local isMLObserver = Loothing.Observer and Loothing.Observer:IsMLObserver()
-    if isCouncil or isML or isObserver or isMLObserver then
+    if isCouncil or isML or isObserver or isMLObserver or IsCachedMLObserver() then
         self:Show()
         self:SelectItemTab(item.guid)
     end

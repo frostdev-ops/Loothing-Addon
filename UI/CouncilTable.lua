@@ -87,6 +87,56 @@ local function CanSeeVoterIdentities()
     return not Loothing.Observer or Loothing.Observer:CanPlayerSeeVoterIdentities()
 end
 
+local function MarkVoter(voterSet, voterName)
+    if type(voterName) ~= "string" then return end
+    voterSet[voterName] = true
+    local normalized = Utils.NormalizeName(voterName)
+    if normalized then
+        voterSet[normalized] = true
+    end
+end
+
+local function VoterSetHas(voterSet, voterName)
+    if type(voterName) ~= "string" then return false end
+    if voterSet[voterName] then return true end
+    local normalized = Utils.NormalizeName(voterName)
+    return normalized and voterSet[normalized] or false
+end
+
+local function BuildVoterSet(item)
+    local voterSet = {}
+    if not item then return voterSet end
+
+    local votes = item.GetVotes and item:GetVotes()
+    if votes and votes.Enumerate then
+        for _, vote in votes:Enumerate() do
+            MarkVoter(voterSet, vote and vote.voter)
+        end
+    elseif type(votes) == "table" then
+        for voterName, vote in pairs(votes) do
+            if type(vote) == "table" then
+                MarkVoter(voterSet, vote.voter or voterName)
+            else
+                MarkVoter(voterSet, voterName)
+            end
+        end
+    end
+
+    local candidateManager = item.GetCandidateManager and item:GetCandidateManager()
+        or item.candidateManager
+    if candidateManager and candidateManager.GetAllCandidates then
+        for _, candidate in ipairs(candidateManager:GetAllCandidates() or {}) do
+            if type(candidate.voters) == "table" then
+                for _, voterName in ipairs(candidate.voters) do
+                    MarkVoter(voterSet, voterName)
+                end
+            end
+        end
+    end
+
+    return voterSet
+end
+
 local function CanSeeResponses()
     return not Loothing.Observer or Loothing.Observer:CanPlayerSeeResponses()
 end
@@ -1029,12 +1079,9 @@ function CouncilTableMixin:UpdateVoterProgress()
     -- Count unique voters on this item
     local votedCount = 0
     if totalExpected > 0 then
-        local voterSet = {}
-        for _, vote in self.currentItem:GetVotes():Enumerate() do
-            voterSet[vote.voter] = true
-        end
+        local voterSet = BuildVoterSet(self.currentItem)
         for _, member in ipairs(expectedVoters) do
-            if voterSet[member] then
+            if VoterSetHas(voterSet, member) then
                 votedCount = votedCount + 1
             end
         end
@@ -1066,17 +1113,14 @@ function CouncilTableMixin:ShowVoterProgressTooltip(anchor)
     if #expectedVoters == 0 then return end
 
     -- Build set of who has voted
-    local voterSet = {}
-    for _, vote in self.currentItem:GetVotes():Enumerate() do
-        voterSet[vote.voter] = true
-    end
+    local voterSet = BuildVoterSet(self.currentItem)
 
     GameTooltip:SetOwner(anchor, "ANCHOR_BOTTOM")
     GameTooltip:AddLine(L["COUNCIL_VOTING_PROGRESS"], 1, 0.82, 0)
     GameTooltip:AddLine(" ")
 
     for _, member in ipairs(expectedVoters) do
-        local hasVoted = voterSet[member] or false
+        local hasVoted = VoterSetHas(voterSet, member) or false
         local shortName = member:match("^([^%-]+)") or member
 
         -- Class-color the name only when identities are visible.

@@ -235,6 +235,7 @@ function ItemFilterMixin:EvaluateItem(itemLink)
         subclassID  = nil,
         quality     = nil,
         minQuality  = minQ,
+        cacheIncomplete = false,
     }
     if not itemLink then
         -- No link — default to ALLOWED so an unknown link doesn't trip
@@ -247,7 +248,16 @@ function ItemFilterMixin:EvaluateItem(itemLink)
     result.classID = classID
     result.subclassID = subclassID
 
-    local _, _, quality = C_Item.GetItemInfo(itemLink)
+    local itemName, _, quality = C_Item.GetItemInfo(itemLink)
+    if quality == nil then
+        -- GetItemInfo is async; the item link color is already available and
+        -- stable, so use it for the quality gate while marking the eval cold.
+        quality = Utils.GetItemQuality(itemLink)
+        result.cacheIncomplete = true
+    end
+    if itemName == nil then
+        result.cacheIncomplete = true
+    end
     result.quality = quality
 
     -- Per-player ignore list
@@ -280,6 +290,9 @@ function ItemFilterMixin:EvaluateItem(itemLink)
     -- BoE check (separate gate from class block — controlled by ml.autoAddBoEs)
     if Loothing.Settings and not Loothing.Settings:Get("ml.autoAddBoEs", false) then
         local _, _, _, _, _, _, _, _, _, _, _, _, _, bindType = C_Item.GetItemInfo(itemLink)
+        if bindType == nil then
+            result.cacheIncomplete = true
+        end
         if bindType == 2 then  -- Enum.ItemBind.OnEquip
             result.allowed = false
             result.reason = "boe"

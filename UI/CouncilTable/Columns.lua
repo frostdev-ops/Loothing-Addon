@@ -664,6 +664,13 @@ end
 
 -- Roll value
 CouncilTableMixin.CellUpdaters.roll = function(_, cell, candidate)
+    local canSeeResponses = not Loothing.Observer or Loothing.Observer:CanPlayerSeeResponses()
+    if not canSeeResponses then
+        cell.text:SetText("")
+        cell.text:SetTextColor(0.4, 0.4, 0.4)
+        return
+    end
+
     if candidate.roll then
         cell.text:SetText(tostring(candidate.roll))
         cell.text:SetTextColor(1, 0.82, 0)

@@ -118,10 +118,30 @@ function CouncilMixin:IsPlayerCouncilMember()
     return self:IsMember(playerName)
 end
 
+local function IsLocalMasterLooterCandidate()
+    if Loothing.IsCachedMasterLooterCandidate then
+        return Loothing:IsCachedMasterLooterCandidate()
+    end
+
+    local playerName = Utils.GetPlayerFullName()
+    if not playerName then return false end
+    local ml = Loothing.Session and Loothing.Session.GetMasterLooter
+        and Loothing.Session:GetMasterLooter()
+        or Loothing.masterLooter
+        or (Loothing.GetCanonicalML and Loothing:GetCanonicalML())
+    return ml and Utils.IsSamePlayer(playerName, ml)
+end
+
 --- Check if the current player can vote (council member AND not ML-observer)
 -- @return boolean
 function CouncilMixin:CanPlayerVote()
     if not self:IsPlayerCouncilMember() then
+        return false
+    end
+    if Loothing.Observer
+        and Loothing.Observer.IsMasterLooterObserverModeEnabled
+        and Loothing.Observer:IsMasterLooterObserverModeEnabled()
+        and IsLocalMasterLooterCandidate() then
         return false
     end
     if Loothing.Observer and Loothing.Observer:IsMLObserver() then

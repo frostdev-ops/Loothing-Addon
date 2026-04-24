@@ -118,6 +118,52 @@ local function SameItemIdentity(entry, itemID, itemLink)
     return entry.itemLink == itemLink
 end
 
+local function GetContainerItemStackCount(bag, slot)
+    if not C_Container or not C_Container.GetContainerItemInfo then
+        return 1
+    end
+    local info = C_Container.GetContainerItemInfo(bag, slot)
+    if type(info) == "table" then
+        local count = tonumber(info.stackCount) or 1
+        if count > 0 then
+            return count
+        end
+    end
+    return 1
+end
+
+local function CountRepresentedTradeableCopies(session, itemID, playerName, encounterID)
+    if not session or not itemID or not playerName then return 0 end
+
+    local count = 0
+    if type(session.lootBuffer) == "table" then
+        for _, entry in ipairs(session.lootBuffer) do
+            if SameItemIdentity(entry, itemID, nil)
+                and entry.playerName
+                and Utils.IsSamePlayer(entry.playerName, playerName)
+                and (encounterID == nil
+                    or SameEncounterID(entry.encounterID, encounterID)) then
+                count = count + 1
+            end
+        end
+    end
+
+    if session.IsActive and session:IsActive() and session.items and session.items.Enumerate then
+        for _, item in session.items:Enumerate() do
+            if item.itemID and tonumber(item.itemID) == tonumber(itemID)
+                and item.looter
+                and Utils.IsSamePlayer(item.looter, playerName)
+                and (encounterID == nil
+                    or session.encounterID == nil
+                    or SameEncounterID(session.encounterID, encounterID)) then
+                count = count + 1
+            end
+        end
+    end
+
+    return count
+end
+
 local function IsVotingEligibleMember(name)
     if not name or not Loothing.Council then return false end
     if Loothing.Council.GetVotingEligibleMembers then
@@ -385,11 +431,14 @@ function SessionMixin:HandleTradable(data)
     if data.source == "bag_scan" and data.forceCreate ~= true
         and type(self.lootBuffer) == "table" then
         local refreshed = false
+        local scanEncounterID = data.encounterID
         for _, entry in ipairs(self.lootBuffer) do
             if entry.source == "roll_won"
                 and playerName
                 and Utils.IsSamePlayer(entry.playerName, playerName)
-                and SameItemIdentity(entry, itemID, itemLink) then
+                and SameItemIdentity(entry, itemID, itemLink)
+                and (scanEncounterID == nil
+                    or SameEncounterID(entry.encounterID, scanEncounterID)) then
                 entry.itemID = entry.itemID or itemID
                 entry.tradeTimeRemaining = data.timeRemaining
                 refreshed = true
@@ -542,7 +591,10 @@ function SessionMixin:HandleTradable(data)
         -- No active session: buffer item and trigger session start
         local bufferEncounterID
         local bufferEncounterName
-        if isCreation and data.encounterID == nil then
+        if data.source == "roll_won" and data.encounterID == nil and self.lastEligibleEncounter then
+            bufferEncounterID = self.lastEligibleEncounter.id
+            bufferEncounterName = self.lastEligibleEncounter.name
+        elseif isCreation and data.encounterID == nil then
             bufferEncounterID = 0
             bufferEncounterName = data.encounterName or "Loot"
         else
@@ -847,7 +899,8 @@ function SessionMixin:StartSession(encounterID, encounterName)
     local bufferedItems = {}
     local remainingBuffer = {}
     for _, entry in ipairs(self.lootBuffer) do
-        if SameEncounterID(entry.encounterID, encounterID) and (now - entry.timestamp) <= bufferTTL then
+        local matchesEncounter = SameEncounterID(entry.encounterID, encounterID)
+        if matchesEncounter and (now - entry.timestamp) <= bufferTTL then
             local force = entry._picked == true
             local item = self:AddItem(entry.itemLink, entry.playerName, nil, force, true)
             if item then
@@ -865,7 +918,7 @@ function SessionMixin:StartSession(encounterID, encounterName)
                     sessionID = self.sessionID,
                 }
             end
-        elseif not SameEncounterID(entry.encounterID, encounterID) then
+        elseif not matchesEncounter then
             remainingBuffer[#remainingBuffer + 1] = entry
         end
     end
@@ -2464,7 +2517,8 @@ function SessionMixin:SnapshotBags()
         for slot = 1, numSlots or 0 do
             local itemID = C_Container.GetContainerItemID(bag, slot)
             if itemID then
-                self.preEncounterBagSnapshot[itemID] = (self.preEncounterBagSnapshot[itemID] or 0) + 1
+                self.preEncounterBagSnapshot[itemID] = (self.preEncounterBagSnapshot[itemID] or 0)
+                    + GetContainerItemStackCount(bag, slot)
             end
         end
     end
@@ -2753,7 +2807,8 @@ function SessionMixin:ScanBagsForTradeableItems()
         for slot = 1, numSlots or 0 do
             local itemID = C_Container.GetContainerItemID(bag, slot)
             if itemID then
-                currentCounts[itemID] = (currentCounts[itemID] or 0) + 1
+                currentCounts[itemID] = (currentCounts[itemID] or 0)
+                    + GetContainerItemStackCount(bag, slot)
             end
         end
     end
@@ -2835,6 +2890,7 @@ function SessionMixin:ScanBagsForTradeableItems()
                             slot = slot,
                             link = itemLink,
                             tradeTime = tradeTime,
+                            stackCount = GetContainerItemStackCount(bag, slot),
                         }
                     else
                         TraceLoot("no-trade-time", itemLink,
@@ -2857,77 +2913,115 @@ function SessionMixin:ScanBagsForTradeableItems()
             end)
         end
 
-        local oldTradeableCopies = #reportableSlots - newCopies
+        local reportableQuantity = 0
+        for _, slotData in ipairs(reportableSlots) do
+            reportableQuantity = reportableQuantity + (slotData.stackCount or 1)
+        end
+
+        local oldTradeableCopies = reportableQuantity - newCopies
         if oldTradeableCopies < 0 then oldTradeableCopies = 0 end
 
         local reportsThisScan = 0
-        local startIndex = oldTradeableCopies + reportedCount + 1
-        for index = startIndex, #reportableSlots do
+        local skipCopies = oldTradeableCopies + reportedCount
+        local representedCopies = isML
+            and CountRepresentedTradeableCopies(
+                self,
+                itemID,
+                Utils.GetPlayerFullName(),
+                self.bagScanEncounterID or self.lastEncounterID
+            )
+            or 0
+
+        for _, ex in ipairs(reportableSlots) do
             if reportedCount + reportsThisScan >= newCopies then break end
 
-            local ex = reportableSlots[index]
-            local itemLink = ex.link
-            local rejected = false
+            local slotCopies = ex.stackCount or 1
+            if skipCopies >= slotCopies then
+                skipCopies = skipCopies - slotCopies
+            else
+                local skippedInSlot = skipCopies
+                skipCopies = 0
+                local availableCopies = slotCopies - skippedInSlot
+                local remainingCopies = newCopies - reportedCount - reportsThisScan
+                local copiesInSlot = math.min(availableCopies, remainingCopies)
+                if copiesInSlot <= 0 then break end
 
-            if enforceFilters then
-                local minQ = GetMinQuality()
-                local quality = Utils.GetItemQuality(itemLink)
-                if not quality or quality < minQ then
-                    TraceLoot("quality-low", itemLink,
-                        "got=" .. tostring(quality) .. " min=" .. tostring(minQ))
-                    rejected = true
-                elseif IsItemClassBlocked(itemLink) then
-                    local _, _, _, _, _, classID, subClassID = C_Item.GetItemInfoInstant(itemLink)
-                    TraceLoot("class-blocked", itemLink,
-                        "class=" .. tostring(classID) .. " sub=" .. tostring(subClassID))
-                    rejected = true
-                else
-                    local boe = IsItemBoE(itemLink)
-                    local autoAddBoEs = Loothing.Settings and Loothing.Settings:Get("ml.autoAddBoEs", false)
-                    if boe and not autoAddBoEs then
-                        TraceLoot("boe-excluded", itemLink, "autoAddBoEs=false")
+                local itemLink = ex.link
+                local rejected = false
+
+                if enforceFilters then
+                    local minQ = GetMinQuality()
+                    local quality = Utils.GetItemQuality(itemLink)
+                    if not quality or quality < minQ then
+                        TraceLoot("quality-low", itemLink,
+                            "got=" .. tostring(quality) .. " min=" .. tostring(minQ))
                         rejected = true
-                    elseif Loothing.ItemFilter and Loothing.ItemFilter:ShouldIgnoreItem(itemLink) then
-                        TraceLoot("in-ignore-list", itemLink)
+                    elseif IsItemClassBlocked(itemLink) then
+                        local _, _, _, _, _, classID, subClassID = C_Item.GetItemInfoInstant(itemLink)
+                        TraceLoot("class-blocked", itemLink,
+                            "class=" .. tostring(classID) .. " sub=" .. tostring(subClassID))
                         rejected = true
+                    else
+                        local boe = IsItemBoE(itemLink)
+                        local autoAddBoEs = Loothing.Settings and Loothing.Settings:Get("ml.autoAddBoEs", false)
+                        if boe and not autoAddBoEs then
+                            TraceLoot("boe-excluded", itemLink, "autoAddBoEs=false")
+                            rejected = true
+                        elseif Loothing.ItemFilter and Loothing.ItemFilter:ShouldIgnoreItem(itemLink) then
+                            TraceLoot("in-ignore-list", itemLink)
+                            rejected = true
+                        end
                     end
                 end
-            end
 
-            if not rejected then
-                local tradeTime = ex.tradeTime
-                local forceCreate = (reportedCount + reportsThisScan) > 0
-                TraceLoot("candidate", itemLink,
-                    "isML=" .. tostring(isML) .. " tt=" .. tradeTime)
-
-                if isML then
-                    self:HandleTradable({
-                        itemLink      = itemLink,
-                        itemID        = itemID,
-                        timeRemaining = tradeTime,
-                        playerName    = Utils.GetPlayerFullName(),
-                        encounterID   = self.bagScanEncounterID or self.lastEncounterID,
-                        encounterName = self.bagScanEncounterName or self.lastEncounterName,
-                        source        = "bag_scan",
-                        forceCreate   = forceCreate,
-                    })
-                elseif suppressNonMLTradable then
-                    TraceLoot("suppressed-nonml-tradable", itemLink,
-                        "groupLoot=active handleLoot=true")
+                if rejected then
+                    reportsThisScan = reportsThisScan + copiesInSlot
+                    self.reportedTradeableItems[itemID] = reportedCount + reportsThisScan
                 else
-                    Loothing.Comm:Send(Loothing.MsgType.TRADABLE, {
-                        itemLink      = itemLink,
-                        itemID        = itemID,
-                        timeRemaining = tradeTime,
-                        encounterID   = self.bagScanEncounterID or self.lastEncounterID,
-                        encounterName = self.bagScanEncounterName or self.lastEncounterName,
-                        source        = "bag_scan",
-                        forceCreate   = forceCreate,
-                    })
-                end
+                    local tradeTime = ex.tradeTime
+                    for _ = 1, copiesInSlot do
+                        local representedBefore = reportedCount + reportsThisScan
+                        local forceCreate = isML
+                            and (representedBefore >= representedCopies)
+                            or (representedBefore > 0)
+                        TraceLoot("candidate", itemLink,
+                            "isML=" .. tostring(isML)
+                            .. " tt=" .. tradeTime
+                            .. " represented=" .. tostring(representedCopies)
+                            .. " index=" .. tostring(representedBefore + 1))
 
-                reportsThisScan = reportsThisScan + 1
-                self.reportedTradeableItems[itemID] = reportedCount + reportsThisScan
+                        if isML then
+                            self:HandleTradable({
+                                itemLink      = itemLink,
+                                itemID        = itemID,
+                                timeRemaining = tradeTime,
+                                playerName    = Utils.GetPlayerFullName(),
+                                quantity      = 1,
+                                encounterID   = self.bagScanEncounterID or self.lastEncounterID,
+                                encounterName = self.bagScanEncounterName or self.lastEncounterName,
+                                source        = "bag_scan",
+                                forceCreate   = forceCreate,
+                            })
+                        elseif suppressNonMLTradable then
+                            TraceLoot("suppressed-nonml-tradable", itemLink,
+                                "groupLoot=active handleLoot=true")
+                        else
+                            Loothing.Comm:Send(Loothing.MsgType.TRADABLE, {
+                                itemLink      = itemLink,
+                                itemID        = itemID,
+                                timeRemaining = tradeTime,
+                                quantity      = 1,
+                                encounterID   = self.bagScanEncounterID or self.lastEncounterID,
+                                encounterName = self.bagScanEncounterName or self.lastEncounterName,
+                                source        = "bag_scan",
+                                forceCreate   = forceCreate,
+                            })
+                        end
+
+                        reportsThisScan = reportsThisScan + 1
+                        self.reportedTradeableItems[itemID] = reportedCount + reportsThisScan
+                    end
+                end
             end
         end
     end
@@ -3046,11 +3140,14 @@ function SessionMixin:StartSessionWithPickedItems(encounterID, encounterName, pi
     for _, entry in ipairs(pickedItems) do
         if entry.itemLink then
             table.insert(self.lootBuffer, {
-                itemLink    = entry.itemLink,
-                playerName  = entry.playerName,
-                encounterID = encounterID,  -- normalise so replay-guard passes
-                timestamp   = now,
-                _picked     = true,         -- StartSession reads this to force-add
+                itemLink           = entry.itemLink,
+                itemID             = entry.itemID,
+                playerName         = entry.playerName,
+                encounterID        = encounterID,  -- normalise so replay-guard passes
+                source             = entry.source,
+                tradeTimeRemaining = entry.tradeTimeRemaining,
+                timestamp          = now,
+                _picked            = true,         -- StartSession reads this to force-add
             })
         end
     end
@@ -3891,18 +3988,7 @@ function SessionMixin:HandlePlayerInfoResponse(data)
         candidateManager:UpdateCandidateGear(candidate.playerName, candidate.gear1Link, candidate.gear2Link, candidate.gear1ilvl, candidate.gear2ilvl, candidate.ilvlDiff)
 
         if Loothing.Comm then
-            Loothing.Comm:BroadcastCandidateUpdate(itemGUID, {
-                name = candidate.playerName,
-                class = candidate.playerClass,
-                response = candidate.response,
-                roll = candidate.roll,
-                note = candidate.note,
-                gear1 = candidate.gear1Link,
-                gear2 = candidate.gear2Link,
-                ilvl1 = candidate.gear1ilvl,
-                ilvl2 = candidate.gear2ilvl,
-                itemsWon = candidate.itemsWonThisSession,
-            }, self.sessionID)
+            self:QueueResponseBroadcast(itemGUID, candidate)
         end
     end
 end
@@ -4029,14 +4115,22 @@ function SessionMixin:QueueResponseBroadcast(itemGUID, candidate)
     if not self.responseBroadcastBuffer then
         self.responseBroadcastBuffer = {}
     end
+    if not self.responseBroadcastIndex then
+        self.responseBroadcastIndex = {}
+    end
 
-    self.responseBroadcastBuffer[#self.responseBroadcastBuffer + 1] = {
+    local candidateName = candidate.playerName or candidate.name
+    if not itemGUID or not candidateName then
+        return
+    end
+    local key = tostring(itemGUID or "") .. "\001" .. tostring(candidateName or "")
+    local entry = {
         command = Loothing.MsgType.CANDIDATE_UPDATE,
         data = {
             itemGUID      = itemGUID,
             candidateData = {
-                name     = candidate.playerName,
-                class    = candidate.playerClass,
+                name     = candidateName,
+                class    = candidate.playerClass or candidate.class or "UNKNOWN",
                 response = candidate.response,
                 roll     = candidate.roll,
                 note     = candidate.note,
@@ -4049,14 +4143,27 @@ function SessionMixin:QueueResponseBroadcast(itemGUID, candidate)
             sessionID = self.sessionID,
         },
     }
-
-    -- Reset the flush timer on each new entry (sliding window)
-    if self.responseBroadcastTimer then
-        self.responseBroadcastTimer:Cancel()
+    local existingIndex = self.responseBroadcastIndex[key]
+    if existingIndex and self.responseBroadcastBuffer[existingIndex] then
+        self.responseBroadcastBuffer[existingIndex] = entry
+    else
+        self.responseBroadcastBuffer[#self.responseBroadcastBuffer + 1] = entry
+        self.responseBroadcastIndex[key] = #self.responseBroadcastBuffer
     end
-    self.responseBroadcastTimer = C_Timer.NewTimer(RESPONSE_BROADCAST_WINDOW, function()
+
+    -- Start the flush timer on the first entry only. Resetting it on every
+    -- response can defer council updates indefinitely during a steady stream.
+    if not self.responseBroadcastTimer then
+        self.responseBroadcastTimer = C_Timer.NewTimer(RESPONSE_BROADCAST_WINDOW, function()
+            self:FlushResponseBroadcasts()
+        end)
+    end
+
+    local maxBatch = Loothing.Comm and Loothing.Comm.MAX_BATCH_SIZE or 20
+    if maxBatch < 2 then maxBatch = 20 end
+    if #self.responseBroadcastBuffer >= maxBatch then
         self:FlushResponseBroadcasts()
-    end)
+    end
 end
 
 --- Flush accumulated response broadcasts as a single BATCH message
@@ -4069,6 +4176,7 @@ function SessionMixin:FlushResponseBroadcasts()
     local buffer = self.responseBroadcastBuffer
     if not buffer or #buffer == 0 then return end
     self.responseBroadcastBuffer = nil
+    self.responseBroadcastIndex = nil
 
     if not Loothing.Comm then return end
 
@@ -4080,7 +4188,7 @@ function SessionMixin:FlushResponseBroadcasts()
         local remaining = #buffer - index + 1
         if remaining == 1 then
             local entry = buffer[index]
-            Loothing.Comm:Send(entry.command, entry.data, nil, "ALERT")
+            Loothing.Comm:Send(entry.command, entry.data, nil, "NORMAL")
             index = index + 1
         else
             local chunk = {}
@@ -4088,7 +4196,7 @@ function SessionMixin:FlushResponseBroadcasts()
             for i = 0, chunkSize - 1 do
                 chunk[#chunk + 1] = buffer[index + i]
             end
-            Loothing.Comm:Send(Loothing.MsgType.BATCH, { messages = chunk }, nil, "ALERT")
+            Loothing.Comm:Send(Loothing.MsgType.BATCH, { messages = chunk }, nil, "NORMAL")
             index = index + chunkSize
         end
     end
@@ -4224,18 +4332,7 @@ function SessionMixin:HandleRollTracked(playerName, roll, minRoll, maxRoll)
                 -- ML broadcasts so council members who missed the chat event stay in sync
                 if isML and Loothing.Comm then
                     local candidate = candidateManager:GetCandidate(playerName)
-                    Loothing.Comm:BroadcastCandidateUpdate(item.itemGUID, {
-                        name = candidate.playerName,
-                        class = candidate.playerClass,
-                        response = candidate.response,
-                        roll = candidate.roll,
-                        note = candidate.note,
-                        gear1 = candidate.gear1Link,
-                        gear2 = candidate.gear2Link,
-                        ilvl1 = candidate.gear1ilvl,
-                        ilvl2 = candidate.gear2ilvl,
-                        itemsWon = candidate.itemsWonThisSession,
-                    }, self.sessionID)
+                    self:QueueResponseBroadcast(item.guid, candidate)
                 end
             end
         end

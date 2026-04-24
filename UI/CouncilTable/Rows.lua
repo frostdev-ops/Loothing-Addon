@@ -504,7 +504,7 @@ function CouncilTableMixin:SortCandidates(candidates)
     if not self.sortColumn then return end
 
     local sortKey = self.COLUMN_SORT_MAP[self.sortColumn] or self.sortColumn
-    if self.sortColumn == "response"
+    if (self.sortColumn == "response" or self.sortColumn == "roll")
         and Loothing.Observer
         and not Loothing.Observer:CanPlayerSeeResponses() then
         sortKey = "name"

@@ -359,11 +359,10 @@ function SyncMixin:HandleSyncRequest(data)
 end
 
 --- Flush all coalesced sync requests: gather state once, send minimally.
---- With ≥2 still-valid requesters, broadcast a single SYNC_DATA to the group
---- instead of sending N WHISPERs. Non-requesters drop the broadcast in
---- HandleSyncData's `syncInProgress` guard, so it's safe. This turns a
---- 20-requester flood (previously 20 WHISPERs = 20 outbound messages, mostly
---- throttled by WoW) into a single raid broadcast.
+--- With ≥2 still-valid requesters, broadcast one SYNC_DATA to the group
+--- instead of sending N full-state whispers. Non-requesters drop the broadcast
+--- in HandleSyncData's syncInProgress guard, so this keeps reconnect storms
+--- bounded without changing what active requesters receive.
 function SyncMixin:FlushSyncRequests()
     self.syncCoalesceTimer = nil
 
@@ -391,14 +390,10 @@ function SyncMixin:FlushSyncRequests()
     local syncData = self:GatherSyncData()
 
     if validCount >= 2 then
-        -- Broadcast once; 2+ WHISPERs would cost 2+ against the message-count
-        -- budget. Receivers drop at the syncInProgress guard (Sync.lua:238).
         Loothing.Comm:Send(Loothing.MsgType.SYNC_DATA, syncData, nil)
         Loothing:Debug("Sync: broadcast coalesced sync_data to group,",
             validCount, "requesters satisfied by 1 send")
     else
-        -- Single requester: WHISPER preserves targeted semantics (no extra
-        -- raid members spend CPU decoding and guard-dropping).
         for requester in pairs(requesters) do
             Loothing.Comm:SendSyncData(syncData, requester)
         end

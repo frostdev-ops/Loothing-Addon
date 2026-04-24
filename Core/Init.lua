@@ -2711,6 +2711,21 @@ function Addon:HasMasterLooterVisibility()
     return playerName and self.masterLooter and Utils.IsSamePlayer(self.masterLooter, playerName) or false
 end
 
+--- Check whether restored/cached state says the local player is the ML.
+--- Used only for fail-closed UI presentation during reconnect verification,
+--- never for revealing responses/votes or enabling ML actions.
+-- @return boolean
+function Addon:IsCachedMasterLooterCandidate()
+    local playerName = Utils.GetPlayerFullName()
+    if not playerName then return false end
+    if self.isMasterLooter == true then return true end
+
+    local ml = self.masterLooter
+        or (self.Session and self.Session.GetMasterLooter and self.Session:GetMasterLooter())
+        or (self.GetCanonicalML and self:GetCanonicalML())
+    return ml and Utils.IsSamePlayer(playerName, ml) or false
+end
+
 --- Get current session
 -- @return table|nil
 function Addon:GetSession()
@@ -2797,9 +2812,12 @@ function Addon:CacheStateForReconnect()
             for _, item in self.Session.items:Enumerate() do
                 local itemEntry = {
                     guid = item.guid,
+                    itemID = item.itemID,
                     itemLink = item.itemLink,
                     looter = item.looter,
                     state = item:GetState(),
+                    isTradable = item.isTradable,
+                    tradeTimeRemaining = item.tradeTimeRemaining,
                 }
 
                 -- Include candidate/vote data so ML can restore full state
@@ -2860,6 +2878,26 @@ function Addon:WriteDesktopExport()
     self.Settings:SetGlobalValue("desktopExchange.export", export)
 end
 
+local function SanitizeReconnectSessionItems(items)
+    if type(items) ~= "table" then return items end
+
+    local sanitized = {}
+    for i, item in ipairs(items) do
+        if type(item) == "table" then
+            sanitized[i] = {
+                guid = item.guid,
+                itemID = item.itemID,
+                itemLink = item.itemLink,
+                looter = item.looter,
+                state = item.state,
+                isTradable = item.isTradable,
+                tradeTimeRemaining = item.tradeTimeRemaining,
+            }
+        end
+    end
+    return sanitized
+end
+
 --- Restore state from cache after UI reload
 function Addon:RestoreFromCache()
     if not self.Settings then return end
@@ -2901,13 +2939,16 @@ function Addon:RestoreFromCache()
         self.MLDB:ApplyFromML(cache.mldb, cache.masterLooter or "")
     end
 
-    -- Restore council roster
-    if cache.councilRoster and self.Council then
+    local restoringAsMasterLooter = cache.isMasterLooter == true
+
+    -- Restore remote rosters only on non-ML clients. ML clients already have
+    -- local saved rosters loaded; making the cached snapshot remote-primary
+    -- would cause subsequent local roster edits/broadcasts to read stale data.
+    if cache.councilRoster and self.Council and not restoringAsMasterLooter then
         self.Council:SetRemoteRoster(cache.councilRoster)
     end
 
-    -- Restore observer roster
-    if cache.observerRoster and self.Observer then
+    if cache.observerRoster and self.Observer and not restoringAsMasterLooter then
         self.Observer:SetRemoteObserverList(cache.observerRoster)
     end
 
@@ -2924,13 +2965,21 @@ function Addon:RestoreFromCache()
         if restoredML then
             cache.session.masterLooter = restoredML
         end
+        local restorePrivateCandidateState = restoringAsMasterLooter
+            or (self.Council and self.Council.IsPlayerCouncilMember
+                and self.Council:IsPlayerCouncilMember())
+
+        local restoredItems = restorePrivateCandidateState
+            and cache.session.items
+            or SanitizeReconnectSessionItems(cache.session.items)
+
         self.Session:SyncFromData({
             sessionID = cache.session.sessionID,
             encounterID = cache.session.encounterID,
             encounterName = cache.session.encounterName,
             state = cache.session.state,
             masterLooter = cache.session.masterLooter,
-            items = cache.session.items,
+            items = restoredItems,
         })
     end
 
