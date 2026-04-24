@@ -761,6 +761,18 @@ function SessionMixin:OnLootPickerHidden()
     end)
 end
 
+--- Called after the picker successfully starts a session.
+-- Clears prompt/debounce state that belonged to the now-consumed picker so
+-- delayed callbacks cannot re-open it after the session has already started.
+function SessionMixin:OnLootPickerSessionStarted()
+    if self.pendingLootTimer then
+        self.pendingLootTimer:Cancel()
+        self.pendingLootTimer = nil
+    end
+    self.pendingBufferedPrompt = nil
+    self.receivedLootCount = 0
+end
+
 --[[--------------------------------------------------------------------
     Session Lifecycle
 ----------------------------------------------------------------------]]
@@ -2997,6 +3009,10 @@ function SessionMixin:StartSessionWithPickedItems(encounterID, encounterName, pi
                 or "Could not start the loot session — your picks were preserved.")
         end
         return false
+    end
+
+    if self.OnLootPickerSessionStarted then
+        self:OnLootPickerSessionStarted()
     end
 
     return true

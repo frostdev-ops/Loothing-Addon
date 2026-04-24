@@ -421,9 +421,15 @@ if TestRunner and Assert then
 
         TestRunner:It("keeps hide cleanup suppressed until asynchronous OnHide fires", function()
             local started = false
+            local disabled = false
             local picker = CreatePicker(101)
             picker.entries = {
                 { itemLink = "picked", playerName = "Raider-Realm", checked = true },
+            }
+            picker.startBtn = {
+                Disable = function()
+                    disabled = true
+                end,
             }
             picker.Hide = function(self)
                 started = self._suppressOnHideCleanup == true
@@ -439,7 +445,79 @@ if TestRunner and Assert then
 
             Assert.IsTrue(ok)
             Assert.IsTrue(started)
+            Assert.IsTrue(disabled)
             Assert.IsTrue(picker._suppressOnHideCleanup)
+            Assert.IsTrue(picker._starting)
+        end, { category = "unit" })
+
+        TestRunner:It("does not start twice while the picker fade-out hide is pending", function()
+            local startCount = 0
+            local disabledCount = 0
+            local picker = CreatePicker(101)
+            picker.entries = {
+                { itemLink = "picked", playerName = "Raider-Realm", checked = true },
+            }
+            picker.startBtn = {
+                Disable = function()
+                    disabledCount = disabledCount + 1
+                end,
+            }
+            picker.Hide = function() end
+            picker.IsShown = function() return true end
+            Loothing.Session = {
+                StartSessionWithPickedItems = function()
+                    startCount = startCount + 1
+                    return true
+                end,
+            }
+
+            local first = picker:OnStart()
+            local second = picker:OnStart()
+
+            Assert.IsTrue(first)
+            Assert.IsFalse(second)
+            Assert.Equals(1, startCount)
+            Assert.Equals(1, disabledCount)
+            Assert.IsTrue(picker._starting)
+        end, { category = "unit" })
+
+        TestRunner:It("does not let delayed Show unlock a picker start in progress", function()
+            local mouseEnabled = false
+            local picker = CreatePicker(101)
+            picker._built = true
+            picker._starting = true
+            picker.frame = {
+                IsShown = function() return true end,
+                EnableMouse = function()
+                    mouseEnabled = true
+                end,
+            }
+            picker.RegisterSessionCallback = function() end
+
+            picker:Show(101, "Old Boss", {})
+
+            Assert.IsTrue(picker._starting)
+            Assert.IsFalse(mouseEnabled)
+        end, { category = "unit" })
+
+        TestRunner:It("clears consumed picker prompt state after a successful session start", function()
+            local canceled = false
+            local session = setmetatable({
+                pendingLootTimer = {
+                    Cancel = function()
+                        canceled = true
+                    end,
+                },
+                pendingBufferedPrompt = { id = 101, name = "Old Boss" },
+                receivedLootCount = 3,
+            }, { __index = ns.SessionMixin })
+
+            session:OnLootPickerSessionStarted()
+
+            Assert.IsTrue(canceled)
+            Assert.Equals(nil, session.pendingLootTimer)
+            Assert.Equals(nil, session.pendingBufferedPrompt)
+            Assert.Equals(0, session.receivedLootCount)
         end, { category = "unit" })
 
         TestRunner:It("clears only matching encounter rows from mixed buffer", function()

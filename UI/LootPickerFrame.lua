@@ -168,6 +168,9 @@ function LootPickerFrameMixin:BuildFrame()
     frame:HookScript("OnHide", function()
         if self._suppressOnHideCleanup then
             self._suppressOnHideCleanup = false
+            self._starting = false
+            if self.frame then self.frame:EnableMouse(true) end
+            if self.startBtn then self.startBtn:Enable() end
             if Loothing.Session and Loothing.Session.OnLootPickerHidden then
                 Loothing.Session:OnLootPickerHidden()
             end
@@ -403,12 +406,19 @@ function LootPickerFrameMixin:Show(encounterID, encounterName, lootBuffer)
     -- Defensive re-attach: Session may have loaded after our first Init.
     self:RegisterSessionCallback()
 
+    -- A successful Start hides with an async fade-out. Do not let a delayed
+    -- prompt/refresh re-enter Show() during that window and unlock the button.
+    if self._starting and self.frame and self.frame:IsShown() then
+        return
+    end
+
     local newEncounter = (encounterID ~= self.encounterID)
                        or not self.frame:IsShown()
 
     self.encounterID = encounterID or 0
     self.encounterName = encounterName or L("LOOT_PICKER_DEFAULT_BOSS", "Encounter")
     self._starting = false
+    if self.frame then self.frame:EnableMouse(true) end
 
     -- Only reset showBlocked + entries when this is a different encounter
     -- (or first show). A re-fire of Show for the SAME encounter — e.g.,
@@ -930,8 +940,9 @@ function LootPickerFrameMixin:OnStart()
     -- Successful start — suppress the OnHide cleanup path so we don't
     -- wipe the buffer Session already consumed via the replay loop.
     self._suppressOnHideCleanup = true
+    if self.frame then self.frame:EnableMouse(false) end
+    if self.startBtn then self.startBtn:Disable() end
     self:Hide()
-    self._starting = false
     return true
 end
 
