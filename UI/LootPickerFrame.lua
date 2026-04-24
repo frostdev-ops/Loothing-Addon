@@ -446,6 +446,41 @@ function LootPickerFrameMixin:IsShown()
 end
 
 --[[--------------------------------------------------------------------
+    Empty-state text: distinguish "still waiting" vs "all blocked"
+----------------------------------------------------------------------]]
+
+--- Update the empty-state message based on whether the post-encounter bag
+--- scan is still running. Previously the picker showed a flat "No tradable
+--- loot detected yet." whether items were still arriving or not, which
+--- made users dismiss the picker before group-loot rolls resolved at T+30s.
+--- Now:
+---   * while `Session.bagScanTimer` is active (scan in progress) — show a
+---     countdown like "Waiting for roll results… (27s remaining)"
+---   * after scan ends with still-empty buffer — show the static message
+---     with a hint about re-triggering
+function LootPickerFrameMixin:UpdateEmptyStateText()
+    if not self.emptyText then return end
+
+    local session = Loothing.Session
+    local scanActive = session and session.bagScanTimer ~= nil
+    local startedAt = session and session.bagScanStartedAt
+    local SCAN_WINDOW = 60
+
+    if scanActive and startedAt then
+        local elapsed = GetTime() - startedAt
+        local remaining = math.max(0, math.ceil(SCAN_WINDOW - elapsed))
+        self.emptyText:SetText(string.format(
+            L("LOOT_PICKER_WAITING_FMT",
+              "Waiting for roll results… (%ds remaining)"),
+            remaining))
+    else
+        self.emptyText:SetText(
+            L("LOOT_PICKER_EMPTY",
+              "No tradable loot detected yet."))
+    end
+end
+
+--[[--------------------------------------------------------------------
     Entry construction (one per buffer item)
 ----------------------------------------------------------------------]]
 
@@ -520,9 +555,40 @@ function LootPickerFrameMixin:Render()
     end
 
     if #visible == 0 then
+        -- Distinguish "buffer genuinely empty, scan still running" from
+        -- "all items were filter-blocked". Without this the user has no
+        -- cue that items are still arriving — they see empty and dismiss.
+        self:UpdateEmptyStateText()
         self.emptyText:Show()
+        -- Drive periodic text refresh while scan is active so the
+        -- countdown ticks down. Cheap: runs only while picker is shown AND
+        -- empty. Hidden when the first item arrives.
+        if not self._emptyTicker then
+            self._emptyTicker = C_Timer.NewTicker(1, function()
+                if not self.frame or not self.frame:IsShown() then
+                    if self._emptyTicker then
+                        self._emptyTicker:Cancel()
+                        self._emptyTicker = nil
+                    end
+                    return
+                end
+                if #self.entries > 0 then
+                    self.emptyText:Hide()
+                    if self._emptyTicker then
+                        self._emptyTicker:Cancel()
+                        self._emptyTicker = nil
+                    end
+                    return
+                end
+                self:UpdateEmptyStateText()
+            end)
+        end
     else
         self.emptyText:Hide()
+        if self._emptyTicker then
+            self._emptyTicker:Cancel()
+            self._emptyTicker = nil
+        end
     end
 
     -- Materialise rows for visible entries (variable row height: blocked

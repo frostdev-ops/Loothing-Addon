@@ -1056,11 +1056,12 @@ local function RegisterEvents()
         end
     end, Loothing)
 
-    Events.Registry:RegisterEventCallback("BOSS_KILL", function(_, encounterID, encounterName)
-        if Loothing.Session then
-            Loothing.Session:OnBossKill(encounterID, encounterName)
-        end
-    end, Loothing)
+    -- BOSS_KILL was previously hooked to a no-op `Session:OnBossKill`
+    -- alongside ENCOUNTER_END. Removed in 2.0.29 — ENCOUNTER_END is the
+    -- canonical "boss died successfully" signal for every encounter in
+    -- 12.0 and carries the success flag + encounter metadata we rely on.
+    -- Re-add only if a specific encounter is found to fire BOSS_KILL
+    -- without a matching ENCOUNTER_END.
 
     -- Loot events
     Events.Registry:RegisterEventCallback("ENCOUNTER_LOOT_RECEIVED", function(_, encounterID, itemID, itemLink, quantity, playerName, className)

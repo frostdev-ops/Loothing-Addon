@@ -6,10 +6,22 @@
       START_LOOT_ROLL (rollID, rollTime)       — roll window opens
       LOOT_ITEM_ROLL_WON (itemLink, qty, ...)  — winner's client only, fires
                                                  at ~T+30s when roll resolves
-      ENCOUNTER_LOOT_RECEIVED                  — personal loot ONLY; does NOT
-                                                 fire for group-loot wins
-                                                 (BossBannerToast.lua:183 is
-                                                  the sole Blizzard consumer)
+                                                 (AlertFrames.lua:473 is the
+                                                  stock Blizzard consumer)
+      ENCOUNTER_LOOT_RECEIVED                  — fires for any encounter-
+                                                 distributed item per
+                                                 BossBannerToast.lua:183.
+                                                 In 12.0 practice this is
+                                                 primarily personal-loot
+                                                 drops — group-loot roll
+                                                 wins are resolved via
+                                                 C_LootHistory and route
+                                                 through LOOT_ITEM_ROLL_WON
+                                                 on the winner's client.
+      LOOT_HISTORY_UPDATE_DROP                 — modern per-drop state
+                                                 stream; richer than
+                                                 LOOT_ITEM_ROLL_WON but
+                                                 not currently hooked.
 
     Key insight: group-loot wins arrive in the ML's bag ~30s after
     ENCOUNTER_END (the roll window equals our old bag-scan window, so the
@@ -80,15 +92,23 @@ end
 function GroupLootMixin:OnLootItemRollWon(_event, itemLink, rollQuantity, rollType, roll, _upgraded)
     if not itemLink or itemLink == "" then return end
 
-    -- Gate: we only care when this client is acting as ML and is handling
-    -- loot. Non-ML wins (e.g., legendary rolls where Loothing deliberately
-    -- stays out, or quality-gated items below threshold) remain the user's
-    -- personal drop and should not enter a council session.
-    local isML = Loothing.handleLoot and (Loothing.isMasterLooter
-        or (Loothing.Session and Loothing.Session:IsMasterLooter())
-        or (Loothing.IsCanonicalML and Loothing:IsCanonicalML()))
+    -- Gate: accept the win when THIS client is canonically the ML, full
+    -- stop. The previous gate also required `Loothing.handleLoot` which
+    -- opened a race: during a `GROUP_ROSTER_UPDATE` that fires while rolls
+    -- are resolving, `PerformMLCheck` can briefly clear `isMasterLooter`
+    -- as it re-verifies, and a roll that resolves in that exact tick
+    -- would silently drop. We ship the event through if ANY canonical ML
+    -- signal says we are the ML — `IsCanonicalML` reads settings-level
+    -- designated ML, leader-designated ML, and raid leader fallback.
+    -- `handleLoot` is a local state flag that `IsCanonicalML` does not
+    -- require; the council session logic downstream re-gates on it when
+    -- it actually matters.
+    local Session = Loothing.Session
+    local isML = (Loothing.IsCanonicalML and Loothing:IsCanonicalML())
+        or (Session and Session.IsMasterLooter and Session:IsMasterLooter())
+        or Loothing.isMasterLooter
     if not isML then
-        Loothing:Debug("LOOT_ITEM_ROLL_WON: not ML/handleLoot, ignoring",
+        Loothing:Debug("LOOT_ITEM_ROLL_WON: not ML, ignoring",
             itemLink, "(roll", tostring(roll) .. ")")
         return
     end

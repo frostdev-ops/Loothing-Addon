@@ -304,7 +304,14 @@ function TooltipScan:GetContainerItemTradeTimeRemaining(bag, slot)
 
     local cacheKey = bag .. ":" .. slot
     local cached = self.bagTradeTimeCache[cacheKey]
-    if cached and cached.identity == identity then
+    -- Only trust a cached result that is KNOWN (tradeTime or bounded==0).
+    -- `math.huge` means "tooltip didn't have a trade line AND didn't have
+    -- a bound line" — this happens for freshly-landed items where the
+    -- server hasn't finished decorating the tooltip yet. Re-scanning on
+    -- the next tick gives the tooltip time to warm up. Without this
+    -- retry, a single cold probe at T+1s permanently poisoned the item
+    -- as no-trade-time for the rest of the bag-scan window.
+    if cached and cached.identity == identity and cached.remaining ~= math.huge then
         return cached.remaining
     end
 
@@ -347,6 +354,11 @@ function TooltipScan:GetContainerItemTradeTimeRemaining(bag, slot)
         remaining = math.huge
     end
 
+    -- Only cache KNOWN results. A `math.huge` here means the tooltip was
+    -- cold / unrendered; store a sentinel with identity but allow re-scan
+    -- on subsequent ticks by writing math.huge (the read-path guards on
+    -- `cached.remaining ~= math.huge`). The entry is still useful for
+    -- invalidation detection via identity change.
     self.bagTradeTimeCache[cacheKey] = {
         identity = identity,
         remaining = remaining,

@@ -143,7 +143,7 @@ function SessionMixin:Init()
     -- Post-encounter bag scanner (RCLC-style distributed item collection)
     self.bagScanTimer = nil
     self.reportedTradeableItems = {}  -- { [itemID] = true } dedup (was keyed by itemLink pre-2.0.27)
-    self.preEncounterBagSnapshot = {} -- { [itemLink] = count } taken at ENCOUNTER_START
+    self.preEncounterBagSnapshot = {} -- { [itemID] = count } taken at ENCOUNTER_START (was itemLink-keyed pre-2.0.27)
 
     -- Legacy aliases (kept for any external reads)
     self.lastEncounterID = nil
@@ -2360,6 +2360,10 @@ function SessionMixin:StartPostEncounterBagScan()
 
     Loothing:Debug("BagScan: starting post-encounter scan (60s window)")
 
+    -- Expose start time so the picker's empty-state can render a countdown.
+    -- Cleared in StopPostEncounterBagScan.
+    self.bagScanStartedAt = GetTime()
+
     self.bagScanTimer = C_Timer.NewTicker(2, function()
         scanCount = scanCount + 1
         self:ScanBagsForTradeableItems()
@@ -2387,6 +2391,7 @@ function SessionMixin:StopPostEncounterBagScan()
         self.bagScanTimer:Cancel()
         self.bagScanTimer = nil
     end
+    self.bagScanStartedAt = nil
 end
 
 --- Scan all bags for NEW tradeable items and either (ML) add them to the
@@ -2678,11 +2683,6 @@ function SessionMixin:StartSessionWithPickedItems(encounterID, encounterName, pi
     return true
 end
 
---- Handle boss kill
-function SessionMixin:OnBossKill()
-    -- Same as encounter end with success
-end
-
 --- Handle loot received
 function SessionMixin:OnLootReceived(encounterID, _itemID, itemLink, _quantity, playerName)
     Loothing:Debug("OnLootReceived:", itemLink, "from", playerName,
@@ -2692,10 +2692,14 @@ function SessionMixin:OnLootReceived(encounterID, _itemID, itemLink, _quantity, 
     local timing = Loothing.Settings:GetSessionTriggerTiming()
     local action = Loothing.Settings:GetSessionTriggerAction()
 
-    -- afterLoot timing: track encounter loot, then apply the configured action.
-    -- Triggers on ANY player's loot (not just ML's) because ENCOUNTER_LOOT_RECEIVED
-    -- fires for all items distributed from the encounter. The ML may not personally
-    -- receive any items in group loot — the debounce must still fire.
+    -- afterLoot timing: track encounter loot, then apply the configured
+    -- action. Runs only on the ML's client (the `Loothing.handleLoot` gate
+    -- is ML-local), but the underlying ENCOUNTER_LOOT_RECEIVED event on the
+    -- ML's client fires for items distributed to ANY raid member — so the
+    -- debounce counts all per-raider deliveries, not just the ML's own. In
+    -- 12.0 group-loot, ENCOUNTER_LOOT_RECEIVED typically only fires for
+    -- personal-loot drops; group-loot wins arrive via LOOT_ITEM_ROLL_WON
+    -- (see Loot/GroupLootEvents.lua).
     if timing == "afterLoot" and action ~= "manual" and Loothing.handleLoot then
         self.receivedLootCount = (self.receivedLootCount or 0) + 1
 
