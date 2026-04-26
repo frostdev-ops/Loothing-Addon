@@ -508,12 +508,19 @@ end
 
 --- Handle version request from another player
 -- @param sender string
-function VersionCheckMixin:HandleRequest(sender)
+function VersionCheckMixin:HandleRequest(sender, distribution)
     -- Suppress version responses during active sessions to avoid N² message floods.
     -- Version data is already cached from pre-session checks.
     if Loothing.Session and Loothing.Session:IsActive() then return end
 
-    Loothing.Comm:SendVersionResponse(sender)
+    if distribution == "GUILD" then
+        Loothing.Comm:SendVersionResponse(nil, "GUILD")
+    elseif distribution == "RAID" or distribution == "PARTY"
+        or distribution == "INSTANCE_CHAT" then
+        Loothing.Comm:SendVersionResponse(nil)
+    else
+        Loothing.Comm:SendVersionResponse(sender)
+    end
 end
 
 local function FindRosterUnit(name)

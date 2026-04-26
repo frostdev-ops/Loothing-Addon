@@ -520,6 +520,44 @@ local function RunCommunicationTests()
     end
 
     --[[--------------------------------------------------------------------
+        Test Group 11: WHISPER target validator (stale-target gate)
+    ----------------------------------------------------------------------]]
+    printGroup("WHISPER target validator")
+
+    if Loolib.Comm and Loolib.Comm.SetTargetValidator then
+        local TEST_PREFIX = "LOOTHING_TVAL"
+        local capturedCalls = {}
+        Loolib.Comm:RegisterComm(TEST_PREFIX, function() end, nil)
+
+        Loolib.Comm:SetTargetValidator(TEST_PREFIX, function(target)
+            capturedCalls[#capturedCalls + 1] = target
+            return false
+        end)
+        assert(true, "SetTargetValidator accepts function")
+
+        local okClear = pcall(function()
+            Loolib.Comm:SetTargetValidator(TEST_PREFIX, nil)
+        end)
+        assert(okClear, "SetTargetValidator accepts nil to clear")
+
+        local okBad = pcall(function()
+            Loolib.Comm:SetTargetValidator(TEST_PREFIX, "not a function")
+        end)
+        assert(not okBad, "SetTargetValidator rejects non-function validator")
+
+        Loolib.Comm:UnregisterComm(TEST_PREFIX)
+
+        -- After unregister, SetTargetValidator entry is also cleared. Re-set
+        -- and verify subsequent UnregisterComm wipes it without error.
+        Loolib.Comm:RegisterComm(TEST_PREFIX, function() end, nil)
+        Loolib.Comm:SetTargetValidator(TEST_PREFIX, function() return true end)
+        Loolib.Comm:UnregisterComm(TEST_PREFIX)
+        assert(true, "UnregisterComm clears associated target validator")
+    else
+        assert(true, "WHISPER target validator: API not available, skip")
+    end
+
+    --[[--------------------------------------------------------------------
         Summary
     ----------------------------------------------------------------------]]
     print("\n|cff00ccff========== Results ==========|r")

@@ -11,6 +11,7 @@ local Loolib = LibStub("Loolib")
 local GetNumGroupMembers = GetNumGroupMembers
 local GetNumSubgroupMembers = GetNumSubgroupMembers
 local IsInGroup = IsInGroup
+local IsInGuild = IsInGuild
 local IsInRaid = IsInRaid
 local UnitIsGroupAssistant = UnitIsGroupAssistant
 local UnitIsGroupLeader = UnitIsGroupLeader
@@ -459,9 +460,19 @@ end
     Version Handlers
 ----------------------------------------------------------------------]]
 
-function CommMixin:HandleVersionRequest(_data, sender)
+function CommMixin:HandleVersionRequest(_data, sender, distribution)
+    if distribution == "GUILD" then
+        if not IsInGuild() then
+            return
+        end
+    elseif not isGroupMember(sender) then
+        Loothing:Debug("Rejected VERSION_REQUEST from non-group member:", sender)
+        return
+    end
+
     self:TriggerEvent("OnVersionRequest", {
         requester = sender,
+        distribution = distribution,
     })
 end
 

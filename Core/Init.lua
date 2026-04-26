@@ -1125,7 +1125,7 @@ local function RegisterEvents()
     local versionCheck = GetVersionCheck()
     if Loothing.Comm and versionCheck then
         Loothing.Comm:RegisterCallback("OnVersionRequest", function(_, data)
-            versionCheck:HandleRequest(data.requester)
+            versionCheck:HandleRequest(data.requester, data.distribution)
         end, Loothing)
 
         Loothing.Comm:RegisterCallback("OnVersionResponse", function(_, data)

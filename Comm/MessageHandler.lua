@@ -246,6 +246,16 @@ function CommMixin:Init()
     Comm:RegisterComm(Loothing.ADDON_PREFIX, function(_prefix, message, distribution, sender)
         self:OnMessage(message, distribution, sender)
     end, self)
+
+    -- Stale-target gate: WHISPERs that pass the queue-time IsGroupMember check
+    -- in Comm:Send can sit in Loolib's throttled queue long enough for the
+    -- target to leave the group (post-wipe disband, zone change). Without a
+    -- send-time recheck, C_ChatInfo.SendAddonMessage returns GeneralError(9)
+    -- and Loolib logs a loud error. Reuse the same membership predicate at
+    -- the drain gate so those late WHISPERs drop silently.
+    if Comm.SetTargetValidator then
+        Comm:SetTargetValidator(Loothing.ADDON_PREFIX, Utils.IsGroupMember)
+    end
 end
 
 --- Get per-type comm statistics for diagnostics
@@ -1141,8 +1151,9 @@ function CommMixin:SendVersionRequest(target)
 end
 
 --- Send version response
--- @param target string - Player to respond to
-function CommMixin:SendVersionResponse(target)
+-- @param target string|nil - Player to respond to for direct requests
+-- @param distribution string|nil - Reply channel for broadcast requests ("GUILD" or group)
+function CommMixin:SendVersionResponse(target, distribution)
     local _, equippedIlvl = GetAverageItemLevel()
     local specID
     local specIndex = GetSpecialization and GetSpecialization()
@@ -1153,12 +1164,18 @@ function CommMixin:SendVersionResponse(target)
         end
     end
 
-    self:Send(Loothing.MsgType.VERSION_RESPONSE, {
+    local data = {
         version = Loothing.VERSION,
         tVersion = ns.VersionCheck and ns.VersionCheck.tVersion or nil,
         ilvl = equippedIlvl and equippedIlvl > 0 and equippedIlvl or nil,
         specID = specID,
-    }, target)
+    }
+
+    if distribution == "GUILD" then
+        self:SendGuild(Loothing.MsgType.VERSION_RESPONSE, data)
+    else
+        self:Send(Loothing.MsgType.VERSION_RESPONSE, data, target)
+    end
 end
 
 --[[--------------------------------------------------------------------
