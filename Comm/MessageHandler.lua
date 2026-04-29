@@ -777,7 +777,12 @@ end
 -- @param sender string
 -- @param distribution string
 function CommMixin:HandleXRealm(data, sender, _distribution)
-    if not data or not data.target then return end
+    if type(data) ~= "table"
+        or type(data.target) ~= "string"
+        or type(data.command) ~= "string" then
+        Loothing:Debug("HandleXRealm: rejected malformed relay from", sender)
+        return
+    end
 
     -- Prevent recursive processing: inner message must not be XREALM or BATCH
     if data.command == Loothing.MsgType.XREALM or data.command == Loothing.MsgType.BATCH then

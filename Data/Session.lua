@@ -1839,11 +1839,25 @@ function SessionMixin:EndVotingForItem(guid)
 
     item:EndVoting()
 
+    return self:RetallyVoteResultsForItem(item)
+end
+
+--- Recompute and broadcast vote results for an item.
+-- Used when voting closes and when late grace-window VOTE_COMMITs alter a
+-- tallied item, so result panels never drift from the authoritative vote set.
+-- @param item table - LoothingItem
+-- @return table|nil - Tally results
+function SessionMixin:RetallyVoteResultsForItem(item)
+    if not item then
+        return nil
+    end
+
     -- Tally votes
     local results = nil
     if Loothing.VotingEngine then
         results = Loothing.VotingEngine:Tally(item:GetVotes())
     end
+    item.voteResults = results
 
     self:TriggerEvent("OnVotingEnded", item, results)
 
@@ -2047,6 +2061,9 @@ function SessionMixin:RetractAllVotes(itemGUID)
 
     -- Remove vote locally
     item:RemoveVote(voter)
+    if Loothing.VoteTracker then
+        Loothing.VoteTracker:ClearVote(item.guid)
+    end
 
     if not self:IsMasterLooter() and IsInGroup() then
         -- Signal ML to clear this voter's vote by sending empty responses
@@ -3616,6 +3633,9 @@ function SessionMixin:HandleRemoteVoteCommit(data)
         end
 
         self:TriggerEvent("OnCandidateUpdated", item, { playerName = data.voter })
+        if isML and item:IsTallied() then
+            self:RetallyVoteResultsForItem(item)
+        end
         return
     end
 
@@ -3696,6 +3716,9 @@ function SessionMixin:HandleRemoteVoteCommit(data)
                 end
             end
             -- Let 100ms batch window coalesce with other vote updates
+        end
+        if item:IsTallied() then
+            self:RetallyVoteResultsForItem(item)
         end
     else
         -- Non-ML council: local vote applied, update all candidate voter arrays

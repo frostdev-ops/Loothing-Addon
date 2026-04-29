@@ -84,19 +84,26 @@ function VoteTrackerMixin:RegisterSessionEvents()
     Loothing.Session:RegisterCallback("OnSessionEnded", function()
         self:Clear()
     end, self)
+
+    Loothing.Session:RegisterCallback("OnVotingStarted", function(_, item)
+        if item and item.guid then
+            self:ClearVote(item.guid)
+        end
+    end, self)
 end
 
 function VoteTrackerMixin:RegisterCommEvents()
     if not Loothing.Comm then return end
 
-    -- Clear per-item state when the item's voting round closes
+    -- Clear per-item state when the item is no longer eligible for late
+    -- VOTE_POLL recovery. VOTE_RESULTS intentionally does not clear this:
+    -- the ML may poll after tallying while the late-accept window is open.
     local function clearOnClose(_, data)
         if data and data.itemGUID then
             self:ClearVote(data.itemGUID)
         end
     end
 
-    Loothing.Comm:RegisterCallback("OnVoteResults", clearOnClose, self)
     Loothing.Comm:RegisterCallback("OnVoteAward",   clearOnClose, self)
     Loothing.Comm:RegisterCallback("OnVoteCancel",  clearOnClose, self)
     Loothing.Comm:RegisterCallback("OnVoteSkip",    clearOnClose, self)
@@ -270,7 +277,13 @@ function VoteTrackerMixin:ReshowVotePanelForItem(guid)
     local item = session:GetItemByGUID(guid)
     if not item or not item:CanAcceptVotes() then return end
 
-    votePanel:SetItem(item)
+    if Loothing.Session and Loothing.Session.ShowVotingUIForItem then
+        Loothing.Session:ShowVotingUIForItem(item)
+    else
+        votePanel:SetVotingMode(Loothing.VotingMode.RANKED_CHOICE)
+        votePanel:SetItem(item)
+        votePanel:Show()
+    end
     Loothing:Debug("VoteTracker: re-showed VotePanel for", guid)
 end
 

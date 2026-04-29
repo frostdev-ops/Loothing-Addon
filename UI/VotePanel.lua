@@ -35,6 +35,33 @@ local PANEL_HEIGHT = 500
 -- Pool of recycled response button frames to avoid orphaning on each refresh
 local responseButtonPool = {}
 
+local function CanCurrentPlayerVote()
+    return (Loothing.Council
+        and Loothing.Council.CanPlayerVote
+        and Loothing.Council:CanPlayerVote()) or false
+end
+
+local function IsCurrentPlayerObserverOnly()
+    if CanCurrentPlayerVote() then
+        return false
+    end
+
+    return (Loothing.Observer
+        and (Loothing.Observer:IsPlayerObserver() or Loothing.Observer:IsMLObserver())) or false
+end
+
+local function IsSelfVoteBlocked(candidateName)
+    if not candidateName then
+        return false
+    end
+    local selfVoteAllowed = not Loothing.Settings or Loothing.Settings:GetSelfVote()
+    if selfVoteAllowed then
+        return false
+    end
+    local playerName = Utils.GetPlayerFullName()
+    return playerName and Utils.IsSamePlayer(candidateName, playerName) or false
+end
+
 --- Initialize the vote panel
 function VotePanelMixin:Init()
     Loolib.CallbackRegistryMixin.OnLoad(self)
@@ -57,6 +84,27 @@ function VotePanelMixin:Init()
             self.item = nil
             if self.selectedResponses then wipe(self.selectedResponses) end
             self:Hide()
+        end, self)
+    end
+
+    if Loothing.Council and Loothing.Council.RegisterCallback then
+        Loothing.Council:RegisterCallback("OnRosterChanged", function()
+            if self.frame and self.frame:IsShown() then
+                self:ApplyObserveMode()
+            end
+        end, self)
+    end
+
+    if Loothing.Observer and Loothing.Observer.RegisterCallback then
+        Loothing.Observer:RegisterCallback("OnObserverListChanged", function()
+            if self.frame and self.frame:IsShown() then
+                self:ApplyObserveMode()
+            end
+        end, self)
+        Loothing.Observer:RegisterCallback("OnPermissionsChanged", function()
+            if self.frame and self.frame:IsShown() then
+                self:ApplyObserveMode()
+            end
         end, self)
     end
 end
@@ -410,6 +458,7 @@ function VotePanelMixin:RefreshResponseButtons()
         -- Key by normalized candidate name (matches CastVote / UpdateCandidateVoters)
         local candidateName = Utils.NormalizeName(candidate.playerName or candidate.name)
         button.buttonId = candidateName
+        button.selfVoteBlocked = IsSelfVoteBlocked(candidateName)
         button.buttonData = {
             text = displayName,
             candidateName = candidateName,
@@ -431,6 +480,27 @@ function VotePanelMixin:UpdateButtonVisibility()
     for _, button in ipairs(self.responseButtonsArray) do
         button:Show()
     end
+end
+
+function VotePanelMixin:UpdateCandidateButtonEligibility()
+    local canVote = CanCurrentPlayerVote()
+    for _, button in ipairs(self.responseButtonsArray) do
+        local blocked = IsSelfVoteBlocked(button.buttonId)
+        button.selfVoteBlocked = blocked
+        button:SetEnabled(canVote and not blocked)
+        button:SetAlpha(blocked and 0.45 or 1)
+    end
+end
+
+function VotePanelMixin:RemoveBlockedSelections()
+    local changed = false
+    for i = #self.selectedResponses, 1, -1 do
+        if IsSelfVoteBlocked(self.selectedResponses[i]) then
+            table.remove(self.selectedResponses, i)
+            changed = true
+        end
+    end
+    return changed
 end
 
 --- Create ranked choice display with interactive rows
@@ -723,8 +793,10 @@ function VotePanelMixin:SetItem(item)
                 break
             end
         end
-        self:UpdateResponseButtons()
     end
+
+    self:RemoveBlockedSelections()
+    self:UpdateResponseButtons()
 
     -- Apply observe mode
     self:ApplyObserveMode()
@@ -740,24 +812,21 @@ end
 
 --- Apply observe mode restrictions
 function VotePanelMixin:ApplyObserveMode()
-    if not Loothing.Settings then return end
+    local canVote = CanCurrentPlayerVote()
+    local observerOnly = IsCurrentPlayerObserverOnly()
 
-    local observeMode = Loothing.Settings:GetOpenObservation()
-
-    -- Disable submit button in observe mode
+    -- Observers/non-council cannot submit. Eligible council members still run
+    -- through UpdateSubmitButton so selection and min-rank requirements apply.
     if self.submitButton then
-        self.submitButton:SetEnabled(not observeMode)
-        if observeMode then
+        if observerOnly then
             self.submitButton:SetText(L["OBSERVE_MODE"])
         else
             self.submitButton:SetText(L["SUBMIT_VOTE"])
         end
     end
 
-    -- Disable candidate buttons in observe mode
-    for _, button in pairs(self.responseButtons) do
-        button:SetEnabled(not observeMode)
-    end
+    self:UpdateCandidateButtonEligibility()
+    self:UpdateSubmitButton()
 end
 
 --[[--------------------------------------------------------------------
@@ -768,6 +837,10 @@ end
 -- @param button Frame
 function VotePanelMixin:OnResponseClick(button)
     local buttonId = button.buttonId
+    if IsSelfVoteBlocked(buttonId) then
+        Loothing:Print(Loothing.Locale["SELF_VOTE_DISABLED"])
+        return
+    end
 
     if self.votingMode == Loothing.VotingMode.RANKED_CHOICE then
         -- Ranked choice - add to ranking
@@ -820,6 +893,7 @@ end
 
 --- Update response buttons based on selection
 function VotePanelMixin:UpdateResponseButtons()
+    self:RemoveBlockedSelections()
     self:ResetResponseButtons()
 
     if self.votingMode == Loothing.VotingMode.RANKED_CHOICE then
@@ -846,13 +920,23 @@ function VotePanelMixin:UpdateResponseButtons()
     end
 
     -- Update submit button state
+    self:UpdateCandidateButtonEligibility()
     self:UpdateSubmitButton()
 end
 
 --- Update submit button state
 function VotePanelMixin:UpdateSubmitButton()
+    if not self.submitButton then
+        return
+    end
+
     local count = #self.selectedResponses
     local hasSelection = count > 0
+
+    if not CanCurrentPlayerVote() then
+        self.submitButton:SetEnabled(false)
+        return
+    end
 
     if self.votingMode == Loothing.VotingMode.RANKED_CHOICE then
         local minRanks = Loothing.Settings and Loothing.Settings:GetMinRanks() or 1
@@ -876,8 +960,9 @@ function VotePanelMixin:SubmitVote()
         return
     end
 
-    -- Check for observe mode
-    if Loothing.Settings and Loothing.Settings:GetOpenObservation() then
+    -- Check for vote eligibility. Open observation alone is not a vote block:
+    -- council members can vote while non-council observers watch.
+    if not CanCurrentPlayerVote() then
         Loothing:Print(Loothing.Locale["OBSERVE_MODE_MSG"])
         return
     end
@@ -894,12 +979,23 @@ function VotePanelMixin:SubmitVote()
         end
     end
 
-    -- Copy responses
+    -- Copy responses after dropping any choices that became invalid while the
+    -- panel was open, such as self-votes after a settings sync.
+    self:RemoveBlockedSelections()
     local responses = { unpack(self.selectedResponses) }
+    if #responses == 0 then
+        self:UpdateResponseButtons()
+        return
+    end
 
-    -- Submit via session
-    if Loothing.Session then
-        Loothing.Session:SubmitVote(self.item.guid, responses)
+    if not Loothing.Session then
+        return
+    end
+
+    local submitted = Loothing.Session:SubmitVote(self.item.guid, responses)
+    if not submitted then
+        self:UpdateResponseButtons()
+        return
     end
 
     self:TriggerEvent("OnVoteSubmitted", self.item, responses)

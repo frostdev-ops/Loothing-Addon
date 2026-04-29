@@ -134,6 +134,24 @@ local SCHEMAS = {
     BATCH           = { { "messages",  "table",  true } },
     MLDB_BROADCAST  = { { "data",      "table",  true } },
     COUNCIL_ROSTER  = { { "members",   "table",  true } },
+    OBSERVER_ROSTER = {
+        { "list",            "table",   true },
+        { "permissions",     "table",   false },
+        { "openObservation", "boolean", false },
+        { "mlIsObserver",    "boolean", false },
+    },
+    SYNC_SETTINGS_REQUEST = {},
+    SYNC_SETTINGS_CONFIRM = {},
+    SYNC_SETTINGS_DATA = {
+        { "data", "table", true },
+    },
+    SYNC_HISTORY_REQUEST = {
+        { "days", nil, false },
+    },
+    SYNC_HISTORY_CONFIRM = {},
+    SYNC_HISTORY_DATA = {
+        { "data", "table", true },
+    },
     PROFILE_EXPORT_SHARE = {
         { "exportString", "string", true },
         { "shareID", "string", false },
@@ -420,7 +438,7 @@ end
 ----------------------------------------------------------------------]]
 
 function CommMixin:HandleObserverRoster(data, sender)
-    if not validateHandler("HandleObserverRoster", data) then return end
+    if not validateHandler("HandleObserverRoster", data, SCHEMAS.OBSERVER_ROSTER) then return end
     if not isMasterLooter(sender) then
         Loothing:Debug("Rejected OBSERVER_ROSTER from non-ML:", sender)
         return
@@ -650,7 +668,8 @@ end
     Settings/History Sync Handlers (delegated to Sync module)
 ----------------------------------------------------------------------]]
 
-function CommMixin:HandleSettingsSyncRequest(_data, sender)
+function CommMixin:HandleSettingsSyncRequest(data, sender)
+    if not validateHandler("HandleSettingsSyncRequest", data, SCHEMAS.SYNC_SETTINGS_REQUEST) then return end
     if not isGroupMember(sender) then
         Loothing:Debug("Rejected SETTINGS_SYNC_REQUEST from non-group member:", sender)
         return
@@ -660,7 +679,8 @@ function CommMixin:HandleSettingsSyncRequest(_data, sender)
     end
 end
 
-function CommMixin:HandleSettingsSyncConfirm(_data, sender)
+function CommMixin:HandleSettingsSyncConfirm(data, sender)
+    if not validateHandler("HandleSettingsSyncConfirm", data, SCHEMAS.SYNC_SETTINGS_CONFIRM) then return end
     if not isGroupMember(sender) then
         Loothing:Debug("Rejected SETTINGS_SYNC_CONFIRM from non-group member:", sender)
         return
@@ -671,16 +691,18 @@ function CommMixin:HandleSettingsSyncConfirm(_data, sender)
 end
 
 function CommMixin:HandleSettingsData(data, sender)
+    if not validateHandler("HandleSettingsData", data, SCHEMAS.SYNC_SETTINGS_DATA) then return end
     if not isGroupMember(sender) then
         Loothing:Debug("Rejected SETTINGS_DATA from non-group member:", sender)
         return
     end
-    if Loothing.Sync and data then
+    if Loothing.Sync then
         Loothing.Sync:HandleSettingsData(data.data, sender)
     end
 end
 
 function CommMixin:HandleHistorySyncRequest(data, sender)
+    if not validateHandler("HandleHistorySyncRequest", data, SCHEMAS.SYNC_HISTORY_REQUEST) then return end
     if not isGroupMember(sender) then
         Loothing:Debug("Rejected HISTORY_SYNC_REQUEST from non-group member:", sender)
         return
@@ -691,7 +713,8 @@ function CommMixin:HandleHistorySyncRequest(data, sender)
     end
 end
 
-function CommMixin:HandleHistorySyncConfirm(_data, sender)
+function CommMixin:HandleHistorySyncConfirm(data, sender)
+    if not validateHandler("HandleHistorySyncConfirm", data, SCHEMAS.SYNC_HISTORY_CONFIRM) then return end
     if not isGroupMember(sender) then
         Loothing:Debug("Rejected HISTORY_SYNC_CONFIRM from non-group member:", sender)
         return
@@ -702,11 +725,12 @@ function CommMixin:HandleHistorySyncConfirm(_data, sender)
 end
 
 function CommMixin:HandleHistoryData(data, sender)
+    if not validateHandler("HandleHistoryData", data, SCHEMAS.SYNC_HISTORY_DATA) then return end
     if not isGroupMember(sender) then
         Loothing:Debug("Rejected HISTORY_DATA from non-group member:", sender)
         return
     end
-    if Loothing.Sync and data then
+    if Loothing.Sync then
         Loothing.Sync:HandleHistoryData(data.data, sender)
     end
 end
