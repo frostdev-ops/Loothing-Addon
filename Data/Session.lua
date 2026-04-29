@@ -1560,7 +1560,7 @@ function SessionMixin:StartVoting(guid, timeout, skipBroadcast)
         item.candidateManager:EnrichWithWishlistData(item.itemID)
     end
 
-    -- Broadcast vote request for this item (skipped when batching via StartVotingOnAllItems)
+    -- Broadcast vote request for this item
     if not skipBroadcast then
         Loothing.Comm:BroadcastVoteRequest(guid, timeout, self.sessionID)
     end
@@ -1696,6 +1696,12 @@ function SessionMixin:StartVotingOnAllItems(timeout)
             end
             return (a.itemLevel or 0) > (b.itemLevel or 0)
         end)
+    end
+
+    -- Ensure queued item-add traffic is delivered before direct vote prompts.
+    -- Receivers drop vote requests for items they have not seen yet.
+    if Loothing.Comm and #pendingItems > 0 then
+        Loothing.Comm:FlushAll()
     end
 
     for _, item in ipairs(pendingItems) do
