@@ -1159,11 +1159,16 @@ local function RegisterEvents()
             if data and data.settings and data.settings.masterLooter then
                 local newML = data.settings.masterLooter
                 local currentML = Loothing.masterLooter
+                local playerName = Utils.GetPlayerFullName()
+                local becameLocalML = playerName and Utils.IsSamePlayer(newML, playerName)
                 -- Note: Session.masterLooter is already propagated inside
                 -- ApplyFromML() (MLDB.lua:587-589) before this callback fires.
-                if not currentML or not Utils.IsSamePlayer(newML, currentML) then
+                if becameLocalML and not Loothing.isMasterLooter then
+                    Loothing:Debug("MLDB assigned us as ML - scheduling ML check")
+                    ScheduleMLCheck(0.5)
+                elseif not currentML or not Utils.IsSamePlayer(newML, currentML) then
                     Loothing:Debug("MLDB changed ML to", newML, "- scheduling ML check")
-                    ScheduleMLCheck()
+                    ScheduleMLCheck(0.5)
                 end
             end
         end, Loothing)
@@ -1559,6 +1564,40 @@ local function RegisterSlashCommands()
         return false
     end
 
+    local function handleMLDBCommand(args)
+        local action = strtrim(args or ""):lower()
+        if action ~= "" and action ~= "refresh" and action ~= "reload" and action ~= "broadcast" then
+            printLine("Usage: /lt mldb refresh")
+            printLine("  Restores the current ML's local settings and broadcasts MLDB to the group.")
+            return
+        end
+
+        if not IsInGroup() then
+            printError(L["MLDB_REFRESH_NOT_GROUPED"] or "Must be in a group to broadcast MLDB settings.")
+            return
+        end
+
+        if not (Loothing.MLDB and Loothing.MLDB.RefreshLocalSettingsAndBroadcast) then
+            printError(L["MLDB_REFRESH_UNAVAILABLE"] or "MLDB module not available.")
+            return
+        end
+
+        local ok, reason, details = Loothing.MLDB:RefreshLocalSettingsAndBroadcast()
+        if not ok then
+            if reason == "not_ml" then
+                printError(L["MLDB_REFRESH_NOT_ML"] or "Only the current Master Looter can refresh and broadcast MLDB settings.")
+            else
+                printError(L["MLDB_REFRESH_FAILED"] or "Failed to refresh MLDB settings.")
+            end
+            return
+        end
+
+        if details and details.restoredSnapshot then
+            printLine(L["MLDB_REFRESH_RESTORED"] or "Restored your local settings before broadcasting.")
+        end
+        printLine(L["MLDB_REFRESH_SENT"] or "Broadcast your MLDB settings to the group.")
+    end
+
     local commands = {
         {
             key = "show",
@@ -1628,6 +1667,15 @@ local function RegisterSlashCommands()
             usage = { "/lt ml", "/lt ml <name>", "/lt ml clear" },
             handler = function(args)
                 handleMasterLooter(args or "")
+            end,
+        },
+        {
+            key = "mldb",
+            aliases = { "mlsync" },
+            description = L["SLASH_DESC_MLDB"] or "Refresh and broadcast Master Looter settings",
+            usage = { "/lt mldb refresh", "/lt mlsync" },
+            handler = function(args)
+                handleMLDBCommand(args or "")
             end,
         },
         {

@@ -62,25 +62,39 @@ local function HasPrivilegedVisibility()
 end
 
 local function GetEffectiveObserverPermissions(self)
+    if HasMasterLooterVisibility() then
+        return Loothing.Settings and Loothing.Settings.GetObserverPermissions
+            and Loothing.Settings:GetObserverPermissions() or nil
+    end
     if self.remotePrimary and self.remotePermissions then
         return self.remotePermissions
     end
-    if not Loothing.Settings then return nil end
+    if not (Loothing.Settings and Loothing.Settings.GetObserverPermissions) then return nil end
     return Loothing.Settings:GetObserverPermissions()
 end
 
 local function GetEffectiveOpenObservation(self)
+    if HasMasterLooterVisibility() then
+        return Loothing.Settings and Loothing.Settings.GetOpenObservation
+            and Loothing.Settings:GetOpenObservation() or false
+    end
     if self.remotePrimary and self.remoteOpenObservation ~= nil then
         return self.remoteOpenObservation == true
     end
-    return Loothing.Settings and Loothing.Settings:GetOpenObservation() or false
+    return Loothing.Settings and Loothing.Settings.GetOpenObservation
+        and Loothing.Settings:GetOpenObservation() or false
 end
 
 local function GetEffectiveMLIsObserver(self)
+    if HasMasterLooterVisibility() then
+        return Loothing.Settings and Loothing.Settings.GetMLIsObserver
+            and Loothing.Settings:GetMLIsObserver() or false
+    end
     if self.remotePrimary and self.remoteMlIsObserver ~= nil then
         return self.remoteMlIsObserver == true
     end
-    return Loothing.Settings and Loothing.Settings:GetMLIsObserver() or false
+    return Loothing.Settings and Loothing.Settings.GetMLIsObserver
+        and Loothing.Settings:GetMLIsObserver() or false
 end
 
 --[[--------------------------------------------------------------------

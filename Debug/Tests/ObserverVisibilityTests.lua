@@ -156,6 +156,37 @@ if TestRunner and Assert and Loothing and ns.CreateObserver then
             Assert.IsFalse(council:CanPlayerVote(), "ML observer mode should disable ML council voting")
         end, { category = "unit" })
 
+        TestRunner:It("local ML observer mode overrides stale remote observer state after handoff", function()
+            Loothing.isMasterLooter = true
+            Loothing.handleLoot = true
+            Loothing.masterLooter = "Felbane-Duskwood"
+            Loothing.Settings = {
+                GetObserverList = function() return {} end,
+                GetObserverPermissions = function()
+                    return {
+                        seeVoteCounts = true,
+                        seeVoterIdentities = true,
+                        seeResponses = true,
+                        seeNotes = true,
+                    }
+                end,
+                GetOpenObservation = function() return false end,
+                GetMLIsObserver = function() return true end,
+            }
+            local observer = ns.CreateObserver()
+            observer.remotePrimary = true
+            observer.remoteMlIsObserver = false
+            Loothing.Observer = observer
+
+            local council = {
+                IsPlayerCouncilMember = function() return true end,
+            }
+            setmetatable(council, { __index = ns.CouncilMixin })
+
+            Assert.IsTrue(observer:IsMLObserver(), "Current ML should use local ML observer setting, not stale remote state")
+            Assert.IsFalse(council:CanPlayerVote(), "Local ML observer mode should block ML council voting after handoff")
+        end, { category = "unit" })
+
         TestRunner:It("uses remote ML observer mode when non-ML clients calculate eligible voters", function()
             local observer = ns.CreateObserver()
             observer.remotePrimary = true

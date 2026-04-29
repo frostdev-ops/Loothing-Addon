@@ -494,6 +494,80 @@ function MLDBMixin:InvalidateBroadcastCache()
     self._lastBroadcastSerialized = nil
 end
 
+--- Restore this player's local ML settings and force-publish them to the group.
+-- Used after ML handoff: the new ML may still have the previous ML's MLDB
+-- applied locally, so restore the pre-session snapshot before gathering.
+-- @return boolean ok
+-- @return string|nil reason
+-- @return table|nil details
+function MLDBMixin:RefreshLocalSettingsAndBroadcast()
+    local playerName = Utils.GetPlayerFullName()
+    if not playerName then
+        return false, "no_player"
+    end
+
+    local isCurrentML = self:IsML()
+        or (Loothing.IsCanonicalML and Loothing:IsCanonicalML())
+        or (Loothing.Session and Loothing.Session.IsMasterLooter and Loothing.Session:IsMasterLooter())
+
+    if not isCurrentML then
+        return false, "not_ml"
+    end
+
+    local restoredSnapshot = self.preSessionSnapshot ~= nil
+    local wasHandlingLoot = Loothing.handleLoot
+    local normalizedPlayer = Utils.NormalizeName(playerName)
+    local hadExplicitML = Loothing.explicitMasterLooter
+        and Utils.IsSamePlayer(Loothing.explicitMasterLooter, playerName)
+
+    if restoredSnapshot then
+        self:RestoreSettings()
+    end
+
+    -- RestoreSettings() intentionally restores the pre-session runtime ML
+    -- override too. Preserve raid-leader fallback mode unless the current ML
+    -- was already an explicit ML assignment before the refresh.
+    Loothing.explicitMasterLooter = hadExplicitML and normalizedPlayer or nil
+    Loothing.masterLooter = normalizedPlayer
+    Loothing.isMasterLooter = true
+    Loothing.mlStateVerified = true
+    Loothing.handleLoot = wasHandlingLoot
+
+    if Loothing.Session and Loothing.Session:IsActive() then
+        Loothing.Session.masterLooter = normalizedPlayer
+    end
+
+    if Loothing.Council and Loothing.Council.ClearRemoteRoster then
+        Loothing.Council:ClearRemoteRoster()
+    end
+    if Loothing.Observer and Loothing.Observer.ClearRemoteObserverList then
+        Loothing.Observer:ClearRemoteObserverList()
+    end
+
+    self:InvalidateBroadcastCache()
+    if Loothing.Sync and Loothing.Sync.InvalidateBroadcastCaches then
+        Loothing.Sync:InvalidateBroadcastCaches()
+    end
+
+    self:BroadcastToRaid(true)
+
+    if Loothing.Sync then
+        if Loothing.Sync.BroadcastCouncilRoster then
+            Loothing.Sync:BroadcastCouncilRoster(true)
+        end
+        if Loothing.Sync.BroadcastObserverRoster then
+            Loothing.Sync:BroadcastObserverRoster(true)
+        end
+    elseif Loothing.Council and Loothing.Comm and Loothing.Comm.BroadcastCouncilRoster then
+        Loothing.Comm:BroadcastCouncilRoster(Loothing.Council:GetAllMembers())
+    end
+
+    return true, nil, {
+        restoredSnapshot = restoredSnapshot,
+        masterLooter = normalizedPlayer,
+    }
+end
+
 --[[--------------------------------------------------------------------
     Receiving
 ----------------------------------------------------------------------]]

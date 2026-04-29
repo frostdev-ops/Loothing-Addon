@@ -51,6 +51,14 @@ local TRADE_COMPLETE_MSG = LE_GAME_ERR_TRADE_COMPLETE
         Enum.GameError.TradeComplete
         or Enum.GameError.ErrTradeComplete
     ))
+local TRADE_COMPLETE_TEXT = ERR_TRADE_COMPLETE
+
+local function GetStagedItemLink(staged)
+    if type(staged) == "table" then
+        return staged.itemLink
+    end
+    return staged
+end
 
 --- Initialize the trade queue
 function TradeQueueMixin:Init()
@@ -97,12 +105,12 @@ function TradeQueueMixin:RegisterEvents()
         self:OnTradeClosed()
     end, self)
 
-    Events.Registry:RegisterEventCallback("TRADE_ACCEPT_UPDATE", function(playerAccepted, targetAccepted)
+    Events.Registry:RegisterEventCallback("TRADE_ACCEPT_UPDATE", function(_, playerAccepted, targetAccepted)
         self:OnTradeAcceptUpdate(playerAccepted, targetAccepted)
     end, self)
 
-    Events.Registry:RegisterEventCallback("UI_INFO_MESSAGE", function(messageType, _message)
-        self:OnUIInfoMessage(messageType)
+    Events.Registry:RegisterEventCallback("UI_INFO_MESSAGE", function(_, messageType, message)
+        self:OnUIInfoMessage(messageType, message)
     end, self)
 
     Events.Registry:RegisterEventCallback("BAG_UPDATE_DELAYED", function()
@@ -165,6 +173,7 @@ function TradeQueueMixin:RemoveFromQueue(itemGUID)
     end
 
     self.queue:Remove(entry)
+    self.warningsSent[itemGUID] = nil
     self:TriggerEvent("OnItemRemoved", entry)
     self:SaveToDatabase()
 
@@ -333,11 +342,20 @@ function TradeQueueMixin:OnTradeClosed()
         local stagedTarget = self.tradeTarget
 
         C_Timer.After(ITEM_WATCH_DELAY, function()
-            for _, link in ipairs(stagedItems) do
-                local bag, _slot = self:FindItemInBags(link)
-                if not bag then
+            for _, staged in ipairs(stagedItems) do
+                local link = GetStagedItemLink(staged)
+                local traded = false
+
+                if type(staged) == "table" and staged.itemID and staged.preBagCount then
+                    traded = self:CountItemIDInBags(staged.itemID) < staged.preBagCount
+                elseif link then
+                    local bag, _slot = self:FindItemInBags(link)
+                    traded = not bag
+                end
+
+                if traded then
                     Loothing:Debug("TRADE_CLOSED fallback: item gone from bags:", link)
-                    self:MarkItemTraded(link, stagedTarget)
+                    self:MarkItemTraded(staged, stagedTarget)
                 end
             end
         end)
@@ -352,29 +370,71 @@ end
 -- @param playerAccepted boolean - Has player accepted
 -- @param targetAccepted boolean - Has target accepted
 function TradeQueueMixin:OnTradeAcceptUpdate(playerAccepted, targetAccepted)
-    if playerAccepted or targetAccepted then
-        -- Record what we're trading
-        wipe(self.itemsInTradeWindow)
+    local playerAcceptedNow = playerAccepted == true or playerAccepted == 1
+    local targetAcceptedNow = targetAccepted == true or targetAccepted == 1
 
-        for i = 1, MAX_TRADE_ITEMS - 1 do -- Last slot is "will not be traded"
-            local link = GetTradePlayerItemLink(i)
-            if link then
-                self.itemsInTradeWindow[#self.itemsInTradeWindow + 1] = link
-                Loothing:Debug("Recording trade item:", link)
-            end
+    if playerAcceptedNow or targetAcceptedNow then
+        self:CaptureTradeWindowItems()
+    else
+        wipe(self.itemsInTradeWindow)
+    end
+end
+
+--- Capture items currently staged in our side of the trade window.
+-- @return number - Number of staged items captured
+function TradeQueueMixin:CaptureTradeWindowItems()
+    local metadataBySlot = {}
+    for _, staged in ipairs(self.itemsInTradeWindow) do
+        if type(staged) == "table" and staged.tradeSlot then
+            metadataBySlot[staged.tradeSlot] = staged
         end
     end
+
+    wipe(self.itemsInTradeWindow)
+
+    for i = 1, MAX_TRADE_ITEMS - 1 do -- Last slot is "will not be traded"
+        local link = GetTradePlayerItemLink(i)
+        if link then
+            local prior = metadataBySlot[i]
+            self.itemsInTradeWindow[#self.itemsInTradeWindow + 1] = {
+                itemLink = link,
+                itemID = Utils.GetItemID(link),
+                entryGUID = prior and prior.entryGUID or nil,
+                winner = prior and prior.winner or nil,
+                preBagCount = prior and prior.preBagCount or nil,
+                tradeSlot = i,
+            }
+            Loothing:Debug("Recording trade item:", link)
+        end
+    end
+
+    return #self.itemsInTradeWindow
+end
+
+local function IsTradeCompleteMessage(messageType, message)
+    if TRADE_COMPLETE_MSG and messageType == TRADE_COMPLETE_MSG then
+        return true
+    end
+    return TRADE_COMPLETE_TEXT and message == TRADE_COMPLETE_TEXT
 end
 
 --- Handle UI_INFO_MESSAGE event (trade complete)
 -- @param messageType number - Message type
-function TradeQueueMixin:OnUIInfoMessage(messageType)
-    if TRADE_COMPLETE_MSG and messageType == TRADE_COMPLETE_MSG then
+-- @param message string - Localized message text
+function TradeQueueMixin:OnUIInfoMessage(messageType, message)
+    if IsTradeCompleteMessage(messageType, message) then
         Loothing:Debug("Trade completed with:", self.tradeTarget)
 
+        local stagedItems = { unpack(self.itemsInTradeWindow) }
+        if self:CaptureTradeWindowItems() == 0 and #stagedItems > 0 then
+            for _, staged in ipairs(stagedItems) do
+                self.itemsInTradeWindow[#self.itemsInTradeWindow + 1] = staged
+            end
+        end
+
         -- Mark traded items as complete
-        for _, link in ipairs(self.itemsInTradeWindow) do
-            self:MarkItemTraded(link, self.tradeTarget)
+        for _, staged in ipairs(self.itemsInTradeWindow) do
+            self:MarkItemTraded(staged, self.tradeTarget)
         end
 
         wipe(self.itemsInTradeWindow)
@@ -426,6 +486,10 @@ function TradeQueueMixin:AddSingleItemToTrade(entry)
 
     -- Add to trade window
     Loothing:Debug("Adding to trade:", entry.itemLink, bag, slot)
+    local itemID = Utils.GetItemID(entry.itemLink)
+    local preBagCount = self:CountItemIDInBags(itemID)
+    local placed = false
+
     ClearCursor()
     C_Container.PickupContainerItem(bag, slot)
 
@@ -433,8 +497,27 @@ function TradeQueueMixin:AddSingleItemToTrade(entry)
     for i = 1, MAX_TRADE_ITEMS - 1 do
         if not GetTradePlayerItemLink(i) then
             ClickTradeButton(i)
+            local placedLink = GetTradePlayerItemLink(i)
+            if placedLink then
+                self.itemsInTradeWindow[#self.itemsInTradeWindow + 1] = {
+                    itemLink = placedLink,
+                    itemID = Utils.GetItemID(placedLink),
+                    entryGUID = entry.itemGUID,
+                    winner = entry.winner,
+                    preBagCount = preBagCount,
+                    tradeSlot = i,
+                }
+                placed = true
+            end
             break
         end
+    end
+
+    if not placed then
+        if CursorHasItem and CursorHasItem() then
+            ClearCursor()
+        end
+        Loothing:Debug("Failed to place item in trade slot:", entry.itemLink)
     end
 end
 
@@ -460,31 +543,65 @@ function TradeQueueMixin:FindItemInBags(itemLink)
     return nil, nil
 end
 
+--- Count matching item IDs in the player's bags.
+-- Used after TRADE_CLOSED as a duplicate-safe fallback when the same item ID
+-- still exists in bags but one copy was traded.
+-- @param itemID number - Item ID to count
+-- @return number - Total stack count found in bags
+function TradeQueueMixin:CountItemIDInBags(itemID)
+    local count = 0
+    if not itemID then
+        return count
+    end
+
+    for bag = 0, NUM_BAG_SLOTS do
+        local numSlots = C_Container.GetContainerNumSlots(bag)
+        for slot = 1, numSlots do
+            local info = C_Container.GetContainerItemInfo(bag, slot)
+            if info and info.hyperlink and Utils.GetItemID(info.hyperlink) == itemID then
+                count = count + (info.stackCount or 1)
+            end
+        end
+    end
+
+    return count
+end
+
 --[[--------------------------------------------------------------------
     Trade Completion
 ----------------------------------------------------------------------]]
 
 --- Mark an item as traded
--- @param itemLink string - Item that was traded
+-- @param itemOrStaged string|table - Item link or staged trade item metadata
 -- @param tradedTo string - Who it was traded to
-function TradeQueueMixin:MarkItemTraded(itemLink, tradedTo)
+function TradeQueueMixin:MarkItemTraded(itemOrStaged, tradedTo)
+    local itemLink = GetStagedItemLink(itemOrStaged)
+    if not itemLink or not tradedTo then
+        return
+    end
     tradedTo = Utils.NormalizeName(tradedTo)
 
     -- Find matching queue entry
     local itemID = Utils.GetItemID(itemLink)
     local entry = nil
 
-    for _, queueEntry in self.queue:Enumerate() do
-        if not queueEntry.traded then
-            local queueItemID = Utils.GetItemID(queueEntry.itemLink)
-            if queueItemID == itemID then
-                -- Prefer exact winner match
-                if queueEntry.winner == tradedTo then
-                    entry = queueEntry
-                    break
-                elseif not entry then
-                    -- Fallback to first matching item
-                    entry = queueEntry
+    if type(itemOrStaged) == "table" and itemOrStaged.entryGUID then
+        entry = self:GetQueuedItem(itemOrStaged.entryGUID)
+    end
+
+    if not entry then
+        for _, queueEntry in self.queue:Enumerate() do
+            if not queueEntry.traded then
+                local queueItemID = Utils.GetItemID(queueEntry.itemLink)
+                if queueItemID == itemID then
+                    -- Prefer exact winner match
+                    if queueEntry.winner == tradedTo then
+                        entry = queueEntry
+                        break
+                    elseif not entry then
+                        -- Fallback to first matching item
+                        entry = queueEntry
+                    end
                 end
             end
         end
@@ -496,7 +613,6 @@ function TradeQueueMixin:MarkItemTraded(itemLink, tradedTo)
         self.queue:UpdateElement(entry)
 
         self:TriggerEvent("OnItemTraded", entry, tradedTo)
-        self:SaveToDatabase()
 
         -- Print trade completion if enabled
         if not Loothing.Settings or Loothing.Settings:Get("ml.printCompletedTrades", true) then
@@ -506,6 +622,8 @@ function TradeQueueMixin:MarkItemTraded(itemLink, tradedTo)
                 Loothing:Print(string.format(L["TRADE_WRONG_RECIPIENT"], entry.itemLink, Utils.GetShortName(tradedTo), Utils.GetShortName(entry.winner)))
             end
         end
+
+        self:RemoveFromQueue(entry.itemGUID)
     end
 end
 
@@ -823,12 +941,19 @@ function TradeQueueMixin:LoadFromDatabase()
     end
 
     self.queue:Flush()
+    local discarded = 0
 
     for _, entry in ipairs(stored) do
         -- Only load entries still within trade window
-        if self:IsWithinTradeWindow(entry) then
+        if not entry.traded and self:IsWithinTradeWindow(entry) then
             self.queue:Insert(entry)
+        else
+            discarded = discarded + 1
         end
+    end
+
+    if discarded > 0 then
+        self:SaveToDatabase()
     end
 
     Loothing:Debug("Loaded", self.queue:GetSize(), "items from trade queue")
@@ -840,7 +965,7 @@ function TradeQueueMixin:SaveToDatabase()
 
     for _, entry in self.queue:Enumerate() do
         -- Only save entries still within trade window
-        if self:IsWithinTradeWindow(entry) then
+        if not entry.traded and self:IsWithinTradeWindow(entry) then
             entries[#entries + 1] = {
                 itemGUID = entry.itemGUID,
                 itemLink = entry.itemLink,

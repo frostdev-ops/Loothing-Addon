@@ -592,6 +592,19 @@ local function rosterSignature(tbl)
     return table.concat(parts, "|")
 end
 
+local function isLocalRosterBroadcaster()
+    if Loothing.Session and Loothing.Session.IsMasterLooter and Loothing.Session:IsMasterLooter() then
+        return true
+    end
+    if Loothing.HasMasterLooterVisibility and Loothing:HasMasterLooterVisibility() then
+        return true
+    end
+    if Loothing.IsCanonicalML and Loothing:IsCanonicalML() then
+        return true
+    end
+    return Loothing.MLDB and Loothing.MLDB.IsML and Loothing.MLDB:IsML() or false
+end
+
 --- Broadcast observer roster to raid (ML-only). Skips send when payload is
 --- unchanged from the previous broadcast — prevents ObserverManager's multiple
 --- add/remove paths from firing back-to-back identical broadcasts.
@@ -599,7 +612,7 @@ end
 ---   join). Callers pushing state to a fresh audience MUST pass force=true
 ---   because the signature check is payload-only, not recipient-aware.
 function SyncMixin:BroadcastObserverRoster(force)
-    if not Loothing.Session or not Loothing.Session:IsMasterLooter() then return end
+    if not isLocalRosterBroadcaster() then return end
     if not Loothing.Observer then return end
 
     local data = {
@@ -643,7 +656,7 @@ end
 ---   join). The signature check is payload-only; callers pushing state to a
 ---   fresh audience MUST pass force=true.
 function SyncMixin:BroadcastCouncilRoster(force)
-    if not (Loothing.Session and Loothing.Session:IsMasterLooter()) then return end
+    if not isLocalRosterBroadcaster() then return end
     if not Loothing.Council then return end
 
     local members = Loothing.Council:GetAllMembers()
