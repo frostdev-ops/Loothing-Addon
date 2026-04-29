@@ -1698,26 +1698,12 @@ function SessionMixin:StartVotingOnAllItems(timeout)
         end)
     end
 
-    -- Use batch sending: collect all vote requests, flush as 1-2 BATCH messages
-    -- instead of N individual BroadcastVoteRequest calls.
-    local useBatch = self:IsMasterLooter() and Loothing.Comm and IsInGroup()
-
     for _, item in ipairs(pendingItems) do
-        if self:StartVoting(item.guid, timeout, useBatch) then
+        -- Vote requests are lifecycle prompts that open response frames. Send
+        -- them directly so mixed clients and diagnostics see explicit VR traffic.
+        if self:StartVoting(item.guid, timeout, false) then
             count = count + 1
-            if useBatch then
-                Loothing.Comm:QueueForBatch(Loothing.MsgType.VOTE_REQUEST, {
-                    itemGUID  = item.guid,
-                    timeout   = timeout,
-                    sessionID = self.sessionID,
-                }, nil, "NORMAL")
-            end
         end
-    end
-
-    -- Flush immediately so raiders see vote requests as a single burst
-    if useBatch and count > 0 then
-        Loothing.Comm:FlushAll()
     end
 
     Loothing:Debug("Started voting on", count, "items")
