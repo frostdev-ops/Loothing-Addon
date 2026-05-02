@@ -23,6 +23,7 @@ local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local Utils = ns.Utils
+local SecretUtil = Loolib.SecretUtil
 
 --- Resolved minimum-quality threshold (Loothing.MinQuality is the
 --- legacy hardcoded fallback; the user-configurable value lives in
@@ -563,10 +564,11 @@ function SessionMixin:HandleTradable(data)
         local item = self:AddItem(itemLink, playerName, nil, forceAdd or nil, true)
         if not item then
             TraceLoot("handleT:add-returned-nil", itemLink,
-                "looter=" .. tostring(playerName))
+                "looter=" .. SecretUtil.GuardToString(playerName, "<secret>"))
             return
         end
-        TraceLoot("handleT:add-ok", itemLink, "looter=" .. tostring(playerName))
+        TraceLoot("handleT:add-ok", itemLink,
+            "looter=" .. SecretUtil.GuardToString(playerName, "<secret>"))
         item.isTradable = true
         item.tradeTimeRemaining = data.timeRemaining
         if Loothing.Comm then
@@ -623,7 +625,8 @@ function SessionMixin:HandleTradable(data)
             return
         end
 
-        TraceLoot("handleT:buffered", itemLink, "looter=" .. tostring(playerName))
+        TraceLoot("handleT:buffered", itemLink,
+            "looter=" .. SecretUtil.GuardToString(playerName, "<secret>"))
         table.insert(self.lootBuffer, {
             itemLink = itemLink,
             itemID = itemID,
@@ -3192,6 +3195,14 @@ end
 
 --- Handle loot received
 function SessionMixin:OnLootReceived(encounterID, _itemID, itemLink, _quantity, playerName)
+    -- ENCOUNTER_LOOT_RECEIVED parameters can be secret-tagged on tainted
+    -- execution paths (raid combat). Drop the event rather than risk a
+    -- comparison/concat throw deeper in the handler.
+    if SecretUtil.IsSecretValue(itemLink, playerName) then
+        Loothing:Debug("OnLootReceived: dropped secret-tagged payload (encounter taint)")
+        return
+    end
+
     Loothing:Debug("OnLootReceived:", itemLink, "from", playerName,
         "encounter:", encounterID, "active:", tostring(self:IsActive()),
         "isML:", tostring(self:IsMasterLooter()), "handleLoot:", tostring(Loothing.handleLoot))
@@ -3309,11 +3320,13 @@ function SessionMixin:OnLootReceived(encounterID, _itemID, itemLink, _quantity, 
                 end
 
                 if not skipNonTradeable then
-                    -- Dedup: bag scanner and HandleTradable can also buffer the same item
+                    -- Dedup: bag scanner and HandleTradable can also buffer the same item.
+                    -- Use IsSamePlayer (not raw ==) so a secret-tagged playerName from a
+                    -- tainted ENCOUNTER_LOOT_RECEIVED early-returns instead of throwing.
                     local alreadyBuffered = false
                     for _, entry in ipairs(self.lootBuffer) do
                         if entry.itemLink == itemLink
-                            and entry.playerName == playerName
+                            and Utils.IsSamePlayer(entry.playerName, playerName)
                             and SameEncounterID(entry.encounterID, encounterID) then
                             alreadyBuffered = true
                             break

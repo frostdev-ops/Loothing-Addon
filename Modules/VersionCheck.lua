@@ -571,7 +571,9 @@ function VersionCheckMixin:UpdatePlayerCacheFromResponse(name, ilvl, specID)
     end
 
     local guid = UnitGUID(unit)
-    if not guid then
+    if not guid or Loolib.SecretUtil.IsSecretValue(guid) then
+        -- Skip if the GUID couldn't be read or is secret-tagged: PlayerCache:Update
+        -- uses guid as a table key, which throws on a secret value.
         return
     end
 

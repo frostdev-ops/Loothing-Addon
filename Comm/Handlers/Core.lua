@@ -494,8 +494,15 @@ function CommMixin:HandleVersionRequest(_data, sender, distribution)
     })
 end
 
-function CommMixin:HandleVersionResponse(data, sender)
+function CommMixin:HandleVersionResponse(data, sender, distribution)
     if not validateHandler("HandleVersionResponse", data) then return end
+    -- Restrict version responses to group/guild distribution. Without this
+    -- gate any prefix-aware peer could whisper a forged response and
+    -- pollute the version display + PlayerCache.
+    if distribution ~= "GUILD" and not isGroupMember(sender) then
+        Loothing:Debug("Rejected VERSION_RESPONSE from non-group/guild peer:", sender)
+        return
+    end
     data.sender = sender
     self:TriggerEvent("OnVersionResponse", data)
 end
@@ -570,12 +577,14 @@ end
 
 function CommMixin:HandleCandidateUpdate(data, sender)
     if not validateHandler("HandleCandidateUpdate", data, SCHEMAS.CANDIDATE_UPDATE) then return end
-    if type(data.candidateData.name) ~= "string" then
-        Loothing:Debug("Rejected CANDIDATE_UPDATE — candidateData.name missing")
-        return
-    end
+    -- Authorize first so forged messages from non-ML peers don't trip the
+    -- inner-payload debug log path.
     if not isMasterLooter(sender) then
         Loothing:Debug("Rejected CANDIDATE_UPDATE from non-ML:", sender)
+        return
+    end
+    if type(data.candidateData.name) ~= "string" then
+        Loothing:Debug("Rejected CANDIDATE_UPDATE — candidateData.name missing")
         return
     end
     data.masterLooter = sender

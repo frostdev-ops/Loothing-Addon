@@ -1089,6 +1089,11 @@ local function RegisterEvents()
             end
         end
 
+        -- CHAT_MSG_LOOT payloads (msg, looter name) are secret-tagged on
+        -- tainted execution paths during raid combat. Any :match / ~= "" /
+        -- string op on a secret throws — drop the event rather than abort.
+        if SecretUtil.IsSecretValue(msg, playerName2) then return end
+
         -- Only track loot the player receives (not others)
         local myName = Utils.GetPlayerFullName()
         if not myName then return end
@@ -2909,11 +2914,15 @@ end
 --- Called at PLAYER_LOGOUT so the desktop app can identify which character last logged out.
 function Addon:WriteDesktopExport()
     if not self.Settings then return end
-    local name = UnitName("player")
+    -- /reload mid-encounter triggers PLAYER_LOGOUT under taint; UnitName /
+    -- UnitClass return secret-tagged values on those paths and the bare
+    -- concat/index ops would throw. Use Safe* wrappers and gate accordingly.
+    local name = SecretUtil.SafeUnitName("player")
     local realm = GetRealmName()
     local fullName = name and realm and (name .. "-" .. realm)
-    local _, class = UnitClass("player")
+    local _, class = SecretUtil.SafeUnitClass("player")
     local guid = UnitGUID("player")
+    if SecretUtil.IsSecretValue(guid) then guid = nil end
 
     local export = {
         version = 2,

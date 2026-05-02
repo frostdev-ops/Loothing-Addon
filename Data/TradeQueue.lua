@@ -13,6 +13,7 @@ local CreateFromMixins = Loolib.CreateFromMixins
 local Data = Loolib.Data
 local Events = Loolib.Events
 local SavedVariables = Loolib.Data.SavedVariables
+local SecretUtil = Loolib.SecretUtil
 local TooltipScan = ns.TooltipScan
 local C_Timer = C_Timer
 
@@ -130,6 +131,13 @@ end
 -- @return table - The queue entry
 function TradeQueueMixin:AddToQueue(itemGUID, itemLink, winner, awardTime)
     winner = Utils.NormalizeName(winner)
+    -- NormalizeName returns nil for secret-tagged or empty inputs. Refuse
+    -- to insert an entry we can never look up again — surface to the caller
+    -- so it can re-resolve the winner instead of silently losing the queue.
+    if not winner then
+        Loothing:Debug("AddToQueue: dropped entry with secret/invalid winner for", itemLink)
+        return nil
+    end
     awardTime = awardTime or time()
 
     -- Check if already queued
@@ -278,14 +286,31 @@ function TradeQueueMixin:OnTradeShow()
         return
     end
 
-    -- Get trade target from Blizzard UI
-    local target = TradeFrameRecipientNameText:GetText()
+    -- Get trade target from Blizzard UI. TradeFrameRecipientNameText:GetText()
+    -- can return a WoW 12.0 secret string when the trade window opens under
+    -- tainted execution; comparing it directly throws. Fall back to the "npc"
+    -- unit (the standard trade-partner unit ID) via SafeUnitName, which also
+    -- guards against secret returns. The recipient frame itself is normally
+    -- present once Blizzard_TradeFrame loads, but guard the global access in
+    -- case another addon defers/blocks the load-on-demand chain.
+    local recipientFrame = _G.TradeFrameRecipientNameText
+    local target = recipientFrame and recipientFrame:GetText() or nil
+    local fallbackRealm
+    if SecretUtil.IsSecretValue(target) or not target or target == "" then
+        target, fallbackRealm = SecretUtil.SafeUnitName("npc")
+    end
     local normalizedTarget = nil
 
     if target and target ~= "" then
         -- Remove "(*)" for cross-realm (use plain find to avoid pattern errors)
         if target:find("(*)", 1, true) then
             target = target:gsub(" ?%(%*%)", "")
+        end
+        -- When the fallback path fired and the partner is on a connected
+        -- realm, SafeUnitName returns the realm separately; attach it so
+        -- NormalizeName can match the queue's stored "Name-realm" winners.
+        if fallbackRealm and fallbackRealm ~= "" and not target:find("-", 1, true) then
+            target = target .. "-" .. fallbackRealm
         end
         normalizedTarget = Utils.NormalizeName(target)
     end
@@ -342,6 +367,12 @@ function TradeQueueMixin:OnTradeClosed()
         local stagedTarget = self.tradeTarget
 
         C_Timer.After(ITEM_WATCH_DELAY, function()
+            -- Bail if a fresh trade started inside the 0.5s gap: items
+            -- staged into the new window aren't in bags either, so the
+            -- bag-delta check would falsely mark the prior trade complete
+            -- and attribute it to the wrong target.
+            if self.isTrading then return end
+
             for _, staged in ipairs(stagedItems) do
                 local link = GetStagedItemLink(staged)
                 local traded = false
@@ -614,8 +645,10 @@ function TradeQueueMixin:MarkItemTraded(itemOrStaged, tradedTo)
 
         self:TriggerEvent("OnItemTraded", entry, tradedTo)
 
-        -- Print trade completion if enabled
-        if not Loothing.Settings or Loothing.Settings:Get("ml.printCompletedTrades", true) then
+        -- Print trade completion if enabled. Default matches Constants
+        -- (printCompletedTrades = false), so Settings-missing falls silent
+        -- rather than spamming the chat frame.
+        if Loothing.Settings and Loothing.Settings:Get("ml.printCompletedTrades", false) then
             if entry.winner == tradedTo then
                 Loothing:Print(string.format(L["TRADE_COMPLETED"], entry.itemLink, Utils.GetShortName(tradedTo)))
             else

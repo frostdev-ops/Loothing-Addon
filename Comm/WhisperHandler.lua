@@ -12,6 +12,7 @@ local Loothing = ns.Addon
 local Loolib = LibStub("Loolib")
 local CreateFromMixins = Loolib.CreateFromMixins
 local Utils = ns.Utils
+local SecretUtil = Loolib.SecretUtil
 
 ns.WhisperHandlerMixin = ns.WhisperHandlerMixin or {}
 
@@ -100,9 +101,15 @@ function WhisperHandlerMixin:OnWhisperReceived(message, sender)
         return
     end
 
-    -- Detaint event payload strings for combat safety
-    message = tostring(message)
-    sender = tostring(sender)
+    -- CHAT_MSG_WHISPER payloads are secret-tagged under encounter taint;
+    -- any string op (tostring, ==, :sub, :match) on a secret throws. Drop
+    -- the message rather than risk aborting the OnEvent handler.
+    if SecretUtil.IsSecretValue(message, sender) then
+        return
+    end
+    if type(message) ~= "string" or type(sender) ~= "string" then
+        return
+    end
 
     -- Trim whitespace and normalize
     message = strtrim(message)

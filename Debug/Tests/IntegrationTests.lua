@@ -534,7 +534,7 @@ local function Test_TradeQueueAfterAward()
     Loothing.Session:AwardItem(item.guid, "TestWinner-Realm", "Main Spec")
 
     -- Verify item is in trade queue
-    local queuedItem = Loothing.TradeQueue:FindItemByGUID(item.guid)
+    local queuedItem = Loothing.TradeQueue:GetQueuedItem(item.guid)
     AssertNotNil(queuedItem, "Item should be in trade queue after award")
 
     Loothing.Session:EndSession()

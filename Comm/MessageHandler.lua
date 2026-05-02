@@ -256,6 +256,23 @@ function CommMixin:Init()
     if Comm.SetTargetValidator then
         Comm:SetTargetValidator(Loothing.ADDON_PREFIX, Utils.IsGroupMember)
     end
+
+    -- Periodic dedup sweep. The lazy in-OnMessage purge below handles
+    -- bursty inbound traffic, but an idle client (post-wipe, between
+    -- pulls) won't fire OnMessage and would otherwise hold expired
+    -- entries until the cap-driven emergency sweep kicks in. This ticker
+    -- runs unconditionally every 30s so memory drains on schedule.
+    if self._seenSweepTicker then self._seenSweepTicker:Cancel() end
+    self._seenSweepTicker = C_Timer.NewTicker(30, function()
+        local now = GetTime()
+        lastCleanup = now
+        for k, t in pairs(seenIDs) do
+            if now - t > SEEN_TTL then
+                seenIDs[k] = nil
+                seenCount = seenCount - 1
+            end
+        end
+    end)
 end
 
 --- Get per-type comm statistics for diagnostics
@@ -526,14 +543,12 @@ function CommMixin:FlushBatch(key)
         return
     end
 
-    -- Multiple messages: wrap in BATCH container.
-    local messagesCopy = {}
-    for i, msg in ipairs(messages) do
-        messagesCopy[i] = msg
-    end
+    -- Multiple messages: wrap in BATCH container. Reuse the pooled table
+    -- directly as the wire payload — Send → SendCommMessage is synchronous
+    -- and consumes the table before returning, so we can release it after.
+    -- The previous copy-then-release defeated the pooling rationale.
+    self:Send(Loothing.MsgType.BATCH, { messages = messages }, batch.target, batch.priority)
     Loolib.TempTable:Release(messages)
-
-    self:Send(Loothing.MsgType.BATCH, { messages = messagesCopy }, batch.target, batch.priority)
 end
 
 --- Flush all pending batches immediately
@@ -856,6 +871,7 @@ end
 -- @param itemLink string
 -- @param guid string
 -- @param looter string
+-- @param sessionID string
 function CommMixin:BroadcastItemAdd(itemLink, guid, looter, sessionID)
     self:Send(Loothing.MsgType.ITEM_ADD, {
         itemLink = itemLink,

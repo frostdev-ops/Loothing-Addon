@@ -320,7 +320,9 @@ function CouncilTableMixin:UpdateRow(row, candidate, index)
         if not voteCell.voteButton._voteHooked then
             voteCell.voteButton._voteHooked = true
             voteCell.voteButton:SetScript("OnClick", function(btn)
-                btn._parentRow._councilTable:OnVoteClick(btn._parentRow.candidate)
+                local r = btn._parentRow
+                if not (r and r.candidate and r._councilTable) then return end
+                r._councilTable:OnVoteClick(r.candidate)
             end)
         end
     end
