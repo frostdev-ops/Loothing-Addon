@@ -83,6 +83,9 @@ local CRITICAL_COMMANDS = {
     [Loothing.MsgType.RESPONSE_BATCH]      = true,
     [Loothing.MsgType.TRADABLE]            = true,
     [Loothing.MsgType.NON_TRADABLE]        = true,
+    -- PLAYER_INFO_RESPONSE became broadcast-authoritative in 2.0.41; keep it
+    -- replayable on restriction lift so gear data isn't silently lost.
+    [Loothing.MsgType.PLAYER_INFO_RESPONSE] = true,
 }
 
 --[[--------------------------------------------------------------------

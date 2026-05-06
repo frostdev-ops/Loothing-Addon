@@ -1640,10 +1640,16 @@ function SessionMixin:PollAllMissingResponses()
                 end
             end
 
-            -- Any roster member missing from this item's responses is "missing"
+            -- Any roster member missing from this item's responses is
+            -- "missing", intersected with the responder set captured when
+            -- voting started — so players who left the raid mid-vote aren't
+            -- chased by RESPONSE_POLL forever.
             local roster = ns.Utils.GetRaidRoster()
+            local expected = item.expectedResponders
             for _, member in ipairs(roster) do
-                if not responded[member.name] then
+                if not responded[member.name]
+                   and (not expected or expected[member.name])
+                then
                     missingByPlayer[member.name] = true
                 end
             end
@@ -2045,7 +2051,8 @@ function SessionMixin:RetractAllVotes(itemGUID)
 
     local voter = Utils.GetPlayerFullName()
 
-    -- Snapshot affected candidates before removing the vote locally
+    -- Snapshot affected candidates before removing the vote locally so we can
+    -- recompute their voter arrays after RemoveVote.
     local existing = item:GetVoteByVoter(voter)
     local affectedCandidates = {}
     if existing and existing.responses then
@@ -2060,31 +2067,26 @@ function SessionMixin:RetractAllVotes(itemGUID)
         Loothing.VoteTracker:ClearVote(item.guid)
     end
 
-    if not self:IsMasterLooter() and IsInGroup() then
-        -- Signal ML to clear this voter's vote by sending empty responses
+    -- Recompute voter lists for the affected candidates so the local UI
+    -- reflects the retraction immediately. GetCandidateManager() lazy-creates
+    -- — direct field access would silently no-op on a brand-new item that
+    -- never had a PLAYER_RESPONSE arrive.
+    local cm = item:GetCandidateManager()
+    if cm then
+        for _, candidateName in ipairs(affectedCandidates) do
+            self:UpdateCandidateVoters(item, candidateName)
+        end
+    end
+
+    -- Broadcast the empty-responses vote to the raid (every receiver applies
+    -- the retraction locally — no ML re-broadcast needed).
+    if IsInGroup() then
         Loothing.Comm:SendVoteCommit(
             item.guid,
             {},
             self.masterLooter,
             self.sessionID
         )
-    elseif Loothing.HasMasterLooterVisibility and Loothing:HasMasterLooterVisibility() then
-        -- ML: rebuild and broadcast voter lists — batch all affected candidates
-        if Loothing.Comm and item.candidateManager and IsInGroup() then
-            for _, candidateName in ipairs(affectedCandidates) do
-                self:UpdateCandidateVoters(item, candidateName)
-                local candidate = item.candidateManager:GetCandidate(candidateName)
-                if candidate then
-                    Loothing.Comm:QueueForBatch(Loothing.MsgType.VOTE_UPDATE, {
-                        itemGUID      = item.guid,
-                        candidateName = candidateName,
-                        voters        = candidate.voters,
-                        sessionID     = self.sessionID,
-                    }, nil, "NORMAL")
-                end
-            end
-            -- Let 100ms batch window coalesce with other vote updates
-        end
     end
 
     return true
@@ -2117,40 +2119,26 @@ function SessionMixin:SubmitVote(itemGUID, responses)
         return false
     end
 
-    -- Snapshot voter arrays for affected candidates BEFORE AddVote (delta broadcast)
-    local voterSnapshots = {}
-    if item.candidateManager then
-        for _, candidateName in ipairs(responses) do
-            local c = item.candidateManager:GetCandidate(candidateName)
-            voterSnapshots[candidateName] = c and c.voters and { unpack(c.voters) } or {}
-        end
-        -- Snapshot previous vote targets (voter list shrinks when vote moves)
-        local existing = item:GetVoteByVoter(voter)
-        if existing and existing.responses then
-            for _, name in ipairs(existing.responses) do
-                if not voterSnapshots[name] then
-                    local c = item.candidateManager:GetCandidate(name)
-                    voterSnapshots[name] = c and c.voters and { unpack(c.voters) } or {}
-                end
-            end
-        end
-    end
-
     -- Add vote locally (AddVote checks CanAcceptVotes internally too)
     item:AddVote(voter, class, responses)
 
     -- Notify UI that a vote was received (drives vote progress indicators)
     self:TriggerEvent("OnVoteReceived", item)
 
-    -- Always update candidate voter lists locally (sets hasMyVote, councilVotes)
-    if item.candidateManager then
-        for _, candidate in ipairs(item.candidateManager:GetAllCandidates()) do
+    -- Always update candidate voter lists locally (sets hasMyVote, councilVotes).
+    -- Lazy-create via GetCandidateManager so the very first vote on a brand-new
+    -- item (no PLAYER_RESPONSE yet) still updates rather than silently no-op.
+    local cm = item:GetCandidateManager()
+    if cm then
+        for _, candidate in ipairs(cm:GetAllCandidates()) do
             self:UpdateCandidateVoters(item, candidate.playerName)
         end
     end
 
-    -- Network: send or broadcast depending on role
-    if not self:IsMasterLooter() and IsInGroup() then
+    -- Broadcast the vote to the raid. Every receiver tallies independently —
+    -- ML no longer needs to re-broadcast VOTE_UPDATE deltas because each
+    -- client derives the same voter list from the raw VOTE_COMMIT.
+    if IsInGroup() then
         Loothing.Comm:SendVoteCommit(
             item.guid,
             responses,
@@ -2160,31 +2148,6 @@ function SessionMixin:SubmitVote(itemGUID, responses)
         -- Track the submitted vote so VoteTracker can re-send on VOTE_POLL
         if Loothing.VoteTracker then
             Loothing.VoteTracker:MarkSubmitted(item.guid, responses)
-        end
-    elseif self:IsMasterLooter() and Loothing.Comm and IsInGroup() then
-        -- Broadcast VOTE_UPDATE only for candidates whose voter list changed
-        if item.candidateManager then
-            for candidateName, oldVoters in pairs(voterSnapshots) do
-                local c = item.candidateManager:GetCandidate(candidateName)
-                if c then
-                    local newVoters = c.voters or {}
-                    local changed = #oldVoters ~= #newVoters
-                    if not changed then
-                        for i, v in ipairs(oldVoters) do
-                            if v ~= newVoters[i] then changed = true; break end
-                        end
-                    end
-                    if changed then
-                        Loothing.Comm:QueueForBatch(Loothing.MsgType.VOTE_UPDATE, {
-                            itemGUID      = item.guid,
-                            candidateName = candidateName,
-                            voters        = newVoters,
-                            sessionID     = self.sessionID,
-                        }, nil, "NORMAL")
-                    end
-                end
-            end
-            -- Let 100ms batch window coalesce with other vote updates
         end
     end
 
@@ -3586,105 +3549,83 @@ function SessionMixin:HandleRemoteVoteCommit(data)
     end
 
     -- Empty responses = vote retraction
-    if #data.responses == 0 then
-        -- ML: snapshot affected candidates BEFORE removal for delta broadcast
-        local affectedSnapshots
-        if isML and item.candidateManager then
-            affectedSnapshots = {}
-            local existing = item:GetVoteByVoter(data.voter)
-            if existing and existing.responses then
-                for _, name in ipairs(existing.responses) do
-                    local c = item.candidateManager:GetCandidate(name)
-                    affectedSnapshots[name] = c and c.voters and { unpack(c.voters) } or {}
-                end
+    -- Vote-policy enforcement runs on every receiver using the MLDB-broadcast
+    -- multiVote/selfVote flags. Pre-2.0.42 versions only enforced this on ML,
+    -- which left council UIs showing votes that ML rejected until VOTE_RESULTS
+    -- arrived. Now every client converges immediately.
+    local function getPolicyFlag(name, defaultIfMissing)
+        local mldb = Loothing.MLDB and Loothing.MLDB:Get()
+        local v = mldb and mldb[name]
+        if v ~= nil then return v end
+        if Loothing.Settings then
+            if name == "multiVote" and Loothing.Settings.GetMultiVote then
+                return Loothing.Settings:GetMultiVote()
+            elseif name == "selfVote" and Loothing.Settings.GetSelfVote then
+                return Loothing.Settings:GetSelfVote()
             end
         end
+        return defaultIfMissing
+    end
 
+    if #data.responses == 0 then
         item:RemoveVote(data.voter)
 
-        -- ML: broadcast VOTE_UPDATE delta for affected candidates
-        if isML then
-            if Loothing.Comm and item.candidateManager then
-                for candidateName, oldVoters in pairs(affectedSnapshots) do
-                    self:UpdateCandidateVoters(item, candidateName)
-                    local c = item.candidateManager:GetCandidate(candidateName)
-                    if c then
-                        local newVoters = c.voters or {}
-                        local changed = #oldVoters ~= #newVoters
-                        if not changed then
-                            for i, v in ipairs(oldVoters) do
-                                if v ~= newVoters[i] then changed = true; break end
-                            end
-                        end
-                        if changed then
-                            Loothing.Comm:QueueForBatch(Loothing.MsgType.VOTE_UPDATE, {
-                                itemGUID      = item.guid,
-                                candidateName = candidateName,
-                                voters        = newVoters,
-                                sessionID     = self.sessionID,
-                            }, nil, "NORMAL")
-                        end
-                    end
-                end
-                -- Let 100ms batch window coalesce with other vote updates
-            end
-        end
-
-        -- Non-ML: update all candidate voter arrays locally
-        if not isML and item.candidateManager then
-            for _, c in ipairs(item.candidateManager:GetAllCandidates()) do
+        -- Every receiver recomputes voter arrays locally; no VOTE_UPDATE
+        -- re-broadcast is needed because each client saw the raw VOTE_COMMIT.
+        local cm = item:GetCandidateManager()
+        if cm then
+            for _, c in ipairs(cm:GetAllCandidates()) do
                 self:UpdateCandidateVoters(item, c.playerName)
             end
         end
 
-        self:TriggerEvent("OnCandidateUpdated", item, { playerName = data.voter })
+        local voterCandidate = cm and cm:GetCandidate(data.voter) or nil
+        self:TriggerEvent("OnCandidateUpdated", item, voterCandidate)
+
+        -- Mixed-version compat: ML re-broadcasts VOTE_UPDATE deltas for the
+        -- candidates the retracted vote previously targeted, so v2.0.41+
+        -- council members who never saw the legacy WHISPER refresh their
+        -- voter arrays.
+        if isML and data._legacyWhisper and Loothing.Comm and cm then
+            -- Without the prior responses we cannot know which candidates
+            -- had voters change, so push every candidate's current voter
+            -- list — bounded by item candidate count, batched by Loolib.
+            for _, c in ipairs(cm:GetAllCandidates()) do
+                Loothing.Comm:QueueForBatch(Loothing.MsgType.VOTE_UPDATE, {
+                    itemGUID      = item.guid,
+                    candidateName = c.playerName,
+                    voters        = c.voters or {},
+                    sessionID     = self.sessionID,
+                }, nil, "NORMAL")
+            end
+        end
+
         if isML and item:IsTallied() then
             self:RetallyVoteResultsForItem(item)
         end
         return
     end
 
-    -- ML: enforce vote policy (multiVote, selfVote)
-    if isML then
-        local multiVote = Loothing.Settings and Loothing.Settings:GetMultiVote()
-        if not multiVote and #data.responses > 1 then
-            Loothing:Debug("Rejected multi-vote from", tostring(data.voter), "- multiVote is disabled")
-            data.responses = { data.responses[#data.responses] }
-        end
-
-        local selfVote = Loothing.Settings and Loothing.Settings:GetSelfVote()
-        if not selfVote and data.voter then
-            local filtered = {}
-            for _, candidateName in ipairs(data.responses) do
-                if not Utils.IsSamePlayer(candidateName, data.voter) then
-                    filtered[#filtered + 1] = candidateName
-                end
-            end
-            if #filtered == 0 then
-                Loothing:Debug("Rejected self-vote from", tostring(data.voter))
-                return
-            end
-            data.responses = filtered
-        end
+    -- Apply multiVote / selfVote on every receiver.
+    local multiVote = getPolicyFlag("multiVote", true)
+    if not multiVote and #data.responses > 1 then
+        Loothing:Debug("Rejected multi-vote from", tostring(data.voter), "- multiVote is disabled")
+        data.responses = { data.responses[#data.responses] }
     end
 
-    -- ML: snapshot voter arrays BEFORE AddVote for delta VOTE_UPDATE
-    local voterSnapshots
-    if isML and item.candidateManager then
-        voterSnapshots = {}
+    local selfVote = getPolicyFlag("selfVote", true)
+    if not selfVote and data.voter then
+        local filtered = {}
         for _, candidateName in ipairs(data.responses) do
-            local c = item.candidateManager:GetCandidate(candidateName)
-            voterSnapshots[candidateName] = c and c.voters and { unpack(c.voters) } or {}
-        end
-        local existing = item:GetVoteByVoter(data.voter)
-        if existing and existing.responses then
-            for _, name in ipairs(existing.responses) do
-                if not voterSnapshots[name] then
-                    local c = item.candidateManager:GetCandidate(name)
-                    voterSnapshots[name] = c and c.voters and { unpack(c.voters) } or {}
-                end
+            if not Utils.IsSamePlayer(candidateName, data.voter) then
+                filtered[#filtered + 1] = candidateName
             end
         end
+        if #filtered == 0 then
+            Loothing:Debug("Rejected self-vote from", tostring(data.voter))
+            return
+        end
+        data.responses = filtered
     end
 
     -- AddVote returns false if item is past VOTING and the late-accept window
@@ -3696,45 +3637,36 @@ function SessionMixin:HandleRemoteVoteCommit(data)
     -- Notify UI that a vote was received (drives vote progress indicators)
     self:TriggerEvent("OnVoteReceived", item)
 
-    if isML then
-        -- ML: broadcast VOTE_UPDATE only for candidates whose voter list changed
-        if Loothing.Comm and item.candidateManager and voterSnapshots then
-            for candidateName, oldVoters in pairs(voterSnapshots) do
-                self:UpdateCandidateVoters(item, candidateName)
-                local c = item.candidateManager:GetCandidate(candidateName)
-                if c then
-                    local newVoters = c.voters or {}
-                    local changed = #oldVoters ~= #newVoters
-                    if not changed then
-                        for i, v in ipairs(oldVoters) do
-                            if v ~= newVoters[i] then changed = true; break end
-                        end
-                    end
-                    if changed then
-                        Loothing.Comm:QueueForBatch(Loothing.MsgType.VOTE_UPDATE, {
-                            itemGUID      = item.guid,
-                            candidateName = candidateName,
-                            voters        = newVoters,
-                            sessionID     = self.sessionID,
-                        }, nil, "NORMAL")
-                    end
-                end
-            end
-            -- Let 100ms batch window coalesce with other vote updates
+    -- Every receiver updates candidate voter arrays locally from the raw vote.
+    local cm = item:GetCandidateManager()
+    if cm then
+        for _, c in ipairs(cm:GetAllCandidates()) do
+            self:UpdateCandidateVoters(item, c.playerName)
         end
-        if item:IsTallied() then
-            self:RetallyVoteResultsForItem(item)
-        end
-    else
-        -- Non-ML council: local vote applied, update all candidate voter arrays
-        -- (covers both new targets and old targets when a vote changes).
-        -- ML's authoritative VOTE_UPDATE will overwrite when it arrives.
-        if item.candidateManager then
-            for _, c in ipairs(item.candidateManager:GetAllCandidates()) do
-                self:UpdateCandidateVoters(item, c.playerName)
+    end
+
+    local voterCandidate = cm and cm:GetCandidate(data.voter) or nil
+    self:TriggerEvent("OnCandidateUpdated", item, voterCandidate)
+
+    -- Mixed-version compat: ML re-broadcasts VOTE_UPDATE deltas for the
+    -- candidates this vote targets, so v2.0.41+ council members who never
+    -- saw the legacy WHISPER refresh their voter arrays.
+    if isML and data._legacyWhisper and Loothing.Comm and cm then
+        for _, candidateName in ipairs(data.responses) do
+            local c = cm:GetCandidate(candidateName)
+            if c then
+                Loothing.Comm:QueueForBatch(Loothing.MsgType.VOTE_UPDATE, {
+                    itemGUID      = item.guid,
+                    candidateName = candidateName,
+                    voters        = c.voters or {},
+                    sessionID     = self.sessionID,
+                }, nil, "NORMAL")
             end
         end
-        self:TriggerEvent("OnCandidateUpdated", item, { playerName = data.voter })
+    end
+
+    if isML and item:IsTallied() then
+        self:RetallyVoteResultsForItem(item)
     end
 end
 
@@ -3957,17 +3889,13 @@ function SessionMixin:HandlePlayerInfoRequest(data)
     -- Get our equipped gear for this slot
     local slot1Link, slot2Link, slot1ilvl, slot2ilvl = self:GetEquippedGearForSlot(item.equipSlot)
 
-    -- Send response to ML
+    -- Broadcast gear info to the raid (every receiver backfills locally).
+    -- The legacy `data.requester` arg is ignored by the broadcast wrapper.
     Loothing.Comm:SendPlayerInfo(itemGUID, slot1Link, slot2Link, slot1ilvl, slot2ilvl, data.requester, self.sessionID)
 end
 
 --- Handle player info response (store gear data on vote)
 function SessionMixin:HandlePlayerInfoResponse(data)
-    -- Only ML processes these
-    if not self:IsMasterLooter() then
-        return
-    end
-
     if not self:IsCurrentSession(data.sessionID) then
         return
     end
@@ -3994,10 +3922,11 @@ function SessionMixin:HandlePlayerInfoResponse(data)
         end
     end
 
-    -- Update candidate gear and broadcast to council
+    -- Update candidate gear locally on every receiver. PLAYER_INFO_RESPONSE
+    -- now broadcasts, so each client backfills its own candidate state without
+    -- ML having to re-broadcast a CANDIDATE_UPDATE.
     local candidateManager = item:GetCandidateManager()
     if candidateManager then
-        -- Resolve candidate class from raid roster (fallback to vote if roster missing)
         local candidateClass = "UNKNOWN"
         local roster = Utils.GetRaidRoster()
         for _, member in ipairs(roster) do
@@ -4014,18 +3943,29 @@ function SessionMixin:HandlePlayerInfoResponse(data)
         candidate:SetGearData(data.slot1Link, data.slot2Link, data.slot1ilvl, data.slot2ilvl)
         candidate:CalculateIlvlDiff(item.itemLevel)
         candidateManager:UpdateCandidateGear(candidate.playerName, candidate.gear1Link, candidate.gear2Link, candidate.gear1ilvl, candidate.gear2ilvl, candidate.ilvlDiff)
+        self:TriggerEvent("OnCandidateUpdated", item, candidate)
 
-        if Loothing.Comm then
-            self:QueueResponseBroadcast(itemGUID, candidate)
+        -- Mixed-version compat: a v2.0.40 sender whispered the gear directly
+        -- to ML. Re-broadcast via CANDIDATE_UPDATE so v2.0.41 council members
+        -- who never saw the original WHISPER backfill the candidate's gear.
+        if self:IsMasterLooter() and Loothing.Comm and data._legacyWhisper then
+            self:QueueResponseBroadcast(item.guid, candidate)
         end
     end
 end
 
 --- Handle incoming player response from raid member.
--- Responses are broadcast to group, so all receivers (ML + council) process them.
--- ML: authoritative processing (CANDIDATE_UPDATE broadcast, gear request).
--- Non-ML: local candidate display (immediate UI update).
--- @param data table - { playerName, itemGUID, response, note, roll, rollMin, rollMax }
+-- Responses broadcast to the group, so every receiver (ML + council + plain
+-- candidates) derives the same candidate state locally.
+-- ML side additionally:
+--   * counts distinct (first-seen) responders for completion checks
+--   * synthesizes a roll for legacy senders that didn't include one and
+--     re-broadcasts it via CANDIDATE_UPDATE so council members converge
+--   * requests gear from legacy senders that don't self-report
+--   * re-broadcasts a CANDIDATE_UPDATE on _legacyWhisper inputs so v2.0.41+
+--     council members backfill state from a v2.0.40 sender's WHISPER
+-- @param data table - { playerName, itemGUID, response, note, roll, rollMin,
+--                       rollMax, gear*Link, gear*ilvl, _legacyWhisper }
 function SessionMixin:HandlePlayerResponse(data)
     local isML = self:IsMasterLooter()
 
@@ -4075,16 +4015,24 @@ function SessionMixin:HandlePlayerResponse(data)
     end
 
     local candidate = candidateManager:GetOrCreateCandidate(sender, senderClass)
+    -- Track whether this is a fresh (first-time) response so ML doesn't
+    -- double-count duplicates that arrive via RESPONSE_POLL replay.
+    local isFreshResponse = candidate.response == nil
     candidate:SetResponse(response, note)
 
+    -- ML generates a fallback roll for legacy senders that didn't include one,
+    -- then re-broadcasts the synthetic value via CANDIDATE_UPDATE so council
+    -- members see the same roll. Without the re-broadcast, sort order on the
+    -- council table diverges from ML's view.
+    local synthesizedRoll = false
     if roll and roll > 0 then
         candidate:SetRoll(roll, rollMin or 1, rollMax or 100)
     elseif isML then
-        -- ML generates fallback roll for candidates that didn't include one
         local rollSettings = Loothing.Settings and Loothing.Settings:Get("rollFrame.rollRange")
         local fallbackMin = rollSettings and rollSettings.min or 1
         local fallbackMax = rollSettings and rollSettings.max or 100
         candidate:SetRoll(math.random(fallbackMin, fallbackMax), fallbackMin, fallbackMax)
+        synthesizedRoll = true
     end
 
     -- Update items won count
@@ -4111,14 +4059,21 @@ function SessionMixin:HandlePlayerResponse(data)
         end
     end
 
-    -- ML-only: authoritative processing
-    if isML then
+    -- ML-only: authoritative bookkeeping. responseCount drives "all responded"
+    -- completion checks, so it must only count distinct responders — duplicate
+    -- arrivals (RESPONSE_POLL replay, restriction-queue replay) would otherwise
+    -- inflate it past expectedResponderCount and short-circuit completion.
+    if isML and isFreshResponse then
         item.responseCount = (item.responseCount or 0) + 1
+    end
 
-        -- Queue CANDIDATE_UPDATE broadcast (500ms sliding window)
-        if Loothing.Comm then
-            self:QueueResponseBroadcast(itemGUID, candidate)
-        end
+    -- Mixed-version compat: when a v2.0.40 client whispered this response
+    -- directly to ML, other v2.0.41 council members never saw it. ML
+    -- re-broadcasts via CANDIDATE_UPDATE so they pick up the candidate state.
+    -- Same path for the synthetic-roll case (everyone needs ML's random value
+    -- to keep sort order consistent).
+    if isML and Loothing.Comm and (data._legacyWhisper or synthesizedRoll) then
+        self:QueueResponseBroadcast(itemGUID, candidate)
     end
 
     -- All receivers: fire UI event
@@ -4128,10 +4083,16 @@ end
 --[[--------------------------------------------------------------------
     Response Broadcast Accumulator
 
-    When multiple player responses arrive in a short burst (e.g., 7 players
-    all sending RESPONSE_BATCH within seconds), each produces a CANDIDATE_UPDATE.
-    Instead of broadcasting each individually (7+ messages), we accumulate them
-    over a 500ms window and flush as a single BATCH message to council.
+    Coalesces ML-side CANDIDATE_UPDATE re-broadcasts over a 500 ms window
+    and flushes them as a single BATCH. As of 2.0.41 the only paths that
+    still feed this accumulator are:
+      * HandleRollTracked — ML re-broadcasts authoritative roll values
+      * HandlePlayerResponse fallback-roll branch — ML synthesizes a roll
+        for legacy senders that didn't include one
+      * HandlePlayerResponse / HandlePlayerInfoResponse legacy-whisper
+        branch — ML re-broadcasts on behalf of v2.0.40 senders so v2.0.41+
+        council members who never saw the WHISPER backfill candidate state
+    Steady raid traffic (raw broadcasts) bypasses this accumulator.
 ----------------------------------------------------------------------]]
 
 local RESPONSE_BROADCAST_WINDOW = 0.5  -- 500ms collection window

@@ -49,6 +49,19 @@ function CandidateManagerMixin:GetOrCreateCandidate(playerName, playerClass)
 
     local candidate = self.candidates[normalizedName]
     if candidate then
+        -- Class upgrade: candidates are sometimes created from voted-target
+        -- lookups before the target's own roster entry resolves (or before
+        -- their PLAYER_RESPONSE arrives), leaving playerClass="UNKNOWN".
+        -- A later call with a real class should overwrite — otherwise the
+        -- candidate sticks on UNKNOWN and the council table can't class-color.
+        if playerClass and playerClass ~= "UNKNOWN"
+           and (candidate.playerClass == nil or candidate.playerClass == "UNKNOWN")
+        then
+            candidate.playerClass = playerClass
+            if candidate.class == nil or candidate.class == "UNKNOWN" then
+                candidate.class = playerClass
+            end
+        end
         return candidate
     end
 

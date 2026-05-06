@@ -306,10 +306,14 @@ function ResponseTrackerMixin:HandleResponsePoll(data)
     end
     if not isInMissing then return end
 
-    -- Collect resendable responses across all polled items
+    -- Collect resendable responses across all polled items. We used to gate
+    -- on a known ML before resending, but PLAYER_RESPONSE / RESPONSE_BATCH
+    -- now broadcast — the wire doesn't need ML, so the only requirement is
+    -- that Comm is up. ml is still resolved (and passed to legacy wrappers)
+    -- but no longer blocks recovery during MLDB / handover churn.
     local itemGUIDs = data.items or (data.itemGUID and { data.itemGUID } or {})
+    if not Loothing.Comm then return end
     local ml = Loothing.Session and Loothing.Session:GetMasterLooter()
-    if not (Loothing.Comm and ml) then return end
 
     local batch = {}
     local hasUnresponded = false

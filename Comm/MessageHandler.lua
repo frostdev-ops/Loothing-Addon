@@ -153,6 +153,11 @@ local CRITICAL_COMMANDS = {
     [Loothing.MsgType.RESPONSE_BATCH]      = true,
     [Loothing.MsgType.TRADABLE]            = true,
     [Loothing.MsgType.NON_TRADABLE]        = true,
+    -- PLAYER_INFO_RESPONSE used to flow ML-only via WHISPER (ML re-broadcast
+    -- the gear via CANDIDATE_UPDATE). Since 2.0.41 it broadcasts directly,
+    -- making every receiver authoritative for that gear data — losing one
+    -- during an encounter restriction means non-replayed gear divergence.
+    [Loothing.MsgType.PLAYER_INFO_RESPONSE] = true,
 }
 
 --[[--------------------------------------------------------------------
@@ -182,6 +187,10 @@ local COALESCE_COMMANDS = {
     [Loothing.MsgType.HEARTBEAT]         = true,
     [Loothing.MsgType.SESSION_INIT]      = true,
     [Loothing.MsgType.VERSION_RESPONSE]  = true,
+    -- DO NOT add: PLAYER_RESPONSE, VOTE_COMMIT, RESPONSE_BATCH,
+    -- PLAYER_INFO_RESPONSE. Since 2.0.41 these broadcast on the group
+    -- channel, where the coalesce key collapses to `command` alone — two
+    -- responses for *different items* would silently overwrite each other.
 }
 
 --- Command → handler method name dispatch table
@@ -907,18 +916,21 @@ function CommMixin:BroadcastVoteRequest(itemGUID, timeout, sessionID)
     })
 end
 
---- Send vote commit privately to the ML.
+--- Broadcast vote commit to the raid (every council member tallies locally).
+-- The masterLooter parameter is kept for API compatibility but unused — the
+-- vote travels over the group channel so candidates see voter lists too.
+-- The sender's own state is already updated by SubmitVote/RetractAllVotes
+-- before this fires, so no local echo is needed here.
 -- @param itemGUID string
 -- @param responses table
 -- @param masterLooter string (unused, kept for API compat)
 -- @param sessionID string|nil
 function CommMixin:SendVoteCommit(itemGUID, responses, masterLooter, sessionID)
-    local target = masterLooter or (Loothing.GetCanonicalML and Loothing:GetCanonicalML())
     self:Send(Loothing.MsgType.VOTE_COMMIT, {
         itemGUID = itemGUID,
         responses = responses,
         sessionID = sessionID,
-    }, target, "ALERT")
+    }, nil, "ALERT")
 end
 
 --- Broadcast vote award
@@ -1006,13 +1018,15 @@ function CommMixin:RequestPlayerInfo(itemGUID, playerName)
     }, playerName)
 end
 
---- Send player info response
+--- Broadcast player info response. The target argument is retained for API
+-- compatibility but unused — the gear payload travels over the group channel
+-- so council members can backfill candidate gear without ML re-broadcasting.
 -- @param itemGUID string
 -- @param slot1Link string|nil
 -- @param slot2Link string|nil
 -- @param slot1ilvl number
 -- @param slot2ilvl number
--- @param target string
+-- @param target string (unused, kept for API compat)
 -- @param sessionID string|nil
 function CommMixin:SendPlayerInfo(itemGUID, slot1Link, slot2Link, slot1ilvl, slot2ilvl, target, sessionID)
     self:Send(Loothing.MsgType.PLAYER_INFO_RESPONSE, {
@@ -1022,7 +1036,23 @@ function CommMixin:SendPlayerInfo(itemGUID, slot1Link, slot2Link, slot1ilvl, slo
         slot1ilvl = slot1ilvl or 0,
         slot2ilvl = slot2ilvl or 0,
         sessionID = sessionID,
-    }, target)
+    }, nil)
+
+    -- RAID/PARTY broadcasts do not loop back to the sender, and the responder
+    -- can also be a council member viewing the candidate panel for themselves
+    -- (ML-as-candidate edge case). Apply locally so the sender's own copy of
+    -- the candidate's gear stays in sync with what every receiver sees.
+    if Loothing.Session then
+        Loothing.Session:HandlePlayerInfoResponse({
+            itemGUID = itemGUID,
+            slot1Link = slot1Link,
+            slot2Link = slot2Link,
+            slot1ilvl = slot1ilvl or 0,
+            slot2ilvl = slot2ilvl or 0,
+            sessionID = sessionID,
+            playerName = Utils.GetPlayerFullName(),
+        })
+    end
 end
 
 --- Send player response (raid member -> ML or assigned processor)
@@ -1057,20 +1087,19 @@ function CommMixin:SendPlayerResponse(itemGUID, response, note, roll, rollMin, r
         gear2ilvl = gear2ilvl or 0,
     }
 
-    -- Self-loopback: when the ML is responding to their own session,
-    -- bypass the network entirely. WHISPER-to-self through the throttled
-    -- comm queue is unreliable (backpressure, self-delivery quirks).
+    -- TestMode bypasses the wire entirely so simulated raids don't broadcast
+    -- noise to real groups.
     local isTestMode = TestMode and TestMode:IsEnabled()
-    local isSelfSend = masterLooter and Utils.IsSamePlayer(masterLooter, Utils.GetPlayerFullName())
-    if isTestMode or isSelfSend then
+    if isTestMode then
         if Loothing.Session then
             Loothing.Session:HandlePlayerResponse(payload)
         end
         return
     end
 
-    -- Send directly to the ML. The ML already batches authoritative candidate
-    -- updates, so passive clients don't need to process every raw response.
+    -- Broadcast: every client computes candidate state locally from the raw
+    -- response, eliminating the ML re-broadcast step and the WHISPER-to-ML
+    -- backpressure that previously dominated queue depth.
     self:Send(Loothing.MsgType.PLAYER_RESPONSE, {
         itemGUID = itemGUID,
         response = response,
@@ -1083,10 +1112,13 @@ function CommMixin:SendPlayerResponse(itemGUID, response, note, roll, rollMin, r
         gear2Link = gear2Link,
         gear1ilvl = gear1ilvl or 0,
         gear2ilvl = gear2ilvl or 0,
-    }, masterLooter, "ALERT")
+    }, nil, "ALERT")
 
-    -- Local echo lets the sender's UI reflect their own choice without putting
-    -- sensitive response data on the group addon channel.
+    -- Apply locally for the responder's own UI. The wire echo of the
+    -- broadcast IS delivered back to the sender by WoW, but Protocol v4
+    -- dedup (sender + msgID) drops it at OnMessage before it reaches any
+    -- handler — so this local apply is the only path that updates the
+    -- responder's own candidate state.
     if Loothing.Session then
         Loothing.Session:HandlePlayerResponse(payload)
     end
@@ -1112,43 +1144,35 @@ function CommMixin:SendResponseBatch(responses, masterLooter, sessionID)
         end
     end
 
+    -- TestMode: simulated raids never touch the wire.
     local isTestMode = TestMode and TestMode:IsEnabled()
-    local isSelfSend = masterLooter and Utils.IsSamePlayer(masterLooter, Utils.GetPlayerFullName())
-    if isTestMode or isSelfSend then
+    if isTestMode then
         handleLocalResponses()
         return
     end
 
-    -- Send directly to the ML; the ML already batches authoritative candidate
-    -- updates back to the raid.
+    -- Broadcast: every receiver applies the responses to its own candidate
+    -- state. The masterLooter argument is retained for API compatibility but
+    -- unused. WoW does loop our own broadcast back to us, but the Protocol
+    -- v4 dedup layer drops it at OnMessage — apply locally so the
+    -- responder's own UI updates.
     self:Send(Loothing.MsgType.RESPONSE_BATCH, {
         responses = responses,
         sessionID = sessionID,
         playerName = Utils.GetPlayerFullName(),
-    }, masterLooter, "ALERT")
+    }, nil, "ALERT")
 
     handleLocalResponses()
 end
 
 --[[--------------------------------------------------------------------
-    Broadcast Helpers - Candidate & Vote Updates
-----------------------------------------------------------------------]]
-
---- Broadcast candidate update (ML -> Council)
--- @param itemGUID string
--- @param candidateData table
--- @param sessionID string|nil
-function CommMixin:BroadcastCandidateUpdate(itemGUID, candidateData, sessionID)
-    self:Send(Loothing.MsgType.CANDIDATE_UPDATE, {
-        itemGUID = itemGUID,
-        candidateData = candidateData,
-        sessionID = sessionID,
-    })
-end
-
-
---[[--------------------------------------------------------------------
     Broadcast Helpers - MLDB & Version
+
+    BroadcastCandidateUpdate / BroadcastVoteUpdate were removed in 2.0.41
+    when raw PLAYER_RESPONSE / VOTE_COMMIT became broadcasts and every
+    receiver derives candidate / voter state locally. The CANDIDATE_UPDATE /
+    VOTE_UPDATE wire codes are still defined and their receivers retained
+    for mixed-version compatibility — old MLs continue to send them.
 ----------------------------------------------------------------------]]
 
 --- Broadcast MLDB (Master Looter Database)

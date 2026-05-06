@@ -293,12 +293,8 @@ function CommMixin:HandleVoteRequest(data, sender)
     self:TriggerEvent("OnVoteRequest", data)
 end
 
-function CommMixin:HandleVoteCommit(data, sender)
+function CommMixin:HandleVoteCommit(data, sender, distribution)
     if not validateHandler("HandleVoteCommit", data, SCHEMAS.VOTE_COMMIT) then return end
-    if Loothing.Session and not Loothing.Session:IsMasterLooter() then
-        Loothing:Debug("Rejected VOTE_COMMIT on non-ML receiver:", sender)
-        return
-    end
     -- Only voting-eligible council members can vote. This excludes the ML
     -- when ML Observer Mode is enabled, matching the displayed voter count.
     if not isVotingEligible(sender) then
@@ -306,7 +302,12 @@ function CommMixin:HandleVoteCommit(data, sender)
         return
     end
     data.voter = sender
-    -- Broadcast votes: all council + ML process for local tally
+    -- Tag legacy whisper sources so the ML can re-broadcast a VOTE_UPDATE
+    -- delta for 2.0.41+ council members who never saw the original (the old
+    -- v2.0.40 sender targeted only ML). Underscore-prefixed key is local-only.
+    data._legacyWhisper = (distribution == "WHISPER")
+    -- Broadcast votes: every receiver tallies locally — ML + council members
+    -- maintain the same voter state without an ML re-broadcast step.
     self:TriggerEvent("OnVoteCommit", data)
 end
 
@@ -461,7 +462,7 @@ function CommMixin:HandlePlayerInfoRequest(data, sender)
     self:TriggerEvent("OnPlayerInfoRequest", data)
 end
 
-function CommMixin:HandlePlayerInfoResponse(data, sender)
+function CommMixin:HandlePlayerInfoResponse(data, sender, distribution)
     if not validateHandler("HandlePlayerInfoResponse", data) then return end
     if not isGroupMember(sender) then
         Loothing:Debug("Rejected PLAYER_INFO_RESPONSE from non-group member:", sender)
@@ -471,6 +472,10 @@ function CommMixin:HandlePlayerInfoResponse(data, sender)
     if data.slot1Link == "" then data.slot1Link = nil end
     if data.slot2Link == "" then data.slot2Link = nil end
     data.playerName = sender
+    -- Tag legacy whisper sources so ML can re-broadcast a CANDIDATE_UPDATE
+    -- with the gear info for 2.0.41+ council members who didn't see the
+    -- original (v2.0.40 senders whisper directly to ML).
+    data._legacyWhisper = (distribution == "WHISPER")
     self:TriggerEvent("OnPlayerInfoResponse", data)
 end
 
@@ -511,13 +516,9 @@ end
     Player Response Handlers
 ----------------------------------------------------------------------]]
 
-function CommMixin:HandlePlayerResponse(data, sender)
+function CommMixin:HandlePlayerResponse(data, sender, distribution)
     if not validateHandler("HandlePlayerResponse", data, SCHEMAS.PLAYER_RESPONSE) then return end
     if not Loothing.Session then return end
-    if not Loothing.Session:IsMasterLooter() then
-        Loothing:Debug("Rejected PLAYER_RESPONSE on non-ML receiver:", sender)
-        return
-    end
 
     -- Validate sender is in the group (bypass in test mode)
     local isTestMode = TestMode and TestMode:IsEnabled()
@@ -527,7 +528,10 @@ function CommMixin:HandlePlayerResponse(data, sender)
     end
 
     data.playerName = sender
-    -- All receivers (ML + council) process; Session distinguishes ML vs non-ML
+    -- Tag legacy whisper sources so ML can re-broadcast a CANDIDATE_UPDATE
+    -- on behalf of a v2.0.40 sender whose response only reached ML directly.
+    data._legacyWhisper = (distribution == "WHISPER")
+    -- Broadcast: every client computes candidate state locally.
     self:TriggerEvent("OnPlayerResponse", data)
 end
 
@@ -840,13 +844,9 @@ end
     Batched Response Handler
 ----------------------------------------------------------------------]]
 
-function CommMixin:HandleResponseBatch(data, sender)
+function CommMixin:HandleResponseBatch(data, sender, distribution)
     if not validateHandler("HandleResponseBatch", data, SCHEMAS.RESPONSE_BATCH) then return end
     if not Loothing.Session then return end
-    if not Loothing.Session:IsMasterLooter() then
-        Loothing:Debug("Rejected RESPONSE_BATCH on non-ML receiver:", sender)
-        return
-    end
 
     -- Validate sender is in the group
     local isTestMode = TestMode and TestMode:IsEnabled()
@@ -854,6 +854,10 @@ function CommMixin:HandleResponseBatch(data, sender)
         Loothing:Debug("Rejected RESPONSE_BATCH from non-group member:", sender)
         return
     end
+
+    -- Tag legacy whisper sources so per-item OnPlayerResponse fan-out can
+    -- propagate a CANDIDATE_UPDATE on ML behalf for v2.0.40 senders.
+    local isLegacyWhisper = (distribution == "WHISPER")
 
     -- Anti-DoS: cap inner batch size. The outer BATCH envelope enforces
     -- MAX_BATCH_SIZE (20) but nothing stopped a peer from sending a single
@@ -881,6 +885,7 @@ function CommMixin:HandleResponseBatch(data, sender)
             if ok then
                 item.playerName = sender
                 item.sessionID = item.sessionID or data.sessionID
+                item._legacyWhisper = isLegacyWhisper
                 self:TriggerEvent("OnPlayerResponse", item)
             else
                 Loothing:Debug("Rejected RESPONSE_BATCH item — schema:", reason)
