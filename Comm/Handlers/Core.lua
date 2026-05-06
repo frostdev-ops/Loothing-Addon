@@ -829,6 +829,13 @@ function CommMixin:HandleSessionInit(data, sender, _distribution)
         self:HandleCouncilRoster(data.councilRoster, sender)
     end
 
+    -- Observer roster (optional; added to SESSION_INIT payload for the
+    -- roster-onboard refresh path so a single SESSION_INIT replaces the
+    -- legacy SESSION_START + MLDB + COUNCIL_ROSTER + OBSERVER_ROSTER fan-out).
+    if data.observerRoster then
+        self:HandleObserverRoster(data.observerRoster, sender)
+    end
+
     if data.sessionStart then
         self:HandleSessionStart(data.sessionStart, sender)
     end

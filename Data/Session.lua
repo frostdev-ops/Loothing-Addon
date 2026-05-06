@@ -961,6 +961,14 @@ function SessionMixin:StartSession(encounterID, encounterName)
         sessionInitData.councilRoster = { members = members }
     end
 
+    -- Include observer roster (when ML observer mode is configured)
+    if Loothing.Observer and Loothing.Observer.GetObservers then
+        local observers = Loothing.Observer:GetObservers()
+        if observers then
+            sessionInitData.observerRoster = { members = observers }
+        end
+    end
+
     -- Include buffered items
     if #bufferedItems > 0 then
         sessionInitData.items = bufferedItems
@@ -970,6 +978,70 @@ function SessionMixin:StartSession(encounterID, encounterName)
         Loothing.Comm:BroadcastSessionInit(sessionInitData)
     end
 
+    return true
+end
+
+--- Re-broadcast current session state for new-member onboarding.
+--- Builds a single SESSION_INIT (no items — those live on receivers already
+--- via earlier ITEM_ADD / SESSION_INIT) carrying SESSION_START + MLDB +
+--- COUNCIL_ROSTER + OBSERVER_ROSTER. Replaces the four-broadcast fan-out
+--- previously triggered on every GROUP_ROSTER_UPDATE while the ML is
+--- handling loot.
+--- @return boolean - true if a refresh was sent, false if not applicable
+function SessionMixin:BroadcastStateRefresh()
+    if not Loothing.Comm then return false end
+    if not (Loothing.MLDB and Loothing.MLDB:IsML()) then return false end
+
+    local refresh = {}
+
+    -- SESSION_START sub-payload only when an active session exists; otherwise
+    -- this is purely an MLDB / roster refresh for between-pull onboarding.
+    if self:IsActive() and self.sessionID then
+        refresh.sessionStart = {
+            encounterID = self.encounterID,
+            encounterName = self.encounterName,
+            sessionID = self.sessionID,
+        }
+    end
+
+    -- MLDB (always — ML identity, autoPass, etc. drive new-member behavior
+    -- even before a session starts).
+    if Loothing.MLDB then
+        local mldbSettings = Loothing.MLDB:GatherSettings()
+        if mldbSettings then
+            local compressed = Loothing.MLDB:CompressForTransmit(mldbSettings)
+            if compressed then
+                refresh.mldb = { data = compressed }
+            end
+        end
+    end
+
+    -- Council roster
+    if Loothing.Council then
+        local members = Loothing.Council:GetAllMembers()
+        if members then
+            refresh.councilRoster = { members = members }
+        end
+    end
+
+    -- Observer roster (fans out via HandleObserverRoster on receivers)
+    if Loothing.Observer and Loothing.Observer.GetObservers then
+        local observers = Loothing.Observer:GetObservers()
+        if observers then
+            refresh.observerRoster = {
+                list = observers,
+                permissions = Loothing.Settings and Loothing.Settings:GetObserverPermissions() or {},
+                openObservation = Loothing.Settings and Loothing.Settings:GetOpenObservation() or false,
+                mlIsObserver = Loothing.Settings and Loothing.Settings:GetMLIsObserver() or false,
+            }
+        end
+    end
+
+    if not (refresh.mldb or refresh.councilRoster or refresh.observerRoster or refresh.sessionStart) then
+        return false
+    end
+
+    Loothing.Comm:BroadcastSessionInit(refresh)
     return true
 end
 
@@ -3988,7 +4060,25 @@ function SessionMixin:HandlePlayerResponse(data)
         return
     end
 
-    if not item or not item:IsVoting() then
+    if not item then
+        return
+    end
+
+    -- IsVoting() gate is ML-only. ML's responseCount + completion logic must
+    -- only count responses for items currently in VOTING state. But on a
+    -- non-ML council member or candidate, the broadcast purpose is purely
+    -- to display state in the council frame — and arrivals can legitimately
+    -- bracket the VOTING window:
+    --   * a fast peer's PLAYER_RESPONSE can land BEFORE the receiver finishes
+    --     processing the ML's VOTE_REQUEST (RAID-channel ordering is not
+    --     preserved across senders)
+    --   * RESPONSE_POLL replays of slow responders can land AFTER VOTE_RESULTS
+    --     has flipped the item to TALLIED on the receiver's side
+    -- Pre-2.0.41 council members got candidate state via HandleRemoteCandidateUpdate
+    -- which deliberately omitted any item-state gate; this restores the same
+    -- permissive policy on the broadcast path. AddVote / CanAcceptVotes still
+    -- enforce eligibility for actual vote tallying.
+    if isML and not item:IsVoting() then
         return
     end
 

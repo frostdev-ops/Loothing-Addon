@@ -332,7 +332,9 @@ function DiagPanelMixin:BuildContent()
     self:AddHeader("Communication")
     self.values.commState     = self:AddRow("Comm State:")
     self.values.queueDepth    = self:AddRow("Queue Depth:")
+    self.values.queueByPrio   = self:AddRow("Queue (A/N/B):")
     self.values.queuePressure = self:AddRow("Queue Pressure:")
+    self.values.channelOther  = self:AddRow("Other-Addon Traffic:")
     self.values.prefixReg     = self:AddRow("Prefix Registered:")
     self.values.restricted    = self:AddRow("Enc. Restricted:")
     self.values.encodeTest    = self:AddRow("Encode/Decode:")
@@ -596,6 +598,27 @@ function DiagPanelMixin:Refresh()
 
     local queued = Comm and Comm.GetQueuedMessageCount and Comm:GetQueuedMessageCount() or nil
     SetText(v.queueDepth, queued and tostring(queued) or "?")
+
+    if v.queueByPrio then
+        if Comm and Comm.GetQueueSizes then
+            local a, n, b = Comm:GetQueueSizes()
+            SetText(v.queueByPrio, format("%d / %d / %d", a or 0, n or 0, b or 0))
+        else
+            SetText(v.queueByPrio, "?", COLOR_DIM)
+        end
+    end
+
+    if v.channelOther then
+        if Comm and Comm.GetChannelOtherTraffic then
+            local recent = Comm:GetChannelOtherTraffic()
+            local color = COLOR_OK
+            if recent > 20 then color = COLOR_BAD
+            elseif recent > 8 then color = COLOR_WARN end
+            SetText(v.channelOther, format("%.1f msg/s", recent), color)
+        else
+            SetText(v.channelOther, "?", COLOR_DIM)
+        end
+    end
 
     local pressure = Comm and Comm.GetQueuePressure and Comm:GetQueuePressure() or nil
     if pressure then
@@ -975,6 +998,15 @@ function DiagPanelMixin:BuildClipboardText()
     L(format("  Queue Depth: %s", tostring(queued)))
     local pressure = Comm and Comm.GetQueuePressure and Comm:GetQueuePressure() or "?"
     L(format("  Queue Pressure: %s", type(pressure) == "number" and format("%.1f%%", pressure * 100) or "?"))
+    if Comm and Comm.GetQueueSizes then
+        local alertSize, normalSize, bulkSize = Comm:GetQueueSizes()
+        L(format("  Queue by Priority: ALERT:%d NORMAL:%d BULK:%d",
+            alertSize or 0, normalSize or 0, bulkSize or 0))
+    end
+    if Comm and Comm.GetChannelOtherTraffic then
+        L(format("  Channel Other Traffic: %.1f msgs/s (recent)",
+            Comm:GetChannelOtherTraffic()))
+    end
     local isRegistered = Comm and Comm.IsCommRegistered and Comm:IsCommRegistered(Loothing.ADDON_PREFIX) or "?"
     L(format("  Prefix Registered: %s", tostring(isRegistered)))
     local restricted = Loothing.Restrictions and Loothing.Restrictions.IsRestricted and Loothing.Restrictions:IsRestricted() or false

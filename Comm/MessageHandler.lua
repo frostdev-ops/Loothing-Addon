@@ -829,10 +829,12 @@ end
     Broadcast Helpers - Session Management
 ----------------------------------------------------------------------]]
 
---- Broadcast combined session initialization (SS + MLDB + CR + items)
--- @param sessionData table - { sessionStart, mldb, councilRoster, items }
+--- Broadcast combined session initialization (SS + MLDB + CR + observers + items).
+-- ALERT priority: this message gates voting state on every receiver, so it
+-- must not sit behind NORMAL queue chatter (version handshakes, sync data).
+-- @param sessionData table - { sessionStart, mldb, councilRoster, observerRoster, items }
 function CommMixin:BroadcastSessionInit(sessionData)
-    self:Send(Loothing.MsgType.SESSION_INIT, sessionData)
+    self:Send(Loothing.MsgType.SESSION_INIT, sessionData, nil, "ALERT")
 end
 
 --- Broadcast SESSION_START. Dirty-checks by sessionID to prevent duplicate
@@ -850,11 +852,14 @@ function CommMixin:BroadcastSessionStart(encounterID, encounterName, sessionID, 
     end
     self._lastSessionStartID = sessionID
 
+    -- ALERT: SESSION_START transitions every receiver into ACTIVE; if it sits
+    -- behind NORMAL traffic, downstream VOTE_REQUEST / PLAYER_RESPONSE arrive
+    -- to receivers whose session state hasn't transitioned yet and get dropped.
     self:Send(Loothing.MsgType.SESSION_START, {
         encounterID = encounterID,
         encounterName = encounterName,
         sessionID = sessionID,
-    })
+    }, nil, "ALERT")
 end
 
 --- Clear the SESSION_START dirty-check cache. Call when session ends so the
@@ -863,20 +868,24 @@ function CommMixin:InvalidateSessionStartCache()
     self._lastSessionStartID = nil
 end
 
---- Broadcast session end
+--- Broadcast session end. ALERT: clean session shutdown on all receivers
+--- avoids stale-session-ID rejections on the next session's traffic.
 -- @param sessionID string|nil - Session ID for validation on receivers
 function CommMixin:BroadcastSessionEnd(sessionID)
     self:Send(Loothing.MsgType.SESSION_END, {
         sessionID = sessionID,
-    })
+    }, nil, "ALERT")
 end
 
---- Broadcast that ML has stopped handling loot entirely
+--- Broadcast that ML has stopped handling loot entirely. ALERT: clean
+--- handoff signal — receivers clear their MLDB on this; if it's late, the
+--- next session starts with stale ML state on some clients.
 function CommMixin:BroadcastStopHandleLoot()
-    self:Send(Loothing.MsgType.STOP_HANDLE_LOOT, {})
+    self:Send(Loothing.MsgType.STOP_HANDLE_LOOT, {}, nil, "ALERT")
 end
 
---- Broadcast item added
+--- Broadcast item added. ALERT: receivers can't process VOTE_REQUEST or
+--- PLAYER_RESPONSE for an item they don't have; ITEM_ADD must land first.
 -- @param itemLink string
 -- @param guid string
 -- @param looter string
@@ -887,24 +896,28 @@ function CommMixin:BroadcastItemAdd(itemLink, guid, looter, sessionID)
         guid = guid,
         looter = looter,
         sessionID = sessionID,
-    })
+    }, nil, "ALERT")
 end
 
---- Broadcast item removed
+--- Broadcast item removed. ALERT: same rationale as ITEM_ADD — keeps
+--- per-receiver item set in sync with ML's session.
 -- @param guid string
 -- @param sessionID string
 function CommMixin:BroadcastItemRemove(guid, sessionID)
     self:Send(Loothing.MsgType.ITEM_REMOVE, {
         guid = guid,
         sessionID = sessionID,
-    })
+    }, nil, "ALERT")
 end
 
 --[[--------------------------------------------------------------------
     Broadcast Helpers - Voting
 ----------------------------------------------------------------------]]
 
---- Broadcast vote request
+--- Broadcast vote request. ALERT: this transitions an item into VOTING on
+--- every receiver — if it sits behind NORMAL traffic, council members and
+--- candidates won't accept incoming PLAYER_RESPONSE/VOTE_COMMIT for the item
+--- (HandlePlayerResponse gates on item:IsVoting()) and the session stalls.
 -- @param itemGUID string
 -- @param timeout number
 -- @param sessionID string|nil
@@ -913,7 +926,7 @@ function CommMixin:BroadcastVoteRequest(itemGUID, timeout, sessionID)
         itemGUID = itemGUID,
         timeout = timeout,
         sessionID = sessionID,
-    })
+    }, nil, "ALERT")
 end
 
 --- Broadcast vote commit to the raid (every council member tallies locally).
@@ -933,7 +946,9 @@ function CommMixin:SendVoteCommit(itemGUID, responses, masterLooter, sessionID)
     }, nil, "ALERT")
 end
 
---- Broadcast vote award
+--- Broadcast vote award. ALERT: the award decision is the user-visible end
+--- state for the item — getting it stuck behind NORMAL traffic is the
+--- "voting completes but the win never propagates" failure mode.
 -- @param itemGUID string
 -- @param winnerName string
 -- @param sessionID string|nil
@@ -942,30 +957,34 @@ function CommMixin:BroadcastVoteAward(itemGUID, winnerName, sessionID)
         itemGUID = itemGUID,
         winner = winnerName,
         sessionID = sessionID,
-    })
+    }, nil, "ALERT")
 end
 
---- Broadcast vote skip
+--- Broadcast vote skip. ALERT: same rationale as VOTE_AWARD — terminates
+--- voting state on every receiver.
 -- @param itemGUID string
 -- @param sessionID string|nil
 function CommMixin:BroadcastVoteSkip(itemGUID, sessionID)
     self:Send(Loothing.MsgType.VOTE_SKIP, {
         itemGUID = itemGUID,
         sessionID = sessionID,
-    })
+    }, nil, "ALERT")
 end
 
---- Broadcast vote cancellation
+--- Broadcast vote cancellation. ALERT: voters need to know the vote was
+--- cancelled before they keep submitting against a stale prompt.
 -- @param itemGUID string
 -- @param sessionID string|nil
 function CommMixin:BroadcastVoteCancel(itemGUID, sessionID)
     self:Send(Loothing.MsgType.VOTE_CANCEL, {
         itemGUID = itemGUID,
         sessionID = sessionID,
-    })
+    }, nil, "ALERT")
 end
 
---- Broadcast vote results/closure
+--- Broadcast vote results/closure. ALERT: authoritative tally that
+--- reconciles any per-receiver vote-policy divergence — must land before
+--- the next item starts voting.
 -- @param itemGUID string
 -- @param results table
 -- @param sessionID string|nil
@@ -974,19 +993,21 @@ function CommMixin:BroadcastVoteResults(itemGUID, results, sessionID, target)
         itemGUID = itemGUID,
         results = results,
         sessionID = sessionID,
-    }, target)
+    }, target, "ALERT")
 end
 
 --[[--------------------------------------------------------------------
     Broadcast Helpers - Council & Sync
 ----------------------------------------------------------------------]]
 
---- Broadcast council roster
+--- Broadcast council roster. ALERT: roster gates voting eligibility on every
+--- receiver via isVotingEligible(); a stale roster causes legitimate
+--- VOTE_COMMITs to be rejected as "non-eligible council".
 -- @param members table
 function CommMixin:BroadcastCouncilRoster(members)
     self:Send(Loothing.MsgType.COUNCIL_ROSTER, {
         members = members,
-    })
+    }, nil, "ALERT")
 end
 
 --- Request sync from ML
@@ -1175,12 +1196,15 @@ end
     for mixed-version compatibility — old MLs continue to send them.
 ----------------------------------------------------------------------]]
 
---- Broadcast MLDB (Master Looter Database)
+--- Broadcast MLDB (Master Looter Database). ALERT: MLDB carries the ML
+--- identity, multiVote/selfVote policy, autoPass settings, etc. — every
+--- receiver gates downstream message authorization on this state, so it
+--- must not sit behind NORMAL queue chatter.
 -- @param mldbData table - Compressed MLDB data
 function CommMixin:BroadcastMLDB(mldbData)
     self:Send(Loothing.MsgType.MLDB_BROADCAST, {
         data = mldbData,
-    })
+    }, nil, "ALERT")
 end
 
 --- Send version request

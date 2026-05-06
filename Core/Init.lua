@@ -1014,10 +1014,19 @@ local function RegisterEvents()
         if versionCheck then
             versionCheck:OnGroupRosterUpdate()
         end
-        -- Re-broadcast ML state when roster changes so new members get full context.
-        -- Without this, members who join after StartHandleLoot never receive MLDB
-        -- and won't auto-pass group loot items for the ML.
+        -- Re-broadcast ML state when roster changes so new members get full
+        -- context. Without this, members who join after StartHandleLoot never
+        -- receive MLDB and won't auto-pass group loot items for the ML.
         -- Debounced: GROUP_ROSTER_UPDATE fires frequently in raids.
+        --
+        -- Pre-2.0.43 sent four separate broadcasts here (SESSION_START + MLDB
+        -- + COUNCIL_ROSTER + OBSERVER_ROSTER). Each was payload-only-dirty-
+        -- checked but routinely went out anyway because the audience had
+        -- changed. In a 19-raid with people resurrecting / vehicling / etc.,
+        -- 16+ roster shifts × 4 messages was a 64-message amplification on
+        -- the queue. Now collapsed into a single SESSION_INIT carrying every
+        -- field — the receiver fans out into the same handlers, so behavior
+        -- is unchanged but the wire footprint is ~75% smaller.
         if Loothing.handleLoot and Loothing.MLDB and Loothing.MLDB:IsML() then
             if mldbRosterTimer then mldbRosterTimer:Cancel() end
             mldbRosterTimer = C_Timer.NewTimer(3, function()
@@ -1025,23 +1034,26 @@ local function RegisterEvents()
                 if not (Loothing.handleLoot and Loothing.MLDB and Loothing.MLDB:IsML()) then
                     return
                 end
-                -- This re-broadcast exists specifically to reach new members
-                -- who joined since the last push — the audience has changed
-                -- even if the payload hasn't, so every helper here must
-                -- bypass its payload-only dirty-check via force=true.
-                Loothing.MLDB:BroadcastToRaid(true)
+
                 local session = Loothing.Session
-                if session and session:IsActive() and session.sessionID then
-                    Loothing.Comm:BroadcastSessionStart(
-                        session.encounterID,
-                        session.encounterName,
-                        session.sessionID,
-                        true  -- force: new-member audience
-                    )
-                end
-                if Loothing.Sync then
-                    Loothing.Sync:BroadcastCouncilRoster(true)
-                    Loothing.Sync:BroadcastObserverRoster(true)
+                if session and session.BroadcastStateRefresh then
+                    session:BroadcastStateRefresh()
+                else
+                    -- Fallback path if the helper isn't available (loading
+                    -- order safety net): preserve legacy behavior.
+                    Loothing.MLDB:BroadcastToRaid(true)
+                    if session and session:IsActive() and session.sessionID then
+                        Loothing.Comm:BroadcastSessionStart(
+                            session.encounterID,
+                            session.encounterName,
+                            session.sessionID,
+                            true
+                        )
+                    end
+                    if Loothing.Sync then
+                        Loothing.Sync:BroadcastCouncilRoster(true)
+                        Loothing.Sync:BroadcastObserverRoster(true)
+                    end
                 end
             end)
         end

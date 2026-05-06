@@ -629,7 +629,10 @@ function SyncMixin:BroadcastObserverRoster(force)
     end
     self._lastObserverSig = sig
 
-    Loothing.Comm:Send(Loothing.MsgType.OBSERVER_ROSTER, data)
+    -- ALERT: observer roster gates ML-Observer-mode visibility on every
+    -- receiver. Old roster lets a non-observer see council UI it shouldn't,
+    -- and is effectively a session-control payload.
+    Loothing.Comm:Send(Loothing.MsgType.OBSERVER_ROSTER, data, nil, "ALERT")
 end
 
 --- Handle received observer roster (non-ML players)
