@@ -375,6 +375,41 @@ function Utils.IsRaidLeader()
     return UnitIsGroupLeader("player")
 end
 
+--- Check whether a named player (possibly realm-qualified) is the current
+--- group/raid leader. Returns true only for strict leader (rank 2 in raid,
+--- UnitIsGroupLeader in party); does NOT count assistants.
+-- @param name string
+-- @return boolean
+function Utils.IsPlayerGroupLeader(name)
+    if not name or not IsInGroup() then return false end
+
+    if IsInRaid() then
+        for i = 1, GetNumGroupMembers() do
+            local rosterName, rank = Loolib.SecretUtil.SafeGetRaidRosterInfo(i)
+            if rosterName and Utils.IsSamePlayer(name, rosterName) then
+                return rank == 2
+            end
+        end
+        return false
+    end
+
+    -- Party: self first, then party1-4
+    if Utils.IsSamePlayer(name, Utils.GetPlayerFullName()) then
+        return UnitIsGroupLeader("player") and true or false
+    end
+    for i = 1, 4 do
+        local unit = "party" .. i
+        if UnitExists(unit) then
+            local unitName = Loolib.SecretUtil.SafeUnitName(unit)
+            if unitName and Utils.IsSamePlayer(name, unitName) then
+                return UnitIsGroupLeader(unit) and true or false
+            end
+        end
+    end
+
+    return false
+end
+
 --- Get the effective group loot mode (MLDB authoritative, local fallback)
 -- When MLDB hasn't arrived yet and a session is active, defaults to "passive"
 -- to prevent auto-rolling before the ML's intent is known (HIGH-1 race fix).

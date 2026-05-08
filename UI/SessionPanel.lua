@@ -1060,10 +1060,19 @@ function SessionPanelMixin:RegisterEvents()
         self:RefreshItems()
     end, self)
 
-    -- Refresh Handle Loot toggle when MLDB changes (e.g., ML toggles remotely)
+    -- Refresh on MLDB changes (settings, ML identity, handover) and on
+    -- council roster changes. Multiple sites in this panel gate visibility
+    -- on HasMasterLooterVisibility() / IsML(), so a footer-only refresh
+    -- left button enable state stale on ML handover. Use full Refresh().
     if Loothing.MLDB then
         Loothing.MLDB:RegisterCallback("OnMLDBApplied", function()
-            self:UpdateFooter()
+            self:Refresh()
+        end, self)
+    end
+
+    if Loothing.Council and Loothing.Council.RegisterCallback then
+        Loothing.Council:RegisterCallback("OnRosterChanged", function()
+            self:Refresh()
         end, self)
     end
 

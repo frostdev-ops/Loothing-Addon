@@ -242,9 +242,17 @@ end
 
 function CommMixin:HandleSessionEnd(data, sender)
     if not validateHandler("HandleSessionEnd", data) then return end
-    -- Accept from current ML or from the previous ML (same ML transfer race as above)
-    if not isMasterLooter(sender)
-        and not (Loothing.MLDB and Loothing.MLDB:WasPreviousMLSender(sender)) then
+    -- Accept from:
+    --   1. Current ML (normal path)
+    --   2. Previous ML who just transferred — MLDB transfer race
+    --   3. Current group leader (defense-in-depth for handover where the
+    --      receiver's cached ML is stale and the new leader is ending the
+    --      orphaned session — Reject path of LOOTHING_ML_HANDOVER_PROMPT)
+    local senderIsML = isMasterLooter(sender)
+    local senderIsPrevML = Loothing.MLDB and Loothing.MLDB:WasPreviousMLSender(sender)
+    local senderIsLeader = Utils.IsPlayerGroupLeader and Utils.IsPlayerGroupLeader(sender)
+
+    if not senderIsML and not senderIsPrevML and not senderIsLeader then
         Loothing:Debug("Rejected SESSION_END from non-ML:", sender)
         return
     end
@@ -766,33 +774,67 @@ function CommMixin:HandleSessionInit(data, sender, _distribution)
     --     accept as bootstrap and provisionally adopt the sender as ML so the
     --     sub-payload handlers (strict ML-only) authorize. The MLDB sub-
     --     payload refines this to the MLDB's settings.masterLooter.
+    --   * Strict GROUP LEADER (rank 2) WHEN our cached ML is stale (handover):
+    --     accept and force-update our cached ML to the leader. The MLDB
+    --     sub-payload (required) then refines settings.masterLooter. Without
+    --     this branch, an observer with explicitMasterLooter still pinned at
+    --     the previous ML would reject the new ML's first SESSION_INIT and
+    --     stay stranded on stale state.
     --   * Otherwise reject. A non-ML group member must not be able to
     --     broadcast SESSION_INIT — the force-end-on-sessionID-mismatch branch
     --     below would let them terminate another player's active session.
     if not isMasterLooter(sender) then
         local mlKnown = Loothing.masterLooter and Loothing.masterLooter ~= ""
-        if mlKnown or not isGroupLeaderOrAssistant(sender) then
+        local senderIsStrictLeader = Utils.IsPlayerGroupLeader
+            and Utils.IsPlayerGroupLeader(sender)
+
+        -- Strict-leader handover override. Only fires when the cached ML is
+        -- stale (mlKnown but != sender) and the sender is unambiguously the
+        -- group leader (NOT an assistant).
+        local leaderHandover = mlKnown
+            and senderIsStrictLeader
+            and not Utils.IsSamePlayer(Loothing.masterLooter, sender)
+
+        if leaderHandover then
+            -- Both bootstrap and leader-handover require a valid MLDB payload
+            -- so HandleMLDBBroadcast can refine settings.masterLooter — see
+            -- the bootstrap-path security note below.
+            if type(data.mldb) ~= "table" or type(data.mldb.data) ~= "table" then
+                Loothing:Debug("Rejected SESSION_INIT leader-handover (MLDB missing):", sender)
+                return
+            end
+            Loothing:Debug("SESSION_INIT handover: leader", sender,
+                "outranks stale ML", Loothing.masterLooter, "- accepting")
+            Loothing.masterLooter = sender
+            -- Drop the stale explicit pin so subsequent ML resolution agrees
+            -- with the leader; symmetric to OnMLDBBroadcast's stale-pin clear.
+            if Loothing.explicitMasterLooter
+                and not Utils.IsSamePlayer(Loothing.explicitMasterLooter, sender) then
+                Loothing.explicitMasterLooter = nil
+            end
+        elseif mlKnown or not isGroupLeaderOrAssistant(sender) then
             Loothing:Debug("Rejected SESSION_INIT from non-ML/non-leader:", sender)
             return
+        else
+            -- Bootstrap REQUIRES an MLDB sub-payload with a populated data table.
+            -- Without it, HandleMLDBBroadcast would never fire OnMLDBBroadcast, the
+            -- subscriber would never resolve settings.masterLooter, and a
+            -- provisionally-adopted leader/assistant would stay impersonating ML
+            -- until the next legitimate MLDB arrived — long enough to forge
+            -- COUNCIL_ROSTER / ITEM_ADD / VOTE_* as the supposed ML.
+            if type(data.mldb) ~= "table" or type(data.mldb.data) ~= "table" then
+                Loothing:Debug("Rejected SESSION_INIT bootstrap (MLDB payload missing or malformed):",
+                    sender)
+                return
+            end
+            -- Bootstrap path: ML unknown + sender is leader/assistant + valid MLDB
+            -- present. Provisionally promote sender so HandleCouncilRoster /
+            -- HandleItemAdd authorize. MLDB routing below will overwrite with the
+            -- MLDB's authoritative settings.masterLooter.
+            Loothing:Debug("SESSION_INIT bootstrap: provisionally adopting",
+                sender, "as ML (pending MLDB resolution)")
+            Loothing.masterLooter = sender
         end
-        -- Bootstrap REQUIRES an MLDB sub-payload with a populated data table.
-        -- Without it, HandleMLDBBroadcast would never fire OnMLDBBroadcast, the
-        -- subscriber would never resolve settings.masterLooter, and a
-        -- provisionally-adopted leader/assistant would stay impersonating ML
-        -- until the next legitimate MLDB arrived — long enough to forge
-        -- COUNCIL_ROSTER / ITEM_ADD / VOTE_* as the supposed ML.
-        if type(data.mldb) ~= "table" or type(data.mldb.data) ~= "table" then
-            Loothing:Debug("Rejected SESSION_INIT bootstrap (MLDB payload missing or malformed):",
-                sender)
-            return
-        end
-        -- Bootstrap path: ML unknown + sender is leader/assistant + valid MLDB
-        -- present. Provisionally promote sender so HandleCouncilRoster /
-        -- HandleItemAdd authorize. MLDB routing below will overwrite with the
-        -- MLDB's authoritative settings.masterLooter.
-        Loothing:Debug("SESSION_INIT bootstrap: provisionally adopting",
-            sender, "as ML (pending MLDB resolution)")
-        Loothing.masterLooter = sender
     end
 
     -- If we are still ACTIVE on a different session (e.g. the previous

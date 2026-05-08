@@ -981,12 +981,16 @@ function SessionMixin:StartSession(encounterID, encounterName)
     return true
 end
 
---- Re-broadcast current session state for new-member onboarding.
---- Builds a single SESSION_INIT (no items — those live on receivers already
---- via earlier ITEM_ADD / SESSION_INIT) carrying SESSION_START + MLDB +
---- COUNCIL_ROSTER + OBSERVER_ROSTER. Replaces the four-broadcast fan-out
---- previously triggered on every GROUP_ROSTER_UPDATE while the ML is
---- handling loot.
+--- Re-broadcast current session state for new-member onboarding and ML
+--- handover. Builds a single SESSION_INIT carrying SESSION_START + MLDB +
+--- COUNCIL_ROSTER + OBSERVER_ROSTER + (optionally) the active items list.
+--- Replaces the four-broadcast fan-out previously triggered on every
+--- GROUP_ROSTER_UPDATE while the ML is handling loot.
+---
+--- The items array is included whenever a session is active; on ML handover
+--- this re-anchors observers' session.masterLooter and ensures late-joiners
+--- (or council members who never received the original ITEM_ADDs) see the
+--- full item list under the new ML's identity.
 --- @return boolean - true if a refresh was sent, false if not applicable
 function SessionMixin:BroadcastStateRefresh()
     if not Loothing.Comm then return false end
@@ -1001,7 +1005,32 @@ function SessionMixin:BroadcastStateRefresh()
             encounterID = self.encounterID,
             encounterName = self.encounterName,
             sessionID = self.sessionID,
+            -- Stamp masterLooter so receivers re-anchor session ownership on
+            -- handover. Without this, observers retain the previous ML's
+            -- session.masterLooter and reject our authority for VOTE_COMMIT /
+            -- award messages.
+            masterLooter = self.masterLooter or Utils.GetPlayerFullName(),
         }
+
+        -- Re-emit the live items list for observers that don't have it
+        -- (e.g. members who joined after handover, or weren't on the
+        -- previous council). Existing items on receivers update by GUID; new
+        -- items get added. Skipped when no items exist to keep the payload
+        -- small for between-pull refreshes.
+        if self.items and self.items.GetSize and self.items:GetSize() > 0 then
+            local items = {}
+            for _, item in self.items:Enumerate() do
+                items[#items + 1] = {
+                    itemLink = item.itemLink,
+                    guid = item.guid,
+                    looter = item.looter,
+                    sessionID = self.sessionID,
+                }
+            end
+            if #items > 0 then
+                refresh.items = items
+            end
+        end
     end
 
     -- MLDB (always — ML identity, autoPass, etc. drive new-member behavior

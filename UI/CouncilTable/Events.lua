@@ -62,6 +62,17 @@ function CouncilTableMixin:RegisterEvents()
             if self.ThrottledRefresh then self:ThrottledRefresh() end
         end, self)
     end
+
+    -- Repaint when the council roster itself changes — local edits, remote
+    -- broadcast from a new ML, or the previous ML's roster being cleared on
+    -- handover. Without this, the candidate rows and voter progress display
+    -- stale members until the next session/candidate event fires.
+    if Loothing.Council and Loothing.Council.RegisterCallback then
+        Loothing.Council:RegisterCallback("OnRosterChanged", function()
+            if self.ThrottledRefresh then self:ThrottledRefresh() end
+            if self.UpdateVoterProgress then self:UpdateVoterProgress() end
+        end, self)
+    end
 end
 
 function CouncilTableMixin:OnSessionStarted()

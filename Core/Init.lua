@@ -590,6 +590,17 @@ end
 --- Core ML check logic - determines if we should be the ML
 -- Handles retry for unknown ML, auto-disable on ML loss, and usage mode prompts
 local function PerformMLCheck()
+    -- Defensive: while the handover modal is open, the local ML state has
+    -- already been resolved (Loothing.masterLooter / isMasterLooter set).
+    -- Re-running the check on roster churn could re-execute the explicit-ML
+    -- pin clear or the remote-roster cleanup at a moment that races with
+    -- AcceptMLHandover/RejectMLHandover. The guard supersedes the per-branch
+    -- guards added later in this function (kept there for resilience).
+    if ns.Popups and ns.Popups.IsShowing
+        and ns.Popups:IsShowing("LOOTHING_ML_HANDOVER_PROMPT") then
+        return
+    end
+
     if ShouldSkipMLCheck() then
         -- Even when skipping, force-clear stale ML state to prevent
         -- loot handling persisting across instance type changes (e.g., raid → PvP).
@@ -685,6 +696,15 @@ local function PerformMLCheck()
         if Loothing.handleLoot then
             Loothing:StopHandleLoot()
         end
+        -- Drop any remote roster/observer state we may have inherited so the
+        -- new ML's broadcast cleanly replaces it. (We were ML so these are
+        -- usually empty, but clear defensively for re-handover edge cases.)
+        if Loothing.Council and Loothing.Council.ClearRemoteRoster then
+            Loothing.Council:ClearRemoteRoster()
+        end
+        if Loothing.Observer and Loothing.Observer.ClearRemoteObserverList then
+            Loothing.Observer:ClearRemoteObserverList()
+        end
         return
     end
 
@@ -696,53 +716,336 @@ local function PerformMLCheck()
         elseif Loothing.MLDB then
             Loothing.MLDB:Clear()
         end
+        -- Drop the previous ML's remote roster/observer list so the council
+        -- UI and eligibility checks immediately fall back to local data
+        -- (auto-included leader/officers) until the new ML rebroadcasts.
+        -- Without this, GetAllMembers() keeps returning the previous ML's
+        -- council until SetRemoteRoster() runs again with new data.
+        if Loothing.Council and Loothing.Council.ClearRemoteRoster then
+            Loothing.Council:ClearRemoteRoster()
+        end
+        if Loothing.Observer and Loothing.Observer.ClearRemoteObserverList then
+            Loothing.Observer:ClearRemoteObserverList()
+        end
         Loothing:Debug("New ML detected:", ml, "- waiting for MLDB")
         return
     end
 
-    -- If we're ML but not yet handling loot, check usage mode to decide whether to prompt/start
+    -- If we're ML but not yet handling loot, decide whether to prompt for state
+    -- handover from a previous ML, then run the usage-mode resolution.
     if isNowML and not Loothing.handleLoot then
-        local usageMode = Loothing.Settings and Loothing.Settings:Get("ml.usageMode", "ask_gl") or "ask_gl"
-
-        if usageMode == "never" then
-            Loothing:Debug("ML detected but usage mode is 'never'")
-            return
-        end
-
-        -- Instance type guard: skip ML handling in instances that the
-        -- configured scope doesn't allow. Without this check the popup
-        -- would appear in keystones (with raids_only) and accepting it
-        -- would cause every group member to auto-pass all loot to the
-        -- ML in an instance where loot council doesn't make sense.
-        local mlScope = Loothing.Settings and Loothing.Settings:Get("ml.scope", "raids_only") or "raids_only"
-        if not Utils.IsEligibleForMLScope(mlScope) then
-            Loothing:Debug("ML detected but instance not eligible for ml.scope =", mlScope)
-            return
-        end
-
-        -- Check guild-only restriction
-        local guildOnly = Loothing.Settings and Loothing.Settings:Get("session.groupLootGuildOnly", false) or false
-        if guildOnly and not Loothing.isInGuildGroup then
-            Loothing:Debug("ML detected but not in guild group (guild-only mode)")
-            return
-        end
-
-        if usageMode == "gl" then
-            -- Always use when group loot - auto-start
-            Loothing:Debug("ML detected, usage mode 'gl' - auto-starting loot handling")
-            Loothing:StartHandleLoot()
-            return
-        end
-
-        if usageMode == "ask_gl" then
-            -- Prompt the user for confirmation
-            Loothing:Debug("ML detected, usage mode 'ask_gl' - prompting")
-            GetPopups():Show("LOOTHING_ML_USAGE_PROMPT", nil, function()
-                Loothing:StartHandleLoot()
+        -- True handover: a different player previously held ML in this session.
+        -- Show the inherit/discard prompt before any usage-mode decision so the
+        -- new ML can choose whether to keep the old ML's MLDB/council/items
+        -- or wipe them. This runs unconditionally on usageMode per requirements.
+        local isHandover = oldML ~= nil
+            and not Utils.IsSamePlayer(oldML, ml)
+        if isHandover then
+            -- If the modal is already up from a previous check, don't reset it.
+            if GetPopups():IsShowing("LOOTHING_ML_HANDOVER_PROMPT") then
+                Loothing:Debug("ML handover modal already open - skipping re-prompt")
+                return
+            end
+            Loothing:Debug("ML handover detected:", oldML, "->", ml, "(self) - prompting")
+            Loothing:PromptMLHandover(oldML, function()
+                Loothing._ResolveMLUsageAfterHandover()
             end)
             return
         end
+
+        Loothing._ResolveMLUsageAfterHandover()
     end
+end
+
+--- Resolve the post-ML-detection usage-mode flow (auto-start, prompt, or noop)
+-- Extracted so the ML-handover prompt can defer to it after the user picks
+-- Continue/Start Fresh. Behavior unchanged from the prior inline logic.
+function Addon._ResolveMLUsageAfterHandover()
+    if Loothing.handleLoot then return end
+    if not Loothing.isMasterLooter then return end
+
+    -- Don't stack the usage-mode prompt under an open handover modal. The
+    -- handover callback will call us back after the user resolves it.
+    if GetPopups():IsShowing("LOOTHING_ML_HANDOVER_PROMPT") then
+        Loothing:Debug("Skipping usage-mode resolve - handover modal is open")
+        return
+    end
+
+    local usageMode = Loothing.Settings and Loothing.Settings:Get("ml.usageMode", "ask_gl") or "ask_gl"
+
+    if usageMode == "never" then
+        Loothing:Debug("ML detected but usage mode is 'never'")
+        return
+    end
+
+    -- Instance type guard: skip ML handling in instances that the
+    -- configured scope doesn't allow.
+    local mlScope = Loothing.Settings and Loothing.Settings:Get("ml.scope", "raids_only") or "raids_only"
+    if not Utils.IsEligibleForMLScope(mlScope) then
+        Loothing:Debug("ML detected but instance not eligible for ml.scope =", mlScope)
+        return
+    end
+
+    -- Guild-only restriction
+    local guildOnly = Loothing.Settings and Loothing.Settings:Get("session.groupLootGuildOnly", false) or false
+    if guildOnly and not Loothing.isInGuildGroup then
+        Loothing:Debug("ML detected but not in guild group (guild-only mode)")
+        return
+    end
+
+    if usageMode == "gl" then
+        Loothing:Debug("ML detected, usage mode 'gl' - auto-starting loot handling")
+        Loothing:StartHandleLoot()
+        return
+    end
+
+    if usageMode == "ask_gl" then
+        Loothing:Debug("ML detected, usage mode 'ask_gl' - prompting")
+        GetPopups():Show("LOOTHING_ML_USAGE_PROMPT", nil, function()
+            Loothing:StartHandleLoot()
+        end)
+        return
+    end
+end
+
+--[[--------------------------------------------------------------------
+    ML Handover (Continue / Start Fresh prompt)
+
+    When a new ML is detected and a different player previously held the
+    role, the new ML is shown a Continue/Start Fresh prompt. Continue
+    adopts the cached MLDB/council/session and rebroadcasts under the new
+    identity (best-effort — if the new ML wasn't on the previous council
+    they'll inherit only what was synced to them via MLDB broadcast).
+    Start Fresh restores the new ML's pre-session settings, clears stale
+    remote state, and broadcasts a clean slate.
+----------------------------------------------------------------------]]
+
+--- Build a short summary of what state will be inherited if Continue is chosen.
+-- Used in the handover popup body. Returns nil if nothing notable is cached.
+local function BuildHandoverInheritedSummary()
+    local parts = {}
+    if Loothing.Council and Loothing.Council.GetAllMembers then
+        local members = Loothing.Council:GetAllMembers()
+        if members and #members > 0 then
+            parts[#parts + 1] = string.format(L["ML_HANDOVER_INHERITED_COUNCIL"], #members)
+        end
+    end
+    if Loothing.MLDB and Loothing.MLDB.Get and Loothing.MLDB:Get() and next(Loothing.MLDB:Get()) ~= nil then
+        parts[#parts + 1] = L["ML_HANDOVER_INHERITED_MLDB"]
+    end
+    if Loothing.Session and Loothing.Session.IsActive and Loothing.Session:IsActive()
+        and Loothing.Session.GetItemCount and Loothing.Session:GetItemCount() > 0 then
+        parts[#parts + 1] = string.format(L["ML_HANDOVER_INHERITED_ITEMS"], Loothing.Session:GetItemCount())
+    end
+    if #parts == 0 then return nil end
+    return table.concat(parts, ", ")
+end
+
+--- Show the ML handover prompt (Continue / Start Fresh).
+-- @param prevML string - Name of the previous ML
+-- @param onResolved function - Called with no args after the user picks
+function Addon:PromptMLHandover(prevML, onResolved)
+    -- Hide any usage-mode prompt left over from a stale earlier check so it
+    -- doesn't sit underneath the handover modal.
+    GetPopups():Hide("LOOTHING_ML_USAGE_PROMPT")
+    GetPopups():Hide("LOOTHING_ML_HANDOVER_PROMPT")
+
+    local data = {
+        previousML = Utils.GetShortName and Utils.GetShortName(prevML) or prevML,
+        inheritedSummary = BuildHandoverInheritedSummary(),
+    }
+
+    GetPopups():Show("LOOTHING_ML_HANDOVER_PROMPT", data,
+        function()
+            -- Continue (button #1)
+            local ok, err = pcall(function()
+                Loothing:AcceptMLHandover(prevML)
+            end)
+            if not ok then
+                Loothing:Error("AcceptMLHandover failed:", tostring(err))
+            end
+            if onResolved then onResolved() end
+        end,
+        function()
+            -- Start Fresh (button #2)
+            local ok, err = pcall(function()
+                Loothing:RejectMLHandover(prevML)
+            end)
+            if not ok then
+                Loothing:Error("RejectMLHandover failed:", tostring(err))
+            end
+            if onResolved then onResolved() end
+        end
+    )
+end
+
+--- Accept handover: keep cached MLDB/council/session state and rebroadcast
+-- under our identity so observers re-anchor to us as the new ML.
+-- @param prevML string|nil
+function Addon:AcceptMLHandover(prevML)
+    local me = Utils.NormalizeName(Utils.GetPlayerFullName())
+    if not me then return end
+
+    -- Seed prevML in MLDB's recent-senders table so any late STOP_HANDLE_LOOT
+    -- or SESSION_END from them (queued under combat restrictions, network
+    -- latency, etc.) authenticates locally via WasPreviousMLSender. Without
+    -- this, a prevML who never broadcast a fresh MLDB to us before being
+    -- demoted is unknown to the auth path.
+    if prevML and self.MLDB then
+        self.MLDB.recentMLDBSenders = self.MLDB.recentMLDBSenders or {}
+        self.MLDB.recentMLDBSenders[Utils.NormalizeName(prevML)] = GetTime()
+    end
+
+    -- Mark ourselves authoritative without wiping cached state.
+    self.masterLooter = me
+    self.isMasterLooter = true
+    self.mlStateVerified = true
+
+    -- Clear an explicitMasterLooter that was inherited from the previous ML's
+    -- MLDB push (MLDB.lua:747). Settings:GetMasterLooter() reads explicit first,
+    -- so leaving it pointing at the previous ML breaks IsMasterLooter() and
+    -- causes BroadcastStateRefresh() to short-circuit. We don't re-assert
+    -- ourselves as explicit ML — fall through to raid-leader detection, which
+    -- correctly identifies us since we are the leader.
+    if self.explicitMasterLooter and prevML
+        and Utils.IsSamePlayer(self.explicitMasterLooter, prevML) then
+        self.explicitMasterLooter = nil
+    end
+
+    -- Promote the previous ML's remote council into our local persistent roster
+    -- so subsequent edits go to SavedVariables. No-op if remote roster empty.
+    if self.Council and self.Council.PromoteRemoteToLocal then
+        self.Council:PromoteRemoteToLocal()
+    end
+
+    -- If a session is in flight (we previously received SESSION_INIT from prevML),
+    -- re-stamp masterLooter and snapshot the reconnect cache so /reload won't lose it.
+    if self.Session and self.Session.IsActive and self.Session:IsActive() then
+        self.Session.masterLooter = me
+        if self.CacheStateForReconnect then
+            self:CacheStateForReconnect()
+        end
+    end
+
+    -- Force-broadcast state forward (MLDB + council + observer + session bundle).
+    -- BroadcastStateRefresh requires MLDB:IsML() = true — we just set
+    -- isMasterLooter above, but its IsML() may have its own check; invalidate
+    -- broadcast caches first so the next push is unconditional.
+    if self.MLDB and self.MLDB.InvalidateBroadcastCache then
+        self.MLDB:InvalidateBroadcastCache()
+    end
+    if self.Sync and self.Sync.InvalidateBroadcastCaches then
+        self.Sync:InvalidateBroadcastCaches()
+    end
+    if self.Comm and self.Comm.InvalidateSessionStartCache then
+        self.Comm:InvalidateSessionStartCache()
+    end
+
+    if self.Session and self.Session.BroadcastStateRefresh then
+        local ok = self.Session:BroadcastStateRefresh()
+        if not ok and self.MLDB and self.MLDB.BroadcastToRaid then
+            -- Fallback: at minimum push our identity via MLDB
+            self.MLDB:BroadcastToRaid(true)
+        end
+    elseif self.MLDB and self.MLDB.BroadcastToRaid then
+        self.MLDB:BroadcastToRaid(true)
+    end
+
+    self:Print(string.format(L["ML_HANDOVER_CONTINUED"], prevML or "?"))
+end
+
+--- Reject handover: discard previous ML's cached state and broadcast our own
+-- pre-session settings as a clean slate.
+function Addon:RejectMLHandover(prevML)
+    -- Seed prevML so their late farewell messages (STOP_HANDLE_LOOT,
+    -- SESSION_END) still authenticate via WasPreviousMLSender. Reject means
+    -- we don't honor their state going forward, but late comms in flight
+    -- shouldn't be silently dropped — they may be needed for state coherence
+    -- on intermediate observers who haven't received our broadcast yet.
+    if prevML and self.MLDB then
+        self.MLDB.recentMLDBSenders = self.MLDB.recentMLDBSenders or {}
+        self.MLDB.recentMLDBSenders[Utils.NormalizeName(prevML)] = GetTime()
+    end
+
+    -- End any orphaned session locally (drops items/candidates).
+    -- Session.masterLooter is still pointing at the previous ML at this point;
+    -- re-stamp it to ourselves so EndSession() captures wasML=true at line 1148
+    -- and broadcasts SESSION_END to observers — without this, observers keep
+    -- seeing the old ML's session because no authoritative end signal arrived.
+    if self.Session and self.Session.IsActive and self.Session:IsActive() then
+        local me = Utils.NormalizeName(Utils.GetPlayerFullName())
+        if me then
+            self.Session.masterLooter = me
+        end
+        if self.Session.EndSession then
+            self.Session:EndSession()
+        end
+    end
+
+    -- EndSession() conditionally nils Loothing.masterLooter / isMasterLooter
+    -- (Session.lua:1198-1201, gated on `not Loothing.handleLoot`). Re-assert
+    -- them so the ML gate in RefreshLocalSettingsAndBroadcast / IsCanonicalML
+    -- passes regardless of which branch ran.
+    local me = Utils.NormalizeName(Utils.GetPlayerFullName())
+    if me then
+        self.masterLooter = me
+        self.isMasterLooter = true
+        self.mlStateVerified = true
+    end
+
+    -- Restore preSessionSnapshot + clear remote rosters in-process WITHOUT
+    -- the per-channel broadcasts RefreshLocalSettingsAndBroadcast issues.
+    -- Reasons we don't just call that helper:
+    --   1. We want a single SESSION_INIT for ordering (MLDB-before-roster
+    --      authorization on receivers).
+    --   2. We want our own settings broadcast, not the previous ML's.
+    if self.MLDB and self.MLDB.RestoreSettings then
+        self.MLDB:RestoreSettings()  -- pre-session snapshot back to live Settings
+    end
+
+    -- Re-assert ML state after RestoreSettings (which may have rewritten
+    -- explicitMasterLooter to the original pre-session value, which was nil
+    -- on a typical "started as ML" snapshot — safe).
+    if me then
+        self.masterLooter = me
+        self.isMasterLooter = true
+        self.mlStateVerified = true
+    end
+
+    if self.Council and self.Council.ClearRemoteRoster then
+        self.Council:ClearRemoteRoster()
+    end
+    if self.Observer and self.Observer.ClearRemoteObserverList then
+        self.Observer:ClearRemoteObserverList()
+    end
+
+    -- Invalidate caches so the upcoming bundled broadcast is unconditional.
+    if self.MLDB and self.MLDB.InvalidateBroadcastCache then
+        self.MLDB:InvalidateBroadcastCache()
+    end
+    if self.Sync and self.Sync.InvalidateBroadcastCaches then
+        self.Sync:InvalidateBroadcastCaches()
+    end
+    if self.Comm and self.Comm.InvalidateSessionStartCache then
+        self.Comm:InvalidateSessionStartCache()
+    end
+
+    -- Bundled SESSION_INIT (MLDB → council → observer in one message)
+    -- gives receivers the right ordering: MLDB's settings.masterLooter
+    -- refines our identity before the council/observer authorization runs.
+    -- BroadcastStateRefresh skips sessionStart when no session is active,
+    -- which is correct here — we just ended any orphaned session above.
+    if self.Session and self.Session.BroadcastStateRefresh then
+        local ok = self.Session:BroadcastStateRefresh()
+        if not ok and self.MLDB and self.MLDB.BroadcastToRaid then
+            -- Fallback: at minimum push our identity via MLDB
+            self.MLDB:BroadcastToRaid(true)
+        end
+    elseif self.MLDB and self.MLDB.BroadcastToRaid then
+        self.MLDB:BroadcastToRaid(true)
+    end
+
+    self:Print(L["ML_HANDOVER_FRESH"])
 end
 
 --- Schedule an ML check with configurable delay (debounced with ceiling).
@@ -989,8 +1292,9 @@ local function RegisterEvents()
         -- When leaving a group, no explicit ML should persist regardless.
         Loothing.explicitMasterLooter = nil
 
-        -- Dismiss any pending ML usage prompt
+        -- Dismiss any pending ML prompts (usage + handover)
         GetPopups():Hide("LOOTHING_ML_USAGE_PROMPT")
+        GetPopups():Hide("LOOTHING_ML_HANDOVER_PROMPT")
     end, Loothing)
 
     Events.Registry:RegisterEventCallback("RAID_INSTANCE_WELCOME", function()

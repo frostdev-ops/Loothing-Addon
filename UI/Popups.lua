@@ -306,6 +306,37 @@ Popups:Register("LOOTHING_ML_USAGE_PROMPT", {
     },
 })
 
+-- ML Handover Prompt - "You inherited X's loot session. Continue or start fresh?"
+-- Shown to a player who just became ML when a previous ML existed. Button 1
+-- (Continue) keeps any cached MLDB/council/session state; button 2 (Start
+-- Fresh) wipes inherited state and broadcasts the new ML's own settings.
+Popups:Register("LOOTHING_ML_HANDOVER_PROMPT", {
+    title = L["ADDON_NAME"],
+    text = L["ML_HANDOVER_PROMPT_TEXT"],
+    modal = true,
+    hide_on_escape = false,  -- decision is required
+    show_while_dead = true,
+    on_show = function(_dialog, data)
+        if not data then return nil end
+        local prev = data.previousML or "?"
+        local summary = data.inheritedSummary
+        if summary and summary ~= "" then
+            return string.format(L["ML_HANDOVER_PROMPT_TEXT_DETAIL"], prev, summary)
+        end
+        return string.format(L["ML_HANDOVER_PROMPT_TEXT"], prev)
+    end,
+    buttons = {
+        {
+            text = L["ML_HANDOVER_CONTINUE"],
+            on_click = function(_dialog, _data) end,
+        },
+        {
+            text = L["ML_HANDOVER_START_FRESH"],
+            on_click = function(_dialog, _data) end,
+        },
+    },
+})
+
 -- Confirm Award - "Award {item} to {player}?"
 Popups:Register("LOOTHING_CONFIRM_AWARD", {
     title = L["AWARD_ITEM"],

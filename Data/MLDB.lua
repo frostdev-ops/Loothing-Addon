@@ -583,16 +583,35 @@ function MLDBMixin:OnMLDBBroadcast(data)
         return
     end
 
-    -- Verify sender is the ML (or accept to bootstrap ML identity)
+    -- Verify sender is authoritative ML.  Two acceptance paths:
+    --   1. Settings:GetMasterLooter() returns sender — standard case.
+    --   2. Sender is the *current group leader* — handles ML handovers where
+    --      our local explicitMasterLooter is still pinned at the previous ML
+    --      (set by their MLDB at line 747 below) but raid leadership has
+    --      already passed to `sender`. Without this gate, observers would
+    --      reject the new ML's MLDB until the stale explicit pin cleared,
+    --      stranding them on the previous ML's settings.
+    -- If ML is unknown (no explicit, no leader), the Core handler already
+    -- validated the sender as a group member; accept to bootstrap identity.
     local currentML = self:GetML()
-    if currentML then
-        if not Utils.IsSamePlayer(sender, currentML) then
+    local senderIsLeader = Utils.IsPlayerGroupLeader and Utils.IsPlayerGroupLeader(sender)
+
+    if currentML and not Utils.IsSamePlayer(sender, currentML) then
+        if senderIsLeader then
+            -- New leader's broadcast outranks our cached explicit pin.
+            -- Drop the pin so subsequent ML resolution agrees with the leader.
+            if Loothing.explicitMasterLooter
+                and not Utils.IsSamePlayer(Loothing.explicitMasterLooter, sender) then
+                Loothing:Debug("MLDB from new leader", sender,
+                    "- clearing stale explicit ML pin:", Loothing.explicitMasterLooter)
+                Loothing.explicitMasterLooter = nil
+            end
+            -- Fall through to apply
+        else
             Loothing:Debug("Ignoring MLDB from non-ML:", sender)
             return
         end
     end
-    -- If ML is unknown, the Core handler already validated the sender as a
-    -- group member. Accept the MLDB so it can bootstrap explicit ML identity.
 
     -- Decompress
     local settings = self:DecompressFromTransmit(compressed)
