@@ -692,6 +692,10 @@ function CommMixin:OnMessage(message, distribution, sender)
     -- structurally-wrong payload shape. Upper-bound newer-version
     -- messages are still attempted — protocol additions are expected to
     -- be backwards-compatible at the schema level.
+    if type(version) ~= "number" then
+        Loothing:Debug("Rejected message with non-numeric protocol version from", sender)
+        return
+    end
     if version < Loothing.MIN_PROTOCOL_VERSION then
         Loothing:Debug("Rejected message with obsolete protocol version:", version, "from", sender)
         return
@@ -1136,10 +1140,12 @@ function CommMixin:SendPlayerResponse(itemGUID, response, note, roll, rollMin, r
     }, nil, "ALERT")
 
     -- Apply locally for the responder's own UI. The wire echo of the
-    -- broadcast IS delivered back to the sender by WoW, but Protocol v4
-    -- dedup (sender + msgID) drops it at OnMessage before it reaches any
-    -- handler — so this local apply is the only path that updates the
-    -- responder's own candidate state.
+    -- broadcast IS delivered back to the sender by WoW and DOES reach the
+    -- handler (nothing on the send path seeds seenIDs, and the transport
+    -- has no self-sender filter — see HandleHeartbeat's explicit self
+    -- check). That's harmless only because HandlePlayerResponse is
+    -- idempotent (isFreshResponse guard); this eager local apply exists
+    -- so the responder's own UI updates without waiting for the echo.
     if Loothing.Session then
         Loothing.Session:HandlePlayerResponse(payload)
     end

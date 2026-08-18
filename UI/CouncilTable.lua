@@ -367,11 +367,10 @@ function CouncilTableMixin:CreateItemTabBar()
 end
 
 function CouncilTableMixin:RefreshItemTabs()
-    -- Clear existing tabs
-    for _, tab in ipairs(self.itemTabs) do
-        tab:Hide()
-    end
-    wipe(self.itemTabs)
+    -- Release existing tabs to the free list for reuse. WoW never
+    -- destroys frames, and this refresh fires on every session event —
+    -- recreating tabs each time leaked ~10 regions per tab per refresh.
+    self:ReleaseItemTabs()
 
     if not Loothing.Session then return end
 
@@ -409,21 +408,36 @@ function CouncilTableMixin:RefreshItemTabs()
     self:UpdateItemTabVotedIndicators()
 end
 
-function CouncilTableMixin:CreateItemTab(index, item)
+--- Release every current item tab into the free list for reuse.
+-- Unregisters the per-item OnItemInfoLoaded callback so orphaned tabs
+-- can't accumulate live registrations against long-lived items.
+function CouncilTableMixin:ReleaseItemTabs()
+    self.itemTabFreeList = self.itemTabFreeList or {}
+    for _, tab in ipairs(self.itemTabs) do
+        local item = tab.item
+        if item and item.UnregisterCallback then
+            item:UnregisterCallback("OnItemInfoLoaded", tab)
+        end
+        tab.item = nil
+        tab:Hide()
+        self.itemTabFreeList[#self.itemTabFreeList + 1] = tab
+    end
+    wipe(self.itemTabs)
+end
+
+--- Build a tab's static structure ONCE. Everything per-item lives in
+-- InitItemTab; scripts are bound here and read tab.item dynamically
+-- (same hook-once pattern as the council rows).
+function CouncilTableMixin:ConstructItemTab()
     local tab = CreateFrame("Button", nil, self.itemTabContent, "BackdropTemplate")
     tab:SetSize(ITEM_TAB_WIDTH, ITEM_TAB_HEIGHT)
-    tab:SetPoint("LEFT", (index - 1) * SCROLL_STEP, 0)
     SkinningMixin:StyleSurface(tab, "alt")
-
-    local quality = item.quality or 1
-    local qr, qg, qb = C_Item.GetItemQualityColor(quality)
 
     -- 3px quality-colored left accent bar
     local accentBar = tab:CreateTexture(nil, "ARTWORK", nil, 1)
     accentBar:SetSize(3, ITEM_TAB_HEIGHT - 2)
     accentBar:SetPoint("LEFT", 1, 0)
     accentBar:SetTexture("Interface\\Buttons\\WHITE8x8")
-    accentBar:SetVertexColor(qr, qg, qb, 1)
     tab.accentBar = accentBar
 
     -- Quality glow behind icon
@@ -432,7 +446,6 @@ function CouncilTableMixin:CreateItemTab(index, item)
     glow:SetPoint("LEFT", 2, 0)
     glow:SetTexture("Interface\\SpellActivationOverlay\\IconAlert")
     glow:SetTexCoord(0.00781250, 0.50781250, 0.27734375, 0.52734375)
-    glow:SetVertexColor(qr, qg, qb, 1)
     glow:SetAlpha(0.22)
     tab.glow = glow
 
@@ -440,8 +453,6 @@ function CouncilTableMixin:CreateItemTab(index, item)
     local icon = tab:CreateTexture(nil, "ARTWORK")
     icon:SetSize(ITEM_TAB_ICON_SIZE, ITEM_TAB_ICON_SIZE)
     icon:SetPoint("LEFT", 4, 0)
-    local texture = item.texture or C_Item.GetItemIconByID(item.itemID or 0)
-    icon:SetTexture(texture or "Interface\\Icons\\INV_Misc_QuestionMark")
     tab.icon = icon
 
     -- WhiteIconFrame quality border around icon
@@ -449,7 +460,6 @@ function CouncilTableMixin:CreateItemTab(index, item)
     iconBorder:SetSize(ITEM_TAB_ICON_SIZE + 2, ITEM_TAB_ICON_SIZE + 2)
     iconBorder:SetPoint("CENTER", icon, "CENTER")
     iconBorder:SetTexture("Interface\\Common\\WhiteIconFrame")
-    iconBorder:SetVertexColor(qr, qg, qb, 1)
     tab.iconBorder = iconBorder
 
     -- ilvl badge overlay on icon (bottom-right)
@@ -465,13 +475,8 @@ function CouncilTableMixin:CreateItemTab(index, item)
     local ilvlText = ilvlBadge:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     ilvlText:SetPoint("CENTER")
     SkinningMixin:StyleText(ilvlText, "highlightSmall", "accent")
-    local ilvl = item.ilvl or 0
-    if ilvl > 0 then
-        ilvlText:SetText(tostring(ilvl))
-    else
-        ilvlBadge:Hide()
-    end
     tab.ilvlBadge = ilvlBadge
+    tab.ilvlText = ilvlText
 
     -- Item name (quality-colored, truncated)
     local nameText = tab:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -479,8 +484,6 @@ function CouncilTableMixin:CreateItemTab(index, item)
     nameText:SetPoint("RIGHT", tab, "RIGHT", -22, 0)
     nameText:SetJustifyH("LEFT")
     nameText:SetWordWrap(false)
-    nameText:SetText(item.name or "Unknown")
-    nameText:SetTextColor(qr, qg, qb, 1)
     tab.nameText = nameText
 
     -- Slot info text (gray)
@@ -490,40 +493,13 @@ function CouncilTableMixin:CreateItemTab(index, item)
     slotText:SetJustifyH("LEFT")
     slotText:SetWordWrap(false)
     SkinningMixin:StyleText(slotText, "bodySmall", "textMuted")
-    slotText:SetText(
-        (ns.TokenData and ns.TokenData:FormatItemSlot(item)) or "")
     tab.slotText = slotText
-
-    -- Cards are constructed once per item — if equipSlot wasn't resolved yet
-    -- (cold cache, async tier-token override), refresh the label in place
-    -- when the item info arrives. The closure unregisters itself on fire.
-    if item and not item.itemInfoLoaded and item.RegisterCallback then
-        item:RegisterCallback("OnItemInfoLoaded", function()
-            if item.UnregisterCallback then
-                item:UnregisterCallback("OnItemInfoLoaded", tab)
-            end
-            if tab.slotText then
-                tab.slotText:SetText(
-                    (ns.TokenData and ns.TokenData:FormatItemSlot(item)) or "")
-            end
-        end, tab)
-    end
 
     -- State indicator (14x14, bottom-right of card)
     local stateIndicator = tab:CreateTexture(nil, "OVERLAY", nil, 6)
     stateIndicator:SetSize(14, 14)
     stateIndicator:SetPoint("BOTTOMRIGHT", -2, 2)
     tab.stateIndicator = stateIndicator
-
-    if item.state == Loothing.ItemState.AWARDED then
-        stateIndicator:SetTexture("Interface\\RaidFrame\\ReadyCheck-Ready")
-    elseif item.state == Loothing.ItemState.VOTING then
-        stateIndicator:SetTexture("Interface\\COMMON\\Indicator-Green")
-    elseif item.state == Loothing.ItemState.SKIPPED then
-        stateIndicator:SetTexture("Interface\\RaidFrame\\ReadyCheck-NotReady")
-    else
-        stateIndicator:Hide()
-    end
 
     -- Voted checkmark (14x14, top-right of card)
     local votedCheck = tab:CreateTexture(nil, "OVERLAY", nil, 7)
@@ -549,12 +525,10 @@ function CouncilTableMixin:CreateItemTab(index, item)
     highlight:SetAlpha(0.15)
     highlight:SetBlendMode("ADD")
 
-    -- Quality border default
-    tab:SetBackdropBorderColor(unpack(SkinningMixin:GetColor("borderStrong")))
-    tab.quality = quality
-
-    -- Tooltip
+    -- Tooltip (reads tab.item dynamically — tab is pooled)
     tab:SetScript("OnEnter", function()
+        local item = tab.item
+        if not item then return end
         GameTooltip:SetOwner(tab, "ANCHOR_BOTTOM")
         if item.itemLink then
             GameTooltip:SetHyperlink(item.itemLink)
@@ -569,10 +543,90 @@ function CouncilTableMixin:CreateItemTab(index, item)
 
     -- Click to switch
     tab:SetScript("OnClick", function()
-        self:SelectItemTab(item.guid)
+        if tab.item then
+            self:SelectItemTab(tab.item.guid)
+        end
     end)
 
+    return tab
+end
+
+--- Populate a (new or reused) tab for one item -- INTERNAL
+function CouncilTableMixin:InitItemTab(tab, index, item)
+    tab.item = item
+
+    tab:ClearAllPoints()
+    tab:SetPoint("LEFT", (index - 1) * SCROLL_STEP, 0)
+
+    local quality = item.quality or 1
+    local qr, qg, qb = C_Item.GetItemQualityColor(quality)
+    tab.quality = quality
+    tab.accentBar:SetVertexColor(qr, qg, qb, 1)
+    tab.glow:SetVertexColor(qr, qg, qb, 1)
+    tab.iconBorder:SetVertexColor(qr, qg, qb, 1)
+
+    local texture = item.texture or C_Item.GetItemIconByID(item.itemID or 0)
+    tab.icon:SetTexture(texture or "Interface\\Icons\\INV_Misc_QuestionMark")
+
+    local ilvl = item.ilvl or 0
+    if ilvl > 0 then
+        tab.ilvlText:SetText(tostring(ilvl))
+        tab.ilvlBadge:Show()
+    else
+        tab.ilvlBadge:Hide()
+    end
+
+    tab.nameText:SetText(item.name or "Unknown")
+    tab.nameText:SetTextColor(qr, qg, qb, 1)
+    tab.slotText:SetText(
+        (ns.TokenData and ns.TokenData:FormatItemSlot(item)) or "")
+
+    -- If equipSlot wasn't resolved yet (cold cache, async tier-token
+    -- override), refresh the label in place when the item info arrives.
+    -- The closure unregisters itself on fire, guards against the tab
+    -- having been re-acquired for a different item, and ReleaseItemTabs
+    -- unregisters it if the tab is released before it fires.
+    if item and not item.itemInfoLoaded and item.RegisterCallback then
+        item:RegisterCallback("OnItemInfoLoaded", function()
+            if item.UnregisterCallback then
+                item:UnregisterCallback("OnItemInfoLoaded", tab)
+            end
+            if tab.item == item and tab.slotText then
+                tab.slotText:SetText(
+                    (ns.TokenData and ns.TokenData:FormatItemSlot(item)) or "")
+            end
+        end, tab)
+    end
+
+    if item.state == Loothing.ItemState.AWARDED then
+        tab.stateIndicator:SetTexture("Interface\\RaidFrame\\ReadyCheck-Ready")
+        tab.stateIndicator:Show()
+    elseif item.state == Loothing.ItemState.VOTING then
+        tab.stateIndicator:SetTexture("Interface\\COMMON\\Indicator-Green")
+        tab.stateIndicator:Show()
+    elseif item.state == Loothing.ItemState.SKIPPED then
+        tab.stateIndicator:SetTexture("Interface\\RaidFrame\\ReadyCheck-NotReady")
+        tab.stateIndicator:Show()
+    else
+        tab.stateIndicator:Hide()
+    end
+
+    tab.votedCheck:Hide()
+    tab.selectBar:Hide()
+
+    -- Quality border default (selection highlighting overrides later)
+    tab:SetBackdropBorderColor(unpack(SkinningMixin:GetColor("borderStrong")))
+
     tab:Show()
+end
+
+function CouncilTableMixin:CreateItemTab(index, item)
+    self.itemTabFreeList = self.itemTabFreeList or {}
+    local tab = table.remove(self.itemTabFreeList)
+    if not tab then
+        tab = self:ConstructItemTab()
+    end
+    self:InitItemTab(tab, index, item)
     return tab
 end
 
@@ -1184,10 +1238,7 @@ function CouncilTableMixin:Clear()
     self.selectedCandidate = nil
     self.disenchantTarget = nil
 
-    for _, tab in ipairs(self.itemTabs) do
-        tab:Hide()
-    end
-    wipe(self.itemTabs)
+    self:ReleaseItemTabs()
 
     if self.rowPool then
         self.rowPool:ReleaseAll()

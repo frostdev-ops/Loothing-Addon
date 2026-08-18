@@ -76,10 +76,10 @@ end
     Simple Voting - Most votes wins
 ----------------------------------------------------------------------]]
 
---- Tally votes using simple majority of submitted ballots.
--- NOTE: the majority denominator is the number of council members who
--- submitted a ballot, not the total council size. Non-voters are not
--- counted as abstentions. Winner requires > 50% of actual ballots cast.
+--- Tally votes: the candidate with the MOST votes wins (plurality).
+-- There is no >50% majority requirement — a 2/2/1 split returns the
+-- leading candidate with isTie=true for the tied leaders. Non-voters
+-- are not counted as abstentions.
 -- @param votes table - DataProvider or array of votes
 -- @param candidates table - Array of candidate names (optional, for filtering)
 -- @return table - { winner, response, counts, isTie, tiedCandidates }
@@ -405,26 +405,6 @@ function VotingEngine:CountVotes(votes)
     return #votes
 end
 
---- Get voters by their first-choice response
--- @param votes table - DataProvider or array
--- @return table - { [response] = { voter1, voter2, ... } }
-function VotingEngine:GroupVotersByResponse(votes)
-    local groups = {}
-
-    for _, response in pairs(Loothing.Response) do
-        groups[response] = {}
-    end
-
-    for _, vote in EnumerateVotes(votes) do
-        local firstChoice = vote.responses and vote.responses[1]
-        if firstChoice and groups[firstChoice] then
-            groups[firstChoice][#groups[firstChoice] + 1] = vote.voter
-        end
-    end
-
-    return groups
-end
-
 --- Calculate vote percentage for each response
 -- @param votes table - DataProvider or array
 -- @return table - { [response] = percentage }
@@ -442,23 +422,6 @@ function VotingEngine:GetVotePercentages(votes)
     end
 
     return percentages
-end
-
---- Determine if there's a clear winner
--- @param votes table - DataProvider or array
--- @param threshold number - Percentage threshold for "clear" winner (default 50)
--- @return boolean, string|nil - hasClearWinner, winningResponse
-function VotingEngine:HasClearWinner(votes, threshold)
-    threshold = threshold or 50
-
-    local percentages = self:GetVotePercentages(votes)
-    local result = self:TallySimple(votes)
-
-    if result.winningResponse and percentages[result.winningResponse] >= threshold then
-        return true, result.winningResponse
-    end
-
-    return false, nil
 end
 
 --[[--------------------------------------------------------------------

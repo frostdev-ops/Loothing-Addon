@@ -460,44 +460,6 @@ Describe("Vote Tallying - Results Structure", function()
         AssertNotNil(firstEntry.percentage, "Entry should have percentage")
     end)
 
-    It("GroupVotersByResponse groups correctly", function()
-        local votes = CreateVoteArray({
-            { "Alice", "WARRIOR", { Loothing.Response.NEED } },
-            { "Bob", "MAGE", { Loothing.Response.NEED } },
-            { "Charlie", "PRIEST", { Loothing.Response.GREED } }
-        })
-
-        local groups = VotingEngine:GroupVotersByResponse(votes)
-
-        AssertEquals(#groups[Loothing.Response.NEED], 2, "NEED should have 2 voters")
-        AssertEquals(#groups[Loothing.Response.GREED], 1, "GREED should have 1 voter")
-    end)
-
-    It("HasClearWinner detects clear winner", function()
-        local votes = CreateVoteArray({
-            { "P1", "WARRIOR", { Loothing.Response.NEED } },
-            { "P2", "MAGE", { Loothing.Response.NEED } },
-            { "P3", "PRIEST", { Loothing.Response.NEED } },
-            { "P4", "ROGUE", { Loothing.Response.GREED } }
-        })
-
-        local hasClear, winner = VotingEngine:HasClearWinner(votes, 50)
-
-        AssertTrue(hasClear, "Should have clear winner at 50% threshold")
-        AssertEquals(winner, Loothing.Response.NEED, "NEED should be the winner")
-    end)
-
-    It("HasClearWinner fails without majority", function()
-        local votes = CreateVoteArray({
-            { "P1", "WARRIOR", { Loothing.Response.NEED } },
-            { "P2", "MAGE", { Loothing.Response.GREED } },
-            { "P3", "PRIEST", { Loothing.Response.OFFSPEC } }
-        })
-
-        local hasClear, winner = VotingEngine:HasClearWinner(votes, 50)
-
-        AssertFalse(hasClear, "Should not have clear winner")
-    end)
 end)
 
 --[[--------------------------------------------------------------------

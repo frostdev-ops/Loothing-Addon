@@ -2921,6 +2921,15 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             Loothing.CommState:OnPlayerEnteringWorld()
         end
 
+        -- Seed the bag snapshot: it is otherwise only taken at
+        -- ENCOUNTER_START, so a player who logs in / reloads / zones in
+        -- mid-raid has an empty baseline and the next post-encounter scan
+        -- re-reports every still-tradable item from earlier bosses as
+        -- fresh loot.
+        if Loothing.Session and Loothing.Session.SnapshotBags and Loothing.initialized then
+            Loothing.Session:SnapshotBags()
+        end
+
         if isReload and Loothing.initialized then
             -- UI reload - attempt to restore cached state
             Loothing:RestoreFromCache()

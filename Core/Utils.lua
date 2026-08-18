@@ -764,7 +764,7 @@ function Utils.GetRaidRoster()
                     classFile = classFile,
                     online = UnitIsConnected(unit),
                     isDead = UnitIsDead(unit),
-                    role = UnitGroupRolesAssigned(unit),
+                    role = Loolib.SecretUtil.Guard(UnitGroupRolesAssigned(unit), "NONE"),
                     isMasterLooter = false,
                 }
             end

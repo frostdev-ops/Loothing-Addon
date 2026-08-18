@@ -144,7 +144,7 @@ function CraftingRecipesMixin:SaveProfessionData(profName, recipes)
     existing.scannedAt = time()
 
     -- Character info
-    local name = UnitName("player")
+    local name = Loolib.SecretUtil.Guard(UnitName("player"), "Unknown")
     local realm = GetNormalizedRealmName() or GetRealmName()
     existing.scannedBy = format("%s-%s", name, realm)
 

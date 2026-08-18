@@ -3,15 +3,23 @@
     Migration - Version-stamped database schema migrations
 
     Manages database migrations across addon versions. Each migration
-    is registered with a version number, runs exactly once, and is
-    tracked in the global scope of SavedVariables (persists across
-    profiles).
+    is registered with a version number and a scope:
+
+    - scope "global": runs exactly once per account, tracked in the
+      global scope of SavedVariables.
+    - scope "profile": runs exactly once per PROFILE, tracked inside
+      that profile (profileDB.migrationsRun). Runs for the active
+      profile on load and re-runs for any profile that becomes active
+      later (profile switch, new alt) that hasn't had it yet. Global
+      tracking for these caused the original bug: only the profile
+      active at upgrade time ever migrated.
 
     Key properties:
     - Version-stamped: Each migration has a semantic version string
-    - Idempotent: Safe to re-run (checks before modifying)
+    - Idempotent: Safe to re-run (checks before modifying) — REQUIRED,
+      since existing profiles that migrated under the old global
+      tracking re-run their profile-scoped migrations once
     - Ordered: Migrations run in version order (oldest to newest)
-    - Tracked: Completed versions stored in global scope
     - Logged: Each execution is logged via Loothing:Debug()
 
     Usage:
@@ -49,7 +57,9 @@ end
 -- @param version string - Semantic version (e.g., "1.0.0")
 -- @param description string - Human-readable description
 -- @param func function - Migration handler: function(profileDB, globalDB)
-function Migration:Register(version, description, func)
+-- @param scope string|nil - "global" (default): once per account;
+--        "profile": once per profile, tracked in the profile itself
+function Migration:Register(version, description, func, scope)
     if not version or not func then
         Loothing:Error("Migration:Register - version and func are required")
         return
@@ -65,6 +75,7 @@ function Migration:Register(version, description, func)
         version = version,
         description = description or "",
         func = func,
+        scope = scope == "profile" and "profile" or "global",
     })
 
     Loothing:Debug("Registered migration:", version, "-", description)
@@ -99,7 +110,7 @@ function Migration:RegisterMigrations()
         end
 
         Loothing:Debug("Migration 1.0.0: Initial schema validated")
-    end)
+    end, "global")
 
     -- Migration 1.0.1: Add new settings fields
     self:Register("1.0.1", "Add new settings fields", function(profileDB, _globalDB)
@@ -139,15 +150,18 @@ function Migration:RegisterMigrations()
         end
 
         Loothing:Debug("Migration 1.0.1: Added new settings fields")
-    end)
+    end, "profile")
 
-    -- Migration 1.1.0: Clean up invalid data
-    self:Register("1.1.0", "Clean up invalid data", function(profileDB, globalDB)
-        -- Remove deprecated settings fields
+    -- Migration 1.1.0 (profile half): Remove deprecated profile settings
+    self:Register("1.1.0", "Remove deprecated profile settings", function(profileDB, _globalDB)
         if profileDB.settings then
             profileDB.settings.legacyField = nil
         end
+        Loothing:Debug("Migration 1.1.0: Removed deprecated profile settings")
+    end, "profile")
 
+    -- Migration 1.1.0 (global half): Clean up invalid history entries
+    self:Register("1.1.0", "Clean up invalid data", function(_profileDB, globalDB)
         -- Clean up history entries with missing required fields
         if globalDB.history then
             local cleaned = 0
@@ -165,10 +179,10 @@ function Migration:RegisterMigrations()
         end
 
         Loothing:Debug("Migration 1.1.0: Cleanup complete")
-    end)
+    end, "global")
 
-    -- Migration 1.2.0: Protocol v1 → v2 transition
-    self:Register("1.2.0", "Protocol v1 to v2 transition", function(profileDB, globalDB)
+    -- Migration 1.2.0 (global half): Protocol v1 → v2 transition
+    self:Register("1.2.0", "Protocol v1 to v2 transition", function(_profileDB, globalDB)
         -- Clear any cached v1 protocol data that may be stored
         -- V1 used colon-separated string format; v2 uses structured tables
 
@@ -196,7 +210,11 @@ function Migration:RegisterMigrations()
             end
         end
 
-        -- Ensure award reasons have new fields
+        Loothing:Debug("Migration 1.2.0: Protocol v1→v2 transition complete")
+    end, "global")
+
+    -- Migration 1.2.0 (profile half): Ensure award reasons have new fields
+    self:Register("1.2.0", "Backfill award reason fields", function(profileDB, _globalDB)
         if profileDB.awardReasons and profileDB.awardReasons.reasons then
             for i, reason in ipairs(profileDB.awardReasons.reasons) do
                 if reason.log == nil then
@@ -210,9 +228,8 @@ function Migration:RegisterMigrations()
                 end
             end
         end
-
-        Loothing:Debug("Migration 1.2.0: Protocol v1→v2 transition complete")
-    end)
+        Loothing:Debug("Migration 1.2.0: Award reason fields backfilled")
+    end, "profile")
 
     -- Migration 1.3.0: Merge responses + buttonSets -> responseSets
     self:Register("1.3.0", "Merge responses + buttonSets into responseSets", function(profileDB, _globalDB)
@@ -289,7 +306,7 @@ function Migration:RegisterMigrations()
 
         profileDB.responseSets = rs
         Loothing:Debug("Migration 1.3.0: Merged responses + buttonSets -> responseSets")
-    end)
+    end, "profile")
 
     -- Migration 1.3.2: Settings audit cleanup + autoAward structured reasons
     self:Register("1.3.2", "Settings audit cleanup and structured auto-award reasons", function(profileDB, _globalDB)
@@ -347,7 +364,7 @@ function Migration:RegisterMigrations()
         end
 
         Loothing:Debug("Migration 1.3.2: Settings audit cleanup complete")
-    end)
+    end, "profile")
 end
 
 --[[--------------------------------------------------------------------
@@ -385,47 +402,117 @@ function Migration:RunOnLoad()
     end)
 
     local executed = 0
+    local failures = 0
     local completedVersions = self:GetCompletedVersions()
 
-    -- Execute each pending migration
+    -- Execute each pending GLOBAL migration (once per account)
     for _, migration in ipairs(migrations) do
-        -- Skip if already completed
-        if completedVersions[migration.version] then
-            Loothing:Debug("Skipping migration:", migration.version, "(already executed)")
-        else
-            Loothing:Debug("Executing migration:", migration.version, "-", migration.description)
-
-            -- Execute in a protected call
-            local success, err = pcall(migration.func, profileDB, globalDB)
-
-            if success then
-                executed = executed + 1
-
-                -- Record completion in global scope
-                if not globalDB.migrations.history then
-                    globalDB.migrations.history = {}
-                end
-                table.insert(globalDB.migrations.history, {
-                    version = migration.version,
-                    description = migration.description,
-                    timestamp = date("%Y-%m-%d %H:%M:%S"),
-                })
-
-                Loothing:Debug("Migration", migration.version, "completed successfully")
+        if migration.scope == "global" then
+            if completedVersions[migration.version] then
+                Loothing:Debug("Skipping migration:", migration.version, "(already executed)")
             else
-                Loothing:Error("Migration", migration.version, "failed:", err)
+                Loothing:Debug("Executing migration:", migration.version, "-", migration.description)
+
+                -- Execute in a protected call
+                local success, err = pcall(migration.func, profileDB, globalDB)
+
+                if success then
+                    executed = executed + 1
+
+                    -- Record completion in global scope
+                    if not globalDB.migrations.history then
+                        globalDB.migrations.history = {}
+                    end
+                    table.insert(globalDB.migrations.history, {
+                        version = migration.version,
+                        description = migration.description,
+                        timestamp = date("%Y-%m-%d %H:%M:%S"),
+                    })
+
+                    Loothing:Debug("Migration", migration.version, "completed successfully")
+                else
+                    failures = failures + 1
+                    Loothing:Error("Migration", migration.version, "failed:", err)
+                end
             end
         end
     end
 
-    -- Update stored version
-    globalDB.migrations.version = currentVersion
+    -- Profile-scoped migrations: once per profile, tracked in the profile
+    local profileExecuted, profileFailures = self:RunPendingProfileMigrations(profileDB, globalDB)
+    executed = executed + profileExecuted
+    failures = failures + profileFailures
+
+    -- Only advance the stored version stamp on a fully clean run, so
+    -- diagnostics don't report a clean migration over a failed one.
+    -- Failed migrations retry next login (they're not in history).
+    if failures == 0 then
+        globalDB.migrations.version = currentVersion
+    end
     globalDB.migrations.lastRun = date("%Y-%m-%d %H:%M:%S")
 
     if executed > 0 then
         Loothing:Debug("Executed", executed, "migrations")
     else
         Loothing:Debug("No migrations needed")
+    end
+
+    -- Profiles activated later (switch, new alt profile) get their pending
+    -- profile-scoped migrations at that moment
+    self:HookProfileChanges()
+end
+
+--- Run pending profile-scoped migrations against the given (or active)
+--- profile. Completion is tracked in profileDB.migrationsRun so each
+--- profile migrates independently. Assumes RegisterMigrations + version
+--- sort already ran (RunOnLoad does both before its first call here).
+-- @param profileDB table|nil - Profile scope (default: active profile)
+-- @param globalDB table|nil - Global scope (default: current)
+-- @return number, number - executed count, failure count
+function Migration:RunPendingProfileMigrations(profileDB, globalDB)
+    if not profileDB then
+        profileDB, globalDB = self:GetDataScopes()
+    end
+    if type(profileDB) ~= "table" then
+        return 0, 0
+    end
+    if type(profileDB.migrationsRun) ~= "table" then
+        profileDB.migrationsRun = {}
+    end
+
+    local executed, failures = 0, 0
+    for _, migration in ipairs(migrations) do
+        if migration.scope == "profile" and not profileDB.migrationsRun[migration.version] then
+            Loothing:Debug("Executing profile migration:", migration.version, "-", migration.description)
+
+            local success, err = pcall(migration.func, profileDB, globalDB)
+            if success then
+                executed = executed + 1
+                profileDB.migrationsRun[migration.version] = date("%Y-%m-%d %H:%M:%S")
+            else
+                failures = failures + 1
+                Loothing:Error("Migration", migration.version, "(profile) failed:", err)
+            end
+        end
+    end
+
+    if executed > 0 then
+        Loothing:Debug("Executed", executed, "profile migrations")
+    end
+    return executed, failures
+end
+
+--- Re-run pending profile migrations whenever the active profile changes -- INTERNAL
+function Migration:HookProfileChanges()
+    if self.profileHooked then
+        return
+    end
+    local sv = Loothing.Settings and Loothing.Settings.GetDB and Loothing.Settings:GetDB()
+    if sv and sv.RegisterCallback then
+        sv:RegisterCallback("OnProfileChanged", function()
+            self:RunPendingProfileMigrations()
+        end, self)
+        self.profileHooked = true
     end
 end
 
@@ -491,11 +578,18 @@ function Migration:GetCompletedVersions()
 end
 
 --- Check if a specific migration has been executed
+-- Global scope: account-wide. Profile scope: for the ACTIVE profile.
 -- @param version string - Migration version to check
 -- @return boolean - True if migration has been executed
 function Migration:HasRun(version)
     local completed = self:GetCompletedVersions()
-    return completed[version] == true
+    if completed[version] == true then
+        return true
+    end
+    local profileDB = self:GetDataScopes()
+    return type(profileDB) == "table"
+        and type(profileDB.migrationsRun) == "table"
+        and profileDB.migrationsRun[version] ~= nil
 end
 
 --- Get the current stored migration version
@@ -547,14 +641,19 @@ end
 ----------------------------------------------------------------------]]
 
 --- Force re-run all migrations (DANGEROUS - for debugging only)
+-- Clears global history and the ACTIVE profile's tracking only; to
+-- force-rerun another profile's migrations, switch to it first.
 function Migration:ForceRerunAll()
     Loothing:Debug("WARNING: Force re-running all migrations")
 
-    local _, globalDB = self:GetDataScopes()
+    local profileDB, globalDB = self:GetDataScopes()
 
     if globalDB and globalDB.migrations then
         globalDB.migrations.version = "0.0.0"
         globalDB.migrations.history = {}
+    end
+    if type(profileDB) == "table" then
+        profileDB.migrationsRun = {}
     end
 
     self:RunOnLoad()

@@ -1,9 +1,9 @@
-## Interface: 120005
+## Interface: 120100
 ## AllowLoadGameType: standard
 ## Title: Loothing (Dev)
 ## Notes: Development build with test harness and debug tooling
 ## Author: James Kueller
-## Version: 2.0.44
+## Version: 2.0.45
 ## SavedVariables: LoolibDB
 ## Dependencies: Loolib
 ## IconTexture: Interface\AddOns\Loothing\Media\logo
@@ -97,7 +97,6 @@ Council\CouncilMembers.lua
 Council\CouncilSettings.lua
 Council\ObserverManager.lua
 Council\VotingEngine.lua
-Council\VotingSession.lua
 
 # Communication
 Comm\Protocol.lua
@@ -126,7 +125,6 @@ UI\Filters.lua
 UI\Popups.lua
 UI\ItemRow.lua
 UI\VotePanel.lua
-UI\Components\ResponseRow.lua
 UI\Components\CandidateResultRow.lua
 UI\ResultsPanel.lua
 UI\SessionPanel.lua

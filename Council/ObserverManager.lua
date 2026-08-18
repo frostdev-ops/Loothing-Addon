@@ -177,16 +177,6 @@ function ObserverMixin:RemoveObserver(name)
     return false
 end
 
---- Clear all observers
-function ObserverMixin:ClearObservers()
-    if not Utils.CanManageCouncilRoster() then return false end
-    wipe(self.list)
-    self:SaveToSettings()
-    self:TriggerEvent("OnObserverListChanged", self.list)
-    if Loothing.Sync then Loothing.Sync:BroadcastObserverRoster() end
-    return true
-end
-
 --- Get explicit observer list
 -- @return table - Array of names
 function ObserverMixin:GetObservers()
@@ -218,24 +208,6 @@ function ObserverMixin:GetReconnectSnapshot()
         openObservation = Loothing.Settings and Loothing.Settings:GetOpenObservation() or false,
         mlIsObserver = Loothing.Settings and Loothing.Settings:GetMLIsObserver() or false,
     }
-end
-
---- Get all effective observers (explicit list + auto-included when openObservation is on)
--- @return table - Array of names
-function ObserverMixin:GetAllObservers()
-    if not GetEffectiveOpenObservation(self) then
-        return self.list
-    end
-    -- Open observation: return all group members
-    if not IsInGroup() then
-        return self.list
-    end
-    local roster = Utils.GetRaidRoster()
-    local result = {}
-    for _, entry in ipairs(roster) do
-        result[#result + 1] = entry.name
-    end
-    return result
 end
 
 --[[--------------------------------------------------------------------
@@ -316,14 +288,6 @@ function ObserverMixin:IsMasterLooterObserverModeEnabled()
     return GetEffectiveMLIsObserver(self)
 end
 
---- Does the current player have privileged council visibility?
--- ML and council members always have full visibility even if observer
--- permissions are restrictive or session/global ML state is mid-sync.
--- @return boolean
-function ObserverMixin:HasPrivilegedVisibility()
-    return HasPrivilegedVisibility()
-end
-
 --- Does the current player match the active Master Looter by any reliable source?
 -- @return boolean
 function ObserverMixin:HasMasterLooterVisibility()
@@ -400,7 +364,12 @@ function ObserverMixin:SetRemoteObserverList(data)
     wipe(self.remoteList)
     if data.list then
         for _, name in ipairs(data.list) do
-            self.remoteList[Utils.NormalizeName(name)] = true
+            -- NormalizeName returns nil for nil/secret input; skip rather
+            -- than raise "table index is nil" inside comm dispatch
+            local normalized = Utils.NormalizeName(name)
+            if normalized then
+                self.remoteList[normalized] = true
+            end
         end
     end
 

@@ -302,26 +302,6 @@ Describe("Item Management", function()
         session:EndSession()
     end)
 
-    It("GetPendingItems returns only pending items", function()
-        local session = CreateMockSession()
-
-        local saved = MockSessionPermissions(true)
-
-        session:StartSession(1, "Boss")
-
-        local item1 = session:AddItem("|cffa335ee|Hitem:212398::::::::80::::::::::|h[Item 1]|h|r", "Player1")
-        local item2 = session:AddItem("|cffa335ee|Hitem:212399::::::::80::::::::::|h[Item 2]|h|r", "Player2")
-
-        item2:SetState(Loothing.ItemState.AWARDED)
-
-        local pending = session:GetPendingItems()
-
-        AssertEquals(#pending, 1, "Should have 1 pending item")
-        AssertEquals(pending[1], item1, "Should return only pending item")
-
-        RestoreSessionPermissions(saved)
-        session:EndSession()
-    end)
 end)
 
 --[[--------------------------------------------------------------------
@@ -493,20 +473,6 @@ Describe("Session End", function()
         RestoreSessionPermissions(saved)
     end)
 
-    It("CloseSession changes state to CLOSED", function()
-        local session = CreateMockSession()
-
-        local saved = MockSessionPermissions(true)
-
-        session:StartSession(1, "Boss")
-        session:CloseSession()
-
-        AssertEquals(session:GetState(), Loothing.SessionState.CLOSED, "Should be CLOSED")
-
-        RestoreSessionPermissions(saved)
-        session:EndSession()
-    end)
-
     It("Cannot end inactive session", function()
         local session = CreateMockSession()
 
@@ -525,7 +491,6 @@ Describe("Edge Cases", function()
         local session = CreateMockSession()
 
         AssertEquals(session:GetItemCount(), 0, "Empty session has 0 items")
-        AssertEquals(#session:GetPendingItems(), 0, "No pending items in empty session")
 
         local items = session:GetItems()
         local count = 0

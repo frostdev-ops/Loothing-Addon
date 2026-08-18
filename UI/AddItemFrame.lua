@@ -50,6 +50,19 @@ end
     AddItemFrameMixin
 ----------------------------------------------------------------------]]
 
+-- Pool resetter shared by all three list panes (queue / recent / bags).
+-- Clears per-item state only; child widgets and the hook-once scripts set
+-- at row construction survive reuse — WoW frames can never be destroyed,
+-- so the pools keep each pane bounded at its high-water row count.
+local function ResetListRow(_, row)
+    row:Hide()
+    row:ClearAllPoints()
+    row._itemData = nil
+    row._iconTex = nil
+    row._queueID = nil
+    row._selected = false
+end
+
 local AddItemFrameMixin = ns.AddItemFrameMixin or {}
 ns.AddItemFrameMixin = AddItemFrameMixin
 
@@ -57,9 +70,6 @@ function AddItemFrameMixin:Init()
     self.activeTab = 1
     self.itemQueue = {}
     self.nextQueueID = 0
-    self.bagRows = {}
-    self.recentRows = {}
-    self.queueRows = {}
     self:BuildFrame()
 end
 
@@ -300,6 +310,7 @@ function AddItemFrameMixin:BuildQueueList(panel)
     sc:SetHeight(1)
     scroll:SetScrollChild(sc)
     self.queueContent = sc
+    self.queueRowPool = CreateFramePool("Frame", sc, "BackdropTemplate", ResetListRow)
 
     scroll:SetScript("OnSizeChanged", function(_sf, w)
         sc:SetWidth(w)
@@ -322,8 +333,7 @@ function AddItemFrameMixin:BuildQueueList(panel)
 end
 
 function AddItemFrameMixin:RefreshQueueList()
-    for _, row in ipairs(self.queueRows) do row:Hide() end
-    wipe(self.queueRows)
+    self.queueRowPool:ReleaseAll()
 
     if #self.itemQueue == 0 then
         self.queueEmptyHint:Show()
@@ -336,95 +346,110 @@ function AddItemFrameMixin:RefreshQueueList()
 
     local yOffset = 0
     for _, entry in ipairs(self.itemQueue) do
-        local row = self:CreateQueueRow(self.queueContent, entry)
+        local row = self:CreateQueueRow(entry)
         row:SetPoint("TOPLEFT", 0, yOffset)
         row:SetWidth(self.queueContent:GetWidth())
         row:Show()
         yOffset = yOffset - 38
-        self.queueRows[#self.queueRows + 1] = row
     end
     self.queueContent:SetHeight(math.abs(yOffset) + 8)
 end
 
-function AddItemFrameMixin:CreateQueueRow(parent, itemData)
-    local row = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-    row:SetHeight(36)
-    row:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        tile = false, edgeSize = 1,
-        insets = { left = 1, right = 1, top = 1, bottom = 1 },
-    })
-    row:SetBackdropColor(0.08, 0.08, 0.08, 1)
-    row:SetBackdropBorderColor(0.15, 0.15, 0.15, 1)
+function AddItemFrameMixin:CreateQueueRow(itemData)
+    local row = self.queueRowPool:Acquire()
 
-    -- Quality-colored left bar
-    local qBar = row:CreateTexture(nil, "ARTWORK")
-    qBar:SetSize(3, 34)
-    qBar:SetPoint("LEFT", 1, 0)
-    if itemData.quality and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[itemData.quality] then
-        local c = ITEM_QUALITY_COLORS[itemData.quality]
-        qBar:SetColorTexture(c.r, c.g, c.b, 1)
-    else
-        qBar:SetColorTexture(0.5, 0.5, 0.5, 1)
-    end
+    -- One-time construction; scripts read row._itemData dynamically so
+    -- pooled reuse never re-allocates closures. Per-item state is applied
+    -- below on every acquire.
+    if not row.icon then
+        row:SetHeight(36)
+        row:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Buttons\\WHITE8x8",
+            tile = false, edgeSize = 1,
+            insets = { left = 1, right = 1, top = 1, bottom = 1 },
+        })
+        row:SetBackdropColor(0.08, 0.08, 0.08, 1)
+        row:SetBackdropBorderColor(0.15, 0.15, 0.15, 1)
 
-    -- Icon
-    local icon = row:CreateTexture(nil, "ARTWORK")
-    icon:SetSize(28, 28)
-    icon:SetPoint("LEFT", 6, 0)
-    if itemData.icon then
-        icon:SetTexture(itemData.icon)
-    end
+        -- Quality-colored left bar
+        local qBar = row:CreateTexture(nil, "ARTWORK")
+        qBar:SetSize(3, 34)
+        qBar:SetPoint("LEFT", 1, 0)
+        row.qBar = qBar
 
-    -- Name
-    local nameText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    nameText:SetPoint("TOPLEFT", icon, "TOPRIGHT", 6, -3)
-    nameText:SetPoint("TOPRIGHT", -28, -3)
-    nameText:SetJustifyH("LEFT")
-    nameText:SetText(itemData.name or "")
-    if itemData.quality and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[itemData.quality] then
-        local c = ITEM_QUALITY_COLORS[itemData.quality]
-        nameText:SetTextColor(c.r, c.g, c.b)
-    end
+        -- Icon
+        local icon = row:CreateTexture(nil, "ARTWORK")
+        icon:SetSize(28, 28)
+        icon:SetPoint("LEFT", 6, 0)
+        row.icon = icon
 
-    -- iLvl
-    local ilvlText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    ilvlText:SetPoint("BOTTOMLEFT", icon, "BOTTOMRIGHT", 6, 3)
-    ilvlText:SetTextColor(0.7, 0.7, 0.7)
-    if itemData.ilvl and itemData.ilvl > 0 then
-        ilvlText:SetText(L["ILVL_PREFIX"] .. itemData.ilvl)
-    end
+        -- Name
+        local nameText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        nameText:SetPoint("TOPLEFT", icon, "TOPRIGHT", 6, -3)
+        nameText:SetPoint("TOPRIGHT", -28, -3)
+        nameText:SetJustifyH("LEFT")
+        row.nameText = nameText
 
-    -- Remove button
-    local removeBtn = CreateFrame("Button", nil, row)
-    removeBtn:SetSize(20, 20)
-    removeBtn:SetPoint("RIGHT", -4, 0)
-    local removeTxt = removeBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    removeTxt:SetPoint("CENTER")
-    removeTxt:SetText("X")
-    removeTxt:SetTextColor(0.8, 0.3, 0.3)
-    removeBtn:SetScript("OnClick", function()
-        self:RemoveFromQueue(itemData.queueID)
-        self:RefreshQueueList()
-    end)
-    removeBtn:SetScript("OnEnter", function()
-        removeTxt:SetTextColor(1, 0.4, 0.4)
-    end)
-    removeBtn:SetScript("OnLeave", function()
+        -- iLvl
+        local ilvlText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        ilvlText:SetPoint("BOTTOMLEFT", icon, "BOTTOMRIGHT", 6, 3)
+        ilvlText:SetTextColor(0.7, 0.7, 0.7)
+        row.ilvlText = ilvlText
+
+        -- Remove button
+        local removeBtn = CreateFrame("Button", nil, row)
+        removeBtn:SetSize(20, 20)
+        removeBtn:SetPoint("RIGHT", -4, 0)
+        local removeTxt = removeBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        removeTxt:SetPoint("CENTER")
+        removeTxt:SetText("X")
         removeTxt:SetTextColor(0.8, 0.3, 0.3)
-    end)
+        removeBtn:SetScript("OnClick", function()
+            if row._itemData then
+                self:RemoveFromQueue(row._itemData.queueID)
+                self:RefreshQueueList()
+            end
+        end)
+        removeBtn:SetScript("OnEnter", function()
+            removeTxt:SetTextColor(1, 0.4, 0.4)
+        end)
+        removeBtn:SetScript("OnLeave", function()
+            removeTxt:SetTextColor(0.8, 0.3, 0.3)
+        end)
 
-    -- Tooltip
-    row:EnableMouse(true)
-    row:SetScript("OnEnter", function(btn)
-        GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
-        GameTooltip:SetHyperlink(itemData.link)
-        GameTooltip:Show()
-    end)
-    row:SetScript("OnLeave", function()
-        GameTooltip:Hide()
-    end)
+        -- Tooltip
+        row:EnableMouse(true)
+        row:SetScript("OnEnter", function(btn)
+            if not (btn._itemData and btn._itemData.link) then return end
+            GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
+            GameTooltip:SetHyperlink(btn._itemData.link)
+            GameTooltip:Show()
+        end)
+        row:SetScript("OnLeave", function()
+            GameTooltip:Hide()
+        end)
+    end
+
+    row._itemData = itemData
+
+    if itemData.quality and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[itemData.quality] then
+        local c = ITEM_QUALITY_COLORS[itemData.quality]
+        row.qBar:SetColorTexture(c.r, c.g, c.b, 1)
+        row.nameText:SetTextColor(c.r, c.g, c.b)
+    else
+        row.qBar:SetColorTexture(0.5, 0.5, 0.5, 1)
+        row.nameText:SetTextColor(1, 0.82, 0)
+    end
+
+    row.icon:SetTexture(itemData.icon)
+    row.nameText:SetText(itemData.name or "")
+
+    if itemData.ilvl and itemData.ilvl > 0 then
+        row.ilvlText:SetText(L["ILVL_PREFIX"] .. itemData.ilvl)
+    else
+        row.ilvlText:SetText("")
+    end
 
     return row
 end
@@ -492,6 +517,7 @@ function AddItemFrameMixin:BuildRecentDropsPanel()
     sc:SetHeight(600)
     scroll:SetScrollChild(sc)
     self.recentContent = sc
+    self.recentRowPool = CreateFramePool("Button", sc, "BackdropTemplate", ResetListRow)
 
     scroll:SetScript("OnSizeChanged", function(_sf, w)
         sc:SetWidth(w)
@@ -507,8 +533,7 @@ function AddItemFrameMixin:BuildRecentDropsPanel()
 end
 
 function AddItemFrameMixin:RefreshRecentDrops()
-    for _, row in ipairs(self.recentRows) do row:Hide() end
-    wipe(self.recentRows)
+    self.recentRowPool:ReleaseAll()
     wipe(self.itemQueue)
     self:UpdateAddButton()
 
@@ -556,12 +581,11 @@ function AddItemFrameMixin:RefreshRecentDrops()
 
     local yOffset = 0
     for _, drop in ipairs(drops) do
-        local row = self:CreateItemRow(self.recentContent, drop)
+        local row = self:CreateItemRow(self.recentRowPool, drop)
         row:SetPoint("TOPLEFT", 0, yOffset)
         row:SetWidth(self.recentContent:GetWidth())
         row:Show()
         yOffset = yOffset - 38
-        self.recentRows[#self.recentRows + 1] = row
     end
     self.recentContent:SetHeight(math.abs(yOffset) + 8)
 end
@@ -604,6 +628,7 @@ function AddItemFrameMixin:BuildFromBagsPanel()
     sc:SetHeight(600)
     scroll:SetScrollChild(sc)
     self.bagsContent = sc
+    self.bagRowPool = CreateFramePool("Button", sc, "BackdropTemplate", ResetListRow)
 
     scroll:SetScript("OnSizeChanged", function(_sf, w)
         sc:SetWidth(w)
@@ -619,8 +644,7 @@ function AddItemFrameMixin:BuildFromBagsPanel()
 end
 
 function AddItemFrameMixin:RefreshBagList()
-    for _, row in ipairs(self.bagRows) do row:Hide() end
-    wipe(self.bagRows)
+    self.bagRowPool:ReleaseAll()
     wipe(self.itemQueue)
     self:UpdateAddButton()
 
@@ -660,12 +684,11 @@ function AddItemFrameMixin:RefreshBagList()
 
     local yOffset = 0
     for _, item in ipairs(items) do
-        local row = self:CreateItemRow(self.bagsContent, item)
+        local row = self:CreateItemRow(self.bagRowPool, item)
         row:SetPoint("TOPLEFT", 0, yOffset)
         row:SetWidth(self.bagsContent:GetWidth())
         row:Show()
         yOffset = yOffset - 38
-        self.bagRows[#self.bagRows + 1] = row
     end
     self.bagsContent:SetHeight(math.abs(yOffset) + 8)
 end
@@ -674,106 +697,132 @@ end
     Shared Item Row (Tabs 2 & 3 — toggle multi-select)
 ----------------------------------------------------------------------]]
 
-function AddItemFrameMixin:CreateItemRow(parent, itemData)
-    local row = CreateFrame("Button", nil, parent, "BackdropTemplate")
-    row:SetHeight(36)
-    row:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        tile = false, edgeSize = 1,
-        insets = { left = 1, right = 1, top = 1, bottom = 1 },
-    })
+function AddItemFrameMixin:CreateItemRow(pool, itemData)
+    local row = pool:Acquire()
+
+    -- One-time construction; scripts read row._itemData / row._iconTex
+    -- dynamically so pooled reuse never re-allocates closures. Per-item
+    -- state is applied below on every acquire.
+    if not row.icon then
+        row:SetHeight(36)
+        row:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Buttons\\WHITE8x8",
+            tile = false, edgeSize = 1,
+            insets = { left = 1, right = 1, top = 1, bottom = 1 },
+        })
+        row:SetBackdropBorderColor(0.15, 0.15, 0.15, 1)
+
+        -- Quality-colored left bar
+        local qBar = row:CreateTexture(nil, "ARTWORK")
+        qBar:SetSize(3, 34)
+        qBar:SetPoint("LEFT", 1, 0)
+        row.qBar = qBar
+
+        -- Icon
+        local icon = row:CreateTexture(nil, "ARTWORK")
+        icon:SetSize(28, 28)
+        icon:SetPoint("LEFT", 6, 0)
+        row.icon = icon
+
+        -- Name
+        local nameText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        nameText:SetPoint("TOPLEFT", icon, "TOPRIGHT", 6, -3)
+        nameText:SetPoint("TOPRIGHT", -62, -3)
+        nameText:SetJustifyH("LEFT")
+        row.nameText = nameText
+
+        -- iLvl
+        local ilvlText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        ilvlText:SetPoint("BOTTOMLEFT", icon, "BOTTOMRIGHT", 6, 3)
+        ilvlText:SetTextColor(0.7, 0.7, 0.7)
+        row.ilvlText = ilvlText
+
+        -- Time remaining (for recent drops tab)
+        local timeText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        timeText:SetPoint("RIGHT", -4, 0)
+        timeText:SetTextColor(1, 0.82, 0)
+        timeText:Hide()
+        row.timeText = timeText
+
+        -- Hover highlight
+        local hl = row:CreateTexture(nil, "HIGHLIGHT")
+        hl:SetAllPoints()
+        hl:SetColorTexture(1, 1, 1, 0.05)
+
+        -- Toggle multi-select on click
+        row:SetScript("OnClick", function(btn)
+            local data = btn._itemData
+            if not data then return end
+            if btn._selected then
+                -- Deselect
+                btn._selected = false
+                btn:SetBackdropColor(0.08, 0.08, 0.08, 1)
+                if btn._queueID then
+                    self:RemoveFromQueue(btn._queueID)
+                end
+            else
+                -- Select (duplicates allowed for multiple copies of same item)
+                btn._selected = true
+                btn:SetBackdropColor(0.12, 0.12, 0.28, 1)
+                self.nextQueueID = (self.nextQueueID or 0) + 1
+                btn._queueID = self.nextQueueID
+                self.itemQueue[#self.itemQueue + 1] = {
+                    link = data.link,
+                    name = data.name,
+                    ilvl = data.ilvl or 0,
+                    quality = data.quality,
+                    icon = btn._iconTex,
+                    queueID = self.nextQueueID,
+                }
+            end
+            self:UpdateAddButton()
+        end)
+
+        row:SetScript("OnEnter", function(btn)
+            if not (btn._itemData and btn._itemData.link) then return end
+            GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
+            GameTooltip:SetHyperlink(btn._itemData.link)
+            GameTooltip:Show()
+        end)
+        row:SetScript("OnLeave", function()
+            GameTooltip:Hide()
+        end)
+    end
+
+    row._itemData = itemData
+    -- The resetter cleared _selected/_queueID; restore the unselected backdrop
+    -- since a previously selected reused row still carries the selection color.
     row:SetBackdropColor(0.08, 0.08, 0.08, 1)
-    row:SetBackdropBorderColor(0.15, 0.15, 0.15, 1)
 
-    -- Quality-colored left bar
-    local qBar = row:CreateTexture(nil, "ARTWORK")
-    qBar:SetSize(3, 34)
-    qBar:SetPoint("LEFT", 1, 0)
     if itemData.quality and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[itemData.quality] then
         local c = ITEM_QUALITY_COLORS[itemData.quality]
-        qBar:SetColorTexture(c.r, c.g, c.b, 1)
+        row.qBar:SetColorTexture(c.r, c.g, c.b, 1)
+        row.nameText:SetTextColor(c.r, c.g, c.b)
     else
-        qBar:SetColorTexture(0.5, 0.5, 0.5, 1)
+        row.qBar:SetColorTexture(0.5, 0.5, 0.5, 1)
+        row.nameText:SetTextColor(1, 0.82, 0)
     end
 
-    -- Icon
-    local icon = row:CreateTexture(nil, "ARTWORK")
-    icon:SetSize(28, 28)
-    icon:SetPoint("LEFT", 6, 0)
     local _, _, _, _, _, _, _, _, _, iconTex = C_Item.GetItemInfo(itemData.link)
-    if iconTex then icon:SetTexture(iconTex) end
+    row._iconTex = iconTex
+    row.icon:SetTexture(iconTex)
+    row.nameText:SetText(itemData.name or "")
 
-    -- Name
-    local nameText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    nameText:SetPoint("TOPLEFT", icon, "TOPRIGHT", 6, -3)
-    nameText:SetPoint("TOPRIGHT", -62, -3)
-    nameText:SetJustifyH("LEFT")
-    nameText:SetText(itemData.name or "")
-    if itemData.quality and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[itemData.quality] then
-        local c = ITEM_QUALITY_COLORS[itemData.quality]
-        nameText:SetTextColor(c.r, c.g, c.b)
-    end
-
-    -- iLvl
-    local ilvlText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    ilvlText:SetPoint("BOTTOMLEFT", icon, "BOTTOMRIGHT", 6, 3)
-    ilvlText:SetTextColor(0.7, 0.7, 0.7)
     if itemData.ilvl and itemData.ilvl > 0 then
-        ilvlText:SetText(L["ILVL_PREFIX"] .. itemData.ilvl)
+        row.ilvlText:SetText(L["ILVL_PREFIX"] .. itemData.ilvl)
+    else
+        row.ilvlText:SetText("")
     end
 
-    -- Time remaining (for recent drops tab)
     if itemData.timeRemaining then
         local mins = math.floor(itemData.timeRemaining / 60)
         local secs = itemData.timeRemaining % 60
-        local tText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        tText:SetPoint("RIGHT", -4, 0)
-        tText:SetTextColor(1, 0.82, 0)
-        tText:SetText(string.format("%d:%02d", mins, secs))
+        row.timeText:SetText(string.format("%d:%02d", mins, secs))
+        row.timeText:Show()
+    else
+        row.timeText:Hide()
     end
-
-    -- Hover highlight
-    local hl = row:CreateTexture(nil, "HIGHLIGHT")
-    hl:SetAllPoints()
-    hl:SetColorTexture(1, 1, 1, 0.05)
-
-    -- Toggle multi-select on click
-    row._selected = false
-    row:SetScript("OnClick", function(btn)
-        if btn._selected then
-            -- Deselect
-            btn._selected = false
-            btn:SetBackdropColor(0.08, 0.08, 0.08, 1)
-            if btn._queueID then
-                self:RemoveFromQueue(btn._queueID)
-            end
-        else
-            -- Select (duplicates allowed for multiple copies of same item)
-            btn._selected = true
-            btn:SetBackdropColor(0.12, 0.12, 0.28, 1)
-            self.nextQueueID = (self.nextQueueID or 0) + 1
-            btn._queueID = self.nextQueueID
-            self.itemQueue[#self.itemQueue + 1] = {
-                link = itemData.link,
-                name = itemData.name,
-                ilvl = itemData.ilvl or 0,
-                quality = itemData.quality,
-                icon = iconTex,
-                queueID = self.nextQueueID,
-            }
-        end
-        self:UpdateAddButton()
-    end)
-
-    row:SetScript("OnEnter", function(btn)
-        GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
-        GameTooltip:SetHyperlink(itemData.link)
-        GameTooltip:Show()
-    end)
-    row:SetScript("OnLeave", function()
-        GameTooltip:Hide()
-    end)
 
     return row
 end

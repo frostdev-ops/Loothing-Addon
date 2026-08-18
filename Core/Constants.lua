@@ -8,7 +8,7 @@ local _, ns = ...
 local Loothing = ns.Addon
 
 -- Addon info
-Loothing.VERSION = "2.0.44"
+Loothing.VERSION = "2.0.45"
 Loothing.PROTOCOL_VERSION = 4
 -- Minimum accepted protocol version on receive. v2 and earlier predate the
 -- current serializer/compressor pipeline and cannot be parsed safely; v3
@@ -618,7 +618,7 @@ Loothing.UIConstants = {
 Loothing.Timing = {
     NO_TIMEOUT = 0,             -- Sentinel: voting runs until ML manually ends it
     DEFAULT_VOTE_TIMEOUT = 30,
-    VOTING_DEFAULT = 30,        -- Alias used in VotingSession / VotePanel
+    VOTING_DEFAULT = 30,        -- Alias used in VotePanel
     MIN_VOTE_TIMEOUT = 10,
     MAX_VOTE_TIMEOUT = 120,
     VOTE_LATE_ACCEPT_WINDOW = 30, -- Seconds after timer expiry to still accept queued VOTE_COMMITs

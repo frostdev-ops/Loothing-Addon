@@ -197,13 +197,15 @@ end
 ----------------------------------------------------------------------]]
 
 function CouncilTableMixin:RebuildColumnHeaders()
-    -- Clear existing headers
-    if self.headerButtons then
-        for _, btn in pairs(self.headerButtons) do
-            btn:Hide()
-        end
+    -- Header buttons are keyed by column id and reused across rebuilds —
+    -- sort clicks, resizes, and column toggles all land here, and WoW
+    -- frames can never be destroyed, so recreating them would leak. Hide
+    -- everything up front; the loop below re-anchors and re-shows the
+    -- headers for the currently visible columns.
+    self.headerButtons = self.headerButtons or {}
+    for _, btn in pairs(self.headerButtons) do
+        btn:Hide()
     end
-    self.headerButtons = {}
 
     if not self.headersContainer then return end
 
@@ -223,101 +225,58 @@ function CouncilTableMixin:RebuildColumnHeaders()
         local col = entry.col
         local w = entry.width
 
-        local btn = CreateFrame("Button", nil, self.headersContainer)
-        btn:SetSize(w, 20)
-        btn:SetPoint("LEFT", xOffset, 0)
+        -- Create only on first sight of this column id. Text, scripts, and
+        -- tooltips are static per column, so they are wired once here;
+        -- size, anchor, and sort arrow are re-applied below every rebuild.
+        local btn = self.headerButtons[col.id]
+        if not btn then
+            btn = CreateFrame("Button", nil, self.headersContainer)
 
-        local text = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        text:SetPoint("LEFT", btn, "LEFT", 2, 0)
-        text:SetPoint("RIGHT", btn, "RIGHT", col.sortable and -10 or -2, 0)
-        text:SetJustifyH("CENTER")
-        text:SetWordWrap(false)
-        text:SetText(col.name)
-        text:SetTextColor(0.8, 0.8, 0.6)
-        btn.text = text
+            local text = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            text:SetPoint("LEFT", btn, "LEFT", 2, 0)
+            text:SetPoint("RIGHT", btn, "RIGHT", col.sortable and -10 or -2, 0)
+            text:SetJustifyH("CENTER")
+            text:SetWordWrap(false)
+            text:SetText(col.name)
+            text:SetTextColor(0.8, 0.8, 0.6)
+            btn.text = text
 
-        -- Sort indicator
-        local sortArrow = btn:CreateTexture(nil, "OVERLAY")
-        sortArrow:SetSize(8, 8)
-        sortArrow:SetPoint("RIGHT", -1, 0)
-        sortArrow:SetTexture("Interface\\Buttons\\UI-SortArrow")
-        sortArrow:Hide()
-        btn.sortArrow = sortArrow
+            -- Sort indicator
+            local sortArrow = btn:CreateTexture(nil, "OVERLAY")
+            sortArrow:SetSize(8, 8)
+            sortArrow:SetPoint("RIGHT", -1, 0)
+            sortArrow:SetTexture("Interface\\Buttons\\UI-SortArrow")
+            sortArrow:Hide()
+            btn.sortArrow = sortArrow
 
-        if col.sortable then
-            btn:SetScript("OnClick", function()
-                self:OnColumnHeaderClick(col.id)
-            end)
-            btn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
+            if col.sortable then
+                btn:SetScript("OnClick", function()
+                    self:OnColumnHeaderClick(col.id)
+                end)
+                btn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
+            end
+
+            self:InitColumnHeaderTooltip(btn, col)
+            self.headerButtons[col.id] = btn
         end
+
+        btn:SetSize(w, 20)
+        btn:ClearAllPoints()
+        btn:SetPoint("LEFT", xOffset, 0)
+        btn:Show()
 
         -- Show sort arrow for current sort column
         if self.sortColumn == col.id then
-            sortArrow:Show()
+            btn.sortArrow:Show()
             if self.sortAscending then
-                sortArrow:SetTexCoord(0, 0.5625, 1, 0)
+                btn.sortArrow:SetTexCoord(0, 0.5625, 1, 0)
             else
-                sortArrow:SetTexCoord(0, 0.5625, 0, 1)
+                btn.sortArrow:SetTexCoord(0, 0.5625, 0, 1)
             end
+        else
+            btn.sortArrow:Hide()
         end
 
-        -- Column header tooltips
-        local tooltip = self.COLUMN_TOOLTIPS and self.COLUMN_TOOLTIPS[col.id]
-        if col.id == "wishlist" then
-            -- Dynamic wishlist header tooltip with candidate breakdown
-            local councilTable = self
-            btn:SetScript("OnEnter", function(b)
-                GameTooltip:SetOwner(b, "ANCHOR_BOTTOM")
-                GameTooltip:AddLine(tooltip or "Wishlist priority from loothing.xyz", 1, 1, 1)
-
-                if councilTable.currentItem and councilTable.currentItem.candidateManager then
-                    local allCandidates = councilTable.currentItem.candidateManager:GetAllCandidates()
-                    local total = 0
-                    local byLevel = {}
-
-                    for _, cand in ipairs(allCandidates) do
-                        if cand.wishlistEntry then
-                            total = total + 1
-                            local nl = cand.wishlistEntry.needLevel or "unknown"
-                            byLevel[nl] = (byLevel[nl] or 0) + 1
-                        end
-                    end
-
-                    if total > 0 then
-                        GameTooltip:AddLine(" ")
-                        GameTooltip:AddLine(string.format("%d candidate(s) wishlisted this item:", total), 0.8, 0.8, 0.8)
-                        local order = { "bis", "major", "minor", "optional", "transmog" }
-                        for _, nl in ipairs(order) do
-                            if byLevel[nl] then
-                                local info = Loothing.NeedLevel[nl]
-                                local lbl = info and info.label or nl
-                                local c = info and info.color or { r = 1, g = 1, b = 1 }
-                                GameTooltip:AddLine(string.format("  %d %s", byLevel[nl], lbl), c.r, c.g, c.b)
-                            end
-                        end
-                    else
-                        GameTooltip:AddLine(" ")
-                        GameTooltip:AddLine("No candidates have this item wishlisted", 0.5, 0.5, 0.5)
-                    end
-                end
-
-                GameTooltip:Show()
-            end)
-            btn:SetScript("OnLeave", function()
-                GameTooltip:Hide()
-            end)
-        elseif tooltip then
-            btn:SetScript("OnEnter", function(b)
-                GameTooltip:SetOwner(b, "ANCHOR_BOTTOM")
-                GameTooltip:AddLine(tooltip, 1, 1, 1)
-                GameTooltip:Show()
-            end)
-            btn:SetScript("OnLeave", function()
-                GameTooltip:Hide()
-            end)
-        end
-
-        self.headerButtons[col.id] = btn
         xOffset = xOffset + w + padding
     end
 
@@ -329,6 +288,66 @@ function CouncilTableMixin:RebuildColumnHeaders()
     end
     self.headerSep:SetPoint("TOPLEFT", self.headersContainer, "BOTTOMLEFT", 0, -2)
     self.headerSep:SetPoint("TOPRIGHT", self.headersContainer, "BOTTOMRIGHT", 0, -2)
+end
+
+--- Wire the static hover tooltip for a header button (once, at creation)
+-- @param btn Button - Header button
+-- @param col table - Column definition
+function CouncilTableMixin:InitColumnHeaderTooltip(btn, col)
+    local tooltip = self.COLUMN_TOOLTIPS and self.COLUMN_TOOLTIPS[col.id]
+    if col.id == "wishlist" then
+        -- Dynamic wishlist header tooltip with candidate breakdown
+        local councilTable = self
+        btn:SetScript("OnEnter", function(b)
+            GameTooltip:SetOwner(b, "ANCHOR_BOTTOM")
+            GameTooltip:AddLine(tooltip or "Wishlist priority from loothing.xyz", 1, 1, 1)
+
+            if councilTable.currentItem and councilTable.currentItem.candidateManager then
+                local allCandidates = councilTable.currentItem.candidateManager:GetAllCandidates()
+                local total = 0
+                local byLevel = {}
+
+                for _, cand in ipairs(allCandidates) do
+                    if cand.wishlistEntry then
+                        total = total + 1
+                        local nl = cand.wishlistEntry.needLevel or "unknown"
+                        byLevel[nl] = (byLevel[nl] or 0) + 1
+                    end
+                end
+
+                if total > 0 then
+                    GameTooltip:AddLine(" ")
+                    GameTooltip:AddLine(string.format("%d candidate(s) wishlisted this item:", total), 0.8, 0.8, 0.8)
+                    local order = { "bis", "major", "minor", "optional", "transmog" }
+                    for _, nl in ipairs(order) do
+                        if byLevel[nl] then
+                            local info = Loothing.NeedLevel[nl]
+                            local lbl = info and info.label or nl
+                            local c = info and info.color or { r = 1, g = 1, b = 1 }
+                            GameTooltip:AddLine(string.format("  %d %s", byLevel[nl], lbl), c.r, c.g, c.b)
+                        end
+                    end
+                else
+                    GameTooltip:AddLine(" ")
+                    GameTooltip:AddLine("No candidates have this item wishlisted", 0.5, 0.5, 0.5)
+                end
+            end
+
+            GameTooltip:Show()
+        end)
+        btn:SetScript("OnLeave", function()
+            GameTooltip:Hide()
+        end)
+    elseif tooltip then
+        btn:SetScript("OnEnter", function(b)
+            GameTooltip:SetOwner(b, "ANCHOR_BOTTOM")
+            GameTooltip:AddLine(tooltip, 1, 1, 1)
+            GameTooltip:Show()
+        end)
+        btn:SetScript("OnLeave", function()
+            GameTooltip:Hide()
+        end)
+    end
 end
 
 function CouncilTableMixin:OnColumnHeaderClick(columnId)

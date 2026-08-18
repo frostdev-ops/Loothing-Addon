@@ -800,11 +800,14 @@ function RollFrameMixin:CreateResponseSection()
 end
 
 function RollFrameMixin:RefreshResponseButtons()
-    for _, button in ipairs(self.responseButtonsArray) do
+    -- Buttons are keyed by response id in self.responseButtons and reused
+    -- across refreshes — WoW frames can never be destroyed, so recreating
+    -- them on every DisplayItem/theme change would leak. Hide everything up
+    -- front; the loop below re-anchors and re-shows the buttons the current
+    -- response set actually uses.
+    for _, button in pairs(self.responseButtons) do
         button:Hide()
-        button:SetParent(nil)
     end
-    wipe(self.responseButtons)
     wipe(self.responseButtonsArray)
 
     local buttons = Loothing.Settings and Loothing.Settings:GetResponseButtons() or {}
@@ -833,7 +836,6 @@ function RollFrameMixin:RefreshResponseButtons()
         if not button then
             button = CreateFrame("Button", nil, self.responseContainer, "BackdropTemplate")
             button:SetSize(buttonWidth, BUTTON_HEIGHT)
-            button:SetPoint("TOPLEFT", 0, -RESPONSE_LABEL_HEIGHT - (i - 1) * (BUTTON_HEIGHT + BUTTON_SPACING))
 
             button:SetBackdrop({
                 bgFile = "Interface\\Buttons\\WHITE8x8",
@@ -890,12 +892,10 @@ function RollFrameMixin:RefreshResponseButtons()
             -- Response text (bold, colored)
             local text = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
             text:SetPoint("LEFT", colorBar, "RIGHT", 8, 0)
-            text:SetText(btnData.text)
             text:SetTextColor(1, 1, 1)
             button.text = text
 
             button.buttonId = btnData.id
-            button.buttonData = btnData
 
             -- Flash overlay texture with its own animation group
             local flashTex = button:CreateTexture(nil, "OVERLAY", nil, 7)
@@ -945,9 +945,21 @@ function RollFrameMixin:RefreshResponseButtons()
             end)
 
             self.responseButtons[btnData.id] = button
-            self.responseButtonsArray[i] = button
-            button:Show()
         end
+
+        self.responseButtonsArray[i] = button
+        button.buttonData = btnData
+        button.text:SetText(btnData.text)
+        button:ClearAllPoints()
+        button:SetPoint("TOPLEFT", 0, -RESPONSE_LABEL_HEIGHT - (i - 1) * (BUTTON_HEIGHT + BUTTON_SPACING))
+
+        -- A reused button may still carry the previous item's selection
+        -- visuals; clear them here — ResetUIState restores any saved
+        -- selection after DisplayItem.
+        button:SetBackdropBorderColor(0.22, 0.22, 0.22, 1)
+        if button.selectedGlow then button.selectedGlow:Hide() end
+        if button.accentBar then button.accentBar:Hide() end
+        button:Show()
 
         -- Apply color from btnData
         local color = btnData.color or { r = 1, g = 1, b = 1 }

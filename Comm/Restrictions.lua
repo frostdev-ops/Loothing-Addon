@@ -244,9 +244,14 @@ end
 -- @param target string|nil - Whisper target or nil for group
 -- @param priority string|nil - "ALERT", "NORMAL", or "BULK"
 function RestrictionsMixin:QueueGuaranteed(command, data, target, priority)
+    -- Copy the payload: callers treat Send() as consuming the table
+    -- synchronously (FlushBatch releases its pooled messages array right
+    -- after Send returns). Retaining the caller's reference here means the
+    -- queued payload is wiped — or worse, re-issued to a different batch —
+    -- before replay.
     self.guaranteedQueue[#self.guaranteedQueue + 1] = {
         command = command,
-        data = data,
+        data = type(data) == "table" and Loolib.TableUtil.DeepCopy(data) or data,
         target = target,
         priority = priority,
         queueTime = GetTime(),

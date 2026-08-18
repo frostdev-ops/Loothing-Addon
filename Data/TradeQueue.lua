@@ -245,32 +245,61 @@ end
 -- @param entry table - Queue entry
 -- @return boolean - True if still tradable
 function TradeQueueMixin:IsWithinTradeWindow(entry)
-    local elapsed = time() - entry.awardTime
-    return elapsed < TRADE_WINDOW_SECONDS
+    return self:GetTimeRemaining(entry) > 0
 end
 
---- Get time remaining for an item's trade window
+--- Get time remaining for an item's trade window.
+-- Prefers the authoritative tooltip-scanned timer from the item in bags:
+-- awardTime is stamped at item CREATION, which overstates remaining time
+-- for items queued mid-window (a manually added item looted 100 minutes
+-- ago would otherwise claim a full 2h and fire its 20/5-minute warnings
+-- after it went soulbound). When the same itemID exists in several slots
+-- the highest known timer wins (the copy that can still be traded).
+-- Falls back to awardTime math when the item isn't locatable or the
+-- tooltip has no verdict yet (math.huge = unbound/cold tooltip).
 -- @param entry table - Queue entry
 -- @return number - Seconds remaining, or 0 if expired
 function TradeQueueMixin:GetTimeRemaining(entry)
+    local targetID = Utils.GetItemID(entry.itemLink)
+    if targetID then
+        local best = nil
+        for bag = 0, NUM_BAG_SLOTS do
+            local numSlots = C_Container.GetContainerNumSlots(bag)
+            for slot = 1, numSlots do
+                local info = C_Container.GetContainerItemInfo(bag, slot)
+                if info and info.hyperlink and Utils.GetItemID(info.hyperlink) == targetID then
+                    local remaining = self:GetContainerItemTradeTimeRemaining(bag, slot)
+                    if remaining and remaining ~= math.huge
+                        and (not best or remaining > best) then
+                        best = remaining
+                    end
+                end
+            end
+        end
+        if best then
+            -- TooltipScan caches a STATIC parsed value until the next bag
+            -- update, so anchor it and count down locally — otherwise
+            -- per-second UI countdowns (TradePanel) freeze between bag
+            -- events. Re-anchor only when the parsed value changes.
+            -- Transient fields: SaveToDatabase copies fields selectively,
+            -- so these never reach SavedVariables.
+            if entry._scanRemaining ~= best then
+                entry._scanRemaining = best
+                entry._scanAnchor = time()
+            end
+            return math.max(0, entry._scanRemaining - (time() - entry._scanAnchor))
+        end
+
+        -- Item momentarily un-locatable (e.g. mid-trade): age the last
+        -- good scan instead of snapping back to creation-time math.
+        if entry._scanRemaining and entry._scanAnchor then
+            return math.max(0, entry._scanRemaining - (time() - entry._scanAnchor))
+        end
+    end
+
     local elapsed = time() - entry.awardTime
     local remaining = TRADE_WINDOW_SECONDS - elapsed
     return math.max(0, remaining)
-end
-
---- Clear expired entries from the queue
--- @return number - Number of entries removed
-function TradeQueueMixin:CleanupExpired()
-    local removed = self.queue:RemoveByPredicate(function(entry)
-        return not self:IsWithinTradeWindow(entry)
-    end)
-
-    if removed > 0 then
-        self:SaveToDatabase()
-        Loothing:Debug("Cleaned up", removed, "expired trade queue entries")
-    end
-
-    return removed
 end
 
 --[[--------------------------------------------------------------------

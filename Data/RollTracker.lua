@@ -96,39 +96,9 @@ function RollTrackerMixin:RecordRoll(playerName, roll, minRoll, maxRoll)
     end
 end
 
---- Get roll for a player
--- @param playerName string
--- @return table|nil - { roll, minRoll, maxRoll, timestamp }
-function RollTrackerMixin:GetRoll(playerName)
-    playerName = Utils.NormalizeName(playerName)
-    return self.rolls[playerName]
-end
-
---- Check if player has rolled
--- @param playerName string
--- @return boolean
-function RollTrackerMixin:HasRolled(playerName)
-    playerName = Utils.NormalizeName(playerName)
-    return self.rolls[playerName] ~= nil
-end
-
---- Get all current rolls
--- @return table - { [playerName] = rollData }
-function RollTrackerMixin:GetAllRolls()
-    return self.rolls
-end
-
 --- Clear all rolls
 function RollTrackerMixin:ClearAllRolls()
     wipe(self.rolls)
-end
-
---- Clear roll for a specific player
--- @param playerName string
-function RollTrackerMixin:ClearRoll(playerName)
-    playerName = Utils.NormalizeName(playerName)
-    if not playerName then return end
-    self.rolls[playerName] = nil
 end
 
 --- Clean up rolls older than threshold
@@ -152,31 +122,6 @@ function RollTrackerMixin:CleanupOldRolls(maxAge)
     if #toRemove > 0 then
         Loothing:Debug("Cleaned up", #toRemove, "old rolls")
     end
-end
-
---- Request rolls from raid
--- Announces a message asking players to /roll
--- @param itemLink string - Optional item link to include in message
-function RollTrackerMixin:RequestRolls(itemLink)
-    local L = Loothing.Locale
-
-    -- Clear previous rolls
-    self:ClearAllRolls()
-
-    -- Build message
-    local message = L["ROLL_REQUEST"]
-    if itemLink then
-        message = string.format("%s: %s", message, itemLink)
-    end
-
-    -- Announce to raid
-    if IsInRaid() then
-        C_ChatInfo.SendChatMessage(message, "RAID_WARNING")
-    elseif IsInGroup() then
-        C_ChatInfo.SendChatMessage(message, "PARTY")
-    end
-
-    Loothing:Print(L["ROLL_REQUEST_SENT"])
 end
 
 --[[--------------------------------------------------------------------

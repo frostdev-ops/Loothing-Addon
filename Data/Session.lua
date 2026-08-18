@@ -296,12 +296,6 @@ function SessionMixin:ShowVotingUIForItem(item)
     self:ShowRollFrameForItem(item)
 end
 
---- Compatibility shim for older callers.
--- @param item table - The item to display
-function SessionMixin:ShowVotePanelForItem(item)
-    self:ShowVotingUIForItem(item)
-end
-
 --- Safely show ResultsPanel to council members
 -- @param item table - The item that was voted on
 -- @param results table - The voting results
@@ -961,11 +955,19 @@ function SessionMixin:StartSession(encounterID, encounterName)
         sessionInitData.councilRoster = { members = members }
     end
 
-    -- Include observer roster (when ML observer mode is configured)
+    -- Include observer roster (when ML observer mode is configured).
+    -- Shape must match HandleObserverRoster's schema (`list`, not `members`)
+    -- and carry the permission set, or receivers drop it and fall back to
+    -- their own local observer permissions.
     if Loothing.Observer and Loothing.Observer.GetObservers then
         local observers = Loothing.Observer:GetObservers()
         if observers then
-            sessionInitData.observerRoster = { members = observers }
+            sessionInitData.observerRoster = {
+                list = observers,
+                permissions = Loothing.Settings and Loothing.Settings:GetObserverPermissions() or {},
+                openObservation = Loothing.Settings and Loothing.Settings:GetOpenObservation() or false,
+                mlIsObserver = Loothing.Settings and Loothing.Settings:GetMLIsObserver() or false,
+            }
         end
     end
 
@@ -1138,13 +1140,22 @@ function SessionMixin:EndSession()
         self.lootBatchTimer = nil
     end
 
-    -- Stop post-encounter bag scanner and wipe its per-encounter state
-    -- so a manual/no-encounter session restart does not inherit stale
-    -- dedup entries or the previous encounter's bag snapshot. Done here
-    -- (not inside StopPostEncounterBagScan) because that function is
-    -- also called from StartPostEncounterBagScan after SnapshotBags has
-    -- already taken a fresh snapshot, and we must not destroy it.
-    if not self.bagScanEncounterID or SameEncounterID(self.bagScanEncounterID, endingEncounterID) then
+    -- An in-flight post-encounter bag scan OUTLIVES the session: group-loot
+    -- rolls resolve ~30-45s after a kill, so an ML who awards quickly (or
+    -- auto-end firing once all items are awarded) used to cancel every
+    -- client's scan before late wins landed in bags — the item then never
+    -- reached the council. The scan is self-terminating (30 ticks × 2s) and
+    -- session-independent: late finds route through HandleTradable's
+    -- no-active-session path, which buffers them and re-prompts/auto-starts
+    -- per the trigger settings, exactly like pre-session loot. The dedup map
+    -- must survive with it so items already collected by the ended session
+    -- are not re-buffered. When no scan is running, wipe per-encounter state
+    -- as before so a manual/no-encounter restart doesn't inherit stale dedup
+    -- entries or the previous encounter's snapshot. Done here (not inside
+    -- StopPostEncounterBagScan) because that function is also called from
+    -- StartPostEncounterBagScan after SnapshotBags has already taken a fresh
+    -- snapshot, and we must not destroy it.
+    if not self.bagScanTimer then
         self:StopPostEncounterBagScan()
         wipe(self.reportedTradeableItems)
         wipe(self.preEncounterBagSnapshot)
@@ -1321,16 +1332,6 @@ function SessionMixin:EndSession()
         end
     end
 
-    return true
-end
-
---- Close session (no more items, finish voting)
-function SessionMixin:CloseSession()
-    if self.state ~= Loothing.SessionState.ACTIVE then
-        return false
-    end
-
-    self:SetState(Loothing.SessionState.CLOSED)
     return true
 end
 
@@ -1570,18 +1571,6 @@ end
 -- @return DataProvider
 function SessionMixin:GetItems()
     return self.items
-end
-
---- Get pending items
--- @return table
-function SessionMixin:GetPendingItems()
-    local pending = {}
-    for _, item in self.items:Enumerate() do
-        if item:IsPending() then
-            pending[#pending + 1] = item
-        end
-    end
-    return pending
 end
 
 --- Get item count
@@ -1954,10 +1943,14 @@ function SessionMixin:RetallyVoteResultsForItem(item)
         return nil
     end
 
-    -- Tally votes
+    -- Tally votes. Pass the configured tie-breaker: without opts,
+    -- TallyRankedChoice's tie-break block is gated out entirely and a
+    -- ranked-choice tie returns winner=nil regardless of the setting.
     local results = nil
     if Loothing.VotingEngine then
-        results = Loothing.VotingEngine:Tally(item:GetVotes())
+        local tieBreakerMode = Loothing.Settings and Loothing.Settings.GetTieBreakerMode
+            and Loothing.Settings:GetTieBreakerMode() or "ROLL"
+        results = Loothing.VotingEngine:Tally(item:GetVotes(), { tieBreakerMode = tieBreakerMode })
     end
     item.voteResults = results
 
@@ -3057,9 +3050,16 @@ function SessionMixin:ScanBagsForTradeableItems()
                     local tradeTime = ex.tradeTime
                     for _ = 1, copiesInSlot do
                         local representedBefore = reportedCount + reportsThisScan
-                        local forceCreate = isML
-                            and (representedBefore >= representedCopies)
-                            or (representedBefore > 0)
+                        -- NOT an and/or ternary: `(isML and X) or Y` falls
+                        -- through to Y when ML and X is false, fabricating a
+                        -- creation signal for a copy the roll-won path already
+                        -- represents (phantom third row on double wins).
+                        local forceCreate
+                        if isML then
+                            forceCreate = representedBefore >= representedCopies
+                        else
+                            forceCreate = representedBefore > 0
+                        end
                         TraceLoot("candidate", itemLink,
                             "isML=" .. tostring(isML)
                             .. " tt=" .. tradeTime
@@ -3644,7 +3644,8 @@ function SessionMixin:HandleRemoteVoteCommit(data)
     local voterClass = "UNKNOWN"
     for _, member in ipairs(roster) do
         if Utils.IsSamePlayer(member.name, data.voter) then
-            voterClass = member.classFile
+            -- classFile can be nil for secret-tagged values; keep the sentinel
+            voterClass = member.classFile or voterClass
             break
         end
     end

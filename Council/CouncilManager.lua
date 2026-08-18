@@ -55,7 +55,12 @@ function CouncilMixin:SetRemoteRoster(members)
     wipe(self.remoteRoster)
 
     for _, name in ipairs(members) do
-        self.remoteRoster[Utils.NormalizeName(name)] = true
+        -- NormalizeName returns nil for nil/secret input; a malformed roster
+        -- element must not become a nil table index inside comm dispatch
+        local normalized = Utils.NormalizeName(name)
+        if normalized then
+            self.remoteRoster[normalized] = true
+        end
     end
 
     self.remotePrimary = true
@@ -121,12 +126,6 @@ function CouncilMixin:PromoteRemoteToLocal()
     self:SaveToSettings()
     self:TriggerEvent("OnRosterChanged")
     return count
-end
-
---- Check if using remote roster
--- @return boolean
-function CouncilMixin:IsUsingRemoteRoster()
-    return self.remotePrimary
 end
 
 -- Settings, persistence, and display helpers extracted to CouncilSettings.lua

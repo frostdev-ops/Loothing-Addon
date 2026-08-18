@@ -241,7 +241,7 @@ function CouncilMixin:GetCurrentGroupMembers()
             if UnitExists(unit) then
                 local name = Loolib.SecretUtil.SafeUnitName(unit)
                 local _, class = Loolib.SecretUtil.SafeUnitClass(unit)
-                local role = UnitGroupRolesAssigned(unit)
+                local role = Loolib.SecretUtil.Guard(UnitGroupRolesAssigned(unit), "NONE")
 
                 if name then
                     name = Utils.NormalizeName(name)
@@ -257,7 +257,7 @@ function CouncilMixin:GetCurrentGroupMembers()
         local playerName = Utils.GetPlayerFullName()
         -- Use SafeUnitClass to avoid secret value tainting
         local _, playerClass = Loolib.SecretUtil.SafeUnitClass("player")
-        local playerRole = UnitGroupRolesAssigned("player")
+        local playerRole = Loolib.SecretUtil.Guard(UnitGroupRolesAssigned("player"), "NONE")
 
         members[#members + 1] = {
             name = playerName,

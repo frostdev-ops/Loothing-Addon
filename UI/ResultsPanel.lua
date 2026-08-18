@@ -69,7 +69,14 @@ function ResultsPanelMixin:Init()
             self.results = nil
             self.selectedCandidate = nil
             self.selectedRow = nil
-            if self.responseRows then wipe(self.responseRows) end
+            if self.responseRows then
+                -- Hide before wiping: DisplayResults clears by iterating this
+                -- array, so wiped-but-visible rows overlap the next session's
+                for _, row in ipairs(self.responseRows) do
+                    row:Hide()
+                end
+                wipe(self.responseRows)
+            end
             self._roundCount = nil
             self:Hide()
         end, self)
