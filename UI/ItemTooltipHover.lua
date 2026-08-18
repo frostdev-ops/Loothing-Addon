@@ -41,7 +41,17 @@ local function resolve(value)
     return value
 end
 
+-- Capture GameTooltip's pre-pin strata/level once so hideTooltip restores
+-- what the tooltip actually had — hardcoding level 1 left the global
+-- GameTooltip pinned at the bottom of TOOLTIP strata for the rest of the
+-- session after the first shift-tooltip (SetOwner does not restore it).
+local savedStrata, savedLevel
+
 local function pinStrata(owner)
+    if savedStrata == nil then
+        savedStrata = GameTooltip:GetFrameStrata() or "TOOLTIP"
+        savedLevel = GameTooltip:GetFrameLevel() or 1
+    end
     local strata = owner:GetFrameStrata() or "TOOLTIP"
     local level = (owner:GetFrameLevel() or 0) + 10
     GameTooltip:SetFrameStrata(strata)
@@ -61,8 +71,10 @@ end
 
 local function hideTooltip()
     GameTooltip:Hide()
-    GameTooltip:SetFrameStrata("TOOLTIP")
-    GameTooltip:SetFrameLevel(1)
+    GameTooltip:SetFrameStrata(savedStrata or "TOOLTIP")
+    if savedLevel then
+        GameTooltip:SetFrameLevel(savedLevel)
+    end
 end
 
 local function ensureListener()

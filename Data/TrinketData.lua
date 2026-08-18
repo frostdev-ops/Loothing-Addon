@@ -30,6 +30,13 @@ local Loothing = ns.Addon
 
 Loothing.TrinketCategories = {
     ["73F7777777777"] = ALL_CLASSES,
+    -- Midnight-corrected archetype flags (Devourer DH digit 4 / Aug Evoker
+    -- bits included). Legacy pre-Midnight keys above/below are kept for any
+    -- older data that still carries them.
+    ["77F7777777777"] = ALL_CLASSES,
+    ["7492775070010"] = ITEM_MOD_INTELLECT_SHORT,
+    ["5410771040000"] = DAMAGER .. ", " .. ITEM_MOD_INTELLECT_SHORT,
+    ["5534773647743"] = DAMAGER,
     ["0365002707767"] = ITEM_MOD_STRENGTH_SHORT .. "/" .. ITEM_MOD_AGILITY_SHORT,
     ["0000000700067"] = ITEM_MOD_STRENGTH_SHORT,
     ["0365002707467"] = MELEE,
@@ -95,19 +102,19 @@ Loothing.TrinketSpecs = {
     -- ================================================================
 
     -- The Venomous Abyss
-    [270162] = "7092775070010", -- Soulcoiler Ritual Vessel (Int) — Nek'zali the Soulcoiler
+    [270162] = "7492775070010", -- Soulcoiler Ritual Vessel (Int) — Nek'zali the Soulcoiler
     [270165] = "0365002707767", -- Keeper's Seething Core (Str/Agi) — Entombed Sentinels
-    [270161] = "1010771050000", -- Fang of Umbral Malignance (DPS Int) — Vashnik the Malignant
+    [270161] = "5410771040000", -- Fang of Umbral Malignance (DPS Int) — Vashnik the Malignant
     [270166] = "0365002007700", -- Vashnik's Sanguine Rancor (Agi) — Vashnik the Malignant
     [270160] = "0241000100024", -- First Mate's Shellward (Tank) — The Lost Explorers
-    [270164] = "73F7777777777", -- Gebbo's Bottomless Bag (All) — The Lost Explorers
+    [270164] = "77F7777777777", -- Gebbo's Bottomless Bag (All) — The Lost Explorers
     [270163] = "0000000700067", -- Sszorak's Ferocity (Str) — Sszorak
     [270174] = "0241000100024", -- Idol of the Howling Nexus (Tank) — Sszorak
-    [270170] = "1010771050000", -- Vexhul's Everflowing Gland (DPS Int) — The Twin Fangs
+    [270170] = "5410771040000", -- Vexhul's Everflowing Gland (DPS Int) — The Twin Fangs
     [270171] = "2082004030010", -- Preternatural Antivenom (Healer) — The Twin Fangs
-    [270169] = "7092775070010", -- Hex Lord's Dooming Idol (Int) — The Coiled Altar
+    [270169] = "7492775070010", -- Hex Lord's Dooming Idol (Int) — The Coiled Altar
     [270173] = "0124002607743", -- Zul'jin's Guillotine Technique (DPS Str/Agi) — The Coiled Altar
-    [270168] = "5134773647743", -- Font of Venomous Rage (DPS) — Ula'tek
+    [270168] = "5534773647743", -- Font of Venomous Rage (DPS) — Ula'tek
     [270175] = "0365002707767", -- Voracious Heart of Ula'tek (Str/Agi) — Ula'tek
 
     -- ================================================================

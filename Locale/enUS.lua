@@ -256,6 +256,7 @@ L["LOOT_FILTER_RESET_CONFIRM"] = "Reset all class-block toggles to their default
 
 -- Loot Picker (themed dialog the ML sees in 'prompt' trigger mode)
 L["LOOT_PICKER_TITLE"] = "Loothing — Pick Loot for Session"
+L["LOOT_PICKER_START_FAILED"] = "Could not start the loot session — check that you are in a group and still handling loot."
 L["LOOT_PICKER_SUBTITLE_FMT"] = "%s    -    %d items detected"
 L["LOOT_PICKER_DEFAULT_BOSS"] = "Encounter"
 L["LOOT_PICKER_SHOW_BLOCKED"] = "Show blocked items"
@@ -624,6 +625,8 @@ L["CONFIG_FRAME_AUTO_CLOSE_DESC"] = "Automatically close loot council frames whe
 L["CONFIG_FRAME_SHOW_SPEC_ICON"] = "Show Spec Icons"
 L["CONFIG_FRAME_SHOW_SPEC_ICON_DESC"] = "Display the player's current specialization icon next to their name in the voting frame"
 L["CONFIG_FRAME_CLOSE_ESCAPE"] = "Close with Escape"
+L["CONFIG_SHOW_MINIMAP_BUTTON"] = "Minimap Button"
+L["CONFIG_SHOW_MINIMAP_BUTTON_DESC"] = "Show the Loothing minimap button. (The button's context menu can hide it; this is the way back.)"
 L["CONFIG_FRAME_CLOSE_ESCAPE_DESC"] = "Allow pressing Escape to close loot council frames. When off, frames can only be closed via the X button."
 L["CONFIG_FRAME_CHAT_OUTPUT"] = "Chat Output Frame"
 L["CONFIG_FRAME_CHAT_OUTPUT_DESC"] = "Select which chat window Loothing messages are printed to"
@@ -1143,6 +1146,10 @@ L["NO_COMPLETED_TRADES"] = "No completed trades to clear"
 -- Voting / Council
 L["OBSERVE_MODE_MSG"] = "You are in observe mode and cannot cast votes."
 L["VOTE_NOTE_REQUIRED"] = "You must add a note with your vote."
+L["ROLLFRAME_AUTOSHOW_HINT"] = "Voting started — use /lt roll to open the loot response window."
+L["VOTE_TIE_REVOTE_FMT"] = "Ranked vote tied for %s — a revote is required."
+L["VOTE_TIE_REVOTE_TITLE"] = "Vote Tied"
+L["VOTE_TIE_REVOTE_PROMPT_FMT"] = "The ranked vote for %s ended in a tie. Start a revote now?"
 L["SELF_VOTE_DISABLED"] = "Self-voting is disabled for this session."
 
 -- Award Reason Editor (Work Stream 1)

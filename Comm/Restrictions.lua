@@ -99,6 +99,16 @@ function RestrictionsMixin:RegisterEvents()
     Events.Registry:RegisterEventCallback("CHALLENGE_MODE_COMPLETED", function()
         self:SetRestrictionBit(RESTRICTION_CHALLENGE, false)
     end, self)
+
+    -- ReplayQueue defers (and ReplayTick pauses) under InCombatLockdown, but
+    -- restrictions routinely lift while the raid is still in combat (boss dies,
+    -- adds linger). Without this retry the queue only replays on the NEXT
+    -- restriction lift — by which time GUARANTEED_TTL has discarded everything.
+    Events.Registry:RegisterEventCallback("PLAYER_REGEN_ENABLED", function()
+        if not self.restrictionsEnabled and #self.guaranteedQueue > 0 then
+            self:ReplayQueue()
+        end
+    end, self)
 end
 
 --[[--------------------------------------------------------------------

@@ -462,6 +462,22 @@ function AddItemFrameMixin:OnItemInputChanged(text)
     self._resolveGen = (self._resolveGen or 0) + 1
     local gen = self._resolveGen
 
+    -- Complete link pastes resolve immediately; raw text/numeric IDs are
+    -- debounced — the generation counter alone can't stop a user pausing
+    -- mid-typed ID from queuing the wrong intermediate item.
+    if not text:find("|Hitem", 1, true) then
+        if self._resolveDebounce then self._resolveDebounce:Cancel() end
+        self._resolveDebounce = C_Timer.NewTimer(0.6, function()
+            self._resolveDebounce = nil
+            if gen ~= self._resolveGen then return end
+            self:_ResolveAndQueue(text, gen)
+        end)
+        return
+    end
+    self:_ResolveAndQueue(text, gen)
+end
+
+function AddItemFrameMixin:_ResolveAndQueue(text, gen)
     ResolveItem(text, function(link, name, ilvl, quality, icon)
         -- Guard: stale resolve, frame closed, or wrong tab
         if gen ~= self._resolveGen then return end

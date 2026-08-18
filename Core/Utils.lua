@@ -1005,6 +1005,47 @@ function Utils.ValidateSchema(data, schema)
     return true
 end
 
+--- Build a Lua match pattern for the localized /roll system message.
+-- Derived from Blizzard's RANDOM_ROLL_RESULT global string so roll capture
+-- works on every locale (the hardcoded English "(.+) rolls (%d+) ..." only
+-- ever matched enUS clients). Captures: name, roll, min, max — callers must
+-- tonumber-validate the numeric captures, which also guards against exotic
+-- locales that reorder the tokens.
+-- @return string - Lua pattern with four captures
+local rollResultPattern
+function Utils.GetRollResultPattern()
+    if rollResultPattern then return rollResultPattern end
+    local fmt = RANDOM_ROLL_RESULT or "%s rolls %d (%d-%d)"
+    -- Positional-token guard: captures come out in WIRE order, but callers
+    -- assign (name, roll, min, max). A locale that reorders tokens (ruRU:
+    -- "%1$s … (%3$d—%4$d) … %2$d") would silently record the MIN BOUND as
+    -- the player's roll. Only accept positional formats whose indices appear
+    -- strictly ascending; otherwise fall back to the English literal, which
+    -- safely fails to match (the pre-fix behavior on those locales).
+    local lastIdx, ordered = 0, true
+    for idx in fmt:gmatch("%%(%d)%$[sd]") do
+        idx = tonumber(idx)
+        if idx ~= lastIdx + 1 then
+            ordered = false
+            break
+        end
+        lastIdx = idx
+    end
+    if not ordered then
+        rollResultPattern = "(.+) rolls (%d+) %((%d+)%-(%d+)%)"
+        return rollResultPattern
+    end
+    -- Normalize positional tokens ("%1$s") to plain ("%s")
+    fmt = fmt:gsub("%%(%d)%$([sd])", "%%%2")
+    -- Escape Lua pattern magic characters (all except "%", which the tokens use)
+    fmt = fmt:gsub("([%(%)%.%+%-%*%?%[%]%^%$])", "%%%1")
+    -- Substitute captures
+    fmt = fmt:gsub("%%s", "(.+)")
+    fmt = fmt:gsub("%%d", "(%%d+)")
+    rollResultPattern = fmt
+    return rollResultPattern
+end
+
 --- Convert named-field color {r=, g=, b=, a=} to array format {r, g, b, a}
 -- Accepts either format; if already array, returns as-is.
 -- @param color table

@@ -1006,6 +1006,12 @@ function TradeQueueMixin:LoadFromDatabase()
     local discarded = 0
 
     for _, entry in ipairs(stored) do
+        -- GetGlobalValue returns live references, so last session's transient
+        -- scan fields can persist (e.g. /reload then logout with no queue
+        -- mutation). A stale _scanAnchor makes GetTimeRemaining compute
+        -- "_scanRemaining - (time since last login)" on a cold tooltip scan
+        -- and prematurely expire the entry. Strip before the window check.
+        entry._scanRemaining, entry._scanAnchor = nil, nil
         -- Only load entries still within trade window
         if not entry.traded and self:IsWithinTradeWindow(entry) then
             self.queue:Insert(entry)

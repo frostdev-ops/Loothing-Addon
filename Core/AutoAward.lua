@@ -273,29 +273,33 @@ function AutoAwardMixin:AwardItem(itemLink, itemGUID, targetPlayer)
         reasonText = reason and reason.name or nil
     end
 
-    -- Create a session item if one doesn't exist
-    local sessionItem = Loothing.Session:FindItemByGUID(itemGUID)
-    if not sessionItem then
-        -- Add item to session
-        sessionItem = Loothing.Session:AddItem(itemLink, itemGUID)
-        if not sessionItem then
-            return false
-        end
+    -- The only caller is Session:AddItem (via ProcessItem), which created the
+    -- item immediately before invoking us — never re-enter AddItem from here:
+    -- the GUID would land in AddItem's `looter` parameter, a fresh GUID would
+    -- be generated, and the pendingAwards dedup would never fire (recursion).
+    local sessionItem = Loothing.Session:GetItemByGUID(itemGUID)
+    if not sessionItem or not Loothing.Session.AwardItem then
+        return false
     end
 
-    -- Award the item
-    if Loothing.Session.AwardItem then
-        -- Mark as pending before awarding to prevent re-entry from duplicate events
-        self.pendingAwards[itemGUID] = true
-        Loothing.Session:AwardItem(sessionItem.id, targetPlayer, nil, reasonId, reasonText)
+    -- Mark as pending before awarding to prevent re-entry from duplicate events
+    self.pendingAwards[itemGUID] = true
 
-        -- Log the auto-award
-        Loothing:Print(string.format(L["ITEM_AWARDED"], itemLink, targetPlayer))
-
-        return true
+    -- A just-added item is PENDING; Session:AwardItem refuses PENDING items.
+    -- Transition state locally (no broadcast — auto-awards are silent).
+    if sessionItem.IsPending and sessionItem:IsPending() and sessionItem.StartVoting then
+        sessionItem:StartVoting()
     end
 
-    return false
+    if not Loothing.Session:AwardItem(sessionItem.guid, targetPlayer, nil, reasonId, reasonText) then
+        self.pendingAwards[itemGUID] = nil
+        return false
+    end
+
+    -- Log the auto-award
+    Loothing:Print(string.format(L["ITEM_AWARDED"], itemLink, targetPlayer))
+
+    return true
 end
 
 --- Get quality name from quality level

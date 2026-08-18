@@ -70,10 +70,12 @@ function ResultsPanelMixin:Init()
             self.selectedCandidate = nil
             self.selectedRow = nil
             if self.responseRows then
-                -- Hide before wiping: DisplayResults clears by iterating this
-                -- array, so wiped-but-visible rows overlap the next session's
+                -- Release into the pool before wiping: DisplayResults clears
+                -- by iterating this array, so wiped-but-visible rows overlap
+                -- the next session's
+                self.candidateRowPool = self.candidateRowPool or {}
                 for _, row in ipairs(self.responseRows) do
-                    row:Hide()
+                    ns.ReleaseCandidateResultRow(row, self.candidateRowPool)
                 end
                 wipe(self.responseRows)
             end
@@ -333,7 +335,10 @@ end
 -- @param results table - Tally results (optional, kept for backward compat)
 function ResultsPanelMixin:SetItem(item, results)
     self.item = item
-    self.results = results
+    -- Callers without a fresh tally (CouncilTable footer Results button)
+    -- fall back to the item's stored tally so ranked mode still shows the
+    -- authoritative IRV winner, not GetMostVoted.
+    self.results = results or (item and item.voteResults)
 
     if not item then
         self:Hide()
@@ -382,9 +387,11 @@ end
 --- Display vote results (candidate-centric)
 -- @param results table - Legacy results (ignored; data comes from candidateManager)
 function ResultsPanelMixin:DisplayResults(_results)
-    -- Clear existing rows
+    -- Release existing rows into the free list (frames are never GC'd; a
+    -- raid night of refreshes used to accumulate them indefinitely)
+    self.candidateRowPool = self.candidateRowPool or {}
     for _, row in ipairs(self.responseRows) do
-        row:Hide()
+        ns.ReleaseCandidateResultRow(row, self.candidateRowPool)
     end
     wipe(self.responseRows)
 
@@ -396,7 +403,15 @@ function ResultsPanelMixin:DisplayResults(_results)
     end
 
     local totalVotes = cm:GetTotalVotes()
-    local winner = cm:GetMostVoted()
+    -- Authoritative winner: the tally's result when present. GetMostVoted
+    -- counts any-rank ballot mentions and routinely disagrees with the IRV
+    -- runoff in ranked mode — the header, highlight, and award auto-select
+    -- must match the rounds visualization below, not a different candidate.
+    local winner = nil
+    if self.results and self.results.winner then
+        winner = cm:GetCandidate(self.results.winner)
+    end
+    winner = winner or cm:GetMostVoted()
     local showVoteCounts = CanSeeVoteCounts()
     local showResponses = CanSeeResponses()
 
@@ -468,7 +483,8 @@ function ResultsPanelMixin:DisplayResults(_results)
     for _, candidate in ipairs(candidates) do
         local isWinner = (showVoteCounts and winner and candidate == winner and totalVotes > 0)
         local row = CreateCandidateResultRow(
-            self.resultsContent, candidate, yOffset, totalVotes, isWinner, clickCallback, showVoteCounts, showResponses
+            self.resultsContent, candidate, yOffset, totalVotes, isWinner, clickCallback, showVoteCounts, showResponses,
+            self.candidateRowPool
         )
         row.candidate = candidate
         self.responseRows[#self.responseRows + 1] = row
@@ -568,6 +584,7 @@ end
 -- @param cm table - CandidateManager
 -- @return number - yOffset after the summary
 function ResultsPanelMixin:UpdateResponseSummary(cm)
+    local L = Loothing.Locale or {}
     if not CanSeeResponses() then
         self.responseSummaryText:SetText(L["RESPONSES_HIDDEN"] or "Responses hidden")
         return -40

@@ -414,15 +414,11 @@ local function InitializeModules()
         end
     end
 
-    -- Initialize Version Check Panel (group/guild version status)
-    if ns.CreateVersionCheckPanel then
-        local success, result = pcall(ns.CreateVersionCheckPanel)
-        if success and result then
-            Loothing.UI.VersionCheckPanel = result
-        else
-            Loothing:Error("Failed to create VersionCheckPanel:", result or "unknown error")
-        end
-    end
+    -- VersionCheckPanel is deliberately NOT created here: nothing ever opened
+    -- it (RosterPanel's version column superseded it), so eager creation just
+    -- built ~40 unreachable frames per session. The file still loads for its
+    -- mixin; wire ns.CreateVersionCheckPanel lazily if a UI entry point ever
+    -- wants it back.
 
     -- Initialize Council Table (tabular view for ML/council to see all candidates and award)
     if ns.CreateCouncilTable then
@@ -3146,6 +3142,16 @@ local RECONNECT_CACHE_MAX_AGE = 15 * 60  -- 15 minutes
 --- Cache current state to global SavedVariables for reconnect
 function Addon:CacheStateForReconnect()
     if not self.Settings then return end
+
+    -- Never persist test/simulator state: a /reload mid-sim would otherwise
+    -- cache the fake ML identity + fake ACTIVE session, and the next load
+    -- (test mode inactive) would restore the phantom session as real — the
+    -- solo path even sets mlStateVerified. Clear any prior cache instead.
+    if (ns.TestModeState and ns.TestModeState:IsActive())
+        or (ns.Simulator and ns.Simulator.IsActive and ns.Simulator:IsActive()) then
+        self.Settings:SetGlobalValue("reconnectCache", nil)
+        return
+    end
 
     local cache = {
         timestamp = time(),

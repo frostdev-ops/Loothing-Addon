@@ -177,11 +177,10 @@ local function NeutralizeItemString(itemLink)
     local itemString = itemLink:match("item:[^|]+")
     if not itemString then return "" end
 
-    -- Split into parts
-    local parts = {}
-    for part in itemString:gmatch("[^:]*") do
-        parts[#parts + 1] = part
-    end
+    -- Split into parts. strsplit keeps empty fields; gmatch("[^:]*") must NOT
+    -- be used here — on Lua 5.1 it yields a spurious empty match after every
+    -- non-empty token, doubling the part count and shifting every index below.
+    local parts = { strsplit(":", itemString) }
 
     -- Standard item string: item:ID:enchant:gem1:gem2:gem3:gem4:suffixID:uniqueID:level:specID:upgradeID:difficultyID:...
     -- Indices (1-based): 1=item, 2=ID, 3=enchant, 4-7=gems, 8=suffixID, 9=uniqueID, 10=level, 11=specID, 12=upgradeID, 13=difficultyID

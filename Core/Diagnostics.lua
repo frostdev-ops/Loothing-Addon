@@ -44,6 +44,19 @@ local EXPECTED_GLOBALS = {
     ["Loolib_GlobalBridge_Loothing_OnAddonCompartmentClick"] = true,
     ["Loolib_GlobalBridge_Loothing_OnAddonCompartmentEnter"] = true,
     ["Loolib_GlobalBridge_Loothing_OnAddonCompartmentLeave"] = true,
+    -- Deliberately named frames (CreateFrame name arg or UISpecialFrames
+    -- registration). Without these the release-SOP "expect 0 unexpected
+    -- globals" check could never pass.
+    ["LoothingDiagPanel"] = true,
+    ["LoothingLootPickerFrame"] = true,
+    ["LoothingLootPickerShowBlocked"] = true,
+    ["LoothingLootPickerScroll"] = true,
+    ["LoothingMinimapButton"] = true,
+    ["LoothingSimulatorPanel"] = true,
+    ["LoothingThemedDropdownPopup"] = true,
+    ["LoothingMainFrame"] = true,
+    ["LoothingCouncilTable"] = true,
+    ["LoothingRollFrame"] = true,
 }
 
 local EXPECTED_INSECURE_GLOBALS = {

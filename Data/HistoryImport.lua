@@ -189,8 +189,19 @@ function HistoryImportMixin:ParseEntry(fields, lineNum, colMap)
     -- Support both old format (winner col) and new format (player col)
     local winnerField = col("winner", 4) or col("player")
 
+    -- The addon's own CSV/TSV export writes date and time as separate columns.
+    -- Without folding the time back in, a round-trip import collapses every
+    -- timestamp to midnight — breaking duplicate detection (GetConflicts keys
+    -- on winner+timestamp) and weekly-reset loot counts.
+    local dateField = col("date", 1)
+    local rawDateField = dateField
+    local timeField = col("time")
+    if dateField and timeField and timeField ~= "" then
+        dateField = dateField .. " " .. timeField
+    end
+
     local entry = {
-        date          = col("date", 1),
+        date          = dateField,
         itemName      = col("item", 2),
         itemID        = tonumber(col("itemid", 3)),
         winner        = winnerField,
@@ -224,8 +235,16 @@ function HistoryImportMixin:ParseEntry(fields, lineNum, colMap)
         return nil
     end
 
-    -- Parse timestamp from date
+    -- Parse timestamp from date. If a nonstandard time column made the
+    -- combined string unparseable, fall back to the date alone (midnight) —
+    -- a garbage time column must not reject rows that imported before.
     entry.timestamp = self:ParseDate(entry.date)
+    if not entry.timestamp and rawDateField and rawDateField ~= entry.date then
+        entry.timestamp = self:ParseDate(rawDateField)
+        if entry.timestamp then
+            entry.date = rawDateField
+        end
+    end
     if not entry.timestamp then
         self:AddError(lineNum, entry.date, "Could not parse date")
         return nil
@@ -603,9 +622,11 @@ function HistoryImportMixin:ParseDate(dateStr)
         })
     end
 
-    -- Try MM/DD/YYYY HH:MM:SS
+    -- Try MM/DD/YYYY HH:MM:SS. Range-guard month/day so European dates
+    -- (25/12/2025) fall through to the DD/MM branch instead of being
+    -- silently normalized by time{} into a wrong future date.
     month, day, year, hour, min, sec = dateStr:match("^(%d%d?)/(%d%d?)/(%d%d%d%d) (%d%d):(%d%d):?(%d*)$")
-    if year then
+    if year and tonumber(month) <= 12 and tonumber(day) <= 31 then
         return time({
             year = tonumber(year),
             month = tonumber(month),
@@ -616,9 +637,23 @@ function HistoryImportMixin:ParseDate(dateStr)
         })
     end
 
-    -- Try MM/DD/YYYY
+    -- Try DD/MM/YYYY HH:MM:SS (European; reached when the MM/DD guard above
+    -- rejected an out-of-range month)
+    day, month, year, hour, min, sec = dateStr:match("^(%d%d?)/(%d%d?)/(%d%d%d%d) (%d%d):(%d%d):?(%d*)$")
+    if year and tonumber(month) <= 12 then
+        return time({
+            year = tonumber(year),
+            month = tonumber(month),
+            day = tonumber(day),
+            hour = tonumber(hour),
+            min = tonumber(min),
+            sec = tonumber(sec) or 0,
+        })
+    end
+
+    -- Try MM/DD/YYYY (range-guarded; see above)
     month, day, year = dateStr:match("^(%d%d?)/(%d%d?)/(%d%d%d%d)$")
-    if year then
+    if year and tonumber(month) <= 12 and tonumber(day) <= 31 then
         return time({
             year = tonumber(year),
             month = tonumber(month),

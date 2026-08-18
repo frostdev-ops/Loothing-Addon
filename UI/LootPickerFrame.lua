@@ -955,6 +955,8 @@ function LootPickerFrameMixin:OnStart()
         -- stays shown with current entries; print a one-line error so
         -- the user understands why nothing happened.
         self._starting = false
+        Loothing:Print(L("LOOT_PICKER_START_FAILED",
+            "Could not start the loot session — check that you are in a group and still handling loot."))
         if self.frame then
             self.frame:Raise()  -- bring back to top in case another popup grabbed focus
         end
@@ -995,11 +997,14 @@ function LootPickerFrameMixin:_DoCleanupOnHide()
 end
 
 function LootPickerFrameMixin:OnCancel()
-    -- OnHide hook would otherwise re-run cleanup; flag it off across
-    -- the Hide call so the hook no-ops.
+    -- Run cancel cleanup BEFORE Hide, then set the flag so the async
+    -- OnHide hook doesn't re-run cleanup; its suppress branch still hands
+    -- off any pendingBufferedPrompt via Session:OnLootPickerHidden.
+    -- (Previous order set the flag across the async fade, so the hook ran
+    -- the successful-start branch before cleanup had executed.)
+    self:_DoCleanupOnHide()
     self._suppressOnHideCleanup = true
     self:Hide()
-    self:_DoCleanupOnHide()
 end
 
 --[[--------------------------------------------------------------------

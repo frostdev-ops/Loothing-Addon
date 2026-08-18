@@ -47,9 +47,14 @@ function RollTrackerMixin:OnChatMessage(text)
     -- and calling methods on tainted strings errors during combat
     local safeText = tostring(text)
 
-    -- Pattern for roll messages
-    -- Handles both "Player rolls X (Y-Z)" and localized versions
-    local playerName, roll, minRoll, maxRoll = string.match(safeText, "(.+) rolls (%d+) %((%d+)%-(%d+)%)")
+    -- Locale-aware pattern built from RANDOM_ROLL_RESULT (the hardcoded
+    -- English pattern silently never matched on non-English clients).
+    local playerName, roll, minRoll, maxRoll =
+        string.match(safeText, Utils.GetRollResultPattern())
+
+    if not playerName or not tonumber(roll) then
+        playerName, roll, minRoll, maxRoll = string.match(safeText, "(.+) rolls (%d+) %((%d+)%-(%d+)%)")
+    end
 
     if not playerName then
         -- Try alternate pattern without "rolls" keyword (for localization)

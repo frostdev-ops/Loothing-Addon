@@ -396,8 +396,11 @@ function FiltersMixin:CreateFilterBar(parent)
     equippableCheck:SetChecked(Loothing.Settings:GetShowOnlyEquippable())
     equippableCheck:SetScript("OnClick", function(cb)
         Loothing.Settings:SetShowOnlyEquippable(cb:GetChecked())
-        FiltersMixin:TriggerEvent("OnFiltersChanged")
-        FiltersMixin:UpdateFilterBar(filterBar)
+        -- Dispatch on the instance: the mixin class table never ran
+        -- CallbackRegistry OnLoad, so TriggerEvent on it is a Lua error.
+        local filters = Loothing.Filters or FiltersMixin
+        if filters.TriggerEvent then filters:TriggerEvent("OnFiltersChanged") end
+        filters:UpdateFilterBar(filterBar)
     end)
     filterBar.equippableCheck = equippableCheck
 
@@ -411,8 +414,9 @@ function FiltersMixin:CreateFilterBar(parent)
     passedCheck:SetChecked(Loothing.Settings:GetHidePassedItems())
     passedCheck:SetScript("OnClick", function(cb)
         Loothing.Settings:SetHidePassedItems(cb:GetChecked())
-        FiltersMixin:TriggerEvent("OnFiltersChanged")
-        FiltersMixin:UpdateFilterBar(filterBar)
+        local filters = Loothing.Filters or FiltersMixin
+        if filters.TriggerEvent then filters:TriggerEvent("OnFiltersChanged") end
+        filters:UpdateFilterBar(filterBar)
     end)
     filterBar.passedCheck = passedCheck
 

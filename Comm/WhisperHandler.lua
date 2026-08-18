@@ -352,6 +352,10 @@ function WhisperHandlerMixin:SubmitWhisperResponse(item, playerName, responseID,
         playerName = playerName,
         sessionID = Loothing.Session and Loothing.Session:GetSessionID() or nil,
         source = "whisper",
+        -- Whisper responses arrive only on the ML; the roll above is generated
+        -- here, so council members need the ML's re-broadcast (CANDIDATE_UPDATE)
+        -- to see the candidate at all — same path as legacy whispered responses.
+        _legacyWhisper = true,
     }
 
     -- Route through the session's response handler

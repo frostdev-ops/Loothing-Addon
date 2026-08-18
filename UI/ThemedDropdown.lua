@@ -12,7 +12,7 @@
             width = 260,
             getOptions = function() return optionsList end,
             getSelected = function() return selectedValue end,
-            onSelect = function(value, option) ... end,
+            onSelect = function(dd, value, option) ... end, -- dispatched as dd:onSelect(value, option)
             getLabel = function(option) return option.label end, -- optional
         })
         dd:SetPoint("LEFT", label, "RIGHT", 8, 0)
@@ -110,14 +110,8 @@ local function ensurePopup()
     f.activeRows = 0
     f.activeHeaders = 0
 
-    -- Close on click outside.
+    -- Close on click outside (the full-screen catcher below handles it).
     f:SetScript("OnShow", function(self)
-        self._closeHandler = self._closeHandler or function(_, btn)
-            if not self:IsShown() then return end
-            if self:IsMouseOver() then return end
-            if self._owner and self._owner:IsMouseOver() then return end
-            self:Close()
-        end
         if not self._globalClickCatcher then
             local catcher = CreateFrame("Button", nil, UIParent)
             catcher:SetFrameStrata("FULLSCREEN_DIALOG")
@@ -220,26 +214,29 @@ end
 local function acquireHeader(popupFrame)
     popupFrame.activeHeaders = popupFrame.activeHeaders + 1
     local h = popupFrame.headers[popupFrame.activeHeaders]
-    if h then
-        h:Show()
-        return h
+    if not h then
+        h = CreateFrame("Frame", nil, popupFrame.content)
+        h:SetHeight(HEADER_HEIGHT)
+        local text = h:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        text:SetPoint("LEFT", 8, -1)
+        text:SetPoint("RIGHT", -8, -1)
+        text:SetJustifyH("LEFT")
+        local line = h:CreateTexture(nil, "ARTWORK")
+        line:SetHeight(1)
+        line:SetPoint("BOTTOMLEFT", 8, 0)
+        line:SetPoint("BOTTOMRIGHT", -8, 0)
+        h.text = text
+        h.line = line
+        popupFrame.headers[popupFrame.activeHeaders] = h
     end
-    h = CreateFrame("Frame", nil, popupFrame.content)
-    h:SetHeight(HEADER_HEIGHT)
-    local text = h:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    text:SetPoint("LEFT", 8, -1)
-    text:SetPoint("RIGHT", -8, -1)
-    text:SetJustifyH("LEFT")
+    -- Re-apply theme colors on every acquire — openDropdown re-themes the
+    -- popup bg/border and rows, and headers must follow accent/skin changes
+    -- too instead of keeping their creation-time colors until /reload.
     local c = GetColor("accent", { 0.95, 0.78, 0.30, 1 })
-    text:SetTextColor(c[1], c[2], c[3], 1)
-    local line = h:CreateTexture(nil, "ARTWORK")
-    line:SetHeight(1)
-    line:SetPoint("BOTTOMLEFT", 8, 0)
-    line:SetPoint("BOTTOMRIGHT", -8, 0)
+    h.text:SetTextColor(c[1], c[2], c[3], 1)
     local bc = GetColor("border", { 0.2, 0.22, 0.28, 0.8 })
-    line:SetColorTexture(bc[1], bc[2], bc[3], bc[4] or 0.8)
-    h.text = text
-    popupFrame.headers[popupFrame.activeHeaders] = h
+    h.line:SetColorTexture(bc[1], bc[2], bc[3], bc[4] or 0.8)
+    h:Show()
     return h
 end
 

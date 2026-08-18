@@ -71,8 +71,17 @@ function HistoryMixin:AddEntry(entry)
     -- They can diverge briefly during init order, so testing either being
     -- active is enough to block a write. Fixes the "remote HISTORY_ENTRY
     -- slips through in test mode" edge case when only one of the two is up.
-    if Loothing.TestMode and Loothing.TestMode.IsActive
-        and Loothing.TestMode:IsActive() then
+    -- The Simulator always blocks history regardless of the persistence
+    -- toggle — it enters test mode with allowPersistence=true (it needs
+    -- settings writes), and honoring that here would leak fake awards into
+    -- real history.
+    if ns.Simulator and ns.Simulator.IsActive and ns.Simulator:IsActive() then
+        return
+    end
+    -- Manual test mode honors "/lt testmode persist on" as advertised:
+    -- block only while persistence is disallowed.
+    if Loothing.TestMode and Loothing.TestMode.ShouldBlockPersistence
+        and Loothing.TestMode:ShouldBlockPersistence() then
         return
     end
     if ns.TestMode and ns.TestMode:IsEnabled() then
@@ -241,6 +250,16 @@ function HistoryMixin:EndBulkUpdate()
 
     if next(removed) then
         self:RemoveSavedEntries(removed)
+        -- An entry both added and removed inside the same bulk window must
+        -- not be saved — SaveEntries runs after RemoveSavedEntries, so it
+        -- would write a ghost row that isn't in memory and resurrects on
+        -- reload.
+        for i = #added, 1, -1 do
+            local guid = added[i] and added[i].guid
+            if guid and removed[guid] then
+                table.remove(added, i)
+            end
+        end
     end
     if #added > 0 then
         self:SaveEntries(added)

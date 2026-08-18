@@ -144,6 +144,23 @@ end
 
 --- Set multiple items for the session
 -- @param items table - Array of LoothingItem instances
+--- Auto-show gate: honors the rollFrame.autoShow local preference (the
+-- toggle previously existed but nothing read it). Prints a one-time hint
+-- so a user who disabled auto-show still learns voting started.
+function RollFrameMixin:AutoShow()
+    if not Loothing.Settings
+        or Loothing.Settings:Get("rollFrame.autoShow", true) ~= false then
+        self:Show()
+        return
+    end
+    if not self._autoShowHintShown then
+        self._autoShowHintShown = true
+        local L = Loothing.Locale or {}
+        Loothing:Print(L["ROLLFRAME_AUTOSHOW_HINT"]
+            or "Voting started — use /lt roll to open the loot response window.")
+    end
+end
+
 function RollFrameMixin:SetItems(items)
     self.items = items or {}
     self.currentItemIndex = 1
@@ -161,7 +178,7 @@ function RollFrameMixin:SetItems(items)
     -- Update session buttons
     self:UpdateSessionButtons()
 
-    self:Show()
+    self:AutoShow()
 end
 
 --- Add an item to the current session
@@ -173,7 +190,7 @@ function RollFrameMixin:AddItem(item)
     -- If this is the first item, display it
     if #self.items == 1 then
         self:DisplayItem(item)
-        self:Show()
+        self:AutoShow()
     end
 end
 
@@ -944,6 +961,11 @@ function RollFrameMixin:SendResponse(note)
         rollMin = rollSettings and rollSettings.min or 1
         rollMax = rollSettings and rollSettings.max or 100
         roll = math.random(rollMin, rollMax)
+        -- Record + display the generated roll: the "Your roll" row otherwise
+        -- shows "..." forever while a hidden roll the player never saw is
+        -- attached to their response.
+        self:SetItemRoll(itemGUID, roll, rollMin, rollMax)
+        self:UpdateRollDisplay()
     end
 
     note = note or (self.noteEditBox and self.noteEditBox:GetText()) or ""

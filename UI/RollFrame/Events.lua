@@ -349,8 +349,15 @@ function RollFrameMixin:OnChatMessage(text)
         end
     end
 
-    local playerName, roll, minRoll, maxRoll = string.match(safeText, "(.+) rolls (%d+) %((%d+)%-(%d+)%)")
-    if not playerName then return end
+    -- Locale-aware pattern (built from RANDOM_ROLL_RESULT); fall back to the
+    -- English literal for safety.
+    local playerName, roll, minRoll, maxRoll =
+        string.match(safeText, Utils.GetRollResultPattern())
+    if not playerName or not tonumber(roll) then
+        playerName, roll, minRoll, maxRoll =
+            string.match(safeText, "(.+) rolls (%d+) %((%d+)%-(%d+)%)")
+    end
+    if not playerName or not tonumber(roll) then return end
 
     -- Use SafeUnitName to avoid secret value tainting
     local myFullName = Utils and Utils.GetPlayerFullName and Utils.GetPlayerFullName() or Loolib.SecretUtil.SafeUnitName("player")

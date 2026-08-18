@@ -415,7 +415,11 @@ function SyncPanelMixin:GetOnlineMembers()
     -- Check raid/party
     local roster = Utils.GetRaidRoster()
     for _, member in ipairs(roster) do
-        if member.name and member.name ~= playerName and not seen[member.name] then
+        -- IsSamePlayer, not ~=: raid roster names carry realm suffixes while
+        -- SafeUnitName("player") is short — the plain compare listed yourself
+        -- as a sync target in raids.
+        if member.name and not Utils.IsSamePlayer(member.name, playerName)
+            and not seen[member.name] then
             seen[member.name] = true
             members[#members + 1] = member.name
         end

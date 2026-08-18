@@ -1083,7 +1083,10 @@ function SessionPanelMixin:RegisterEvents()
         cinematicFrame:RegisterEvent("CINEMATIC_STOP")
         cinematicFrame:SetScript("OnEvent", function(_, event)
             if event == "CINEMATIC_START" then
-                if self.frame and self.frame:IsShown() then
+                -- IsVisible, not IsShown: the inner frame is never hidden
+                -- individually, so IsShown() is true even when the window is
+                -- closed — the panel would pop open after every cinematic.
+                if self.frame and self.frame:IsVisible() then
                     self.wasShowingBeforeCinematic = true
                     self.frame:Hide()
                 end

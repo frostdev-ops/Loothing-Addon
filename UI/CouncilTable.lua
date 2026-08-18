@@ -402,6 +402,10 @@ function CouncilTableMixin:RefreshItemTabs()
     -- Select first item if none selected
     if not self.currentItem and #self.items > 0 then
         self:SelectItemTab(self.items[1].guid)
+    elseif self.currentItem then
+        -- Tabs were rebuilt in unselected style; re-apply the selection +
+        -- per-state styling without re-running selection side effects.
+        self:UpdateItemTabVisuals(self.currentItem.guid)
     end
 
     -- Update voted indicators on item tabs
@@ -664,6 +668,30 @@ function CouncilTableMixin:SelectItemTab(itemGUID)
     end
 
     -- Update tab visuals based on selection + item state
+    self:UpdateItemTabVisuals(itemGUID)
+
+    -- Auto-scroll selected tab into view
+    if targetIndex and self.itemTabClip then
+        local tabLeft = (targetIndex - 1) * SCROLL_STEP
+        local tabRight = tabLeft + ITEM_TAB_WIDTH
+        local clipWidth = self.itemTabClip:GetWidth()
+
+        if tabLeft < self.scrollOffset then
+            self:ScrollTo(tabLeft)
+        elseif tabRight > self.scrollOffset + clipWidth then
+            self:ScrollTo(tabRight - clipWidth)
+        end
+    end
+    return self:_FinishSelectItemTab(targetItem, itemGUID)
+end
+
+--- Apply selection + item-state styling to every tab. Split out of
+-- SelectItemTab so RefreshItemTabs can re-apply it without re-running
+-- selection side effects (candidate reset, PlayerIntel context, scroll).
+-- Without this, any item event that rebuilds tabs (award, state change,
+-- tradability) dropped the selected tab's accent styling until re-click.
+-- @param selectedGUID string|nil
+function CouncilTableMixin:UpdateItemTabVisuals(selectedGUID)
     for i, tab in ipairs(self.itemTabs) do
         local item = self.items[i]
         if not item then break end
@@ -671,7 +699,7 @@ function CouncilTableMixin:SelectItemTab(itemGUID)
         local q = item.quality or 1
         local qr, qg, qb = C_Item.GetItemQualityColor(q)
 
-        if item.guid == itemGUID then
+        if item.guid == selectedGUID then
             -- Selected state: accent border and full fidelity
             tab.selectBar:Show()
             tab:SetBackdropBorderColor(unpack(SkinningMixin:GetColor("accent")))
@@ -714,20 +742,11 @@ function CouncilTableMixin:SelectItemTab(itemGUID)
             tab.accentBar:SetVertexColor(qr, qg, qb, 0.5)
         end
     end
+end
 
-    -- Auto-scroll selected tab into view
-    if targetIndex and self.itemTabClip then
-        local tabLeft = (targetIndex - 1) * SCROLL_STEP
-        local tabRight = tabLeft + ITEM_TAB_WIDTH
-        local clipWidth = self.itemTabClip:GetWidth()
-
-        if tabLeft < self.scrollOffset then
-            self:ScrollTo(tabLeft)
-        elseif tabRight > self.scrollOffset + clipWidth then
-            self:ScrollTo(tabRight - clipWidth)
-        end
-    end
-
+--- Selection side effects split out of SelectItemTab (see UpdateItemTabVisuals).
+-- @param targetItem table
+function CouncilTableMixin:_FinishSelectItemTab(targetItem)
     -- Update title
     if self.titleText then
         local name = targetItem.name or "Unknown"

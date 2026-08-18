@@ -774,6 +774,23 @@ local function GetLocalPreferencesOptions()
                         get = function() return Loothing.Settings:Get("frame.showSpecIcon") end,
                         set = function(_, v) Loothing.Settings:Set("frame.showSpecIcon", v) end,
                     },
+                    showMinimapButton = {
+                        type = "toggle",
+                        name = L["CONFIG_SHOW_MINIMAP_BUTTON"] or "Minimap Button",
+                        desc = L["CONFIG_SHOW_MINIMAP_BUTTON_DESC"]
+                            or "Show the Loothing minimap button. (The button's context menu can hide it; this is the way back.)",
+                        order = 13.5,
+                        width = "half",
+                        get = function()
+                            return Loothing.Settings:Get("frame.showMinimapButton", true)
+                        end,
+                        set = function(_, v)
+                            Loothing.Settings:Set("frame.showMinimapButton", v)
+                            if Loothing.MinimapButton and Loothing.MinimapButton.UpdateVisibility then
+                                Loothing.MinimapButton:UpdateVisibility()
+                            end
+                        end,
+                    },
                     closeWithEscape = {
                         type = "toggle",
                         name = L["CONFIG_FRAME_CLOSE_ESCAPE"],
@@ -781,7 +798,15 @@ local function GetLocalPreferencesOptions()
                         order = 14,
                         width = "half",
                         get = function() return Loothing.Settings:Get("frame.closeWithEscape") end,
-                        set = function(_, v) Loothing.Settings:Set("frame.closeWithEscape", v) end,
+                        set = function(_, v)
+                            Loothing.Settings:Set("frame.closeWithEscape", v)
+                            -- Apply live — registration only happens at frame
+                            -- creation, so without this the toggle needed a
+                            -- /reload to enable and never disabled.
+                            if ns.SkinningMixin and ns.SkinningMixin.ApplyEscapeCloseSetting then
+                                ns.SkinningMixin:ApplyEscapeCloseSetting(v)
+                            end
+                        end,
                     },
                     timeoutFlash = {
                         type = "toggle",

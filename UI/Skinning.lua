@@ -1234,24 +1234,70 @@ end
     Escape-to-Close
 ----------------------------------------------------------------------]]
 
+local function addToUISpecialFrames(globalName)
+    if not UISpecialFrames then return end
+    for _, name in ipairs(UISpecialFrames) do
+        if name == globalName then return end
+    end
+    tinsert(UISpecialFrames, globalName)
+end
+
+local function removeFromUISpecialFrames(globalName)
+    if not UISpecialFrames then return end
+    for i = #UISpecialFrames, 1, -1 do
+        if UISpecialFrames[i] == globalName then
+            tremove(UISpecialFrames, i)
+        end
+    end
+end
+
 --- Register a frame for Escape-to-close
--- @param frame Frame - Must have a global name
+-- @param frame Frame
 -- @param globalName string - Global frame name
 function SkinningMixin:RegisterForEscapeClose(frame, globalName)
     if not frame or not globalName then return end
 
-    -- Check setting
-    if Loothing.Settings then
-        local closeWithEscape = Loothing.Settings:Get("frame.closeWithEscape", false)
-        if not closeWithEscape then return end
+    -- Blizzard's CloseSpecialWindows resolves the entry by global NAME;
+    -- several of our frames (MainFrame, CouncilTable, RollFrame) are created
+    -- unnamed, so their registration was a silent no-op — ESC did nothing on
+    -- exactly the windows users most expect it to close. Publishing the
+    -- global here is deliberate (it's how UISpecialFrames works).
+    if _G[globalName] == nil then
+        _G[globalName] = frame
     end
 
-    -- Add to UISpecialFrames if not already there
-    if UISpecialFrames then
-        for _, name in ipairs(UISpecialFrames) do
-            if name == globalName then return end
+    -- Track every registration so the closeWithEscape toggle applies live
+    -- (previously enabling required a /reload and disabling never took
+    -- effect at all).
+    self.escapeCloseNames = self.escapeCloseNames or {}
+    local tracked = false
+    for _, name in ipairs(self.escapeCloseNames) do
+        if name == globalName then
+            tracked = true
+            break
         end
-        tinsert(UISpecialFrames, globalName)
+    end
+    if not tracked then
+        tinsert(self.escapeCloseNames, globalName)
+    end
+
+    if Loothing.Settings
+        and not Loothing.Settings:Get("frame.closeWithEscape", false) then
+        return
+    end
+    addToUISpecialFrames(globalName)
+end
+
+--- Apply the closeWithEscape setting to every tracked frame immediately.
+-- Called from the options setter.
+-- @param enabled boolean
+function SkinningMixin:ApplyEscapeCloseSetting(enabled)
+    for _, name in ipairs(self.escapeCloseNames or {}) do
+        if enabled then
+            addToUISpecialFrames(name)
+        else
+            removeFromUISpecialFrames(name)
+        end
     end
 end
 

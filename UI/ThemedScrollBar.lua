@@ -454,7 +454,10 @@ function ns.CreateThemedScrollBar(parent, opts)
         self:SetScript("OnUpdate", function()
             if not bar._dragging then self:SetScript("OnUpdate", nil) return end
             local cx, cy = GetCursorPosition()
-            local scale = UIParent:GetEffectiveScale()
+            -- Bar's own effective scale, not UIParent's: host panels register
+            -- Ctrl+Scroll scaling, and on a scaled panel the thumb otherwise
+            -- drifts from the cursor by exactly the panel-scale factor.
+            local scale = bar:GetEffectiveScale()
             local delta = (isVertical(bar) and (bar._dragStartCursor - cy) or (cx - bar._dragStartCursor)) / scale
             local trackExtent = bar:GetTrackExtent()
             local movable = math.max(1, trackExtent - bar._thumbExtent)
@@ -474,7 +477,8 @@ function ns.CreateThemedScrollBar(parent, opts)
     track:SetScript("OnClick", function(_, mouseButton)
         if mouseButton ~= "LeftButton" or not bar._enabled then return end
         local cx, cy = GetCursorPosition()
-        local scale = UIParent:GetEffectiveScale()
+        -- Bar's own effective scale (see drag handler above)
+        local scale = bar:GetEffectiveScale()
         local target = sliderValueFromMouse(bar, cx / scale, cy / scale)
         bar:SetValue(target)
     end)

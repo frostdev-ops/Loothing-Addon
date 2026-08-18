@@ -563,6 +563,14 @@ function SessionMixin:HandleTradable(data)
         end
         TraceLoot("handleT:add-ok", itemLink,
             "looter=" .. SecretUtil.GuardToString(playerName, "<secret>"))
+        -- Auto-award consumed the item inside AddItem (no ITEM_ADD was
+        -- broadcast, by design — auto-awards are silent). Broadcasting one
+        -- here would plant a phantom PENDING item in every receiver's
+        -- session UI, with the VOTE_AWARD long since dropped as unknown.
+        if item:IsComplete() then
+            TraceLoot("handleT:auto-awarded", itemLink)
+            return
+        end
         item.isTradable = true
         item.tradeTimeRemaining = data.timeRemaining
         if Loothing.Comm then
@@ -764,6 +772,23 @@ function SessionMixin:BufferDeferredLoot(data, encounterID, encounterName)
     return true
 end
 
+--- Re-stamp buffered rows for one encounter so the StartSession replay TTL
+-- measures from the moment the deferral concluded, not from the original
+-- drop. Cross-encounter deferrals (boss B drops while boss A's session is
+-- voting) routinely age past LOOT_BUFFER_TTL before the ML is even asked —
+-- without the re-stamp, auto trigger mode silently destroyed that loot.
+-- The picker path does the same in StartSessionWithPickedItems.
+-- @param encounterID number|nil
+function SessionMixin:RestampBufferedLoot(encounterID)
+    if type(self.lootBuffer) ~= "table" then return end
+    local now = time()
+    for _, entry in ipairs(self.lootBuffer) do
+        if SameEncounterID(entry.encounterID, encounterID) then
+            entry.timestamp = now
+        end
+    end
+end
+
 --- Remove buffered rows for one encounter, preserving other encounters.
 -- Nil/0 are treated as the same "encounterless" bucket; clearAll is the only
 -- path that wipes unrelated future-encounter rows.
@@ -814,6 +839,7 @@ function SessionMixin:PromptForBufferedLoot(encounter)
     self.lastEncounterName = enc.name
     self.pendingBufferedPrompt = nil
     self.receivedLootCount = #self.lootBuffer
+    self:RestampBufferedLoot(enc.id)
     self:ApplyTriggerAction(enc.id, enc.name)
 end
 
@@ -1964,6 +1990,32 @@ function SessionMixin:RetallyVoteResultsForItem(item)
         Loothing.Comm:BroadcastVoteResults(item.guid, results, self.sessionID)
     end
 
+    -- REVOTE tie-breaker: the engine reports the tie (winner=nil,
+    -- needsRevote=true) but nothing consumed it, so the setting silently
+    -- behaved like it didn't exist. Prompt the ML once per tally cycle
+    -- (late grace-window retallies that stay tied don't re-prompt; the
+    -- flag is cleared in RevoteItem).
+    if results and results.needsRevote and self:IsMasterLooter()
+        and not item._revotePromptShown then
+        item._revotePromptShown = true
+        local itemLabel = tostring(item.itemLink or item.guid)
+        Loothing:Print(string.format(
+            L("VOTE_TIE_REVOTE_FMT", "Ranked vote tied for %s — a revote is required."),
+            itemLabel))
+        local Popups = GetPopups()
+        if Popups then
+            Popups:Confirm(
+                L("VOTE_TIE_REVOTE_TITLE", "Vote Tied"),
+                string.format(
+                    L("VOTE_TIE_REVOTE_PROMPT_FMT",
+                      "The ranked vote for %s ended in a tie. Start a revote now?"),
+                    itemLabel),
+                function()
+                    self:RevoteItem(item.guid, true)
+                end)
+        end
+    end
+
     return results
 end
 
@@ -2502,6 +2554,18 @@ function SessionMixin:RevoteItem(guid, force)
         item.votes:Flush()
     end
     item:SetState(Loothing.ItemState.PENDING)
+    item._revotePromptShown = nil
+
+    -- Tell receivers still in VOTING to reset first: their StartVoting
+    -- requires PENDING, and HandleRemoteVoteRequest deliberately leaves
+    -- VOTING items alone (a reset there would flush live votes on
+    -- duplicate/replayed requests). Both messages are ALERT, so the cancel
+    -- drains before the VOTE_REQUEST that StartVoting broadcasts. Receivers
+    -- whose item is TALLIED/AWARDED are reset by HandleRemoteVoteRequest
+    -- itself (2.0.49+; the cancel handler ignores non-voting items).
+    if Loothing.Comm then
+        Loothing.Comm:BroadcastVoteCancel(guid, self.sessionID)
+    end
 
     -- Start voting again (handles broadcast internally)
     return self:StartVoting(guid)
@@ -3138,6 +3202,9 @@ function SessionMixin:ShowSessionPrompt(encounterID, encounterName)
     Popups:Show("LOOTHING_CONFIRM_START_SESSION", {
         boss = encounterName or "Unknown Boss",
         onAccept = function()
+            -- The ML may sit on this popup past LOOT_BUFFER_TTL; measure the
+            -- replay TTL from the accept, not the original drops.
+            self:RestampBufferedLoot(encounterID)
             self:StartSession(encounterID, encounterName)
         end,
     })
@@ -3592,6 +3659,26 @@ function SessionMixin:HandleRemoteVoteRequest(data)
                           math.min(Loothing.Timing.MAX_VOTE_TIMEOUT, timeout))
     end
 
+    -- Revote support: the ML resets an item to PENDING and re-broadcasts
+    -- VOTE_REQUEST (RevoteItem). Mirror that reset for TALLIED/completed
+    -- items — StartVoting requires PENDING, so without this the request
+    -- silently no-ops while the RollFrame still opens, votes are dropped,
+    -- and a later re-award is rejected by the IsComplete() guard. Items
+    -- already VOTING keep the old silent-dedup behavior (a reset there
+    -- would flush live votes on duplicate/replayed requests).
+    if not item:IsPending() and not item:IsVoting() then
+        if item:IsComplete() then
+            item.winner = nil
+            item.winnerResponse = nil
+            item.awardedTime = nil
+            item.awarded = false
+        end
+        if item.votes then
+            item.votes:Flush()
+        end
+        item:SetState(Loothing.ItemState.PENDING)
+    end
+
     item:StartVoting(timeout)
     -- Note: We don't set self.currentVotingItem here because multiple items
     -- can be in voting state simultaneously. Use GetVotingItems() instead.
@@ -3712,10 +3799,35 @@ function SessionMixin:HandleRemoteVoteCommit(data)
     end
 
     -- Apply multiVote / selfVote on every receiver.
-    local multiVote = getPolicyFlag("multiVote", true)
-    if not multiVote and #data.responses > 1 then
-        Loothing:Debug("Rejected multi-vote from", tostring(data.voter), "- multiVote is disabled")
-        data.responses = { data.responses[#data.responses] }
+    -- In ranked-choice mode a ballot is legitimately an ordered array of
+    -- candidate names; the multiVote flag governs the unrelated SIMPLE-mode
+    -- "vote for several candidates" toggle. Clamping ranked ballots here used
+    -- to truncate every remote ballot to its LAST (least-preferred) entry with
+    -- default settings, permanently diverging tallies from the voter's own
+    -- client. Ranked ballots are bounded by maxRanks instead.
+    local mldbSettings = Loothing.MLDB and Loothing.MLDB:Get()
+    local votingMode = (mldbSettings and mldbSettings.votingMode)
+        or (Loothing.Settings and Loothing.Settings:GetVotingMode())
+        or Loothing.VotingMode.SIMPLE
+    if votingMode == Loothing.VotingMode.RANKED_CHOICE then
+        local maxRanks = tonumber(mldbSettings and mldbSettings.maxRanks)
+            or (Loothing.Settings and Loothing.Settings:GetMaxRanks())
+            or 0
+        if maxRanks > 0 and #data.responses > maxRanks then
+            Loothing:Debug("Clamping ranked ballot from", tostring(data.voter),
+                "to", maxRanks, "ranks")
+            local bounded = {}
+            for i = 1, maxRanks do
+                bounded[i] = data.responses[i]
+            end
+            data.responses = bounded
+        end
+    else
+        local multiVote = getPolicyFlag("multiVote", true)
+        if not multiVote and #data.responses > 1 then
+            Loothing:Debug("Rejected multi-vote from", tostring(data.voter), "- multiVote is disabled")
+            data.responses = { data.responses[#data.responses] }
+        end
     end
 
     local selfVote = getPolicyFlag("selfVote", true)

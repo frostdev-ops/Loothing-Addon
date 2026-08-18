@@ -166,6 +166,17 @@ function SettingsMixin:Init()
         if Loothing and Loothing.Debug then
             Loothing:Debug("Profile changed from", oldProfile, "to", newProfile)
         end
+        -- Re-apply visual state from the new profile. RefreshTheme only fires
+        -- from the SetSkin/SetAccent/SetDensity setters, so without this every
+        -- live frame keeps the old profile's theme (and the minimap button its
+        -- old visibility) until the user manually re-picks a theme or reloads.
+        if ns.SkinningMixin and ns.SkinningMixin.RefreshTheme then
+            ns.SkinningMixin:RefreshTheme()
+        end
+        if Loothing and Loothing.MinimapButton
+            and Loothing.MinimapButton.UpdateVisibility then
+            Loothing.MinimapButton:UpdateVisibility()
+        end
     end, self)
 
     self.sv:RegisterCallback("OnProfileReset", function()
