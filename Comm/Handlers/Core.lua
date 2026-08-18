@@ -209,18 +209,33 @@ end
 
 function CommMixin:HandleSessionStart(data, sender)
     if not validateHandler("HandleSessionStart", data) then return end
-    -- SESSION_START is the authoritative ML declaration. Accept from:
-    --   1. Known ML (Session or Settings)
-    --   2. Group leader or assistant
-    --   3. Any group member — covers explicit ML (/lt ml) who may not be leader.
-    -- Reject only non-group senders.
-    local senderIsML = isMasterLooter(sender)
-    local senderIsLeader = isGroupLeaderOrAssistant(sender)
-    local senderInGroup = isGroupMember(sender)
+    -- SESSION_START is the authoritative ML declaration. Same authorization
+    -- ladder as SESSION_INIT (minus the MLDB-payload requirement — bare
+    -- SESSION_START never carries one):
+    --   1. Known ML (Session or Settings). Covers explicit ML (/lt ml) who may
+    --      not be leader — every current send path broadcasts MLDB before or
+    --      alongside SESSION_START, so receivers already resolved the ML.
+    --   2. Strict group leader when our cached ML is stale (handover).
+    --   3. Leader/assistant bootstrap when we don't know an ML yet.
+    -- Anything else is rejected: HandleRemoteSessionStart force-ends the
+    -- active session on sessionID mismatch and adopts the sender as global
+    -- ML, so an unauthenticated SESSION_START would let any group member
+    -- terminate another player's session and pass isMasterLooter() for
+    -- subsequent ITEM_ADD / VOTE_AWARD / COUNCIL_ROSTER forgeries — the
+    -- exact takeover HandleSessionInit guards against.
+    if not isMasterLooter(sender) then
+        local mlKnown = Loothing.masterLooter and Loothing.masterLooter ~= ""
+        local senderIsStrictLeader = Utils.IsPlayerGroupLeader
+            and Utils.IsPlayerGroupLeader(sender)
+        local leaderHandover = mlKnown
+            and senderIsStrictLeader
+            and not Utils.IsSamePlayer(Loothing.masterLooter, sender)
+        local bootstrap = not mlKnown and isGroupLeaderOrAssistant(sender)
 
-    if not senderIsML and not senderIsLeader and not senderInGroup then
-        Loothing:Debug("Rejected SESSION_START from non-group sender:", sender)
-        return
+        if not leaderHandover and not bootstrap then
+            Loothing:Debug("Rejected SESSION_START from non-ML/non-leader:", sender)
+            return
+        end
     end
 
     -- Accept and propagate the sender as authoritative ML
@@ -1003,8 +1018,20 @@ end
     Desktop Intel Share Handlers
 ----------------------------------------------------------------------]]
 
+-- Intel share has a consent popup downstream, but datasets buffer in memory
+-- before acceptance and a declined sender can re-send to re-pop the dialog.
+-- Require a relationship: group member, or guild channel (Blizzard only
+-- delivers GUILD addon messages from guildmates). Blocks stranger WHISPERs.
+local function isIntelShareSenderAllowed(sender, distribution)
+    return distribution == "GUILD" or isGroupMember(sender)
+end
+
 function CommMixin:HandleIntelShareManifest(data, sender, distribution)
     if not validateHandler("HandleIntelShareManifest", data, SCHEMAS.INTEL_SHARE_MANIFEST) then return end
+    if not isIntelShareSenderAllowed(sender, distribution) then
+        Loothing:Debug("Rejected INTEL_SHARE_MANIFEST from non-group/non-guild sender:", sender)
+        return
+    end
     if Loothing.IntelShare then
         Loothing.IntelShare:HandleManifest(data, sender, distribution)
     end
@@ -1012,6 +1039,10 @@ end
 
 function CommMixin:HandleIntelShareData(data, sender, distribution)
     if not validateHandler("HandleIntelShareData", data, SCHEMAS.INTEL_SHARE) then return end
+    if not isIntelShareSenderAllowed(sender, distribution) then
+        Loothing:Debug("Rejected INTEL_SHARE from non-group/non-guild sender:", sender)
+        return
+    end
     if Loothing.IntelShare then
         Loothing.IntelShare:HandleDataset(data, sender, distribution)
     end
