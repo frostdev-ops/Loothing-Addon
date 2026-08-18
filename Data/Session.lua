@@ -1946,11 +1946,14 @@ function SessionMixin:RetallyVoteResultsForItem(item)
     -- Tally votes. Pass the configured tie-breaker: without opts,
     -- TallyRankedChoice's tie-break block is gated out entirely and a
     -- ranked-choice tie returns winner=nil regardless of the setting.
+    -- Signature is Tally(votes, mode, opts) — mode stays nil so Tally
+    -- resolves the configured voting mode itself; passing opts in the
+    -- mode slot silently forced every tally down the simple path.
     local results = nil
     if Loothing.VotingEngine then
         local tieBreakerMode = Loothing.Settings and Loothing.Settings.GetTieBreakerMode
             and Loothing.Settings:GetTieBreakerMode() or "ROLL"
-        results = Loothing.VotingEngine:Tally(item:GetVotes(), { tieBreakerMode = tieBreakerMode })
+        results = Loothing.VotingEngine:Tally(item:GetVotes(), nil, { tieBreakerMode = tieBreakerMode })
     end
     item.voteResults = results
 

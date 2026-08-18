@@ -30,6 +30,15 @@ local Loothing = ns.Addon
 -- timestamp-range resolution.
 local SEASONS_TABLE = {
     {
+        id       = "MIDNIGHT_S2",
+        name     = "Midnight Season 2",
+        order    = -1,
+        -- Patch 12.1.0 "Curse of Ula'tek" — single 8-boss raid tier.
+        instances = {
+            "The Venomous Abyss",
+        },
+    },
+    {
         id       = "MIDNIGHT_S1",
         name     = "Midnight Season 1",
         order    = 0,
