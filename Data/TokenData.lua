@@ -838,6 +838,37 @@ ns.TokenTable = {
 
     -- Midnight Season 1 - March on Quel'Danas (omni-token, exchangeable with Kirana for any tier piece)
     [249367] = "MultiSlots",   -- Chiming Void Curio (Midnight Falls - all classes, all slots)
+
+    -- Midnight Season 2 - The Venomous Abyss (Venom* family, patch 12.1)
+    -- IDs from ItemSparse 12.1.0.69382 (wago.tools). Slot words differ from S1:
+    -- Idol=hands, Effigy=head, Relic=legs, Remnant=shoulder, Icon=chest.
+    [270910] = "HandsSlot",    -- Venomwoven Idol (cloth) — Breath of Ula'tek
+    [270911] = "HandsSlot",    -- Venomcured Idol (leather)
+    [270912] = "HandsSlot",    -- Venomcast Idol (mail)
+    [270913] = "HandsSlot",    -- Venomforged Idol (plate)
+
+    [270914] = "HeadSlot",     -- Venomwoven Effigy (cloth) — Vexhul
+    [270915] = "HeadSlot",     -- Venomcured Effigy (leather)
+    [270916] = "HeadSlot",     -- Venomcast Effigy (mail)
+    [270917] = "HeadSlot",     -- Venomforged Effigy (plate)
+
+    [270918] = "LegsSlot",     -- Venomwoven Relic (cloth) — Sszorak
+    [270919] = "LegsSlot",     -- Venomcured Relic (leather)
+    [270920] = "LegsSlot",     -- Venomcast Relic (mail)
+    [270921] = "LegsSlot",     -- Venomforged Relic (plate)
+
+    [270922] = "ShoulderSlot", -- Venomwoven Remnant (cloth) — Mor'zahi
+    [270923] = "ShoulderSlot", -- Venomcured Remnant (leather)
+    [270924] = "ShoulderSlot", -- Venomcast Remnant (mail)
+    [270925] = "ShoulderSlot", -- Venomforged Remnant (plate)
+
+    [270926] = "ChestSlot",    -- Venomwoven Icon (cloth)
+    [270927] = "ChestSlot",    -- Venomcured Icon (leather)
+    [270928] = "ChestSlot",    -- Venomcast Icon (mail)
+    [270929] = "ChestSlot",    -- Venomforged Icon (plate)
+
+    -- Midnight Season 2 omni-token (exchangeable with Kirana, all classes/slots)
+    [270909] = "MultiSlots",   -- Slumbering Coil Curio
 }
 
 --- Token name family prefix → set of class tokens (must match keys in CLASS_NAME_TO_ID)
@@ -856,6 +887,12 @@ ns.TokenClassFamilies = {
     ["Alncured"]   = { DEMONHUNTER=true, ROGUE=true, MONK=true, DRUID=true }, -- leather
     ["Alnwoven"]   = { WARLOCK=true, PRIEST=true, MAGE=true },         -- cloth
     ["Alnforged"]  = { DEATHKNIGHT=true, PALADIN=true, WARRIOR=true }, -- plate
+    -- Midnight Season 2 (The Venomous Abyss — Venom* family). Same armor-class
+    -- split; new prefix per season.
+    ["Venomcast"]   = { EVOKER=true, HUNTER=true, SHAMAN=true },        -- mail
+    ["Venomcured"]  = { DEMONHUNTER=true, ROGUE=true, MONK=true, DRUID=true }, -- leather
+    ["Venomwoven"]  = { WARLOCK=true, PRIEST=true, MAGE=true },         -- cloth
+    ["Venomforged"] = { DEATHKNIGHT=true, PALADIN=true, WARRIOR=true }, -- plate
 }
 
 --- Slot keyword → INVTYPE_* constant. Reverse of GetSlotName for engine-side
@@ -895,6 +932,14 @@ local NAME_PATTERN_TO_SLOT = {
     ["Unraveled"] = "ShoulderSlot",
     -- Dreamrift Riftbloom suffix (chest)
     ["Riftbloom"] = "ChestSlot",
+    -- Venomous Abyss (S2) suffix words. Safe from false positives (e.g. the
+    -- "Hex Lord's Dooming Idol" trinket) because IsToken requires a Venom*/Void*/
+    -- Aln* family prefix before consulting this table.
+    ["Idol"]    = "HandsSlot",
+    ["Effigy"]  = "HeadSlot",
+    ["Relic"]   = "LegsSlot",
+    ["Remnant"] = "ShoulderSlot",
+    ["Icon"]    = "ChestSlot",
 }
 
 --- Table mapping item IDs to base item levels (normal difficulty)
