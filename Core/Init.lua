@@ -1569,7 +1569,13 @@ local function RegisterEvents()
             Loothing.Announcer:AnnounceSessionEnd()
         end, Loothing)
 
+        -- ML-only, like OnSessionStarted above: both events also fire on every
+        -- RECEIVING client (HandleRemoteItemAdd / HandleRemoteVoteRequest), and
+        -- MLDB pushes the ML's announcement toggles into every raid member's
+        -- local settings — without the gate the whole raid re-announced each
+        -- item ("X is considering Y" ×N per item).
         Loothing.Session:RegisterCallback("OnItemAdded", function(_, item)
+            if not Loothing.Session:IsMasterLooter() then return end
             if item and item.itemLink then
                 Loothing.Announcer:AnnounceItem(item.itemLink, {
                     itemLevel = item.itemLevel,
@@ -1580,6 +1586,7 @@ local function RegisterEvents()
         end, Loothing)
 
         Loothing.Session:RegisterCallback("OnVotingStarted", function(_, item)
+            if not Loothing.Session:IsMasterLooter() then return end
             if item and item.itemLink then
                 Loothing.Announcer:AnnounceConsiderations(item.itemLink, {
                     itemLevel = item.itemLevel,
