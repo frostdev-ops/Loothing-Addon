@@ -668,6 +668,11 @@ function MLDBMixin:ApplyFromML(settings, sender)
     -- Store MLDB (after ML guard so only non-ML clients hold the received copy)
     self.mldb = settings
 
+    -- Every Settings write below is an ML-sync write, not a user write.
+    -- Suppress snapshot mirroring for the duration, including the
+    -- OnMLDBApplied callbacks at the end (they react to the remote apply).
+    self._applyingRemote = true
+
     -- Snapshot local settings before first MLDB overwrite so we can restore on session end
     if not self.preSessionSnapshot then
         self:SnapshotSettings()
@@ -845,6 +850,8 @@ function MLDBMixin:ApplyFromML(settings, sender)
         settings = settings,
     })
 
+    self._applyingRemote = false
+
     Loothing:Debug("Applied MLDB from", sender)
 end
 
@@ -869,6 +876,96 @@ end
 --[[--------------------------------------------------------------------
     Settings Snapshot / Restore (non-ML clients)
 ----------------------------------------------------------------------]]
+
+-- Settings keys that map to dedicated scalar slots in the snapshot.
+-- Must stay in sync with SnapshotSettings/RestoreSettings below.
+local SNAPSHOT_SCALAR_KEYS = {
+    ["session.triggerAction"]     = "sessionTriggerAction",
+    ["session.triggerTiming"]     = "sessionTriggerTiming",
+    ["session.scope.raid"]        = "sessionTriggerRaid",
+    ["session.scope.dungeon"]     = "sessionTriggerDungeon",
+    ["session.scope.openWorld"]   = "sessionTriggerOpenWorld",
+    ["session.groupLootMode"]     = "groupLootMode",
+    ["councilTable.sortColumn"]   = "sortOrder",
+    ["observers.mlIsObserver"]    = "mlIsObserver",
+    ["observers.openObservation"] = "openObservation",
+    ["voting.timeout"]            = "votingTimeout",
+    ["voting.mode"]               = "votingMode",
+}
+
+-- Settings table roots stored as whole tables in the snapshot. A write to
+-- the root replaces the snapshot copy; a write to a sub-key mirrors only
+-- that path — the rest of the live table holds the ML's synced values and
+-- must never be re-copied wholesale into the snapshot.
+local SNAPSHOT_TABLE_ROOTS = {
+    ["voting"]                = "voting",
+    ["observers.permissions"] = "observerPermissions",
+    ["autoPass"]              = "autoPass",
+    ["autoAward"]             = "autoAward",
+    ["awardReasons"]          = "awardReasons",
+    ["winnerDetermination"]   = "winnerDetermination",
+    ["announcements"]         = "announcements",
+    ["ignoreItems"]           = "ignoreItems",
+    ["responseSets"]          = "responseSets",
+}
+
+--- Mirror a user-initiated settings write into the pre-session snapshot.
+-- Called from SettingsMixin:Set after every write. While a snapshot
+-- exists, live Settings hold the ML's synced values and the snapshot
+-- holds the user's own; an edit the user makes mid-session must land in
+-- the snapshot too or RestoreSettings reverts it when the ML stint ends.
+-- Writes performed by ApplyFromML are excluded via _applyingRemote.
+-- The snapshot table is the same table persisted at
+-- __mldbPreSessionSnapshot, so in-place mutation keeps the /reload
+-- recovery copy current too.
+-- @param key string - Settings key (dot notation)
+-- @param value any - Value that was written
+function MLDBMixin:MirrorUserWrite(key, value)
+    local snap = self.preSessionSnapshot
+    if not snap or self._applyingRemote then
+        return
+    end
+
+    local scalarField = SNAPSHOT_SCALAR_KEYS[key]
+    if scalarField then
+        snap[scalarField] = value
+    end
+
+    for root, field in pairs(SNAPSHOT_TABLE_ROOTS) do
+        if key == root then
+            snap[field] = Utils.DeepCopy(value)
+        elseif key:sub(1, #root + 1) == (root .. ".") then
+            local target = snap[field]
+            if type(target) ~= "table" then
+                target = {}
+                snap[field] = target
+            end
+            local parts = Utils.Split(key:sub(#root + 2), ".")
+            if #parts == 0 then
+                return  -- malformed key (trailing dot); base Set tolerates it, so must we
+            end
+            for i = 1, #parts - 1 do
+                local part = parts[i]
+                if type(target[part]) ~= "table" then
+                    target[part] = {}
+                end
+                target = target[part]
+            end
+            local leaf = value
+            if type(leaf) == "table" then
+                leaf = Utils.DeepCopy(leaf)
+            end
+            target[parts[#parts]] = leaf
+        end
+    end
+
+    -- A whole-table voting write also refreshes the dedicated slots that
+    -- RestoreSettings applies after (and over) snap.voting.
+    if key == "voting" and type(value) == "table" then
+        snap.votingTimeout = value.timeout
+        snap.votingMode = value.mode
+    end
+end
 
 --- Snapshot current local settings before ML overwrite.
 -- Only call once per session (guarded in ApplyFromML).
@@ -936,6 +1033,10 @@ end
 --- Restore local settings from snapshot after session ends.
 -- No-op if no snapshot exists (ML client, or no MLDB was received).
 function MLDBMixin:RestoreSettings()
+    -- Belt-and-braces: never let a mid-apply error strand the remote-write
+    -- flag across sessions (it would silently disable user-edit mirroring).
+    self._applyingRemote = false
+
     local snap = self.preSessionSnapshot
     if not snap then
         return

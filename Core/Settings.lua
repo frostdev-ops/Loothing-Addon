@@ -298,6 +298,14 @@ function SettingsMixin:Set(key, value)
 
     -- Set value
     target[parts[#parts]] = value
+
+    -- Mid-session user edits to MLDB-synced keys must also land in the
+    -- pre-session snapshot or the session-end restore reverts them.
+    -- No-op unless a snapshot exists and the write is not MLDB's own.
+    local mldb = Loothing.MLDB
+    if mldb and mldb.MirrorUserWrite then
+        mldb:MirrorUserWrite(key, value)
+    end
 end
 
 --- Get a value from the global scope
