@@ -43,6 +43,13 @@ Loothing.isMasterLooter = false     -- Are we currently the ML?
 Loothing.masterLooter = nil         -- Player name of current ML (or nil)
 Loothing.explicitMasterLooter = nil -- Runtime-only explicit ML (per-session, synced via MLDB)
 Loothing.handleLoot = false         -- Is Loothing actively handling loot?
+-- User explicitly declined/disabled loot handling for this ML stint.
+-- Without this latch the toggle was not respected at all: PerformMLCheck
+-- re-evaluates on every roster/leader/loot-method event whenever we're ML
+-- without handleLoot, and usage mode 'gl' re-enabled it seconds after the
+-- user turned it off ('ask_gl' re-prompted forever instead). In-memory by
+-- design: cleared on enable, on leaving the group, or on losing ML.
+Loothing.handleLootDeclined = false
 Loothing.isInGuildGroup = false     -- Is group leader in our guild?
 Loothing.lootMethod = nil           -- Current loot method from GetLootMethod()
 Loothing.mlStateVerified = true     -- False only during reconnect-cache restore until live ML check runs
@@ -644,6 +651,8 @@ local function PerformMLCheck()
         Loothing.masterLooter = nil
         Loothing.isInGuildGroup = false
         Loothing.mlStateVerified = true
+        -- Fresh group = fresh decision; drop any decline latch.
+        Loothing.handleLootDeclined = false
         return
     end
 
@@ -689,6 +698,9 @@ local function PerformMLCheck()
     -- If we lost ML status, auto-disable
     if wasML and not isNowML then
         Loothing:Debug("Lost ML status, stopping loot handling")
+        -- The decline was about that ML stint; a later re-gain is a fresh
+        -- decision.
+        Loothing.handleLootDeclined = false
         if Loothing.handleLoot then
             Loothing:StopHandleLoot()
         end
@@ -760,6 +772,12 @@ function Addon._ResolveMLUsageAfterHandover()
     if Loothing.handleLoot then return end
     if not Loothing.isMasterLooter then return end
 
+    -- Respect an explicit decline for the rest of this ML stint.
+    if Loothing.handleLootDeclined then
+        Loothing:Debug("Skipping usage-mode resolve - user declined loot handling")
+        return
+    end
+
     -- Don't stack the usage-mode prompt under an open handover modal. The
     -- handover callback will call us back after the user resolves it.
     if GetPopups():IsShowing("LOOTHING_ML_HANDOVER_PROMPT") then
@@ -799,6 +817,9 @@ function Addon._ResolveMLUsageAfterHandover()
         Loothing:Debug("ML detected, usage mode 'ask_gl' - prompting")
         GetPopups():Show("LOOTHING_ML_USAGE_PROMPT", nil, function()
             Loothing:StartHandleLoot()
+        end, function()
+            -- "No" must stick — otherwise the next roster event re-prompts.
+            Loothing.handleLootDeclined = true
         end)
         return
     end
@@ -1114,6 +1135,8 @@ OnRaidEnter = function()
     end
 
     if Loothing.handleLoot then return end
+    -- Instance entry must not override an explicit decline either.
+    if Loothing.handleLootDeclined then return end
     if not UnitIsGroupLeader("player") then
         ScheduleMLCheck()
         return
@@ -1138,6 +1161,8 @@ OnRaidEnter = function()
                 Loothing:StartHandleLoot()
             end,
             function()
+                -- "No" must stick for this ML stint (see handleLootDeclined).
+                Loothing.handleLootDeclined = true
                 Loothing:Print(L["ML_NOT_ACTIVE_SESSION"])
             end
         )
@@ -1154,6 +1179,7 @@ function Addon:StartHandleLoot()
     if self.handleLoot then return end
 
     self.handleLoot = true
+    self.handleLootDeclined = false
     self.mlStateVerified = true
     self:Debug("StartHandleLoot - now handling loot")
     self:Print(L["ML_HANDLING_LOOT"])
@@ -1226,6 +1252,10 @@ function Addon:SetHandleLoot(enabled)
         self:StartHandleLoot()
     else
         self.handleLoot = false
+        -- Explicit user opt-out: latch it so ML re-detection doesn't
+        -- auto-re-enable ('gl') or re-prompt ('ask_gl') on the next
+        -- roster event.
+        self.handleLootDeclined = true
         self:Debug("SetHandleLoot(false) - soft disable, session preserved")
         self:Print(L["HANDLE_LOOT_DISABLED"])
 
@@ -2033,6 +2063,9 @@ local function RegisterSlashCommands()
             handler = function()
                 if Loothing.handleLoot then
                     Loothing:StopHandleLoot()
+                    -- Explicit user stop — don't re-prompt/auto-re-enable
+                    -- on the next roster event.
+                    Loothing.handleLootDeclined = true
                     printLine("Stopped handling loot.")
                 else
                     printLine("Not currently handling loot.")
@@ -2475,6 +2508,7 @@ local function RegisterSlashCommands()
 
                 printLine("=== Loothing Loot Detection Diagnostics ===")
                 printLine("handleLoot:            " .. yn(Loothing.handleLoot))
+                printLine("handleLootDeclined:    " .. yn(Loothing.handleLootDeclined))
                 printLine("isMasterLooter:        " .. yn(Loothing.isMasterLooter))
                 printLine("masterLooter:          " .. tostring(Loothing.masterLooter))
                 printLine("canonicalML:           " .. tostring(Loothing:GetCanonicalML()))
