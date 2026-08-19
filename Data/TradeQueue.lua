@@ -586,6 +586,7 @@ end
 -- @return number, number - Bag and slot, or nil if not found
 function TradeQueueMixin:FindItemInBags(itemLink)
     local targetID = Utils.GetItemID(itemLink)
+    local firstBag, firstSlot
     for bag = 0, NUM_BAG_SLOTS do
         local numSlots = C_Container.GetContainerNumSlots(bag)
         for slot = 1, numSlots do
@@ -595,12 +596,25 @@ function TradeQueueMixin:FindItemInBags(itemLink)
                 local foundID = Utils.GetItemID(info.hyperlink)
 
                 if targetID == foundID then
-                    return bag, slot
+                    -- Prefer the TRADABLE copy. The ML may own a soulbound
+                    -- copy of the same item earlier in bag order (own earlier
+                    -- win, worn duplicate) — auto-trade would stage that one,
+                    -- WoW refuses it, and the winner's copy silently never
+                    -- trades. Mirrors GetTimeRemaining's all-copies scan.
+                    local remaining = self:GetContainerItemTradeTimeRemaining(bag, slot)
+                    if remaining and remaining > 0 then
+                        return bag, slot
+                    end
+                    if not firstBag then
+                        firstBag, firstSlot = bag, slot
+                    end
                 end
             end
         end
     end
-    return nil, nil
+    -- Fall back to the first ID match (cold tooltip scan / genuinely
+    -- untradable copy — callers handle staging failure as before).
+    return firstBag, firstSlot
 end
 
 --- Count matching item IDs in the player's bags.

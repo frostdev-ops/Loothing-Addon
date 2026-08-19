@@ -187,13 +187,27 @@ function GroupLootMixin:OnStartLootRoll(_, rollID)
     -- Non-ML clients check the MLDB handleLoot field instead. If the field is
     -- absent (older ML version), MLDB presence alone signals handling for
     -- backward compatibility; handleLoot=false explicitly disables auto-roll.
+    --
+    -- An EXPLICIT off always wins — even mid-session. SetHandleLoot(false)
+    -- deliberately preserves the session (soft toggle) and re-broadcasts
+    -- mldb.handleLoot=false precisely so clients stop auto-rolling; the old
+    -- `sessionActive OR handling` gate kept auto-rolling on every client
+    -- whenever a session was active, overriding the user's toggle.
+    local mldb = Loothing.MLDB and Loothing.MLDB:Get()
+    if Loothing.isMasterLooter then
+        -- Our own toggle is authoritative on the ML's client.
+        if not Loothing.handleLoot then
+            return
+        end
+    elseif mldb and mldb.handleLoot == false then
+        -- The ML explicitly disabled handling; don't auto-pass to them.
+        return
+    end
+
     local sessionActive = Loothing.Session and Loothing.Session:IsActive()
     local mlHandling = Loothing.handleLoot
-    if not mlHandling and Loothing.MLDB then
-        local mldb = Loothing.MLDB:Get()
-        if mldb and mldb.handleLoot ~= false then
-            mlHandling = true
-        end
+    if not mlHandling and mldb and mldb.handleLoot ~= false then
+        mlHandling = true
     end
     if not sessionActive and not mlHandling then
         return

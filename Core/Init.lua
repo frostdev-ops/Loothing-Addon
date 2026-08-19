@@ -3197,6 +3197,9 @@ function Addon:CacheStateForReconnect()
     local cache = {
         timestamp = time(),
         handleLoot = self.handleLoot,
+        -- Persist the decline latch: without it, usage mode 'gl' silently
+        -- re-enabled a just-declined toggle after any /reload.
+        handleLootDeclined = self.handleLootDeclined,
         isMasterLooter = self.isMasterLooter,
         masterLooter = self.masterLooter,
         explicitMasterLooter = self.explicitMasterLooter,
@@ -3358,6 +3361,7 @@ function Addon:RestoreFromCache()
     -- Restore ML state
     self.mlStateVerified = false
     self.handleLoot = cache.handleLoot or false
+    self.handleLootDeclined = cache.handleLootDeclined or false
     self.isMasterLooter = cache.isMasterLooter or false
     self.masterLooter = cache.masterLooter
     self.explicitMasterLooter = cache.explicitMasterLooter

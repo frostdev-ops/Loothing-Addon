@@ -100,7 +100,14 @@ function IntelShareMixin:Init()
 
     -- Receiver state: { [transferID] = { sender, manifest, datasets, timer } }
     self.pendingReceive = {}
+
+    -- Decline cooldown: [normalizedSender] = GetTime() of last decline.
+    -- A declined sender re-sending (fresh transferID) within the window is
+    -- auto-declined instead of re-popping the consent dialog.
+    self.declinedSenders = {}
 end
+
+local DECLINE_COOLDOWN = 300  -- seconds
 
 --[[--------------------------------------------------------------------
     Sender: Data Collection
@@ -321,6 +328,25 @@ function IntelShareMixin:HandleManifest(data, sender, distribution)
     -- Don't create duplicate entries
     if self.pendingReceive[transferID] then return end
 
+    -- Respect a recent decline: don't re-pop the consent dialog because the
+    -- same sender immediately re-sent with a fresh transferID.
+    local senderKey = Utils.NormalizeName(sender)
+    local declinedAt = senderKey and self.declinedSenders[senderKey]
+    if declinedAt and (GetTime() - declinedAt) < DECLINE_COOLDOWN then
+        -- Tell the user (throttled) — if they declined by accident and asked
+        -- the sender to retry, a silent drop would look like a dead feature.
+        if (GetTime() - (self.autoDeclineNotifiedAt or 0)) > 60 then
+            self.autoDeclineNotifiedAt = GetTime()
+            Loothing:Print(string.format(
+                L["INTEL_AUTO_DECLINED"] or "Auto-declined a data share from %s (declined recently — cooldown expires in %d min).",
+                Ambiguate(sender, "short"),
+                math.ceil((DECLINE_COOLDOWN - (GetTime() - declinedAt)) / 60)))
+        end
+        Loothing:Debug("IntelShare: auto-declining manifest from", sender,
+            "— declined", math.floor(GetTime() - declinedAt), "s ago")
+        return
+    end
+
     -- Anti-DoS: cap one active pending transfer per sender. Without this, a
     -- malicious peer could flood HandleManifest with unique transferIDs,
     -- each creating a RECEIVE_TIMEOUT-lived entry plus a C_Timer. A
@@ -410,6 +436,10 @@ function IntelShareMixin:DeclineTransfer(transferID)
     end
 
     Loothing:Print(string.format(L["INTEL_RECEIVE_DECLINED"], Ambiguate(pending.sender, "short")))
+    local senderKey = pending.sender and Utils.NormalizeName(pending.sender)
+    if senderKey then
+        self.declinedSenders[senderKey] = GetTime()
+    end
     self.pendingReceive[transferID] = nil
 end
 

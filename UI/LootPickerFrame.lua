@@ -166,6 +166,11 @@ function LootPickerFrameMixin:BuildFrame()
     -- Hide may fade asynchronously, so the flag is cleared inside OnHide,
     -- not immediately after Hide() returns.
     frame:HookScript("OnHide", function()
+        -- Parent-driven hides (UIParent hidden for a cinematic, Alt-Z) keep
+        -- IsShown() true — the picker is still logically open and will
+        -- reappear. Running cleanup here would cancel the prompt and latch a
+        -- phantom decline the user never made.
+        if frame:IsShown() then return end
         if self._suppressOnHideCleanup then
             self._suppressOnHideCleanup = false
             self._starting = false

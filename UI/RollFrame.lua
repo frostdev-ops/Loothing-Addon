@@ -1033,10 +1033,17 @@ function RollFrameMixin:FlushResponseBatch()
 
     local batch = self.pendingBatch
     if not batch or #batch == 0 then return end
+
+    -- Comm-only gate: responses broadcast on the group channel, so a
+    -- transiently-unknown ML (MLDB/handover churn inside the debounce
+    -- window) must not drop the batch — these responses are already marked
+    -- submitted in ResponseTracker, and recovery would wait on the ML's
+    -- +15s poll. The poll resend path already works ML-less; both senders
+    -- tolerate a nil ml. Keep the batch buffered if Comm itself is down.
+    if not Loothing.Comm then return end
     self.pendingBatch = nil
 
     local ml = Loothing.Session and Loothing.Session:GetMasterLooter()
-    if not (Loothing.Comm and ml) then return end
 
     local sessionID = Loothing.Session and Loothing.Session:GetSessionID()
 

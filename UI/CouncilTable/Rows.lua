@@ -814,6 +814,10 @@ function CouncilTableMixin:OnVoteClick(candidate)
         end
         local ok = Loothing.Session:CastVote(self.currentItem.guid, candidate.name)
         Loothing:Debug("OnVoteClick: CastVote returned", tostring(ok))
+        if not ok then
+            local L = Loothing.Locale or {}
+            Loothing:Print(L["VOTE_CLOSED_FOR_ITEM"] or "Voting has closed for this item.")
+        end
     end
 
     self:RefreshCandidates()

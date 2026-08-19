@@ -161,6 +161,20 @@ function Popups:Show(name, data, onAccept, onCancel)
         return
     end
 
+    -- Dedup: a repeat trigger (sync request re-sent, second intel manifest)
+    -- previously created a NEW dialog and overwrote activeDialogs[name],
+    -- orphaning the still-visible old one — stacked modals that Hide(name)
+    -- could no longer reach. Replace the prior instance instead. Plain
+    -- Hide() fires no OnCancel, so the superseded prompt's decline path
+    -- doesn't run.
+    local existing = self.activeDialogs[name]
+    if existing then
+        self.activeDialogs[name] = nil
+        if existing.IsShown and existing:IsShown() then
+            existing:Hide()
+        end
+    end
+
     -- Create dialog
     local dialog = Loolib.UI.Dialog.Create()
 
@@ -591,6 +605,14 @@ Popups:Register("LOOTHING_CONFIRM_START_SESSION", {
             end,
         },
     },
+    -- ESC routes through Cancel() → the OnCancel event, not the "No"
+    -- button — without this, an ESC-dismissal skipped the decline latch
+    -- and the re-prompt loop returned.
+    on_cancel = function(_dialog, data)
+        if data and data.onCancel then
+            data.onCancel()
+        end
+    end,
 })
 
 -- Settings Import Confirmation — two action buttons for import mode

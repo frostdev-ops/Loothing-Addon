@@ -994,6 +994,10 @@ function VotePanelMixin:SubmitVote()
 
     local submitted = Loothing.Session:SubmitVote(self.item.guid, responses)
     if not submitted then
+        -- Tell the user — a silent no-op reads as a dead button when the
+        -- vote raced the timeout/award.
+        local L = Loothing.Locale or {}
+        Loothing:Print(L["VOTE_CLOSED_FOR_ITEM"] or "Voting has closed for this item.")
         self:UpdateResponseButtons()
         return
     end

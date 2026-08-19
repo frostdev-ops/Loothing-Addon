@@ -889,6 +889,11 @@ function SessionMixin:StartSession(encounterID, encounterName)
         return false
     end
 
+    -- A session actually starting supersedes any earlier prompt declines.
+    if self.declinedEncounters then
+        wipe(self.declinedEncounters)
+    end
+
     local sessionID = Utils.GenerateGUID()
     if Loothing and Loothing.TestMode and Loothing.TestMode.ApplySessionTag then
         sessionID = Loothing.TestMode:ApplySessionTag(sessionID)
@@ -2138,8 +2143,12 @@ function SessionMixin:CastVote(itemGUID, candidateName)
         Loothing:Debug("CastVote: item not found for GUID", itemGUID)
         return false
     end
-    if not item:IsVoting() then
-        Loothing:Debug("CastVote: item not in VOTING state, state =", item:GetState())
+    -- CanAcceptVotes, not the strict IsVoting: SubmitVote and remote
+    -- VOTE_COMMITs both honor the 30s late-accept grace window after tally —
+    -- the strict gate made the CouncilTable reject a vote the VotePanel (and
+    -- every other client) would accept during that window.
+    if not item:CanAcceptVotes() then
+        Loothing:Debug("CastVote: item no longer accepting votes, state =", item:GetState())
         return false
     end
 
@@ -2577,6 +2586,11 @@ end
 
 --- Handle encounter start
 function SessionMixin:OnEncounterStart(encounterID, encounterName)
+    -- A new pull is a fresh context — stale prompt declines don't carry over.
+    if self.declinedEncounters then
+        wipe(self.declinedEncounters)
+    end
+
     local preserveOpenPicker = false
     local pickerHandledBuffer = false
     local picker = ns.LootPickerFrame
@@ -2715,6 +2729,17 @@ end
 -- @param encounterID number
 -- @param encounterName string
 function SessionMixin:ApplyTriggerAction(encounterID, encounterName)
+    -- Decline gate: the user cancelled the picker/prompt for this encounter
+    -- bucket — don't re-prompt (or auto-start) because late TRADABLE reports
+    -- from other members' scans re-armed the debounce. Manual starts bypass
+    -- this function entirely, so a deliberate start is always possible.
+    if self.declinedEncounters
+        and self.declinedEncounters[NormalizeEncounterID(encounterID)] then
+        Loothing:Debug("ApplyTriggerAction: declined for encounter",
+            tostring(encounterID), "- skipping")
+        return
+    end
+
     -- Scope gate: refuse to auto-trigger (or prompt-to-trigger) a session
     -- in an instance type the user has disabled.  Without this, a raid-ML
     -- who carries handleLoot=true into a M+ dungeon will start a session
@@ -3207,6 +3232,11 @@ function SessionMixin:ShowSessionPrompt(encounterID, encounterName)
             self:RestampBufferedLoot(encounterID)
             self:StartSession(encounterID, encounterName)
         end,
+        onCancel = function()
+            -- Route the legacy popup's "No" through the same decline latch
+            -- as the picker's Cancel, or late scan reports re-prompt.
+            self:CancelPendingPrompt(encounterID)
+        end,
     })
 end
 
@@ -3215,6 +3245,14 @@ end
 --- Called from LootPickerFrame:OnCancel.
 -- @param encounterID number|nil - picker encounter to cancel; nil means the encounterless bucket
 function SessionMixin:CancelPendingPrompt(encounterID)
+    -- Remember the decline for this encounter bucket. Other raid members'
+    -- post-encounter scans keep sending TRADABLE for up to 60s; each arrival
+    -- re-buffered, re-armed the debounce, and re-showed the picker seconds
+    -- after the user cancelled it. ApplyTriggerAction gates on this latch;
+    -- it clears on the next ENCOUNTER_START or an actual session start.
+    self.declinedEncounters = self.declinedEncounters or {}
+    self.declinedEncounters[NormalizeEncounterID(encounterID)] = true
+
     if self.pendingLootTimer then
         self.pendingLootTimer:Cancel()
         self.pendingLootTimer = nil
