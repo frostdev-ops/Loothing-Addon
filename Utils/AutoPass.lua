@@ -128,8 +128,10 @@ AutoPass.weaponAutoPass = {
     },
 
     -- Daggers
+    -- Demon Hunters can equip daggers (Blizzard change picked up by
+    -- RCLootCouncil 3.23.2), so they must not auto-pass them.
     [Enum.ItemWeaponSubclass.Dagger] = {
-        "DEATHKNIGHT", "PALADIN", "MONK", "DEMONHUNTER"
+        "DEATHKNIGHT", "PALADIN", "MONK"
     },
 
     -- Guns
@@ -205,7 +207,9 @@ AutoPass.requiredWeaponStats = {
     WARLOCK = { "ITEM_MOD_INTELLECT_SHORT" },
     MONK = { "ITEM_MOD_INTELLECT_SHORT", "ITEM_MOD_AGILITY_SHORT" },
     DRUID = { "ITEM_MOD_INTELLECT_SHORT", "ITEM_MOD_AGILITY_SHORT" },
-    DEMONHUNTER = { "ITEM_MOD_AGILITY_SHORT" },
+    -- Devourer (Midnight DH spec) uses Intellect weapons, so a DH must not
+    -- auto-pass an Int weapon they can equip. Matches RCLootCouncil 3.20.2.
+    DEMONHUNTER = { "ITEM_MOD_AGILITY_SHORT", "ITEM_MOD_INTELLECT_SHORT" },
     EVOKER = { "ITEM_MOD_INTELLECT_SHORT" },
 }
 

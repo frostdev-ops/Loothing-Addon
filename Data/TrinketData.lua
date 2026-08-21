@@ -40,7 +40,12 @@ Loothing.TrinketCategories = {
     ["0365002707767"] = ITEM_MOD_STRENGTH_SHORT .. "/" .. ITEM_MOD_AGILITY_SHORT,
     ["0000000700067"] = ITEM_MOD_STRENGTH_SHORT,
     ["0365002707467"] = MELEE,
+    -- Agility/Intellect, one key per class-roster generation: pre-Evoker,
+    -- pre-Augmentation/Devourer, and current. Older keys are kept so history
+    -- recorded before those specs existed still resolves to a label.
     ["33F7777077710"] = ITEM_MOD_AGILITY_SHORT .. "/" .. ITEM_MOD_INTELLECT_SHORT,
+    ["73F7777077710"] = ITEM_MOD_AGILITY_SHORT .. "/" .. ITEM_MOD_INTELLECT_SHORT,
+    ["77F7777077710"] = ITEM_MOD_AGILITY_SHORT .. "/" .. ITEM_MOD_INTELLECT_SHORT,
     ["0365002007700"] = ITEM_MOD_AGILITY_SHORT,
     ["7092775070010"] = ITEM_MOD_INTELLECT_SHORT,
     ["0241000100024"] = TANK,
@@ -97,15 +102,16 @@ Loothing.TrinketSpecs = {
 
     -- ================================================================
     -- Midnight Season 2 Trinkets (patch 12.1 "Curse of Ula'tek")
-    -- Sourced from ItemSparse 12.1.0.69382 (wago.tools) + Wowhead;
-    -- role/stat archetypes cross-checked against the community S2 loot table.
+    -- Spec flags taken from the live Encounter Journal export shipped in
+    -- RCLootCouncil 3.23.1 (2026-08-17), which supersedes the earlier
+    -- hand-derived ItemSparse/Wowhead archetypes used here.
     -- ================================================================
 
     -- The Venomous Abyss
-    [270162] = "7492775070010", -- Soulcoiler Ritual Vessel (Int) — Nek'zali the Soulcoiler
+    [270162] = "2082004030010", -- Soulcoiler Ritual Vessel (Healer) — Nek'zali the Soulcoiler
     [270165] = "0365002707767", -- Keeper's Seething Core (Str/Agi) — Entombed Sentinels
     [270161] = "5410771040000", -- Fang of Umbral Malignance (DPS Int) — Vashnik the Malignant
-    [270166] = "0365002007700", -- Vashnik's Sanguine Rancor (Agi) — Vashnik the Malignant
+    [270166] = "0124002007700", -- Vashnik's Sanguine Rancor (DPS Agi) — Vashnik the Malignant
     [270160] = "0241000100024", -- First Mate's Shellward (Tank) — The Lost Explorers
     [270164] = "77F7777777777", -- Gebbo's Bottomless Bag (All) — The Lost Explorers
     [270163] = "0000000700067", -- Sszorak's Ferocity (Str) — Sszorak
@@ -113,9 +119,57 @@ Loothing.TrinketSpecs = {
     [270170] = "5410771040000", -- Vexhul's Everflowing Gland (DPS Int) — The Twin Fangs
     [270171] = "2082004030010", -- Preternatural Antivenom (Healer) — The Twin Fangs
     [270169] = "7492775070010", -- Hex Lord's Dooming Idol (Int) — The Coiled Altar
-    [270173] = "0124002607743", -- Zul'jin's Guillotine Technique (DPS Str/Agi) — The Coiled Altar
+    [270173] = "0365002707767", -- Zul'jin's Guillotine Technique (Str/Agi) — The Coiled Altar
     [270168] = "5534773647743", -- Font of Venomous Rage (DPS) — Ula'tek
     [270175] = "0365002707767", -- Voracious Heart of Ula'tek (Str/Agi) — Ula'tek
+
+    -- Midnight Season 2 Mythic+ / dungeon pool
+    -- Altar of Fangs (id: 1322)
+    [273795] = "0000000700067", -- Coiled Fangstone (Str)
+    [273794] = "7492775070010", -- Knot of Writhing Serpents (Int)
+    [273797] = "0124002607743", -- Tattered Amani War Banner (DPS Str/Agi)
+    [273796] = "77F7777777777", -- Vile Vial of Volatile Venom (All)
+    -- The Tidebound Grotto (id: 1317)
+    [270167] = "7492775070010", -- Wavecaller's Seastone (Int)
+    -- Den of Nalorakk (id: 1311)
+    [250229] = "0000000700067", -- Idol of the War Loa (Str)
+    [250248] = "2082004030010", -- Mycolic Medicine (Healer)
+    [250244] = "0241000100024", -- Permafrost Essence (Tank)
+    -- Murder Row (id: 1304)
+    [250215] = "77F7777077710", -- Freightrunner's Flask (Agi/Int)
+    [250243] = "0241000100024", -- Manaheart's Binding Flame (Tank)
+    [250228] = "0365002707767", -- Resonant Bellowstone (Str/Agi)
+    [250255] = "2082004030010", -- Unstable Felheart Crystal (Healer)
+    -- The Blinding Vale (id: 1309)
+    [250214] = "77F7777077710", -- Lightspire Core (Agi/Int)
+    [250259] = "77F7777777777", -- Sapling of the Dawnroot (All)
+    [250254] = "2082004030010", -- Seed of Radiant Hope (Healer)
+    [250238] = "0000000700067", -- Seed of the Devouring Wild (Str)
+    -- Voidscar Arena (id: 1313)
+    [250224] = "7492775070010", -- Mindpiercer's Sigil (Int)
+    [250245] = "0241000100024", -- Tumor of the Swarm (Tank)
+    [250225] = "0365002007700", -- Void Execution Mandate (Agi)
+    -- Kings' Rest (id: 1041)
+    [159617] = "0365002007700", -- Lustrous Golden Plumage (Agi)
+    [159618] = "0241000100024", -- Mchimba's Ritual Bandages (Tank)
+    [273649] = "7492775070010", -- Stormbound Emblem of Dazar (Int)
+    -- Ruby Life Pools (id: 1202)
+    [193762] = "0000000700067", -- Blazebinder's Hoof (Str)
+    [193748] = "2082004030010", -- Kyrakka's Searing Embers (Healer)
+    [193757] = "77F7777777777", -- Ruby Whelp Shell (All)
+    -- Temple of Sethraliss (id: 1030)
+    [158367] = "0000000700067", -- Merektha's Fang (Str)
+    [158368] = "5410771040000", -- Sethraliss' Defiled Relic (DPS Int)
+    [158374] = "0124002007700", -- Tiny Electromental in a Jar (DPS Agi)
+    -- Skyreach (id: 476)
+    [110011] = "0000000600043", -- Fires of the Sun (DPS Str)
+    [110006] = "2082004030010", -- Rukhran's Quill (Healer)
+    [110016] = "0241000100024", -- Solar Containment Unit (Tank)
+    [252411] = "2082004030010", -- Radiant Sunstone (Healer)
+    [252418] = "0241000100024", -- Solar Core Igniter (Tank)
+    [252420] = "0365002707767", -- Solarflare Prism (Str/Agi)
+    -- Sporefall (id: 1305)
+    [268292] = "77F7777777777", -- Sporelord's Mycelial Insignia (All)
 
     -- ================================================================
     -- The War Within Season 1 Trinkets

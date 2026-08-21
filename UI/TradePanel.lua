@@ -632,6 +632,9 @@ function TradePanelMixin:CreateRow()
             if Loothing.TradeQueue then
                 local unitId = FindUnitIdForPlayer(entry.winner)
                 if unitId and CheckInteractDistance(unitId, 2) then
+                    -- Remember the intent: TRADE_SHOW can't always read the
+                    -- partner's name back out of Blizzard's frame.
+                    Loothing.TradeQueue:NoteAttemptedTradeTarget(entry.winner)
                     InitiateTrade(unitId)
                 else
                     local errName = Utils.GetShortName(entry.winner)
@@ -644,6 +647,9 @@ function TradePanelMixin:CreateRow()
         rowRef.tradeButton:SetScript("OnClick", function()
             local unitId = FindUnitIdForPlayer(entry.winner)
             if unitId and CheckInteractDistance(unitId, 2) then
+                if Loothing.TradeQueue then
+                    Loothing.TradeQueue:NoteAttemptedTradeTarget(entry.winner)
+                end
                 InitiateTrade(unitId)
             else
                 local errName = Utils.GetShortName(entry.winner)

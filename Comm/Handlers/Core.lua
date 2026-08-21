@@ -634,6 +634,10 @@ end
 
 function CommMixin:HandleTradable(data, sender)
     if not validateHandler("HandleTradable", data) then return end
+    if type(data.itemLink) ~= "string" or data.itemLink == "" then
+        Loothing:Debug("Rejected TRADABLE with no item link from:", sender)
+        return
+    end
     -- Any group member can send tradability status for their own looted items
     if not isGroupMember(sender) then
         Loothing:Debug("Rejected TRADABLE from non-group member:", sender)
@@ -645,6 +649,10 @@ end
 
 function CommMixin:HandleNonTradable(data, sender)
     if not validateHandler("HandleNonTradable", data) then return end
+    if type(data.itemLink) ~= "string" or data.itemLink == "" then
+        Loothing:Debug("Rejected NON_TRADABLE with no item link from:", sender)
+        return
+    end
     if not isGroupMember(sender) then
         Loothing:Debug("Rejected NON_TRADABLE from non-group member:", sender)
         return

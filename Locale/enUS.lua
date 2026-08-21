@@ -1112,6 +1112,7 @@ L["TRADE_COMPLETED"] = "Traded %s to %s"
 L["TRADE_WRONG_RECIPIENT"] = "Warning: Traded %s to %s (was awarded to %s)"
 L["TRADE_WINDOW_WARNING"] = "|cffff9900Warning:|r Trade window for %s (awarded to %s) expires in %d minutes!"
 L["TRADE_WINDOW_URGENT"] = "|cffff0000URGENT:|r Trade window for %s (awarded to %s) expires in %d minutes!"
+L["TRADE_TARGET_UNAVAILABLE"] = "Couldn't read who this trade is with (Blizzard restriction) - close the window and try again."
 
 -- SettingsExport
 L["IMPORT_SUMMARY"] = "Profile: %s | Exported: %s | Version: %s"

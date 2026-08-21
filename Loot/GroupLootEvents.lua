@@ -141,6 +141,14 @@ function GroupLootMixin:OnLootItemRollWon(_event, itemLink, rollQuantity, rollTy
     -- encounterless loot instead of borrowing stale boss state.
     local itemID = GetItemID(itemLink)
 
+    -- Known-untradeable drops never enter the council pipeline, even when the
+    -- ML wins one on a manual roll — awarding an item nobody can be handed
+    -- just burns a session slot. Same list that suppresses auto-rolling.
+    if ns.IsGroupLootIgnored(itemID) then
+        Loothing:Debug("LOOT_ITEM_ROLL_WON: untradeable item, not adding to session:", itemLink)
+        return
+    end
+
     local ok, err = pcall(session.HandleTradable, session, {
         itemLink      = itemLink,
         itemID        = itemID,
@@ -222,6 +230,13 @@ function GroupLootMixin:OnStartLootRoll(_, rollID)
 
     local link = GetLootRollItemLink(rollID)
     if not link then
+        return
+    end
+
+    -- Never auto-roll items the ML could not trade on afterwards; passing to
+    -- them would strand or outright destroy the drop. See ns.GroupLootIgnoreList.
+    if ns.IsGroupLootIgnored(GetItemID(link)) then
+        Loothing:Debug("Group loot ignore list — leaving roll to the player:", link)
         return
     end
 

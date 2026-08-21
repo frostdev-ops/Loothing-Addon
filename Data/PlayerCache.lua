@@ -133,7 +133,8 @@ end
 -- @param guid string - Player GUID
 -- @param fields table - Fields to update (e.g., { role = "TANK", ilvl = 600 })
 function PlayerCacheMixin:Update(guid, fields)
-    if not guid or not fields then return end
+    if not guid or guid == "" or not fields then return end
+    if Loolib.SecretUtil.IsSecretValue(guid) then return end
 
     local player = self.byGUID[guid]
     if not player then

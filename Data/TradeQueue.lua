@@ -16,6 +16,7 @@ local SavedVariables = Loolib.Data.SavedVariables
 local SecretUtil = Loolib.SecretUtil
 local TooltipScan = ns.TooltipScan
 local C_Timer = C_Timer
+local GetTime = GetTime
 
 --[[--------------------------------------------------------------------
     TradeQueueMixin
@@ -43,6 +44,9 @@ local TRADE_WARNING_5MIN = 5 * 60
 
 -- How often to check trade timers (seconds)
 local TRADE_TIMER_CHECK_INTERVAL = 60
+-- How long a click on our own "trade" button stays usable as the fallback
+-- trade partner when Blizzard won't tell us who the window belongs to.
+local ATTEMPTED_TRADE_TARGET_TTL = 20
 local ITEM_WATCH_DELAY = 0.5
 
 -- Resolve trade-complete constant once at load time.
@@ -306,6 +310,31 @@ end
     Trade Window Handling
 ----------------------------------------------------------------------]]
 
+--- Record who we are about to open a trade with.
+--- Call this immediately before `InitiateTrade()`. `OnTradeShow` uses it when
+--- Blizzard hands back a secret/empty trade partner name.
+--- @param winner string|nil - Player name of the intended trade partner
+function TradeQueueMixin:NoteAttemptedTradeTarget(winner)
+    self.lastAttemptedTradeTarget = winner and Utils.NormalizeName(winner) or nil
+    self.lastAttemptedTradeTime = self.lastAttemptedTradeTarget and GetTime() or nil
+end
+
+--- The trade partner we most recently tried to open a window with, but only
+--- while that attempt is still plausibly the window being shown. Staleness
+--- matters: a trade the player opens by hand (right-click in the world) must
+--- never inherit a target from some earlier session, or we would auto-stage
+--- someone else's items into it.
+--- @return string|nil
+function TradeQueueMixin:GetRecentAttemptedTradeTarget()
+    if not self.lastAttemptedTradeTarget or not self.lastAttemptedTradeTime then
+        return nil
+    end
+    if GetTime() - self.lastAttemptedTradeTime > ATTEMPTED_TRADE_TARGET_TTL then
+        return nil
+    end
+    return self.lastAttemptedTradeTarget
+end
+
 --- Handle TRADE_SHOW event
 function TradeQueueMixin:OnTradeShow()
     -- Block trades during active voting if setting is enabled
@@ -329,6 +358,7 @@ function TradeQueueMixin:OnTradeShow()
         target, fallbackRealm = SecretUtil.SafeUnitName("npc")
     end
     local normalizedTarget = nil
+    local usedAttemptedFallback = false
 
     if target and target ~= "" then
         -- Remove "(*)" for cross-realm (use plain find to avoid pattern errors)
@@ -344,6 +374,16 @@ function TradeQueueMixin:OnTradeShow()
         normalizedTarget = Utils.NormalizeName(target)
     end
 
+    -- Both the frame text and UnitName("npc") can come back secret or empty
+    -- under Blizzard's restricted-execution rules. Rather than dropping the
+    -- whole trade on the floor, fall back to whoever we just clicked "trade"
+    -- on — that is the player this window belongs to in every normal flow.
+    -- Matches RCLootCouncil's `lastAttemptedTradeTarget` fix (3.21.0).
+    if not normalizedTarget then
+        normalizedTarget = self:GetRecentAttemptedTradeTarget()
+        usedAttemptedFallback = normalizedTarget ~= nil
+    end
+
     self.tradeTarget = normalizedTarget
     self.isTrading = true
     wipe(self.itemsInTradeWindow)
@@ -351,7 +391,12 @@ function TradeQueueMixin:OnTradeShow()
     Loothing:Debug("Trade opened with:", self.tradeTarget or "<unknown>")
 
     if not self.tradeTarget then
+        Loothing:Print(L["TRADE_TARGET_UNAVAILABLE"])
         return
+    end
+
+    if usedAttemptedFallback then
+        Loothing:Debug("Trade target unreadable, using last attempted target:", self.tradeTarget)
     end
 
     -- Reject trades with players who have no queued items (if setting is enabled)
@@ -908,6 +953,17 @@ end
 --- Handle a recently looted item - determine if tradable and broadcast
 -- @param itemLink string - Item link that was just looted
 function TradeQueueMixin:UpdateAndSendRecentTradableItem(itemLink)
+    -- Sender-side guard. A link that arrived secret or empty produces a
+    -- TRADABLE/NON_TRADABLE broadcast the whole raid then has to defend
+    -- against; catch it here where we still know which item was meant.
+    if SecretUtil.IsSecretValue(itemLink) then
+        Loothing:Debug("UpdateAndSendRecentTradableItem: itemLink is a secret value, skipping")
+        return
+    end
+    if type(itemLink) ~= "string" or itemLink == "" then
+        Loothing:Error("UpdateAndSendRecentTradableItem: invalid itemLink:", tostring(itemLink))
+        return
+    end
     if shouldSuppressTradeBroadcast() then
         Loothing:Debug("TRADABLE suppressed (auto-roll raid):", itemLink)
         return
