@@ -43,6 +43,19 @@ local DEFAULT_TTL = 2 * 24 * 60 * 60
 -- GUID pattern: "Player-XXXX-XXXXXXXX"
 local GUID_PATTERN = "^Player%-%d+%-%x+$"
 
+--- Canonical byName key: lowercase the realm segment, matching
+-- Utils.NormalizeName output. Writers store canonical API casing
+-- ("Name-Duskwood") while UI callers look up normalized names
+-- ("Name-duskwood"); without this every full-name lookup misses.
+-- Short names (no realm) pass through unchanged.
+local function nameKey(name)
+    local short, realm = name:match("^([^-]+)-(.+)$")
+    if short then
+        return short .. "-" .. realm:lower()
+    end
+    return name
+end
+
 --- Initialize the player cache
 function PlayerCacheMixin:Init()
     Loolib.CallbackRegistryMixin.OnLoad(self)
@@ -90,7 +103,7 @@ function PlayerCacheMixin:Get(nameOrGUID)
     end
 
     -- Name-Realm lookup
-    local guid = self.byName[nameOrGUID]
+    local guid = self.byName[nameKey(nameOrGUID)]
     if guid then
         local player = self.byGUID[guid]
         if player and self:IsValid(player) then
@@ -166,7 +179,7 @@ function PlayerCacheMixin:Invalidate(nameOrGUID)
     if nameOrGUID:match(GUID_PATTERN) then
         guid = nameOrGUID
     else
-        guid = self.byName[nameOrGUID]
+        guid = self.byName[nameKey(nameOrGUID)]
     end
 
     if not guid or not self.byGUID[guid] then
@@ -177,7 +190,7 @@ function PlayerCacheMixin:Invalidate(nameOrGUID)
 
     -- Remove from secondary index
     if player.name and player.realm then
-        self.byName[player.name .. "-" .. player.realm] = nil
+        self.byName[nameKey(player.name .. "-" .. player.realm)] = nil
     end
     if player.name then
         self.byName[player.name] = nil
@@ -270,7 +283,7 @@ function PlayerCacheMixin:CreateEntry(guid, name, realm, class)
 
     -- Add to secondary index
     if name and realm then
-        self.byName[name .. "-" .. realm] = guid
+        self.byName[nameKey(name .. "-" .. realm)] = guid
     end
     -- Only store short name if no collision exists (cross-realm players may share names)
     if name and guid then
@@ -323,7 +336,7 @@ function PlayerCacheMixin:FetchFromGUID(guid)
         existing.cacheTime = time()
 
         -- Update secondary index
-        self.byName[name .. "-" .. realmName] = guid
+        self.byName[nameKey(name .. "-" .. realmName)] = guid
         -- Only store short name if no collision
         local existingShort = self.byName[name]
         if not existingShort or existingShort == guid then
@@ -488,7 +501,7 @@ function PlayerCacheMixin:LoadFromSavedVariables()
                 self.byGUID[guid] = player
 
                 if player.name and player.realm then
-                    self.byName[player.name .. "-" .. player.realm] = guid
+                    self.byName[nameKey(player.name .. "-" .. player.realm)] = guid
                 end
                 -- Only store short name if no collision
                 if player.name then

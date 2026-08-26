@@ -453,40 +453,11 @@ end
     Council Settings
 ----------------------------------------------------------------------]]
 
---- Get council members
--- @return table - Array of member names (copy)
-function SettingsMixin:GetCouncilMembers()
-    local members = self:Get("council.members", {})
-    return Utils.DeepCopy(members)
-end
-
---- Set council members
--- @param members table - Array of member names
-function SettingsMixin:SetCouncilMembers(members)
-    self:Set("council.members", members)
-end
-
---- Add council member
--- @param name string - Member name
-function SettingsMixin:AddCouncilMember(name)
-    local members = self:GetCouncilMembers()
-    local normalized = Utils.NormalizeName(name)
-
-    if not Utils.Contains(members, normalized) then
-        members[#members + 1] = normalized
-        self:SetCouncilMembers(members)
-    end
-end
-
---- Remove council member
--- @param name string - Member name
-function SettingsMixin:RemoveCouncilMember(name)
-    local members = self:GetCouncilMembers()
-    local normalized = Utils.NormalizeName(name)
-
-    Utils.RemoveValue(members, normalized)
-    self:SetCouncilMembers(members)
-end
+-- Council roster CRUD lives in Council/CouncilMembers.lua +
+-- Council/CouncilSettings.lua, which own the "council.members" key.
+-- The old string-array helpers here (Get/Set/Add/RemoveCouncilMember)
+-- were removed: the key now stores member tables, so their string
+-- compares silently no-oped.
 
 --- Get auto-include officers setting
 -- @return boolean
