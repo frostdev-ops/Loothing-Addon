@@ -268,7 +268,7 @@ function TradeQueueMixin:GetTimeRemaining(entry)
     if targetID then
         local best = nil
         for bag = 0, NUM_BAG_SLOTS do
-            local numSlots = C_Container.GetContainerNumSlots(bag)
+            local numSlots = C_Container.GetContainerNumSlots(bag) or 0
             for slot = 1, numSlots do
                 local info = C_Container.GetContainerItemInfo(bag, slot)
                 if info and info.hyperlink and Utils.GetItemID(info.hyperlink) == targetID then
@@ -475,14 +475,14 @@ end
 -- @param playerAccepted boolean - Has player accepted
 -- @param targetAccepted boolean - Has target accepted
 function TradeQueueMixin:OnTradeAcceptUpdate(playerAccepted, targetAccepted)
-    local playerAcceptedNow = playerAccepted == true or playerAccepted == 1
-    local targetAcceptedNow = targetAccepted == true or targetAccepted == 1
-
-    if playerAcceptedNow or targetAcceptedNow then
-        self:CaptureTradeWindowItems()
-    else
-        wipe(self.itemsInTradeWindow)
-    end
+    -- TRADE_ACCEPT_UPDATE fires with both flags false on every un-accept
+    -- (which WoW does automatically when an item is added after an
+    -- accept). Wiping here destroyed the entryGUID/winner metadata from
+    -- AddSingleItemToTrade, forcing MarkItemTraded onto its fuzzy
+    -- itemID-scan fallback — which can retire the WRONG winner's queue
+    -- entry when two copies of an item are queued. CaptureTradeWindowItems
+    -- already reconciles by tradeSlot, so run it on every update.
+    self:CaptureTradeWindowItems()
 end
 
 --- Capture items currently staged in our side of the trade window.
@@ -633,7 +633,7 @@ function TradeQueueMixin:FindItemInBags(itemLink)
     local targetID = Utils.GetItemID(itemLink)
     local firstBag, firstSlot
     for bag = 0, NUM_BAG_SLOTS do
-        local numSlots = C_Container.GetContainerNumSlots(bag)
+        local numSlots = C_Container.GetContainerNumSlots(bag) or 0
         for slot = 1, numSlots do
             local info = C_Container.GetContainerItemInfo(bag, slot)
             if info and info.hyperlink then
@@ -674,7 +674,7 @@ function TradeQueueMixin:CountItemIDInBags(itemID)
     end
 
     for bag = 0, NUM_BAG_SLOTS do
-        local numSlots = C_Container.GetContainerNumSlots(bag)
+        local numSlots = C_Container.GetContainerNumSlots(bag) or 0
         for slot = 1, numSlots do
             local info = C_Container.GetContainerItemInfo(bag, slot)
             if info and info.hyperlink and Utils.GetItemID(info.hyperlink) == itemID then
@@ -841,7 +841,7 @@ function TradeQueueMixin:ProcessPendingBagWatches(countAttempt)
     end
 
     for bag = 0, NUM_BAG_SLOTS do
-        local numSlots = C_Container.GetContainerNumSlots(bag)
+        local numSlots = C_Container.GetContainerNumSlots(bag) or 0
         for slot = 1, numSlots do
             local bagItemLink = C_Container.GetContainerItemLink(bag, slot)
             if bagItemLink then

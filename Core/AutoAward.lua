@@ -263,6 +263,12 @@ function AutoAwardMixin:AwardItem(itemLink, itemGUID, targetPlayer)
     -- Log the auto-award
     Loothing:Print(string.format(L["ITEM_AWARDED"], itemLink, targetPlayer))
 
+    -- Clear the marker once the redundant-event window has passed —
+    -- keeping it forever leaked one entry per auto-award for the session.
+    C_Timer.After(30, function()
+        self.pendingAwards[itemGUID] = nil
+    end)
+
     return true
 end
 

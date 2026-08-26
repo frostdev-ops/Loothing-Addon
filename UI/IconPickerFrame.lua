@@ -36,10 +36,13 @@ ns.IconPickerMixin = IconPickerMixin
 -- Pass nil to clear the current icon.
 -- @param anchorFrame Frame
 -- @param onSelect function(iconPath)
-function IconPickerMixin:Open(anchorFrame, onSelect)
-    self.onSelect  = onSelect
+function IconPickerMixin:Open(anchorFrame, onSelect, currentIcon)
+    self.onSelect    = onSelect
+    self.currentIcon = currentIcon
     self.searchStr = ""
     self.searchBox:SetText("")
+    -- SetText("") fires no focus event; restore the placeholder manually
+    if self.searchHint then self.searchHint:Show() end
     self:Refresh()
 
     self:ClearAllPoints()
@@ -60,6 +63,10 @@ end
 
 --- Close the picker without selecting
 function IconPickerMixin:Close()
+    -- Drop the selection closure: the row it captured may be rebuilt or
+    -- belong to a different response set by the next open.
+    self.onSelect = nil
+    self.currentIcon = nil
     if self._loothingFadeGroup then self._loothingFadeGroup:Stop() end
     if AnimationPresets and self:IsVisible() then
         local frame = self
@@ -103,6 +110,8 @@ function IconPickerMixin:Refresh()
         if entry then
             btn.icon:SetTexture(entry.path)
             btn.entry = entry
+            -- Highlight the button's current icon so the user can find it
+            btn.selectedOverlay:SetShown(self.currentIcon ~= nil and entry.path == self.currentIcon)
             btn:Show()
         else
             btn:Hide()
@@ -116,6 +125,7 @@ function IconPickerMixin:Refresh()
         local entry = filtered[i]
         self.iconButtons[i].icon:SetTexture(entry.path)
         self.iconButtons[i].entry = entry
+        self.iconButtons[i].selectedOverlay:SetShown(self.currentIcon ~= nil and entry.path == self.currentIcon)
     end
 
     -- Resize scroll child to fit grid
@@ -150,6 +160,14 @@ function IconPickerMixin:CreateIconButton(i)
     hl:SetAllPoints()
     hl:SetColorTexture(1, 0.82, 0, 0.25)
     btn.highlight = hl
+
+    -- Persistent marker for the currently-assigned icon (the HIGHLIGHT
+    -- layer above only renders on hover)
+    local sel = btn:CreateTexture(nil, "OVERLAY")
+    sel:SetAllPoints()
+    sel:SetColorTexture(1, 0.82, 0, 0.35)
+    sel:Hide()
+    btn.selectedOverlay = sel
 
     local tex = btn:CreateTexture(nil, "ARTWORK")
     tex:SetAllPoints()
@@ -233,6 +251,7 @@ function IconPickerMixin:OnLoad()
     local hint = search:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     hint:SetPoint("LEFT", search, "LEFT", 4, 0)
     hint:SetText("Search...")
+    self.searchHint = hint
     search:SetScript("OnEditFocusGained", function() hint:Hide() end)
     search:SetScript("OnEditFocusLost",   function()
         if search:GetText() == "" then hint:Show() end

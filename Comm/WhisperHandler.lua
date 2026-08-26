@@ -205,6 +205,9 @@ function WhisperHandlerMixin:ParseCommand(message)
     for part in text:gmatch("%S+") do
         parts[#parts + 1] = part
     end
+    -- "!" followed only by whitespace %s covers but strtrim doesn't
+    -- (\v, \f) yields no parts
+    if not parts[1] then return nil end
 
     local command = parts[1]:lower()
     local itemNum = nil
@@ -395,14 +398,17 @@ function WhisperHandlerMixin:SendHelp(target)
     local buttons = self:GetActiveButtons()
     if buttons then
         for _, button in ipairs(buttons) do
-            local key = "!" .. button.text:lower()
+            -- Same nil-text guard MatchCommand uses
+            local key = button.text and ("!" .. button.text:lower()) or nil
             if button.whisperKey then
                 key = button.whisperKey:lower()
                 if key:sub(1, 1) ~= "!" then
                     key = "!" .. key
                 end
             end
-            self:SendWhisper(target, string.format(L["WHISPER_HELP_LINE"], key, button.text))
+            if key then
+                self:SendWhisper(target, string.format(L["WHISPER_HELP_LINE"], key, button.text or key))
+            end
         end
     end
 end

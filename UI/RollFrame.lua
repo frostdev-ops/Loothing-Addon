@@ -289,9 +289,19 @@ function RollFrameMixin:DisplayItem(item)
     -- something. The closure self-unregisters on fire and no-ops if the user
     -- has switched to a different item in the meantime.
     if item and not item.itemInfoLoaded and item.RegisterCallback then
+        -- Distinct owner key: the deferred-autopass path (Events.lua) also
+        -- registers OnItemInfoLoaded with owner `self`, and the registry
+        -- keeps ONE callback per (event, owner) — same-owner registrations
+        -- silently replaced this re-render and cold-cache items rendered
+        -- with no slot/ilvl until clicked.
+        local renderOwner = self._renderCallbackOwner
+        if not renderOwner then
+            renderOwner = {}
+            self._renderCallbackOwner = renderOwner
+        end
         item:RegisterCallback("OnItemInfoLoaded", function()
             if item.UnregisterCallback then
-                item:UnregisterCallback("OnItemInfoLoaded", self)
+                item:UnregisterCallback("OnItemInfoLoaded", renderOwner)
             end
             if self.item == item then
                 -- Preserve an unsubmitted response click across the
@@ -323,7 +333,7 @@ function RollFrameMixin:DisplayItem(item)
                     end
                 end
             end
-        end, self)
+        end, renderOwner)
     end
 end
 
@@ -481,6 +491,18 @@ function RollFrameMixin:UpdateGearComparison()
         self.gear1Level:Show()
         self.gear2Icon:Hide()
         self.gear2Level:Hide()
+        -- Clear the previous item's residue too: tooltip links, second
+        -- gear button, and the upgrade badge otherwise survive into the
+        -- unknown-slot state.
+        if self.gear1Btn then
+            self.gear1Btn.itemLink = nil
+            self.gear1Btn:Hide()
+        end
+        if self.gear2Btn then
+            self.gear2Btn.itemLink = nil
+            self.gear2Btn:Hide()
+        end
+        if self.upgradeBadge then self.upgradeBadge:Hide() end
         self.upgradeText:SetText("|cff888888Unknown slot|r")
         return
     end
@@ -595,6 +617,7 @@ end
 function RollFrameMixin:UpdateUpgradeIndicator(slot1, slot2)
     if not self.item or not self.item.itemLevel then
         self.upgradeText:SetText("")
+        if self.upgradeBadge then self.upgradeBadge:Hide() end
         return
     end
 
@@ -1257,6 +1280,12 @@ function RollFrameMixin:Show()
     self:RestorePosition()
     self.frame:Show()
 
+    -- Hide() unregisters /roll capture; a Hide/Show cycle within one
+    -- voting item otherwise left capture off — DoRoll's result was never
+    -- parsed and SendResponse generated a different roll than the one
+    -- the player saw in chat.
+    self:RegisterRollCapture()
+
     if Loolib_Presets then
         self.frame._loothingFadeGroup = Loolib_Presets.FadeIn(self.frame, 0.22, "outCubic")
     else
@@ -1356,6 +1385,14 @@ function RollFrameMixin:Close(submitted, reason)
         self._suppressUnexpectedHide = true
         self.frame:Hide()
         self._suppressUnexpectedHide = false
+    end
+
+    -- Closing while combat-minimized: the frame is already hidden, so the
+    -- Hide() above is a no-op and the combat-end restore would resurrect
+    -- an empty ghost frame. Tell the minimize registry we closed
+    -- deliberately.
+    if ns.SkinningMixin and ns.SkinningMixin.NotifyFrameClosed then
+        ns.SkinningMixin:NotifyFrameClosed(self.frame)
     end
 
     if not submitted then

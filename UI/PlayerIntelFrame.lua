@@ -365,20 +365,27 @@ local function BindOverviewTab(refs, intel)
         cards.attendance:SetAccent("success", { 0.3, 0.85, 0.35, 1 })
     end
 
-    -- Tier set
+    -- Tier set. Accent literals set directly: SetAccent(nil, fallback)
+    -- resolves the theme's "accent" key (the fallback is only used when
+    -- the key is missing), so the 2pc/4pc color coding never rendered.
     if cards.gear then
         if intel.tierCount and intel.tierCount > 0 then
             cards.gear:SetValue(format("%dpc", intel.tierCount), "text", { 1, 1, 1 })
             if intel.has4pc then
                 cards.gear:SetValue(format("%dpc", intel.tierCount), nil, nil)
                 cards.gear.value:SetTextColor(0.64, 0.21, 0.93) -- legendary/epic violet
-                cards.gear:SetAccent(nil, { 0.64, 0.21, 0.93, 1 })
+                cards.gear.accent:SetColorTexture(0.64, 0.21, 0.93, 1)
             elseif intel.has2pc then
                 cards.gear.value:SetTextColor(0, 0.44, 0.87)     -- rare blue
-                cards.gear:SetAccent(nil, { 0, 0.44, 0.87, 1 })
+                cards.gear.accent:SetColorTexture(0, 0.44, 0.87, 1)
+            else
+                cards.gear:SetAccent()  -- theme accent for 1pc
             end
         else
             cards.gear:SetValue("—", "textSubtle", { 0.5, 0.5, 0.5 })
+            -- Reset: a previously-bound player's 2pc/4pc accent otherwise
+            -- leaks onto the no-tier card
+            cards.gear:SetAccent()
         end
         local gearBits = {}
         if intel.enchMissing == 0 then
@@ -564,11 +571,15 @@ local function BuildParsesTab(panel, refs)
     trend:Hide()
     refs.parseTrend = trend
 
-    -- Boss info strip
+    -- Boss info strip. TOPLEFT+TOPRIGHT (not a bare RIGHT, which pins the
+    -- string's vertical CENTER to the panel center and stacked both
+    -- strips on top of each other mid-panel).
     local boss = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     boss:SetPoint("TOPLEFT", 0, -115)
-    boss:SetPoint("RIGHT", 0, 0)
+    boss:SetPoint("TOPRIGHT", 0, -115)
     boss:SetJustifyH("LEFT")
+    boss:SetJustifyV("TOP")
+    boss:SetHeight(36)
     boss:SetWordWrap(true)
     applyTextColor(boss, "textMuted", { 0.7, 0.72, 0.76 })
     refs.parseBossText = boss
@@ -576,8 +587,10 @@ local function BuildParsesTab(panel, refs)
     -- Explainer
     local hint = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     hint:SetPoint("TOPLEFT", 0, -155)
-    hint:SetPoint("RIGHT", 0, 0)
+    hint:SetPoint("TOPRIGHT", 0, -155)
     hint:SetJustifyH("LEFT")
+    hint:SetJustifyV("TOP")
+    hint:SetHeight(48)
     hint:SetWordWrap(true)
     hint:SetText(L("INTEL_PARSE_HINT",
         "Averages and bests come from Warcraft Logs. Trend indicates whether recent parses are trending up, holding steady, or dropping."))
@@ -1102,7 +1115,8 @@ local function resolveSpec(intel, playerName)
     if intel and intel.spec then return intel.spec end
     if Utils and Utils.IsSamePlayer and Utils.GetPlayerFullName
         and Utils.IsSamePlayer(playerName, Utils.GetPlayerFullName()) then
-        local specIndex = GetSpecialization and GetSpecialization()
+        local getSpec = C_SpecializationInfo and C_SpecializationInfo.GetSpecialization or GetSpecialization
+        local specIndex = getSpec and getSpec()
         if specIndex then
             local getInfo = C_SpecializationInfo and C_SpecializationInfo.GetSpecializationInfo
                 or GetSpecializationInfo

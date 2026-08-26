@@ -223,15 +223,24 @@ function TooltipScan:GetItemClassRestrictions(itemLink)
     tooltip:SetHyperlink(itemLink)
 
     local restrictions
-    local classLabel = ITEM_CLASSES_ALLOWED
+    -- ITEM_CLASSES_ALLOWED is a format string ("Classes: %s"); plain-find
+    -- of that literal can never match a rendered tooltip line, so the
+    -- localized branch was dead and non-enUS clients never detected class
+    -- restrictions. Build a capture pattern from it instead (RCLC does
+    -- the same).
+    local classPattern
+    if ITEM_CLASSES_ALLOWED then
+        classPattern = "^"
+            .. ITEM_CLASSES_ALLOWED
+                :gsub("([%(%)%.%%%+%-%*%?%[%]%^%$])", "%%%1")
+                :gsub("%%%%s", "(.+)")
+            .. "$"
+    end
 
     for text in IterateTooltipText(tooltip) do
         local classList
-        if classLabel then
-            local startPos, endPos = text:find(classLabel, 1, true)
-            if startPos == 1 then
-                classList = text:sub(endPos + 1):match("^:%s*(.+)$")
-            end
+        if classPattern then
+            classList = text:match(classPattern)
         end
         if not classList then
             classList = text:match("^Classes:%s*(.+)$")

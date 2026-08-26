@@ -400,6 +400,30 @@ function RestrictionsMixin:ReplayTick()
     -- Completion check
     if self.replayIndex > #buffer then
         self:FinishReplay()
+        return
+    end
+
+    -- Stall guard: under sustained soft pressure with a non-ALERT at the
+    -- head, the loop above makes no progress — after several consecutive
+    -- zero-progress ticks, pause (re-queue) instead of spinning the 0.1s
+    -- ticker for minutes.
+    if sent == 0 then
+        self._replayStallTicks = (self._replayStallTicks or 0) + 1
+        if self._replayStallTicks >= 50 then  -- ~5s of no progress
+            self._replayStallTicks = 0
+            Loothing:Debug("Replay stalled under pressure — pausing, retry in 5s")
+            self:PauseReplay()
+            -- ReplayQueue is normally only re-triggered by a restriction
+            -- lift; schedule a retry so the queue isn't stranded.
+            C_Timer.After(5, function()
+                local CommState = Loothing.CommState
+                if CommState and CommState:GetState() == CommState.STATE_CONNECTED then
+                    self:ReplayQueue()
+                end
+            end)
+        end
+    else
+        self._replayStallTicks = 0
     end
 end
 

@@ -489,14 +489,21 @@ function SessionMixin:HandleTradable(data)
         -- when the same player wins two identical items, so refresh every
         -- matching row instead of only the first one.
         if itemID then
+            local updatedAny = false
             for _, item in self.items:Enumerate() do
                 if item.itemID == itemID and playerName and Utils.IsSamePlayer(item.looter, playerName) then
                     item.isTradable = true
                     item.tradeTimeRemaining = data.timeRemaining
                     self:TriggerEvent("OnItemTradabilityChanged", item)
+                    updatedAny = true
                 end
             end
-            return
+            -- `matched` can come from the raw-link fallback while having no
+            -- itemID of its own — the loop above then updates nothing and
+            -- the refresh would be silently dropped.
+            if updatedAny then
+                return
+            end
         end
         matched.isTradable = true
         matched.tradeTimeRemaining = data.timeRemaining
@@ -939,12 +946,17 @@ function SessionMixin:StartSession(encounterID, encounterName)
                     item.isTradable = true
                     item.tradeTimeRemaining = entry.tradeTimeRemaining
                 end
+                -- Auto-award can complete the item synchronously inside
+                -- AddItem; broadcasting it would plant a phantom PENDING
+                -- row in every receiver's UI (same guard HandleTradable has)
+                if not (item.IsComplete and item:IsComplete()) then
                 bufferedItems[#bufferedItems + 1] = {
                     itemLink = entry.itemLink,
                     guid = item.guid,
                     looter = entry.playerName,
                     sessionID = self.sessionID,
                 }
+                end
             end
         elseif not matchesEncounter then
             remainingBuffer[#remainingBuffer + 1] = entry
@@ -1679,10 +1691,8 @@ function SessionMixin:StartVoting(guid, timeout, skipBroadcast)
         return false
     end
 
-    -- Enrich candidates with wishlist data from desktop exchange
-    if item.candidateManager and item.itemID then
-        item.candidateManager:EnrichWithWishlistData(item.itemID)
-    end
+    -- (Wishlist enrichment happens per-candidate as responses arrive —
+    -- at this point no candidates exist yet, so enriching here was a no-op.)
 
     -- Broadcast vote request for this item
     if not skipBroadcast then
@@ -2423,7 +2433,9 @@ function SessionMixin:AwardItem(guid, winner, response, awardReasonId, awardReas
         local instanceData = item.instanceData or {}
 
         -- Resolve the winner's response text for top-level fields
+        -- (system responses — autopass/disenchant — live in SystemResponseInfo)
         local responseInfo = Loothing.ResponseInfo[response]
+            or (Loothing.SystemResponseInfo and Loothing.SystemResponseInfo[response])
         local responseText = responseInfo
             and (responseInfo.text or responseInfo.name) or nil
 
@@ -2464,8 +2476,11 @@ function SessionMixin:AwardItem(guid, winner, response, awardReasonId, awardReas
             responseID      = response,
             -- Timestamps: unix epoch + pre-formatted UTC strings
             timestamp     = now,
-            date          = date("!%Y-%m-%d", now),
-            time          = date("!%H:%M:%S", now),
+            -- Local time, not UTC: every consumer (FormatDate, CSV/TSV/JSON
+            -- exporters) formats entry.timestamp in LOCAL time — a UTC date
+            -- string here put evening awards on the next calendar day.
+            date          = date("%Y-%m-%d", now),
+            time          = date("%H:%M:%S", now),
             -- Session / encounter
             encounterID    = self.encounterID,
             encounterName  = self.encounterName,
@@ -4315,6 +4330,12 @@ function SessionMixin:HandlePlayerResponse(data)
 
     local candidate = candidateManager:GetOrCreateCandidate(sender, senderClass)
     if not candidate then return end  -- secret/redacted name normalizes to nil
+    -- Attach wishlist data now that the candidate exists (the old
+    -- StartVoting-time enrichment ran before any candidates were created,
+    -- so the council table's wishlist column was always empty)
+    if item.itemID then
+        candidateManager:EnrichWithWishlistData(item.itemID)
+    end
     -- Track whether this is a fresh (first-time) response so ML doesn't
     -- double-count duplicates that arrive via RESPONSE_POLL replay.
     local isFreshResponse = candidate.response == nil
@@ -4559,6 +4580,11 @@ function SessionMixin:HandleRemoteCandidateUpdate(data)
 
     local candidate = candidateManager:GetOrCreateCandidate(candidateName, candidateClass)
     if not candidate then return end  -- secret/redacted name normalizes to nil
+    -- Attach wishlist data for the newly-seen candidate (see
+    -- HandlePlayerResponse — StartVoting-time enrichment ran too early)
+    if item.itemID then
+        candidateManager:EnrichWithWishlistData(item.itemID)
+    end
     if responseRecognized then
         candidate:SetResponse(response, note)
     end
@@ -4697,7 +4723,11 @@ function SessionMixin:SyncFromData(data)
     self.encounterName = data.encounterName
     self.startTime = time()
     self.masterLooter = data.masterLooter
-    self:SetState(data.state)
+    -- Adopt ACTIVE for the duration of item restore: AddItem hard-refuses
+    -- INACTIVE/CLOSED sessions (even with force), so syncing into a
+    -- CLOSED session silently dropped every item. data.state is applied
+    -- after the loop below.
+    self:SetState(Loothing.SessionState.ACTIVE)
 
     -- Propagate ML identity globally so handler security checks, combat-end
     -- sync, and CheckNeedSync all resolve the correct ML for late joiners.
@@ -4751,6 +4781,12 @@ function SessionMixin:SyncFromData(data)
                 end
             end
         end
+    end
+
+    -- Now that items are restored, adopt the synced session state
+    -- (may be CLOSED — see the ACTIVE adoption above the item loop)
+    if data.state then
+        self:SetState(data.state)
     end
 
     self:TriggerEvent("OnSessionStarted", self.sessionID, data.encounterID, data.encounterName)

@@ -59,9 +59,15 @@ local function pinStrata(owner)
 end
 
 local function showTooltip(state)
-    GameTooltip:SetOwner(state.region, state.anchor)
+    -- Read the setup LIVE from the region, not from the snapshot taken at
+    -- OnEnter: pooled rows can be rebound under a resting cursor (list
+    -- refresh releases + re-acquires the row without OnLeave firing), and
+    -- the snapshot would show the previous binding's item.
+    local setup = state.region._shiftTooltipSetup or state.setup
+    if not setup then return end
+    GameTooltip:SetOwner(state.region, state.region._shiftTooltipAnchor or state.anchor)
     pinStrata(state.region)
-    local ok = state.setup(GameTooltip, state.region)
+    local ok = setup(GameTooltip, state.region)
     if ok == false then
         GameTooltip:Hide()
         return
@@ -94,9 +100,15 @@ end
 
 function ns.AttachShiftTooltip(region, setupFn, anchor)
     ensureListener()
+    -- Stored on the region so re-attaching (pooled row rebind) replaces
+    -- the setup even while the cursor is resting on the row.
+    region._shiftTooltipSetup = setupFn
+    region._shiftTooltipAnchor = anchor or "ANCHOR_RIGHT"
+    if region._shiftTooltipHooked then return end
+    region._shiftTooltipHooked = true
     region:EnableMouse(true)
     region:SetScript("OnEnter", function(r)
-        hover = { region = r, setup = setupFn, anchor = anchor or "ANCHOR_RIGHT" }
+        hover = { region = r, setup = r._shiftTooltipSetup, anchor = r._shiftTooltipAnchor }
         if IsShiftKeyDown() then showTooltip(hover) end
     end)
     region:SetScript("OnLeave", function()

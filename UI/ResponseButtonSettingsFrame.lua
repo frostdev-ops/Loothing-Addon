@@ -162,9 +162,12 @@ function ResponseButtonSettingsMixin:BuildFrame()
         frame:StartMoving()
     end)
     f:SetScript("OnDragStop",  f.StopMovingOrSizing)
+    -- Layout only: RebuildRows here ran a full settings deep-copy (and,
+    -- in the response editor, a global ResponseInfo rebuild) on every
+    -- frame of a resize drag. The resize grip's OnMouseUp does the real
+    -- rebuild once at drag end.
     f:SetScript("OnSizeChanged", function()
         self:UpdateLayout()
-        self:RebuildRows()
     end)
     f:SetClampedToScreen(true)
     f:SetBackdrop({
@@ -255,7 +258,11 @@ function ResponseButtonSettingsMixin:BuildFrame()
     setSelectBtn:SetScript("OnClick", function(btn)
         MenuUtil.CreateContextMenu(btn, function(_ownerRegion, rootDescription)
             local rs = Loothing.Settings:GetResponseSets()
-            for id, set in pairs(rs.sets or {}) do
+            local ids = {}
+            for id in pairs(rs.sets or {}) do ids[#ids + 1] = id end
+            table.sort(ids)
+            for _, id in ipairs(ids) do
+                local set = rs.sets[id]
                 rootDescription:CreateRadio(set.name,
                     function() return id == self:GetActiveSetId() end,
                     function()
@@ -339,7 +346,9 @@ function ResponseButtonSettingsMixin:BuildFrame()
         local rs = Loothing.Settings:GetResponseSets()
         local count = 0
         for _ in pairs(rs.sets or {}) do count = count + 1 end
-        if count <= 1 then
+        if count <= 1 or id == 1 then
+            -- Set 1 is the built-in default; RemoveResponseSet refuses it,
+            -- so tell the user instead of silently no-opping.
             Loothing:Print(L["CANNOT_DELETE_LAST_SET"])
             return
         end
@@ -464,7 +473,9 @@ end
     Type Code Mapping
 ----------------------------------------------------------------------]]
 
-local TYPE_CODES = { "default", "WEAPON", "RARE", "TOKEN", "PETS", "MOUNTS", "RECIPE", "SPECIAL", "CATALYST" }
+-- Must match what ItemData's TYPE_CODE_GENERATORS can emit — rows for
+-- codes the data layer never produces are settings that can't take effect.
+local TYPE_CODES = { "default", "WEAPON", "RARE", "TOKEN", "PETS", "MOUNTS", "RECIPE", "BAGSLOT" }
 
 function ResponseButtonSettingsMixin:BuildTypeCodeMap(container)
     self.tcDropdowns = {}
@@ -492,7 +503,11 @@ function ResponseButtonSettingsMixin:BuildTypeCodeMap(container)
                 )
 
                 local rs = Loothing.Settings:GetResponseSets()
-                for sid, set in pairs(rs.sets or {}) do
+                local sids = {}
+                for sid in pairs(rs.sets or {}) do sids[#sids + 1] = sid end
+                table.sort(sids)
+                for _, sid in ipairs(sids) do
+                    local set = rs.sets[sid]
                     rootDescription:CreateRadio(set.name,
                         function() return tcMap[capturedTc] == sid end,
                         function()
@@ -592,6 +607,16 @@ end
 
 function ResponseButtonSettingsMixin:RebuildRows()
     if not self.scrollChild then return end
+    -- Re-entry guard: ClearFocus during the rebuild fires OnEditFocusLost,
+    -- whose handler calls RebuildRows again mid-loop.
+    if self._rebuilding then return end
+    self._rebuilding = true
+
+    -- Close a floating icon picker: its onSelect closure captured a row
+    -- (and set id) that this rebuild is about to replace.
+    if ns.IconPickerFrame and ns.IconPickerFrame:IsShown() and ns.IconPickerFrame.Close then
+        ns.IconPickerFrame:Close()
+    end
     -- Hide all existing rows
     for _, row in ipairs(self.rowFrames) do
         row:Hide()
@@ -629,6 +654,8 @@ function ResponseButtonSettingsMixin:RebuildRows()
     if Loothing.ResponseManager and self.frame and self.frame:IsShown() then
         Loothing.ResponseManager:LoadResponses()
     end
+
+    self._rebuilding = false
 end
 
 --[[--------------------------------------------------------------------
@@ -858,10 +885,10 @@ function ResponseButtonSettingsMixin:PopulateRow(row, setId, btnData, idx, total
 
         -- Display text
         row.dispEB:SetText(btnData.text or "")
+        -- Save happens in OnEditFocusLost (fired by ClearFocus); doing it
+        -- here too double-ran the save+rebuild pipeline.
         row.dispEB:SetScript("OnEnterPressed", function(eb)
             eb:ClearFocus()
-            Loothing.Settings:UpdateResponseButton(setId, btnData.id, { text = eb:GetText() })
-            self:RebuildRows()
         end)
         row.dispEB:SetScript("OnEditFocusLost", function(eb)
             Loothing.Settings:UpdateResponseButton(setId, btnData.id, { text = eb:GetText() })
@@ -870,10 +897,10 @@ function ResponseButtonSettingsMixin:PopulateRow(row, setId, btnData, idx, total
 
         -- Response text
         row.respEB:SetText(btnData.responseText or btnData.text or "")
+        -- Save happens in OnEditFocusLost (fired by ClearFocus); doing it
+        -- here too double-ran the save+rebuild pipeline.
         row.respEB:SetScript("OnEnterPressed", function(eb)
             eb:ClearFocus()
-            Loothing.Settings:UpdateResponseButton(setId, btnData.id, { responseText = eb:GetText() })
-            if Loothing.ResponseManager then Loothing.ResponseManager:LoadResponses() end
         end)
         row.respEB:SetScript("OnEditFocusLost", function(eb)
             Loothing.Settings:UpdateResponseButton(setId, btnData.id, { responseText = eb:GetText() })
@@ -893,11 +920,10 @@ function ResponseButtonSettingsMixin:PopulateRow(row, setId, btnData, idx, total
         -- Whisper keys (comma-separated)
         local keysStr = table.concat(btnData.whisperKeys or {}, ", ")
         row.whisperEB:SetText(keysStr)
+        -- Save happens in OnEditFocusLost (fired by ClearFocus); doing it
+        -- here too double-ran the save+rebuild pipeline.
         row.whisperEB:SetScript("OnEnterPressed", function(eb)
             eb:ClearFocus()
-            local parts = Utils.Split(eb:GetText():gsub("%s+", ""), ",")
-            Loothing.Settings:UpdateResponseButton(setId, btnData.id, { whisperKeys = parts })
-            if Loothing.ResponseManager then Loothing.ResponseManager:LoadResponses() end
         end)
         row.whisperEB:SetScript("OnEditFocusLost", function(eb)
             local parts = Utils.Split(eb:GetText():gsub("%s+", ""), ",")

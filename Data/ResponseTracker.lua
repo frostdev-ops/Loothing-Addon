@@ -14,7 +14,6 @@ local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local Utils = ns.Utils
-local Protocol = ns.Protocol
 local CreateFromMixins = Loolib.CreateFromMixins
 local GetTime = GetTime
 

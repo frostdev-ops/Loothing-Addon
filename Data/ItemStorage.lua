@@ -342,7 +342,7 @@ function ItemStorageMixin:FindInBags(itemLink, skip)
     local foundBag, foundSlot, foundTime = nil, nil, nil
 
     for bag = 0, NUM_BAG_SLOTS do
-        local numSlots = C_Container.GetContainerNumSlots(bag)
+        local numSlots = C_Container.GetContainerNumSlots(bag) or 0
         for slot = 1, numSlots do
             -- Skip this position if requested
             if not self:ShouldSkipSlot(skip, bag, slot) then
@@ -496,7 +496,7 @@ function ItemStorageMixin:ProcessPendingItemWatches(countAttempt)
     end
 
     for bag = 0, NUM_BAG_SLOTS do
-        local numSlots = C_Container.GetContainerNumSlots(bag)
+        local numSlots = C_Container.GetContainerNumSlots(bag) or 0
         for slot = 1, numSlots do
             local bagItemLink = C_Container.GetContainerItemLink(bag, slot)
             local foundID = bagItemLink and Utils.GetItemID(bagItemLink)

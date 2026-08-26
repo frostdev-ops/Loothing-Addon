@@ -310,10 +310,30 @@ end
 
 --- Create response buttons
 function VotePanelMixin:CreateResponseButtons()
-    local container = CreateFrame("Frame", nil, self.frame)
-    container:SetPoint("TOPLEFT", 20, -120)
-    container:SetPoint("TOPRIGHT", -20, -120)
-    container:SetHeight(400)  -- Accommodates up to ~12 candidates visible
+    -- Scrollable: a 20-man raid produces up to 20 candidate rows at 32px,
+    -- which overflowed the fixed-height panel — rows covered the note
+    -- input, timer bar, and Submit button with no way to reach them.
+    local scroll = CreateFrame("ScrollFrame", nil, self.frame)
+    scroll:SetPoint("TOPLEFT", 20, -120)
+    scroll:SetPoint("BOTTOMRIGHT", -20, 110)
+    scroll:EnableMouseWheel(true)
+    scroll:SetClipsChildren(true)
+
+    local container = CreateFrame("Frame", nil, scroll)
+    container:SetSize(1, 1)
+    scroll:SetScrollChild(container)
+    container:SetPoint("TOPLEFT")
+    container:SetWidth(PANEL_WIDTH - 40)
+
+    if ns.ApplyThemedScrollBar then
+        self.responseScrollBar = ns.ApplyThemedScrollBar(scroll, { autoHide = true, thickness = 8, showButtons = false })
+    else
+        scroll:SetScript("OnMouseWheel", function(s, delta)
+            local cur = s:GetVerticalScroll()
+            local maxScroll = math.max(0, container:GetHeight() - s:GetHeight())
+            s:SetVerticalScroll(math.min(maxScroll, math.max(0, cur - delta * 28)))
+        end)
+    end
 
     -- Label
     local label = container:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -322,6 +342,7 @@ function VotePanelMixin:CreateResponseButtons()
 
     self.responseButtons = {}
     self.responseButtonsArray = {}
+    self.responseScroll = scroll
     self.responseContainer = container
     self.responseContainerLabel = label
 
@@ -472,6 +493,20 @@ function VotePanelMixin:RefreshResponseButtons()
 
         self.responseButtons[candidateName] = button
         self.responseButtonsArray[i] = button
+    end
+
+    -- Size the scroll child to the laid-out rows so the scrollbar range
+    -- covers every candidate
+    local rowCount = #sorted
+    self.responseContainer:SetHeight(math.max(1, 24 + rowCount * (buttonHeight + spacing)))
+    if self.responseScroll then
+        self.responseScroll:UpdateScrollChildRect()
+        self.responseScroll:SetVerticalScroll(0)
+    end
+    -- Keep the themed bar's thumb in sync with the scroll reset
+    if self.responseScrollBar then
+        if self.responseScrollBar.SetValue then self.responseScrollBar:SetValue(0) end
+        if self.responseScrollBar.Refresh then self.responseScrollBar:Refresh() end
     end
 end
 
@@ -1071,6 +1106,19 @@ function VotePanelMixin:UpdateTimer()
     end
 
     if remaining <= 0 then
+        -- GetTimeRemaining() returns 0 for any non-VOTING state, including
+        -- TALLIED during the late-accept grace window — the state the
+        -- reshow-after-combat path opens the panel in. Treat "can still
+        -- accept votes" as not-expired or the panel closes itself one
+        -- second after opening.
+        if self.item.CanAcceptVotes and self.item:CanAcceptVotes() then
+            self.timerText:SetText(Loothing.Locale["NO_LIMIT"] or "No Limit")
+            local maxWidth = self.timerContainer:GetWidth() - 2
+            self.timerBar:SetWidth(math.max(0.001, maxWidth))
+            self.timerBar:SetColorTexture(0.6, 0.5, 0.2, 1)
+            return
+        end
+
         self.timerText:SetText(Loothing.Locale["TIME_EXPIRED"])
         self.timerBar:SetWidth(0.001)
         self.timerBar:SetColorTexture(0.6, 0.2, 0.2, 1)
@@ -1082,7 +1130,10 @@ function VotePanelMixin:UpdateTimer()
             self.autoCloseTimer = true
             C_Timer.After(1, function()
                 self.autoCloseTimer = nil
-                local itemRemaining = self.frame:IsShown() and self.item and self.item:GetTimeRemaining() or 0
+                if not self.frame:IsShown() then return end
+                local item = self.item
+                if item and item.CanAcceptVotes and item:CanAcceptVotes() then return end
+                local itemRemaining = item and item:GetTimeRemaining() or 0
                 if itemRemaining ~= math.huge and itemRemaining <= 0 then
                     self:Hide()
                 end

@@ -1500,51 +1500,10 @@ function SettingsMixin:SetAwardReasonDisenchant(id, enabled)
     end
 end
 
---- Reorder award reason (move up or down in sort order)
--- @param id number - Reason ID
--- @param direction string - "up" or "down"
--- @return boolean - True if reordered successfully
-function SettingsMixin:ReorderAwardReason(id, direction)
-    local reasons = self:GetAwardReasons()
-
-    -- Find the reason
-    local reasonIndex = nil
-    for i, reason in ipairs(reasons) do
-        if reason.id == id then
-            reasonIndex = i
-            break
-        end
-    end
-
-    if not reasonIndex then
-        return false
-    end
-
-    -- Determine swap index
-    local swapIndex = nil
-    if direction == "up" and reasonIndex > 1 then
-        swapIndex = reasonIndex - 1
-    elseif direction == "down" and reasonIndex < #reasons then
-        swapIndex = reasonIndex + 1
-    end
-
-    if not swapIndex then
-        return false
-    end
-
-    -- Swap the reasons
-    local temp = reasons[reasonIndex]
-    reasons[reasonIndex] = reasons[swapIndex]
-    reasons[swapIndex] = temp
-
-    -- Update sort order to match new positions
-    for i, reason in ipairs(reasons) do
-        reason.sort = i
-    end
-
-    self:Set("awardReasons.reasons", reasons)
-    return true
-end
+-- NOTE: a second, direction-string ReorderAwardReason("up"/"down") used to
+-- be defined here — it silently overwrote the numeric-position version at
+-- line ~1293 that the settings UI actually calls, making the ▲/▼ reorder
+-- buttons dead. Removed; the numeric form above is the only implementation.
 
 --- Reset award reasons to defaults (alias for ResetAwardReasons)
 function SettingsMixin:ResetAwardReasonsToDefaults()

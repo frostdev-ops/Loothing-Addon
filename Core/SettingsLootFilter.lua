@@ -111,7 +111,20 @@ local function getOrCreateClassEntry(self, classID)
     local classes = self:GetLootFilterClasses()
     local entry = classes[classID]
     if not entry then
-        entry = { blocked = false }
+        -- Seed from the defaults so the new entry is authoritative from
+        -- here on. A bare {blocked=false} entry made lookups fall back to
+        -- DEFAULT_BLOCKED_CLASSES whenever subclasses was empty/nil —
+        -- unblocking the last default-blocked subclass snapped both
+        -- checkboxes back to blocked with no way to clear them.
+        local def = DEFAULT_BLOCKED_CLASSES[classID]
+        entry = { blocked = def ~= nil and def.all == true }
+        if def then
+            local subs = {}
+            for k, v in pairs(def) do
+                if k ~= "all" and v == true then subs[k] = true end
+            end
+            if next(subs) then entry.subclasses = subs end
+        end
         classes[classID] = entry
     end
     return entry
@@ -136,8 +149,14 @@ function SettingsMixin:IsLootFilterSubclassBlocked(classID, subclassID)
     if self:IsLootFilterClassBlocked(classID) then return true end
     local classes = self:GetLootFilterClasses()
     local entry = classes[classID]
-    if entry and type(entry.subclasses) == "table" then
-        return entry.subclasses[subclassID] == true
+    if entry then
+        -- An existing entry is authoritative (seeded from defaults at
+        -- creation): nil/empty subclasses means "no subclass blocks",
+        -- not "fall back to defaults".
+        if type(entry.subclasses) == "table" then
+            return entry.subclasses[subclassID] == true
+        end
+        return false
     end
     local def = DEFAULT_BLOCKED_CLASSES[classID]
     if def and def[subclassID] == true then return true end

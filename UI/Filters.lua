@@ -97,10 +97,21 @@ function FiltersMixin:CanEquipItem(candidateData, itemData)
         return true  -- Default to true if we can't determine
     end
 
-    -- Get item info
+    -- Get item info. Utils.GetItemInfo returns localized display strings
+    -- (class/subclass names) and no itemClassID/itemSubClass/itemEquipLoc —
+    -- the fields the checks below need — so all filtering was dead code.
+    -- GetItemInfoInstant provides the numeric IDs and equip location.
     local itemInfo = Utils.GetItemInfo(itemData.itemLink)
     if not itemInfo then
         return true
+    end
+    if C_Item and C_Item.GetItemInfoInstant then
+        local instantID, _, _, equipLoc, _, classID, subclassID =
+            C_Item.GetItemInfoInstant(itemData.itemLink)
+        itemInfo.itemID = itemInfo.itemID or instantID
+        itemInfo.itemClassID = classID
+        itemInfo.itemSubClass = subclassID
+        itemInfo.itemEquipLoc = equipLoc
     end
 
     local candidateClassID = candidateData.classID
@@ -123,8 +134,11 @@ function FiltersMixin:CanEquipItem(candidateData, itemData)
         end
     end
 
-    -- Check armor type restrictions
-    if itemInfo.itemClassID == Enum.ItemClass.Armor and itemInfo.itemSubClass then
+    -- Check armor type restrictions. Cloaks are armor-class Cloth for every
+    -- wearer — the armor-type check would filter every non-cloth class off
+    -- a cloak, so they're exempt.
+    if itemInfo.itemClassID == Enum.ItemClass.Armor and itemInfo.itemSubClass
+        and itemInfo.itemEquipLoc ~= "INVTYPE_CLOAK" then
         if not self:CanClassWearArmorType(candidateClassID, itemInfo.itemSubClass) then
             return false
         end

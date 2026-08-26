@@ -7,7 +7,6 @@ local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local Utils = ns.Utils
-local TestMode = ns.TestMode
 local SkinningMixin = ns.SkinningMixin
 
 local CouncilTableMixin = ns.CouncilTableMixin or {}
@@ -463,7 +462,8 @@ function CouncilTableMixin:EnrichCandidates(candidates)
 
         -- For local player, always use the live spec
         if not candidate.specID and Utils.IsSamePlayer(candidate.playerName or candidate.name, Utils.GetPlayerFullName()) then
-            local specIndex = GetSpecialization and GetSpecialization()
+            local getSpec = C_SpecializationInfo and C_SpecializationInfo.GetSpecialization or GetSpecialization
+            local specIndex = getSpec and getSpec()
             if specIndex then
                 local getInfo = C_SpecializationInfo and C_SpecializationInfo.GetSpecializationInfo or GetSpecializationInfo
                 if getInfo then
@@ -484,6 +484,7 @@ function CouncilTableMixin:EnrichCandidates(candidates)
         --   3. TestMode is off AND cache is unavailable — zero the counters so
         --      stale random values from a prior TestMode run cannot persist
         --      after `/lt test` is disabled mid-session.
+        local TestMode = ns.TestMode
         if not (TestMode and TestMode.enabled) then
             if countCache then
                 local normalized = Utils.NormalizeName(candidate.playerName or candidate.name)
@@ -641,7 +642,8 @@ function CouncilTableMixin:ShowCandidateContextMenu(row, candidate)
 
             rootDescription:CreateButton(L["AWARD_ITEM"], function()
                 if Loothing.Session then
-                    Loothing.Session:AwardItem(itemGUID, candidate.name)
+                    -- Pass the candidate's response so history records it
+                    Loothing.Session:AwardItem(itemGUID, candidate.name, candidate.response)
                     self:TriggerEvent("OnCandidateAwarded", self.currentItem, candidate)
                 end
             end)
@@ -658,7 +660,9 @@ function CouncilTableMixin:ShowCandidateContextMenu(row, candidate)
                 local label = string.format(L["AWARD_PREFIX_FMT"], info.name)
                 rootDescription:CreateButton(label, function()
                     if Loothing.Session then
-                        Loothing.Session:AwardItem(itemGUID, candidate.name, info.name)
+                        -- info.id (numeric Response id), not info.name — the
+                        -- History Response filter compares numeric ids
+                        Loothing.Session:AwardItem(itemGUID, candidate.name, info.id)
                         self:TriggerEvent("OnCandidateAwarded", self.currentItem, candidate)
                     end
                 end)
@@ -677,7 +681,7 @@ function CouncilTableMixin:ShowCandidateContextMenu(row, candidate)
                         local coloredName = string.format("|cff%02x%02x%02x%s|r", r * 255, g * 255, b * 255, reason.name)
                         awardForMenu:CreateButton(coloredName, function()
                             if Loothing.Session then
-                                Loothing.Session:AwardItem(itemGUID, candidate.name, nil, reason.id)
+                                Loothing.Session:AwardItem(itemGUID, candidate.name, candidate.response, reason.id)
                                 self:TriggerEvent("OnCandidateAwarded", self.currentItem, candidate)
                             end
                         end)

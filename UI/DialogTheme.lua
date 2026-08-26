@@ -144,8 +144,12 @@ end
 --- attaches a themed bar outside the scroll area. Idempotent — a flag on
 --- the ScrollFrame prevents double-application if the dialog re-opens.
 function DialogTheme:HookDialogScrollbars()
+    -- The callback registry (and the dialogs map) live on Config.Dialog,
+    -- not on the plain Config module table — the old guard against
+    -- Config.RegisterCallback always failed and this hook never attached.
     local Config = Loolib and Loolib.Config
-    if not Config or type(Config.RegisterCallback) ~= "function" then
+    local Dialog = Config and Config.Dialog
+    if not Dialog or type(Dialog.RegisterCallback) ~= "function" then
         return
     end
     if self._scrollHookInstalled then return end
@@ -165,10 +169,10 @@ function DialogTheme:HookDialogScrollbars()
         if ok then scroll._loothingThemedBar = bar end
     end
 
-    Config:RegisterCallback("OnDialogOpened", function(_, appName)
+    Dialog:RegisterCallback("OnDialogOpened", function(_, appName)
         if appName ~= APP_NAME then return end
         if type(ns.ApplyThemedScrollBar) ~= "function" then return end
-        local dialog = Config.dialogs and Config.dialogs[appName]
+        local dialog = Dialog.dialogs and Dialog.dialogs[appName]
         if not dialog then return end
         apply(dialog.treeScroll)
         apply(dialog.optionsScroll)

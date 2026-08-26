@@ -385,8 +385,6 @@ function TradePanelMixin:RefreshList()
         return
     end
 
-    self.emptyText:Hide()
-
     local yOffset = 0
     local rowHeight = 40
     local spacing = 2
@@ -405,6 +403,10 @@ function TradePanelMixin:RefreshList()
             yOffset = yOffset - rowHeight - spacing
         end
     end
+
+    -- Empty state must consider what the loop actually rendered: every
+    -- entry can be traded (and skipped) while the queue itself is non-empty
+    self.emptyText:SetShown(#self.rows == 0)
 
     -- Update content height
     self.listContent:SetHeight(math.abs(yOffset) + 20)

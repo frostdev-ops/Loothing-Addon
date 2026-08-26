@@ -1228,6 +1228,19 @@ function SkinningMixin:OnCombatStart()
     end
 end
 
+--- Mark a combat-minimized frame as deliberately closed so OnCombatEnd
+--- doesn't resurrect it. Frames hidden while minimized never fire the
+--- usual OnHide path, so wasShown would stay true and the frame would
+--- ghost back open (empty) after combat.
+function SkinningMixin:NotifyFrameClosed(frame)
+    for _, entry in ipairs(managedFrames) do
+        if entry.frame == frame then
+            entry.wasShown = false
+            return
+        end
+    end
+end
+
 --- Handle combat end - restore minimized frames
 function SkinningMixin:OnCombatEnd()
     for _, entry in ipairs(managedFrames) do

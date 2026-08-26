@@ -47,7 +47,9 @@ function VotingEngine:Tally(votes, mode, opts)
         local candidates = self:GetCandidatesFromVotes(votes)
         return self:TallyRankedChoice(votes, candidates, opts)
     else
-        return self:TallySimple(votes)
+        -- opts must flow through: TallySimple's tie-breaking reads
+        -- opts.tieBreakerMode
+        return self:TallySimple(votes, nil, opts)
     end
 end
 
@@ -77,57 +79,79 @@ end
 ----------------------------------------------------------------------]]
 
 --- Tally votes: the candidate with the MOST votes wins (plurality).
--- There is no >50% majority requirement — a 2/2/1 split returns the
--- leading candidate with isTie=true for the tied leaders. Non-voters
--- are not counted as abstentions.
+-- There is no >50% majority requirement. Ties among leaders are resolved
+-- by opts.tieBreakerMode (same modes as ranked choice). Non-voters are
+-- not counted as abstentions.
 -- @param votes table - DataProvider or array of votes
--- @param candidates table - Array of candidate names (optional, for filtering)
--- @return table - { winningResponse, counts, isTie, tiedResponses, totalVotes }
-function VotingEngine:TallySimple(votes, _candidates)
+-- @param _candidates table - Array of candidate names (optional, unused)
+-- @param opts table|nil - Optional tally options (e.g. { tieBreakerMode = "ROLL" })
+-- @return table - { winner, winningResponse, counts, isTie, tiedResponses, totalVotes, needsRevote }
+function VotingEngine:TallySimple(votes, _candidates, opts)
     local counts = {}
 
-    -- Initialize response counts
-    for _, response in pairs(Loothing.Response) do
-        counts[response] = {
-            count = 0,
-            voters = {},
-        }
-    end
-
-    -- Count votes
+    -- Count first-choice votes. vote.responses holds CANDIDATE NAMES
+    -- (Session:CastVote appends candidateName) — the old table was
+    -- pre-seeded with numeric Response IDs, a key space no vote could
+    -- ever match, so every vote was silently discarded and the default
+    -- (SIMPLE) mode always tallied zero.
     for _, vote in EnumerateVotes(votes) do
         local firstChoice = vote.responses and vote.responses[1]
-        if firstChoice and counts[firstChoice] then
-            -- If we have candidates, only count if voter voted for a candidate
-            -- (In simple mode, we're counting response types, not individual candidates)
-            counts[firstChoice].count = counts[firstChoice].count + 1
-            counts[firstChoice].voters[#counts[firstChoice].voters + 1] = vote.voter
+        if firstChoice then
+            local entry = counts[firstChoice]
+            if not entry then
+                entry = { count = 0, voters = {} }
+                counts[firstChoice] = entry
+            end
+            entry.count = entry.count + 1
+            entry.voters[#entry.voters + 1] = vote.voter
         end
     end
 
-    -- Find the winning response
+    -- Find the winning candidate
     local maxCount = 0
-    local winningResponse = nil
+    local winner = nil
     local tied = {}
 
-    for response, data in pairs(counts) do
+    for candidate, data in pairs(counts) do
         if data.count > maxCount then
             maxCount = data.count
-            winningResponse = response
-            tied = { response }
+            winner = candidate
+            tied = { candidate }
         elseif data.count == maxCount and data.count > 0 then
-            tied[#tied + 1] = response
+            tied[#tied + 1] = candidate
         end
     end
 
     local isTie = #tied > 1
+    local needsRevote = nil
+
+    -- Tie-breaking, mirroring the ranked-choice path. Only the ML's tally
+    -- is authoritative (results are broadcast), so a random roll here
+    -- cannot diverge across clients.
+    if isTie then
+        local mode = opts and opts.tieBreakerMode
+        if mode == "ROLL" then
+            winner = self:BreakTie(tied, votes, "random")
+        elseif mode == "ML_CHOICE" then
+            winner = self:BreakTie(tied, votes, "manual")
+        elseif mode == "REVOTE" then
+            winner = nil
+            needsRevote = true
+        else
+            -- No tie-breaker configured: report the tie, name no winner
+            -- (pairs() order would pick an arbitrary, non-deterministic one)
+            winner = nil
+        end
+    end
 
     return {
-        winningResponse = winningResponse,
+        winner = winner,
+        winningResponse = winner,  -- legacy field name kept for consumers
         counts = counts,
         isTie = isTie,
         tiedResponses = isTie and tied or nil,
         totalVotes = self:CountVotes(votes),
+        needsRevote = needsRevote,
     }
 end
 
@@ -429,6 +453,10 @@ end
 ----------------------------------------------------------------------]]
 
 --- Get a summary of votes by response type
+-- WARNING: TallySimple's `counts` are keyed by CANDIDATE NAME (ballots
+-- carry candidate names, not response IDs), so the ResponseInfo lookup
+-- below never matches and this returns an empty array. No production
+-- callers today — rework against candidate responses before using.
 -- @param votes table - DataProvider or array
 -- @return table - Array of { response, responseInfo, count, voters, percentage }
 function VotingEngine:GetResponseSummary(votes)

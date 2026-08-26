@@ -351,6 +351,7 @@ function ResultsPanelMixin:SetItem(item, results)
 
     local quality = item.quality or 1
     local r, g, b = C_Item.GetItemQualityColor(quality)
+    if not (r and g and b) then r, g, b = 0.5, 0.5, 0.5 end
     self.itemIconBorder:SetVertexColor(r, g, b)
     self.itemName:SetTextColor(r, g, b)
     self.itemName:SetText(item.name or item.itemLink or "Unknown Item")
@@ -452,7 +453,15 @@ function ResultsPanelMixin:DisplayResults(_results)
     if showVoteCounts and self.results and self.results.rounds and #self.results.rounds > 0 then
         self:BuildRoundsVisualization(self.results)
         local L = Loothing.Locale
-        self.roundsToggle:SetText(string.format(L and L["SHOW_IRV_ROUNDS"], #self.results.rounds))
+        self._roundCount = #self.results.rounds
+        -- Label must reflect the container's (persistent) shown state, or
+        -- an expanded container from the previous item reads "Show" while
+        -- open and the toggle appears broken.
+        if self.roundsContainer and self.roundsContainer:IsShown() then
+            self.roundsToggle:SetText(L and L["HIDE_IRV_ROUNDS"])
+        else
+            self.roundsToggle:SetText(string.format(L and L["SHOW_IRV_ROUNDS"], #self.results.rounds))
+        end
         self.roundsToggle:Show()
         -- Adjust starting offset for candidate rows
         summaryOffset = summaryOffset - 26  -- space for toggle button
@@ -722,7 +731,9 @@ end
 
 --- Recalculate candidate row positions based on rounds visibility
 function ResultsPanelMixin:LayoutCandidateRows()
-    local yStart = -40  -- Base offset after winner/summary text
+    local yStart = -40 - 8  -- Base offset after winner/summary text (+8px
+    -- row gap, matching DisplayResults — omitting it made rows jump up
+    -- 8px on the first rounds-toggle click)
 
     -- Account for rounds toggle button
     if self.roundsToggle and self.roundsToggle:IsShown() then
@@ -798,7 +809,9 @@ function ResultsPanelMixin:ShowAwardDialog(_winnerResponse, awardReasonId, award
         reason = awardReasonName,
     }, function()
         if Loothing.Session and itemGUID then
-            Loothing.Session:AwardItem(itemGUID, playerName, nil, awardReasonId)
+            -- Record the winner's actual response so history rows carry
+            -- winnerResponse (the Response filter and color stripes read it)
+            Loothing.Session:AwardItem(itemGUID, playerName, candidate.response, awardReasonId)
         end
         self:Hide()
     end)

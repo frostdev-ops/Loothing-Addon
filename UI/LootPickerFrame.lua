@@ -799,6 +799,10 @@ function LootPickerFrameMixin:BindRow(row, entry)
     -- Status chip + reason line — populated only when blocked
     if entry.eval.allowed then
         row.chip:Hide()
+        -- Collapse the chip: nameText anchors RIGHT to the chip's LEFT,
+        -- and pooled rows otherwise keep the blocked chip's width, clipping
+        -- the item name ~148px short.
+        row.chip:SetWidth(0.001)
         row.reasonText:SetText("")
     else
         row.chip:Show()
@@ -1032,9 +1036,15 @@ ns.LootPickerFrame = setmetatable({}, {
         local v = inst[key]
         if type(v) == "function" then
             local wrapped = function(_, ...) return v(inst, ...) end
-            t[key] = wrapped  -- memoise so subsequent dispatch is direct
+            rawset(t, key, wrapped)  -- memoise so subsequent dispatch is direct
             return wrapped
         end
         return v
+    end,
+    -- Field writes (e.g. Session.lua setting _suppressOnHideCleanup before
+    -- Hide()) must reach the instance; landing on the proxy both discarded
+    -- the write and permanently shadowed the instance field for reads.
+    __newindex = function(_, key, value)
+        getInstance()[key] = value
     end,
 })

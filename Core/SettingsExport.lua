@@ -141,7 +141,9 @@ function SettingsExportMixin:ValidatePayload(payload)
         return false, "Invalid payload type"
     end
 
-    if not payload._exportVersion then
+    -- Type check, not truthiness: a string version would make the `>`
+    -- compare below throw instead of returning IMPORT_FAILED.
+    if type(payload._exportVersion) ~= "number" then
         return false, "Not a Loothing settings export"
     end
 
@@ -154,6 +156,12 @@ function SettingsExportMixin:ValidatePayload(payload)
     if type(payload.settings) ~= "table" then
         return false, "Missing or invalid settings data"
     end
+
+    -- Normalize untrusted metadata: these flow into date(), string
+    -- concatenation, and profile naming, which all throw on wrong types.
+    if type(payload._profileName) ~= "string" then payload._profileName = nil end
+    if type(payload._exportDate) ~= "number" then payload._exportDate = nil end
+    if type(payload._addonVersion) ~= "string" then payload._addonVersion = nil end
 
     return true
 end
@@ -339,15 +347,18 @@ end
 -- @return boolean accepted
 -- @return string|nil errMsg
 function SettingsExportMixin:QueueIncomingImport(payload, parentFrame, sender, metadata)
+    -- Capacity check BEFORE remembering the share: a share dropped for
+    -- queue-full must not be marked seen, or the sender's re-send within
+    -- the dedup window is silently swallowed.
+    if #self.pendingImportQueue >= MAX_PENDING_SHARED_IMPORTS then
+        Loothing:Debug("Dropped shared settings import from", sender, "- import queue full")
+        return false, string.format(L["PROFILE_SHARE_QUEUE_FULL"], sender or L["UNKNOWN"])
+    end
+
     local key = self:GetIncomingShareKey(payload, sender, metadata)
     if not self:RememberIncomingShare(key) then
         Loothing:Debug("Dropped duplicate shared settings import from", sender)
         return false
-    end
-
-    if #self.pendingImportQueue >= MAX_PENDING_SHARED_IMPORTS then
-        Loothing:Debug("Dropped shared settings import from", sender, "- import queue full")
-        return false, string.format(L["PROFILE_SHARE_QUEUE_FULL"], sender or L["UNKNOWN"])
     end
 
     self.pendingImportQueue[#self.pendingImportQueue + 1] = {

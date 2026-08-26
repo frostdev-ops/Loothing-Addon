@@ -840,13 +840,24 @@ function MainFrameMixin:SavePosition()
         width = width,
         height = height,
     })
+
+    -- Persist scale too (frame.UI.MainFrame.scale) — nothing else writes
+    -- it, and UpdateScale reads it on login to restore Ctrl+Scroll sizing.
+    if ns.SkinningMixin and ns.SkinningMixin.SaveFrameState then
+        ns.SkinningMixin:SaveFrameState(self.frame, "MainFrame")
+    end
 end
 
 --- Update frame scale
 function MainFrameMixin:UpdateScale()
     if not Loothing.Settings then return end
 
-    local scale = Loothing.Settings:Get("frame.uiScale") or 1.0
+    -- Prefer the scale persisted by the Ctrl+Scroll skin handler
+    -- (frame.UI.MainFrame.scale). frame.uiScale has no writer, so reading
+    -- only it reset the user's saved scale to 1.0 every login.
+    local scale = Loothing.Settings:Get("frame.UI.MainFrame.scale")
+        or Loothing.Settings:Get("frame.uiScale")
+        or 1.0
     self.frame:SetScale(scale)
 end
 

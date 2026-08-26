@@ -24,7 +24,11 @@ ns.RollFrameMixin = RollFrameMixin
 -- Frame dimensions
 local FRAME_WIDTH = 380
 local MIN_FRAME_HEIGHT = 300
-local MAX_FRAME_HEIGHT = 600
+-- Tall enough for a full 10-button response set (344px chrome + 32px per
+-- button); the old 600 cap made 9-10 button sets overlap the note box,
+-- timer bar, and Submit.
+-- ponytail: hard cap, no scrolling — revisit if sets ever exceed 10.
+local MAX_FRAME_HEIGHT = 684
 local BUTTON_HEIGHT = 28
 local BUTTON_SPACING = 4
 local SECTION_PADDING = 8
@@ -581,9 +585,14 @@ function RollFrameMixin:ReanchorSections(showGear, showTimer, showRolls, numButt
     end
 
     if showTimer then
+        -- Anchor to the FRAME edges (matching CreateTimerBar), not to the
+        -- 160px submit button — the bar collapsed to button width on the
+        -- first re-layout. Y offset = submit bottom margin (16) + button
+        -- height + padding, i.e. just above the submit button.
+        local timerY = 16 + SUBMIT_BUTTON_HEIGHT + SECTION_PADDING
         self.timerContainer:ClearAllPoints()
-        self.timerContainer:SetPoint("BOTTOMLEFT", self.submitButton, "TOPLEFT", 0, SECTION_PADDING)
-        self.timerContainer:SetPoint("BOTTOMRIGHT", self.submitButton, "TOPRIGHT", 0, SECTION_PADDING)
+        self.timerContainer:SetPoint("BOTTOMLEFT", self.frame, "BOTTOMLEFT", 20, timerY)
+        self.timerContainer:SetPoint("BOTTOMRIGHT", self.frame, "BOTTOMRIGHT", -20, timerY)
         self.timerContainer:SetHeight(TIMER_BAR_HEIGHT)
     end
 end

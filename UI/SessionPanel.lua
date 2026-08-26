@@ -142,12 +142,16 @@ end
 
 --- Toggle filter bar visibility
 function SessionPanelMixin:ToggleFilterBar()
+    -- Use the theme's panelInset (ApplyTheme anchors with it); a literal
+    -- 8 here desynced the left edge from the themed right edge.
+    local sk = ns.SkinningMixin
+    local inset = (sk and sk.GetLayoutValue and sk:GetLayoutValue("panelInset", 8)) or 8
     if self.filterBar:IsShown() then
         self.filterBar:Hide()
-        self.listContainer:SetPoint("TOPLEFT", 8, -66)
+        self.listContainer:SetPoint("TOPLEFT", inset, -66)
     else
         self.filterBar:Show()
-        self.listContainer:SetPoint("TOPLEFT", 8, -154)
+        self.listContainer:SetPoint("TOPLEFT", inset, -154)
     end
 end
 
@@ -1452,6 +1456,42 @@ function SessionPanelMixin:RefreshItems()
 
     -- Sync selection state (backward compat + bulk bar)
     self:UpdateSelectionState()
+
+    -- Live countdown: rows render "Ns" for VOTING items but nothing
+    -- re-rendered on a clock, so the number froze at its initial value.
+    -- Run a 1 Hz ticker only while a VOTING row exists.
+    local hasVoting = false
+    for _, row in ipairs(self.itemRows) do
+        local it = row.item or (row.GetItem and row:GetItem())
+        if it and it.IsVoting and it:IsVoting() then
+            hasVoting = true
+            break
+        end
+    end
+    if hasVoting and not self.votingTicker then
+        self.votingTicker = C_Timer.NewTicker(1, function()
+            if not self.frame:IsShown() then
+                self.votingTicker:Cancel()
+                self.votingTicker = nil
+                return
+            end
+            local stillVoting = false
+            for _, row in ipairs(self.itemRows) do
+                local it = row.item or (row.GetItem and row:GetItem())
+                if it and it.IsVoting and it:IsVoting() then
+                    stillVoting = true
+                    if row.UpdateStatus then row:UpdateStatus() end
+                end
+            end
+            if not stillVoting then
+                self.votingTicker:Cancel()
+                self.votingTicker = nil
+            end
+        end)
+    elseif not hasVoting and self.votingTicker then
+        self.votingTicker:Cancel()
+        self.votingTicker = nil
+    end
 end
 
 --- Hide ML-only controls and restore the row's default layout.

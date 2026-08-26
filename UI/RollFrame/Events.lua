@@ -375,10 +375,12 @@ function RollFrameMixin:OnChatMessage(text)
     minRoll = tonumber(minRoll) or 1
     maxRoll = tonumber(maxRoll) or 100
 
-    local itemGUID = self.pendingRollGUID or (self.item and self.item.guid)
-    if itemGUID then
-        self:SetItemRoll(itemGUID, roll, minRoll, maxRoll)
-    end
+    -- Only attribute rolls WE initiated (DoRoll sets pendingRollGUID).
+    -- Falling back to the displayed item captured any manual /roll — with
+    -- its own min/max — as the player's loot roll for the open item.
+    local itemGUID = self.pendingRollGUID
+    if not itemGUID then return end
+    self:SetItemRoll(itemGUID, roll, minRoll, maxRoll)
     if itemGUID and self.pendingRollStarted then
         self.pendingRollStarted[itemGUID] = nil
     end

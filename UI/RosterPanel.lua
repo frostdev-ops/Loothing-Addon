@@ -583,7 +583,8 @@ function RosterPanelMixin:GatherRosterData()
 
         -- Spec: try unit API if we have a unit and didn't get from cache
         if not entry.specID and unit and UnitIsUnit(unit, "player") then
-            local specIndex = GetSpecialization and GetSpecialization()
+            local getSpec = C_SpecializationInfo and C_SpecializationInfo.GetSpecialization or GetSpecialization
+            local specIndex = getSpec and getSpec()
             if specIndex then
                 local getInfo = C_SpecializationInfo and C_SpecializationInfo.GetSpecializationInfo or GetSpecializationInfo
                 if getInfo then

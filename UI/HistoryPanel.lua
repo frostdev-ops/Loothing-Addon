@@ -929,9 +929,11 @@ function HistoryPanelMixin:SetupHistoryRow(row, entry, yOffset)
     local texture = entry.itemID and C_Item.GetItemIconByID(entry.itemID) or "Interface\\Icons\\INV_Misc_QuestionMark"
     row.icon:SetTexture(texture)
 
-    -- Quality color
+    -- Quality color (returns nothing for out-of-range quality — a shared
+    -- or hand-edited entry with a bogus value must not abort the render)
     local quality = entry.quality or 1
     local r, g, b = C_Item.GetItemQualityColor(quality)
+    if not (r and g and b) then r, g, b = 0.5, 0.5, 0.5 end
     row.iconBorder:SetVertexColor(r, g, b)
 
     -- Item name
@@ -945,10 +947,14 @@ function HistoryPanelMixin:SetupHistoryRow(row, entry, yOffset)
         row.winnerText:SetText("")
     end
 
-    -- Response color bar
-    if entry.winnerResponse and Loothing.ResponseInfo[entry.winnerResponse] then
-        local info = Loothing.ResponseInfo[entry.winnerResponse]
-        row.colorBar:SetColorTexture(info.color.r, info.color.g, info.color.b, 1)
+    -- Response color bar. winnerResponse is absent on most legacy rows;
+    -- fall back to the winner's candidate-snapshot response like the
+    -- detail frame does.
+    local winnerResp = ns.GetWinnerResponse and ns.GetWinnerResponse(entry) or entry.winnerResponse
+    local respInfo = winnerResp and (Loothing.ResponseInfo[winnerResp]
+        or (Loothing.SystemResponseInfo and Loothing.SystemResponseInfo[winnerResp]))
+    if respInfo and respInfo.color then
+        row.colorBar:SetColorTexture(respInfo.color.r, respInfo.color.g, respInfo.color.b, 1)
         row.colorBar:Show()
     else
         row.colorBar:Hide()

@@ -51,7 +51,9 @@ local AttachIconButtonPolish = ns.FramePolish.AttachIconButtonPolish
 
 local ITEM_DETAIL_WIDTH = 720
 local ITEM_DETAIL_HEIGHT = 560
-local SESSION_SUMMARY_WIDTH = 560
+-- 580: the sibling list's Roll column spans x=500..540 inside a clipped
+-- scroll region that ends at (width - 42); 560 clipped it to one digit.
+local SESSION_SUMMARY_WIDTH = 580
 local SESSION_SUMMARY_HEIGHT = 460
 local PROFILE_WIDTH = 680
 local PROFILE_HEIGHT = 520
@@ -143,6 +145,7 @@ local function getWinnerResponse(entry)
     end
     return nil
 end
+ns.GetWinnerResponse = getWinnerResponse
 
 --- Wrap a response id in its configured color. Returns nil (not "") on a
 --- missing id so `responseColoredText(x) or fallback` works as intended.

@@ -21,7 +21,8 @@ ns.CommMixin = CreateFromMixins(CallbackRegistryMixin, ns.CommMixin or {})
 ----------------------------------------------------------------------]]
 
 local Utils = ns.Utils
-local TestMode = ns.TestMode
+-- NOTE: Debug/TestMode.lua loads after this file; always resolve
+-- ns.TestMode at call time, never capture it at file scope.
 
 ---@class CommMixin
 ---@field GenerateCallbackEvents fun(self: CommMixin, events: table)
@@ -380,7 +381,14 @@ function CommMixin.Send(self, command, data, target, priority)
     -- Combat does NOT block addon comms (confirmed by RCLC analysis of WoW 12.0).
     local prio = priority or "NORMAL"
     local CommState = Loothing.CommState
-    if CommState and CommState:ShouldDefer(command, prio) then
+    -- STATE_DISCONNECTED means "not in a group", but whispers to
+    -- guildmates (sync panel, settings/history share) are perfectly
+    -- sendable while solo — SendGuild has the same exemption for guild
+    -- broadcasts. STATE_RESTRICTED must still defer.
+    local disconnectedGuildWhisper = CommState
+        and CommState:GetState() == CommState.STATE_DISCONNECTED
+        and target and Utils.IsGuildMember and Utils.IsGuildMember(target)
+    if CommState and not disconnectedGuildWhisper and CommState:ShouldDefer(command, prio) then
         local state = CommState:GetState()
         if state == CommState.STATE_RESTRICTED then
             -- Critical commands → guaranteed queue (replayed when restrictions lift)
@@ -487,6 +495,7 @@ function CommMixin.Send(self, command, data, target, priority)
         commStats.sent[command] = (commStats.sent[command] or 0) + 1
         -- TestMode intercept fires only on successful queue so test-mode stats
         -- match production stats (a queue-full drop is not an "outgoing" event).
+        local TestMode = ns.TestMode
         if TestMode and TestMode.OnOutgoingComm then
             local channel = target and "WHISPER" or (IsInRaid() and "RAID" or "PARTY")
             TestMode:OnOutgoingComm(channel, target)
@@ -652,6 +661,7 @@ function CommMixin:SendGuild(command, data, priority)
     else
         commStats.sent[command] = (commStats.sent[command] or 0) + 1
         -- Test-mode only records successful queueing (matches Send parity).
+        local TestMode = ns.TestMode
         if TestMode and TestMode.OnOutgoingComm then
             TestMode:OnOutgoingComm("GUILD", nil)
         end
@@ -717,8 +727,13 @@ function CommMixin:OnMessage(message, distribution, sender)
         -- Still try to process - might be backwards compatible
     end
 
-    -- Normalize sender name
+    -- Normalize sender name. NormalizeName returns nil for secret-tagged
+    -- values (encounter taint) — the concatenations below would throw.
     sender = Utils.NormalizeName(sender)
+    if not sender then
+        Loothing:Debug("Dropped message with unresolvable sender")
+        return
+    end
 
     -- Replay protection: deduplicate by sender+msgID (Protocol v4+) or by a
     -- content hash of the encoded blob for legacy v3 senders. A v3 forgery
@@ -737,7 +752,10 @@ function CommMixin:OnMessage(message, distribution, sender)
     if seenIDs[dedupKey] then
         Loothing:Debug("Dropped duplicate", command, "from", sender,
             "msgID=", tostring(msgID or "(v3-hash)"))
-        commStats.dropped[command] = (commStats.dropped[command] or 0) + 1
+        -- Only stat known wire codes: `command` is sender-controlled and
+        -- unknown strings would grow commStats without bound.
+        local statKey = HANDLERS[command] and command or "UNKNOWN"
+        commStats.dropped[statKey] = (commStats.dropped[statKey] or 0) + 1
         return
     end
 
@@ -797,9 +815,13 @@ end
 -- @param distribution string - Channel
 function CommMixin:RouteMessage(command, data, sender, distribution)
     Loothing:Debug("Received:", command, "from", sender)
-    commStats.received[command] = (commStats.received[command] or 0) + 1
 
     local handlerName = HANDLERS[command]
+    -- Bucket unknown (sender-controlled) command strings under one key so
+    -- forged commands can't grow commStats without bound.
+    local statKey = handlerName and command or "UNKNOWN"
+    commStats.received[statKey] = (commStats.received[statKey] or 0) + 1
+
     if handlerName and self[handlerName] then
         self[handlerName](self, data, sender, distribution)
     else
@@ -1126,6 +1148,7 @@ function CommMixin:SendPlayerResponse(itemGUID, response, note, roll, rollMin, r
 
     -- TestMode bypasses the wire entirely so simulated raids don't broadcast
     -- noise to real groups.
+    local TestMode = ns.TestMode
     local isTestMode = TestMode and TestMode:IsEnabled()
     if isTestMode then
         if Loothing.Session then
@@ -1184,6 +1207,7 @@ function CommMixin:SendResponseBatch(responses, masterLooter, sessionID)
     end
 
     -- TestMode: simulated raids never touch the wire.
+    local TestMode = ns.TestMode
     local isTestMode = TestMode and TestMode:IsEnabled()
     if isTestMode then
         handleLocalResponses()
@@ -1245,7 +1269,8 @@ end
 function CommMixin:SendVersionResponse(target, distribution)
     local _, equippedIlvl = GetAverageItemLevel()
     local specID
-    local specIndex = GetSpecialization and GetSpecialization()
+    local getSpec = C_SpecializationInfo and C_SpecializationInfo.GetSpecialization or GetSpecialization
+    local specIndex = getSpec and getSpec()
     if specIndex then
         local getInfo = C_SpecializationInfo and C_SpecializationInfo.GetSpecializationInfo or GetSpecializationInfo
         if getInfo then

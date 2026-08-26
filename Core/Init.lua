@@ -572,7 +572,10 @@ local function DetermineML()
         end
     elseif IsInGroup() then
         if UnitIsGroupLeader("player") then
-            return Utils.GetPlayerFullName()
+            -- Normalize like every other branch: GetPlayerFullName keeps
+            -- canonical realm casing, which no other ML path produces —
+            -- casing mismatches here have caused council/MLDB wipes.
+            return Utils.NormalizeName(Utils.GetPlayerFullName())
         end
         for i = 1, 4 do
             local unit = "party" .. i

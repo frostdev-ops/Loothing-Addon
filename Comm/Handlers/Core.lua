@@ -17,7 +17,6 @@ local UnitIsGroupAssistant = UnitIsGroupAssistant
 local UnitIsGroupLeader = UnitIsGroupLeader
 local Loothing = ns.Addon
 local Utils = ns.Utils
-local TestMode = ns.TestMode
 
 ns.CommMixin = ns.CommMixin or {}
 
@@ -64,6 +63,7 @@ end
 -- @param sender string
 -- @return boolean
 local function isGroupLeaderOrAssistant(sender)
+    local TestMode = ns.TestMode
     if TestMode and TestMode:IsEnabled() then
         return true
     end
@@ -202,8 +202,11 @@ local SCHEMAS = {
 -- @param schema table|nil - Schema from SCHEMAS (nil = nil-check only)
 -- @return boolean
 local function validateHandler(name, data, schema)
-    if not data then
-        Loothing:Debug("Rejected", name, "— no data")
+    -- The wire can carry ANY deserializable type in the payload slot; a
+    -- truthiness check let numbers/booleans through to handlers that
+    -- immediately index them (remote-triggerable errors).
+    if type(data) ~= "table" then
+        Loothing:Debug("Rejected", name, "— data not a table")
         return false
     end
     if schema then
@@ -557,6 +560,7 @@ function CommMixin:HandlePlayerResponse(data, sender, distribution)
     if not Loothing.Session then return end
 
     -- Validate sender is in the group (bypass in test mode)
+    local TestMode = ns.TestMode
     local isTestMode = TestMode and TestMode:IsEnabled()
     if not isGroupMember(sender) and not isTestMode then
         Loothing:Debug("Rejected PLAYER_RESPONSE from non-group member:", sender)
@@ -695,7 +699,9 @@ function CommMixin:HandleBatch(data, sender, distribution)
         -- Block nested BATCH: without this, 20 inner BATCHes each carrying
         -- 20 messages turn one wire message into 400 handler invocations,
         -- bypassing the cap above. Same recursion guard HandleXRealm has.
-        if inner.command and inner.command ~= Loothing.MsgType.BATCH then
+        -- (type check: entries are attacker-controlled; inner.command on a
+        -- number throws)
+        if type(inner) == "table" and inner.command and inner.command ~= Loothing.MsgType.BATCH then
             -- Route each inner message through the normal handler chain.
             -- Security validation happens inside each handler, not here.
             self:RouteMessage(inner.command, inner.data, sender, distribution)
@@ -715,6 +721,14 @@ function CommMixin:HandleHeartbeat(data, sender, _distribution)
     -- ensures any OnHeartbeat subscriber gets a filtered stream by default.
     local localName = Utils.GetPlayerFullName()
     if localName and Utils.IsSamePlayer(sender, localName) then
+        return
+    end
+    -- Only the ML sends heartbeats (Heartbeat.lua enforces that on the
+    -- send side). Accepting them from anyone let any group member reset
+    -- lastHeartbeatTime (suppressing stale-session recovery sync) and aim
+    -- TriggerAutoSync at themselves.
+    if not isMasterLooter(sender) then
+        Loothing:Debug("Rejected HEARTBEAT from non-ML:", sender)
         return
     end
     -- Heartbeat handles the comparison and potential auto-sync trigger
@@ -885,7 +899,7 @@ function CommMixin:HandleSessionInit(data, sender, _distribution)
     -- back to the previous session's baseline — leaving session 2 running
     -- with stale votingMode, responseSets, autoPass, etc. That is the
     -- "autopass broken / character names as buttons" class of bug.
-    if data.sessionStart and Loothing.Session and Loothing.Session.IsActive
+    if type(data.sessionStart) == "table" and Loothing.Session and Loothing.Session.IsActive
         and Loothing.Session:IsActive() then
         local newSessionID = data.sessionStart.sessionID
         local currentID = Loothing.Session.sessionID
@@ -902,22 +916,25 @@ function CommMixin:HandleSessionInit(data, sender, _distribution)
     -- path in HandleMLDBBroadcast) before SessionStart flips state to ACTIVE —
     -- otherwise GetEffectiveGroupLootMode() sees no MLDB yet and AutoPass /
     -- other MLDB-dependent checks fail on the first tick.
-    if data.mldb then
+    -- Sub-payloads are attacker-controlled; type-gate each before routing
+    -- so a non-table field can't abort the flow mid-way (leaving ML state
+    -- mutated above but the mandatory MLDB never applied).
+    if type(data.mldb) == "table" then
         self:HandleMLDBBroadcast(data.mldb, sender)
     end
 
-    if data.councilRoster then
+    if type(data.councilRoster) == "table" then
         self:HandleCouncilRoster(data.councilRoster, sender)
     end
 
     -- Observer roster (optional; added to SESSION_INIT payload for the
     -- roster-onboard refresh path so a single SESSION_INIT replaces the
     -- legacy SESSION_START + MLDB + COUNCIL_ROSTER + OBSERVER_ROSTER fan-out).
-    if data.observerRoster then
+    if type(data.observerRoster) == "table" then
         self:HandleObserverRoster(data.observerRoster, sender)
     end
 
-    if data.sessionStart then
+    if type(data.sessionStart) == "table" then
         self:HandleSessionStart(data.sessionStart, sender)
     end
 
@@ -937,6 +954,7 @@ function CommMixin:HandleResponseBatch(data, sender, distribution)
     if not Loothing.Session then return end
 
     -- Validate sender is in the group
+    local TestMode = ns.TestMode
     local isTestMode = TestMode and TestMode:IsEnabled()
     if not isGroupMember(sender) and not isTestMode then
         Loothing:Debug("Rejected RESPONSE_BATCH from non-group member:", sender)

@@ -23,6 +23,10 @@ function CouncilMixin:AddMember(name)
     end
 
     name = Utils.NormalizeName(name)
+    if not name then
+        -- Secret-tagged values normalize to nil; self.members[nil] throws
+        return false, "Invalid name"
+    end
 
     if self.members[name] then
         return false, "Player is already a council member"

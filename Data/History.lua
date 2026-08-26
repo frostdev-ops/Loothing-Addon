@@ -125,15 +125,16 @@ function HistoryMixin:AddEntry(entry)
 
     -- Backfill date/time from timestamp if missing (pre-1.10 entries or remote sync)
     if not entry.date and entry.timestamp > 0 then
-        entry.date = date("!%Y-%m-%d", entry.timestamp)
+        entry.date = date("%Y-%m-%d", entry.timestamp)
     end
     if not entry.time and entry.timestamp > 0 then
-        entry.time = date("!%H:%M:%S", entry.timestamp)
+        entry.time = date("%H:%M:%S", entry.timestamp)
     end
 
     -- Backfill top-level response/responseID from winnerResponse if missing
     if not entry.response and entry.winnerResponse then
         local info = Loothing.ResponseInfo[entry.winnerResponse]
+            or (Loothing.SystemResponseInfo and Loothing.SystemResponseInfo[entry.winnerResponse])
         if info then
             entry.response = info.text or info.name
         end
@@ -804,11 +805,11 @@ function HistoryMixin:LoadFromSaved()
         -- Backfill new fields on legacy entries (pre-1.10)
         local ts = entry.timestamp or 0
         if not entry.date and ts > 0 then
-            entry.date = date("!%Y-%m-%d", ts)
+            entry.date = date("%Y-%m-%d", ts)
             needsResave = true
         end
         if not entry.time and ts > 0 then
-            entry.time = date("!%H:%M:%S", ts)
+            entry.time = date("%H:%M:%S", ts)
             needsResave = true
         end
         if not entry.response and entry.winnerResponse then

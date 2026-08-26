@@ -557,7 +557,7 @@ function AddItemFrameMixin:RefreshRecentDrops()
 
     -- Scan bags for recently looted tradeable items
     for bag = 0, NUM_BAG_SLOTS do
-        local numSlots = C_Container.GetContainerNumSlots(bag)
+        local numSlots = C_Container.GetContainerNumSlots(bag) or 0
         for slot = 1, numSlots do
             local link = C_Container.GetContainerItemLink(bag, slot)
             if link then
@@ -668,7 +668,7 @@ function AddItemFrameMixin:RefreshBagList()
     local items = {}
 
     for bag = 0, NUM_BAG_SLOTS do
-        local numSlots = C_Container.GetContainerNumSlots(bag)
+        local numSlots = C_Container.GetContainerNumSlots(bag) or 0
         for slot = 1, numSlots do
             local link = C_Container.GetContainerItemLink(bag, slot)
             if link then
@@ -966,6 +966,15 @@ function AddItemFrameMixin:Hide()
         end)
     else
         self.frame:Hide()
+    end
+    -- Invalidate any pending resolve debounce: SetText("") takes the
+    -- empty-text early return in OnItemInputChanged (which doesn't bump
+    -- the generation), so a stale debounce could queue a phantom item
+    -- into the next Show().
+    self._resolveGen = (self._resolveGen or 0) + 1
+    if self._resolveDebounce then
+        if self._resolveDebounce.Cancel then self._resolveDebounce:Cancel() end
+        self._resolveDebounce = nil
     end
     self.editBox:SetText("")
     wipe(self.itemQueue)

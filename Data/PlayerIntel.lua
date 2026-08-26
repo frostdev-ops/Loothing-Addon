@@ -62,7 +62,25 @@ function PlayerIntelMixin:LoadFromSaved()
     self.players = {}
     for key, value in pairs(raw) do
         local normalized = Utils and Utils.NormalizeName and Utils.NormalizeName(key) or key
-        if normalized then self.players[normalized] = value end
+        if normalized then
+            -- Older desktop audit syncs wrote flat mpWeekCount/mpHighest
+            -- instead of the mpWeek table every reader expects.
+            if not value.mpWeek and (value.mpWeekCount or value.mpHighest) then
+                value.mpWeek = { count = value.mpWeekCount, highest = value.mpHighest }
+            end
+            self.players[normalized] = value
+            -- Desktop keys use hyphenated realm SLUGS ("twisting-nether"),
+            -- but in-game names use GetNormalizedRealmName() which strips
+            -- spaces ("twistingnether"). Index a hyphen-stripped realm
+            -- variant too, or every multi-word-realm player has no intel.
+            local name, realm = normalized:match("^([^-]+)-(.+)$")
+            if name and realm and realm:find("-", 1, true) then
+                local variant = name .. "-" .. realm:gsub("%-", "")
+                if not self.players[variant] then
+                    self.players[variant] = value
+                end
+            end
+        end
     end
     self.generatedAt = pi.generatedAt
     self.raidTier = pi.raidTier

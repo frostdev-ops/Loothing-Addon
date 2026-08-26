@@ -81,6 +81,17 @@ end
 
 function CouncilTableMixin:OnSessionEnded()
     self:Clear()
+    -- If the session ends while the table is combat-minimized, tell the
+    -- minimize registry it's closed — otherwise the combat-end restore
+    -- pops an empty "No candidates" table open unprompted.
+    if self.frame and ns.SkinningMixin and ns.SkinningMixin.NotifyFrameClosed then
+        ns.SkinningMixin:NotifyFrameClosed(self.frame)
+    end
+    if self.Hide then
+        self:Hide()
+    elseif self.frame then
+        self.frame:Hide()
+    end
 end
 
 function CouncilTableMixin:OnItemAdded(item)

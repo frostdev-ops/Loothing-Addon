@@ -15,7 +15,6 @@ local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
 local Utils = ns.Utils
-local TrinketData = ns.TrinketData
 local TooltipScan = ns.TooltipScan
 
 local AutoPass = {}
@@ -511,6 +510,9 @@ function AutoPass:ShouldAutoPassTrinket(itemID, _playerClass)
         return false, nil
     end
 
+    -- Resolved at call time: Data/TrinketData.lua loads after this file,
+    -- so a file-scope capture is permanently nil (trinket autopass dead).
+    local TrinketData = ns.TrinketData
     if not TrinketData then
         return false, nil
     end

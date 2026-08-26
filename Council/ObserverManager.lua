@@ -143,6 +143,10 @@ function ObserverMixin:AddObserver(name)
         return false, "Invalid name"
     end
     name = Utils.NormalizeName(name)
+    if not name then
+        -- Secret-tagged values normalize to nil
+        return false, "Invalid name"
+    end
     -- Already on list?
     for _, n in ipairs(self.list) do
         if Utils.IsSamePlayer(n, name) then

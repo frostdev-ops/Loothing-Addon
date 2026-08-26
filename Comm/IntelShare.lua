@@ -496,6 +496,12 @@ function IntelShareMixin:MergeIntel(transferID)
     local pending = self.pendingReceive[transferID]
     if not pending then return end
 
+    -- A sender can ship more datasets than its manifest declared; each
+    -- surplus arrival would re-trigger this and run a second concurrent
+    -- merge chain over the same transfer.
+    if pending.merging then return end
+    pending.merging = true
+
     -- Cancel timeout timer
     if pending.timer then
         pending.timer:Cancel()
@@ -543,8 +549,12 @@ function IntelShareMixin:MergeIntel(transferID)
         if exchangeKey and incomingData then
             local exchange = GetExchange() or {}
             local local_sub = exchange[exchangeKey]
-            local localTs = local_sub and local_sub[tsKey]
-            local incomingTs = incomingData[tsKey]
+            -- Wire timestamps are untrusted: a string vs number compare
+            -- below would throw inside a fresh C_Timer callback (no comm
+            -- pcall), abort the chain, and wedge pendingReceive for this
+            -- sender until /reload.
+            local localTs = local_sub and tonumber(local_sub[tsKey])
+            local incomingTs = tonumber(incomingData[tsKey])
 
             -- Merge if incoming is newer or local has no data
             local shouldMerge = not localTs or (incomingTs and incomingTs > localTs)

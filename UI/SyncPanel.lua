@@ -433,21 +433,24 @@ function SyncPanelMixin:GetOnlineMembers()
         -- as a sync target in raids.
         if member.name and not Utils.IsSamePlayer(member.name, playerName)
             and not seen[member.name] then
-            seen[member.name] = true
+            seen[member.name] = true  -- GetRaidRoster names are pre-normalized
             members[#members + 1] = member.name
         end
     end
 
-    -- Check guild
+    -- Check guild. Key `seen` through NormalizeName so it matches the
+    -- raid pass above — comparing raw "Name-Realm" against the normalized
+    -- raid keys listed every in-raid guildmate twice.
     if IsInGuild() then
         local numGuild = GetNumGuildMembers()
         for i = 1, numGuild do
             local name, _, _, _, _, _, _, _, online = GetGuildRosterInfo(i)
-            if online and name and not seen[name] then
+            local normalized = name and Utils.NormalizeName(name)
+            if online and normalized and not seen[normalized] then
                 -- Strip realm from guild roster names
                 local shortName = Ambiguate(name, "short")
                 if shortName ~= playerName then
-                    seen[name] = true
+                    seen[normalized] = true
                     members[#members + 1] = shortName
                 end
             end
@@ -514,8 +517,21 @@ function SyncPanelMixin:StartSync()
     end
 
     -- Set progress to full after initiating (actual callbacks from Sync module drive real progress)
-    -- Use a short timer to allow the comm to fire
+    -- Use a short timer to allow the comm to fire. Guarded on the Sync
+    -- module (no module = nothing was sent — don't fake a green bar) and
+    -- tokened so rapid double-clicks don't double-fire completion.
+    if not Loothing.Sync then
+        self.statusText:SetText("|cffff0000" .. (L["SYNC_UNAVAILABLE"] or "Sync unavailable") .. "|r")
+        self.progressBg:Hide()
+        self.syncInProgress = false
+        self.sendBtn:Enable()
+        return
+    end
+    local token = {}
+    self._completeToken = token
     C_Timer.After(1, function()
+        if self._completeToken ~= token then return end
+        self._completeToken = nil
         self:SetProgress(1.0)
         self:TriggerEvent("OnSyncComplete", self.syncType, self.targetPlayer)
     end)
@@ -669,16 +685,21 @@ function SyncPanelMixin:RegisterIntelShareCallbacks()
     end, self)
 
     Loothing.IntelShare:RegisterCallback("OnIntelShareComplete", function()
+        -- Reset BEFORE the visibility bail: closing the panel mid-share
+        -- otherwise left syncInProgress stuck and the Send button
+        -- permanently disabled.
+        self.syncInProgress = false
+        self.sendBtn:Enable()
         if not self.frame:IsShown() then return end
         self:SetProgress(1.0)
         self:TriggerEvent("OnSyncComplete", "intel", self.targetPlayer)
     end, self)
 
     Loothing.IntelShare:RegisterCallback("OnIntelShareFailed", function(_, transferID, reason)
-        if not self.frame:IsShown() then return end
-        self.statusText:SetText("|cffff0000" .. (reason or "Share failed") .. "|r")
         self.syncInProgress = false
         self.sendBtn:Enable()
+        if not self.frame:IsShown() then return end
+        self.statusText:SetText("|cffff0000" .. (reason or "Share failed") .. "|r")
     end, self)
 end
 

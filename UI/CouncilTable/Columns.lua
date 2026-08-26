@@ -56,7 +56,10 @@ CouncilTableMixin.COLUMN_SORT_MAP = {
     role = "role",
     response = "response",
     roll = "roll",
-    ilvl = "ilvl",
+    -- equippedIlvl is what EnrichCandidates computes and the cell renders;
+    -- no candidate ever has an `ilvl` field, so sorting fell through to
+    -- the alphabetical-name tiebreak.
+    ilvl = "equippedIlvl",
     ilvlDiff = "ilvlDiff",
     vote = "councilVotes",
     wonSession = "itemsWonThisSession",

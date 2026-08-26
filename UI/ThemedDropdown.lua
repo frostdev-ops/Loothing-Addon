@@ -480,6 +480,16 @@ function ns.CreateThemedDropdown(parent, opts)
         end
     end)
 
+    -- The popup is parented to UIParent: if the owning panel hides (ESC,
+    -- tab switch) the popup — and its full-screen click catcher — would
+    -- survive as a floating orphan that eats one click. Close immediately
+    -- (no fade) when this dropdown is hidden while owning the popup.
+    dd:HookScript("OnHide", function(self)
+        if popup and popup._owner == self and popup:IsShown() then
+            popup:Hide()
+        end
+    end)
+
     return dd
 end
 

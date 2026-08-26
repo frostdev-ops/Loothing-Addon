@@ -164,9 +164,12 @@ function AwardReasonsSettingsMixin:BuildFrame()
         frame:StartMoving()
     end)
     f:SetScript("OnDragStop",  f.StopMovingOrSizing)
+    -- Layout only: RebuildRows here ran a full settings deep-copy (and,
+    -- in the response editor, a global ResponseInfo rebuild) on every
+    -- frame of a resize drag. The resize grip's OnMouseUp does the real
+    -- rebuild once at drag end.
     f:SetScript("OnSizeChanged", function()
         self:UpdateLayout()
-        self:RebuildRows()
     end)
     f:SetClampedToScreen(true)
     f:SetBackdrop({
@@ -406,6 +409,10 @@ end
 
 function AwardReasonsSettingsMixin:RebuildRows()
     if not self.scrollChild then return end
+    -- Re-entry guard: ClearFocus during the rebuild fires OnEditFocusLost,
+    -- whose handler calls RebuildRows again mid-loop.
+    if self._rebuilding then return end
+    self._rebuilding = true
 
     -- Hide all existing rows
     for _, row in ipairs(self.rowFrames) do
@@ -438,6 +445,8 @@ function AwardReasonsSettingsMixin:RebuildRows()
     end
 
     self.scrollChild:SetHeight(math.max(yOffset, 1))
+
+    self._rebuilding = false
 end
 
 --[[--------------------------------------------------------------------
@@ -689,12 +698,11 @@ function AwardReasonsSettingsMixin:PopulateRow(row, reasonData, idx, total, isEx
 
         -- Name EditBox
         row.nameEB:SetText(reasonData.name or "")
+        -- ClearFocus fires OnEditFocusLost synchronously, which performs
+        -- the save+rebuild — doing it here too ran the whole pipeline
+        -- twice and re-entered RebuildRows mid-handler.
         row.nameEB:SetScript("OnEnterPressed", function(eb)
             eb:ClearFocus()
-            Loothing.Settings:UpdateAwardReason(reasonData.id, { name = eb:GetText() })
-            self:RebuildRows()
-            Utils.NotifySettingsDialogRefresh()
-            Utils.BroadcastMLDBIfML()
         end)
         row.nameEB:SetScript("OnEditFocusLost", function(eb)
             Loothing.Settings:UpdateAwardReason(reasonData.id, { name = eb:GetText() })

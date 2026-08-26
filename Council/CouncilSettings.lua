@@ -5,7 +5,6 @@
 local _, ns = ...
 local Loothing = ns.Addon
 local Utils = ns.Utils
-local TestMode = ns.TestMode
 
 ns.CouncilMixin = ns.CouncilMixin or {}
 
@@ -93,6 +92,8 @@ end
 
 -- Raid integration
 function CouncilMixin:GetMembersInRaid()
+    -- ns.TestMode resolved at call time (Debug/TestMode.lua loads last)
+    local TestMode = ns.TestMode
     if TestMode and TestMode:IsEnabled() then
         local fakeMembers = TestMode:GetFakeCouncilMembers()
         local result = {}
@@ -123,6 +124,7 @@ function CouncilMixin:GetMembersInRaid()
 end
 
 function CouncilMixin:IsPlayerCouncilMember()
+    local TestMode = ns.TestMode
     if TestMode and TestMode:IsEnabled() then
         return true
     end
