@@ -7,6 +7,7 @@
 local _, ns = ...
 local Loolib = LibStub("Loolib")
 local Loothing = ns.Addon
+local ItemMixin = ns.ItemMixin  -- NOT the Blizzard global ItemMixin
 local Protocol = ns.Protocol
 local Utils = ns.Utils
 local VotingEngine = ns.VotingEngine
@@ -60,7 +61,21 @@ local TEST_ITEM_IDS = {
 
 --- Enable or disable test mode
 -- @param enabled boolean
-function TestMode:SetEnabled(enabled)
+-- @param opts table|nil - { force = boolean } forwarded to CheckPrerequisites
+-- @return boolean - false when enabling was blocked by prerequisites
+function TestMode:SetEnabled(enabled, opts)
+    if enabled and not self.enabled then
+        -- Single choke-point gate: EVERY enable path must pass the
+        -- lead/assist prerequisite, not just the bare on/toggle slash
+        -- subcommands. The auto-enable paths (/lt test full, rollframe,
+        -- scenario, counciltable, session) previously bypassed it, so a
+        -- non-assist raider in a live raid could trigger a fake
+        -- SESSION_INIT + council-roster broadcast to the whole group.
+        local state = ns.TestModeState
+        if state and state.CheckPrerequisites and not state:CheckPrerequisites(opts) then
+            return false
+        end
+    end
     self.enabled = enabled
 
     if Loothing and Loothing.TestMode and Loothing.TestMode.OnSimulatorToggled then
@@ -97,6 +112,8 @@ function TestMode:SetEnabled(enabled)
         -- Update test mode indicator
         self:UpdateTestModeIndicator()
     end
+
+    return true
 end
 
 --- Register event handlers for test mode
@@ -121,6 +138,13 @@ end
 function TestMode:UnregisterEventHandlers()
     if Loothing.UI and Loothing.UI.RollFrame and Loothing.UI.RollFrame.UnregisterCallback then
         Loothing.UI.RollFrame:UnregisterCallback("OnResponseSubmitted", "TestMode_Events")
+        -- The full-workflow callback too: it was never unregistered
+        -- anywhere, so after /lt test full + /lt test off it kept writing
+        -- fake responses/rolls into LIVE items' CandidateManagers on the
+        -- player's next real loot response.
+        Loothing.UI.RollFrame:UnregisterCallback("OnResponseSubmitted", "TestMode_Workflow")
+        self.fullWorkflowCallbackRegistered = false
+        self.inFullWorkflowMode = false
     end
     if Loothing.UI and Loothing.UI.ResultsPanel and Loothing.UI.ResultsPanel.UnregisterCallback then
         Loothing.UI.ResultsPanel:UnregisterCallback("OnRevoteClicked", "TestMode_Events")
@@ -258,8 +282,10 @@ function TestMode:PopulateCandidateManagerFromVotes(item)
 end
 
 --- Enable test mode
-function TestMode:Enable()
-    self:SetEnabled(true)
+-- @param force boolean|nil - Bypass the lead/assist prerequisite gate
+-- @return boolean - false when blocked by prerequisites
+function TestMode:Enable(force)
+    return self:SetEnabled(true, force and { force = true } or nil)
 end
 
 --- Disable test mode
@@ -274,13 +300,22 @@ function TestMode:IsEnabled()
 end
 
 --- Toggle test mode
-function TestMode:Toggle()
-    self:SetEnabled(not self.enabled)
+function TestMode:Toggle(force)
+    return self:SetEnabled(not self.enabled, force and { force = true } or nil)
 end
 
 --[[--------------------------------------------------------------------
     Fake Council Generation
 ----------------------------------------------------------------------]]
+
+--- Pick a random fake member, preferring non-player entries (index 1 is
+-- the real player). Guards the small-roster case: math.random(2, 1) after
+-- /lt test council 0 threw "interval is empty".
+local function randomFakeMember(self)
+    local n = #self.fakeCouncilMembers
+    if n == 0 then return nil end
+    return self.fakeCouncilMembers[math.random(math.min(2, n), n)]
+end
 
 --- Generate fake council members
 -- @param count number - Number of members to generate (default 5)
@@ -292,12 +327,20 @@ function TestMode:GenerateFakeCouncil(count)
     local usedNames = {}
 
     for i = 1, count do
+        -- Bounded attempts: the pools yield only 144 unique combos, so an
+        -- uncapped repeat/until hard-hung the client on /lt test council
+        -- 200. Numeric fallback mirrors Simulator's name generator.
         local name
+        local attempts = 0
         repeat
             local prefix = NAME_PREFIXES[math.random(#NAME_PREFIXES)]
             local suffix = NAME_SUFFIXES[math.random(#NAME_SUFFIXES)]
             name = prefix .. suffix
-        until not usedNames[name]
+            attempts = attempts + 1
+        until not usedNames[name] or attempts >= 50
+        if usedNames[name] then
+            name = name .. i
+        end
 
         usedNames[name] = true
 
@@ -402,9 +445,9 @@ function TestMode:CreateFakeItem()
         return nil
     end
 
-    -- Auto-enable test mode if not enabled
-    if not self.enabled then
-        self:Enable()
+    -- Auto-enable test mode if not enabled (abort if the gate blocks it)
+    if not self.enabled and not self:Enable() then
+        return nil
     end
 
     -- Ensure we have council members
@@ -415,7 +458,7 @@ function TestMode:CreateFakeItem()
     local itemLink = self:GenerateFakeItemLink()
     local looterName
     if #self.fakeCouncilMembers >= 2 then
-        local looter = self.fakeCouncilMembers[math.random(2, #self.fakeCouncilMembers)]
+        local looter = randomFakeMember(self)
         looterName = looter and looter.name or Utils.GetPlayerFullName()
     else
         looterName = Utils.GetPlayerFullName()
@@ -453,7 +496,7 @@ function TestMode:CreateFakeResults(_item)
         local count = math.random(0, 4) -- 0-4 voters per response
 
         for _ = 1, count do
-            local member = self.fakeCouncilMembers[math.random(2, #self.fakeCouncilMembers)]
+            local member = randomFakeMember(self)
             if member then
                 -- Store voter names as plain strings (GetShortName expects strings)
                 voters[#voters + 1] = member.name
@@ -522,7 +565,7 @@ function TestMode:AddFakeItems(count)
         local itemLink = self:GenerateFakeItemLink(itemID)
 
         -- Pick a random fake council member as looter
-        local looter = self.fakeCouncilMembers[math.random(2, #self.fakeCouncilMembers)]
+        local looter = randomFakeMember(self)
         local looterName = looter and looter.name or Utils.GetPlayerFullName()
 
         local item = Loothing.Session:AddItem(itemLink, looterName)
@@ -783,9 +826,9 @@ function TestMode:ShowCouncilTable()
         return
     end
 
-    -- Make sure test mode is enabled
-    if not self.enabled then
-        self:Enable()
+    -- Make sure test mode is enabled (abort if the gate blocks it)
+    if not self.enabled and not self:Enable() then
+        return
     end
 
     -- Start a test session if needed
@@ -941,9 +984,9 @@ end
 function TestMode:RunFullWorkflow()
     print("|cff00ff00[Loothing Test]|r Starting full workflow test...")
 
-    -- Step 1: Enable test mode if not already enabled
-    if not self.enabled then
-        self:SetEnabled(true)
+    -- Step 1: Enable test mode if not already enabled (abort if gated)
+    if not self.enabled and not self:SetEnabled(true) then
+        return
     end
 
     -- Step 2: Start session if not active
@@ -1009,6 +1052,9 @@ function TestMode:RegisterFullWorkflowCallbacks()
     -- Use "TestMode_Workflow" owner key to avoid overwriting the event handler callback
     -- RollFrame fires: TriggerEvent("OnResponseSubmitted", self.item, response, note, roll)
     rollFrame:RegisterCallback("OnResponseSubmitted", function(_, item, response, note, roll)
+        -- Defense in depth: never touch live items outside test mode
+        -- (mirrors the TestMode_Events handler's guard).
+        if not TestMode.enabled then return end
         -- Add player as a candidate with their response
         if item and item.GetCandidateManager then
             local playerName = Loolib.SecretUtil.SafeUnitName("player")
@@ -1077,25 +1123,25 @@ function TestMode:UpdateTestModeIndicator()
         return
     end
 
-    -- Remove existing indicator if present
-    if self.testModeIndicator then
-        self.testModeIndicator:Hide()
-        self.testModeIndicator = nil
+    if not self.enabled then
+        if self.testModeIndicator then
+            if self.testModeIndicatorAnim then self.testModeIndicatorAnim:Stop() end
+            self.testModeIndicator:Hide()
+        end
+        return
     end
 
-    if self.enabled then
-        -- Create test mode indicator
+    -- Create once, reuse across toggles: FontStrings cannot be destroyed,
+    -- so re-creating on every enable leaked one looping-animated region
+    -- per test-mode cycle.
+    if not self.testModeIndicator then
         local indicator = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
         indicator:SetPoint("TOP", mainFrame, "TOP", 0, -8)
         indicator:SetText("|cffff0000TEST MODE|r")
         indicator:SetTextColor(1, 0, 0)
         indicator:SetShadowColor(0, 0, 0, 1)
         indicator:SetShadowOffset(1, -1)
-        indicator:Show()
 
-        self.testModeIndicator = indicator
-
-        -- Pulse animation (optional)
         local ag = indicator:CreateAnimationGroup()
         local fadeOut = ag:CreateAnimation("Alpha")
         fadeOut:SetFromAlpha(1)
@@ -1111,8 +1157,13 @@ function TestMode:UpdateTestModeIndicator()
         fadeIn:SetStartDelay(0.8)
 
         ag:SetLooping("REPEAT")
-        ag:Play()
+
+        self.testModeIndicator = indicator
+        self.testModeIndicatorAnim = ag
     end
+
+    self.testModeIndicator:Show()
+    self.testModeIndicatorAnim:Play()
 end
 
 --[[--------------------------------------------------------------------
@@ -1121,11 +1172,15 @@ end
 
 --- Clear all fake data
 function TestMode:ClearFakeData()
-    -- Remove fake council members from in-memory council (no SaveToSettings)
+    -- Remove fake council members from in-memory council (no SaveToSettings).
+    -- Only rows WE created (isTestMode tag): the real player's entry may
+    -- predate test mode as a genuine council member — GenerateFakeCouncil
+    -- skipped it, so removing by name here would delete real membership.
     if Loothing and Loothing.Council then
         for _, member in ipairs(self.fakeCouncilMembers) do
             local normalized = Utils.NormalizeName(member.name)
-            if normalized then
+            local row = normalized and Loothing.Council.members[normalized]
+            if row and row.isTestMode then
                 Loothing.Council.members[normalized] = nil
             end
         end
@@ -1157,16 +1212,11 @@ function TestMode:HandleCommand(args)
     local force = param:lower() == "force"
 
     if cmd == "" or cmd == "toggle" then
-        if not self.enabled and state and not state:CheckPrerequisites({ force = force }) then
-            return
-        end
-        self:Toggle()
+        -- SetEnabled runs CheckPrerequisites itself; pass force through.
+        self:Toggle(force)
         return
     elseif cmd == "on" or cmd == "enable" then
-        if state and not state:CheckPrerequisites({ force = force }) then
-            return
-        end
-        self:Enable()
+        self:Enable(force)
         return
     elseif cmd == "off" or cmd == "disable" then
         self:Disable()
@@ -1502,9 +1552,9 @@ function TestMode:RunScenario(scenarioName)
     print("|cff888888" .. scenario.description .. "|r")
     print(" ")
 
-    -- Enable test mode if not already
-    if not self.enabled then
-        self:SetEnabled(true)
+    -- Enable test mode if not already (abort if gated)
+    if not self.enabled and not self:SetEnabled(true) then
+        return
     end
 
     -- Call the scenario function
@@ -1649,7 +1699,7 @@ function TestMode:RunManyItemsScenario()
     for i = 1, 25 do
         local itemID = TEST_ITEM_IDS[(i % #TEST_ITEM_IDS) + 1]
         local itemLink = self:GenerateFakeItemLink(itemID)
-        local looter = self.fakeCouncilMembers[math.random(2, #self.fakeCouncilMembers)]
+        local looter = randomFakeMember(self)
         Loothing.Session:AddItem(itemLink, looter.name)
     end
 

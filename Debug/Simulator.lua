@@ -208,6 +208,14 @@ function Simulator:Disable()
     -- may have been in a real test mode session before sim started).
     if ns.TestMode then
         ns.TestMode.enabled = self._priorTestModeEnabled and true or false
+        -- Remove the fake council Enable() injected into the LIVE roster.
+        -- Without this the fakes survived /lt sim off, and the next
+        -- council edit's SaveToSettings persisted them into SavedVariables.
+        -- Skip when restoring an active test mode — the fakes are then
+        -- still that session's working set.
+        if not ns.TestMode.enabled and ns.TestMode.ClearFakeData then
+            ns.TestMode:ClearFakeData()
+        end
     end
     self._priorTestModeEnabled = nil
 
@@ -1143,7 +1151,12 @@ function Simulator:Flush(delay)
     end
     safePrint(string.format("[Sim] Flushing %d queued kills (every %ds)...", #self.queue, delay))
 
+    -- Staleness guard like every other deferred closure in this file:
+    -- without it, /lt sim off mid-flush left the chain ticking, draining
+    -- the queue into FireKill's "Simulator not active" error each tick.
+    local gen = self._gen
     local function fireNextWithDelay()
+        if not self:_isCurrent(gen) then return end
         if #self.queue == 0 then return end
         self:FireNext()
         C_Timer.After(delay, fireNextWithDelay)

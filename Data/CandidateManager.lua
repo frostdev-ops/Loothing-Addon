@@ -45,7 +45,12 @@ function CandidateManagerMixin:GetOrCreateCandidate(playerName, playerClass)
         return nil
     end
 
+    -- NormalizeName returns nil for secret-tagged values; writing
+    -- self.candidates[nil] would throw "table index is nil".
     local normalizedName = Utils.NormalizeName(playerName)
+    if not normalizedName then
+        return nil
+    end
 
     local candidate = self.candidates[normalizedName]
     if candidate then
@@ -488,8 +493,10 @@ function CandidateManagerMixin:Deserialize(data)
         end
 
         local normalizedName = Utils.NormalizeName(candidate.playerName)
-        self.candidates[normalizedName] = candidate
-        self.candidateCount = self.candidateCount + 1
+        if normalizedName then
+            self.candidates[normalizedName] = candidate
+            self.candidateCount = self.candidateCount + 1
+        end
     end
 end
 

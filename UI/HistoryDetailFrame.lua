@@ -85,8 +85,12 @@ local function qualityColor(quality, itemLink)
         quality = q
     end
     if type(quality) == "number" and C_Item and C_Item.GetItemQualityColor then
+        -- API can return nothing for out-of-range quality (same guard as
+        -- PlayerIntelFrame) — nils here would error in SetVertexColor.
         local r, g, b = C_Item.GetItemQualityColor(quality)
-        return r, g, b
+        if r and g and b then
+            return r, g, b
+        end
     end
     return 0.5, 0.5, 0.5
 end

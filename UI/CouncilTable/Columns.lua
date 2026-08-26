@@ -373,11 +373,20 @@ end
 -- @param candidate table - Candidate data
 -- @param row Frame - Parent row frame
 function CouncilTableMixin:DoCellUpdate(cell, col, candidate, row)
+    -- Rebind the cell's candidate reference at the single dispatch point:
+    -- pooled cells otherwise keep the PREVIOUS candidate whenever an
+    -- updater only assigns it conditionally (gear/note hover handlers
+    -- read cell.candidate), showing one player's data on another's row.
+    cell.candidate = candidate
     local handler = self.CellUpdaters[col.id]
     if handler then
         local ok, err = pcall(handler, self, cell, candidate, row)
-        if not ok and Loothing.Debug then
-            Loothing.Debug:Log("CellUpdate error [" .. col.id .. "]: " .. tostring(err))
+        if not ok then
+            -- Loothing.Debug is a METHOD (Addon:Debug), not a logger
+            -- table — the old `Loothing.Debug:Log(...)` indexed a
+            -- function and re-raised outside the pcall, so one bad cell
+            -- blanked every row after it.
+            Loothing:Debug("CellUpdate error [" .. col.id .. "]: " .. tostring(err))
         end
     end
 end
@@ -439,8 +448,8 @@ CouncilTableMixin.CellUpdaters.spec = function(_, cell, candidate)
     if not cell.icon then return end
     cell.icon:Hide()
     local specID = candidate.specID
-    if specID and GetSpecializationInfoForSpecID then
-        local _, _, _, icon = GetSpecializationInfoForSpecID(specID)
+    if specID then
+        local _, _, _, icon = Utils.GetSpecializationInfoForSpecID(specID)
         if icon then
             cell.icon:SetTexture(icon)
             cell.icon:SetTexCoord(0, 1, 0, 1)
@@ -648,7 +657,6 @@ CouncilTableMixin.CellUpdaters.gear1 = function(_, cell, candidate)
             end)
             cell._gear1Hooked = true
         end
-        cell.candidate = candidate
     elseif cell.icon then
         cell.icon:Hide()
     end
@@ -675,7 +683,6 @@ CouncilTableMixin.CellUpdaters.gear2 = function(_, cell, candidate)
             end)
             cell._gear2Hooked = true
         end
-        cell.candidate = candidate
     elseif cell.icon then
         cell.icon:Hide()
     end
@@ -726,7 +733,6 @@ CouncilTableMixin.CellUpdaters.note = function(_, cell, candidate)
             end)
             cell._noteHooked = true
         end
-        cell.candidate = candidate
     else
         if cell.icon then
             cell.icon:Hide()

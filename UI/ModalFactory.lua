@@ -624,12 +624,17 @@ local function CreateScrollList(parent, opts)
         })
     end
 
+    -- Reset does NOT nil the row scripts: initRow installs them exactly
+    -- once (guarded by row._initialized) and their closures read row
+    -- fields that bindRow rewrites on every acquire — the same
+    -- install-once pattern as CouncilTable rows. Nil'ing scripts here
+    -- while keeping _initialized set permanently killed every
+    -- initRow-installed handler (wishlist shift-tooltips, row clicks)
+    -- after the first Refresh; re-running initRow instead would leak a
+    -- fresh set of FontStrings per release/acquire cycle.
     local rowPool = CreateFramePool("Button", content, "BackdropTemplate", function(_p, row)
         row:Hide()
         row:ClearAllPoints()
-        row:SetScript("OnEnter", nil)
-        row:SetScript("OnLeave", nil)
-        row:SetScript("OnClick", nil)
     end)
 
     local emptyText = container:CreateFontString(nil, "OVERLAY", "GameFontNormal")

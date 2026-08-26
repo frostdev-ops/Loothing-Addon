@@ -70,6 +70,9 @@ local function RunReconnectTests()
     local origIsML = Loothing.isMasterLooter
     local origML = Loothing.masterLooter
     local origGuild = Loothing.isInGuildGroup
+    -- Save the real reconnect cache too — cleanup previously nil'd it,
+    -- destroying genuine mid-session recovery state.
+    local origReconnectCache = Loothing.Settings:GetGlobalValue("reconnectCache")
 
     -- Set known state
     Loothing.handleLoot = true
@@ -137,7 +140,7 @@ local function RunReconnectTests()
     printGroup("Nil / Missing Cache")
 
     -- Clear cache entirely
-    Loothing.Settings:SetGlobalValue("reconnectCache", nil)
+    Loothing.Settings:SetGlobalValue("reconnectCache", origReconnectCache)
 
     Loothing.handleLoot = false
     Loothing.isMasterLooter = false

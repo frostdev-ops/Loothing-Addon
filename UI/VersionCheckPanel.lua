@@ -47,7 +47,6 @@ function VersionCheckPanelMixin:Init()
 
     self.entries = {}
     self.versionCallbackRegistered = false
-    self.rowsByName = {}
     self.refreshToken = 0
 
     self:CreateFrame()
@@ -297,18 +296,19 @@ function VersionCheckPanelMixin:RefreshList()
         counts = { total = 0, current = 0, outdated = 0, notInstalled = 0 },
     }
     local sorted = snapshot.entries
-    local activeRows = {}
+
+    -- Pooled rows (positional). The old per-name cache created a
+    -- permanent Frame + 3 FontStrings for every distinct character ever
+    -- seen in a version query and only ever Hide()'d them — hundreds of
+    -- orphan frames across a raid night with guild-roster queries.
+    self.rowPool:ReleaseAll()
 
     local yOffset = 0
     for _, entry in ipairs(sorted) do
-        local row = self.rowsByName[entry.name]
-        if not row then
-            row = CreateFrame("Frame", nil, self.scrollContent)
-            self.rowsByName[entry.name] = row
-        end
+        local row = self.rowPool:Acquire()
         row:SetSize(self.scrollContent:GetWidth(), ROW_HEIGHT)
+        row:ClearAllPoints()
         row:SetPoint("TOPLEFT", 0, -yOffset)
-        activeRows[entry.name] = true
 
         -- Lazily create font strings on first use
         if not row.nameText then
@@ -353,12 +353,6 @@ function VersionCheckPanelMixin:RefreshList()
 
         row:Show()
         yOffset = yOffset + ROW_HEIGHT
-    end
-
-    for name, row in pairs(self.rowsByName) do
-        if not activeRows[name] then
-            row:Hide()
-        end
     end
 
     self.scrollContent:SetHeight(math.max(1, yOffset + 4))

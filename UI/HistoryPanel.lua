@@ -49,7 +49,12 @@ function HistoryPanelMixin:Init(parent)
 
     if Loothing.History then
         Loothing.History:RegisterCallback("OnHistoryChanged", function()
-            if self.frame and self.frame:IsShown() then
+            -- IsVisible, not IsShown: this frame is a SetAllPoints child
+            -- that is never individually hidden, so IsShown() is always
+            -- true and every award rebuilt the full history view with
+            -- the Loothing window closed. IsVisible() respects the
+            -- hidden parent; the panel refreshes on Show instead.
+            if self.frame and self.frame:IsVisible() then
                 self:Refresh()
             end
         end, self)

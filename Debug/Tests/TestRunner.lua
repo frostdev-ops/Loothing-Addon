@@ -120,6 +120,17 @@ function TestRunner:Describe(suiteName, suiteFunc)
         focused = false,
     }
 
+    -- Nested Describe: inherit the parent's per-test hooks. Each Describe
+    -- creates a SEPARATE suite object and RunTest only consults
+    -- test.suite's own lists, so an AfterEach registered on an outer
+    -- suite never ran for tests defined in inner suites — SecretValueTests
+    -- left the global `issecretvalue` mocked/nil for the whole session.
+    local parent = state.currentSuite
+    if parent then
+        for _, h in ipairs(parent.beforeEach) do table.insert(suite.beforeEach, h) end
+        for _, h in ipairs(parent.afterEach) do table.insert(suite.afterEach, h) end
+    end
+
     table.insert(state.suites, suite)
 
     -- Set as current suite and run suite definition

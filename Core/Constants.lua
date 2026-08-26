@@ -8,7 +8,7 @@ local _, ns = ...
 local Loothing = ns.Addon
 
 -- Addon info
-Loothing.VERSION = "2.0.55"
+Loothing.VERSION = "2.0.56"
 Loothing.PROTOCOL_VERSION = 4
 -- Minimum accepted protocol version on receive. v2 and earlier predate the
 -- current serializer/compressor pipeline and cannot be parsed safely; v3
@@ -453,6 +453,7 @@ Loothing.DefaultSettings = {
         share = "off",              -- "off" | "group" | "guild"  (replaces sendHistory + sendToGuild)
         savePersonalLoot = false,   -- Log personal loot items
         maxEntries = 500,           -- Hard cap for the shared history table
+        maxAgeDays = 180,           -- Login auto-prune age in days; 0 = never prune by age
         autoExportWeb = false,      -- Show Web export dialog when session ends
     },
 

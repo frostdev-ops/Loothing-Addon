@@ -954,8 +954,8 @@ function RosterPanelMixin:ShowRowTooltip(row, entry)
     local roleStr = entry.role or "NONE"
     if roleStr == "NONE" or roleStr == "" then roleStr = L["ROSTER_NO_ROLE"] end
     local specStr = ""
-    if entry.specID and entry.specID > 0 and GetSpecializationInfoForSpecID then
-        local ok, _, specName = pcall(GetSpecializationInfoForSpecID, entry.specID)
+    if entry.specID and entry.specID > 0 then
+        local ok, _, specName = pcall(Utils.GetSpecializationInfoForSpecID, entry.specID)
         if ok and specName then
             specStr = " - " .. specName
         end
@@ -1036,7 +1036,12 @@ function RosterPanelMixin:ShowRowContextMenu(row, entry)
     local canManageCouncilRoster = Utils.CanManageCouncilRoster()
     local isSelf = Utils.IsSamePlayer(entry.name, playerName)
 
-    MenuUtil.CreateContextMenu(row, function(_, rootDescription)
+    -- Anchor the menu to the stable panel frame, NOT the pooled row: a
+    -- background refresh (version reply, history change) can release and
+    -- re-bind the row to a different player while the menu is open,
+    -- detaching/repositioning it over an unrelated row. The captured
+    -- `entry` keeps the actions correct either way.
+    MenuUtil.CreateContextMenu(self.frame or row, function(_, rootDescription)
         -- Header: class-colored player name
         local classColor = RAID_CLASS_COLORS and entry.classFile and RAID_CLASS_COLORS[entry.classFile]
         if classColor then

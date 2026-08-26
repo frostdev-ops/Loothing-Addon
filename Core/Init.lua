@@ -580,7 +580,12 @@ local function DetermineML()
                 local name, realm = SecretUtil.SafeUnitName(unit)
                 if not name then return nil end
                 if realm and realm ~= "" then
-                    return name .. "-" .. realm
+                    -- NormalizeName like every other branch: returning the
+                    -- canonical-cased realm here made the same leader
+                    -- compare unequal across a party→raid conversion,
+                    -- which non-ML clients treated as an ML change and
+                    -- wiped council/MLDB state mid-session.
+                    return Utils.NormalizeName(name .. "-" .. realm)
                 end
                 return Utils.NormalizeName(name)
             end
@@ -1318,6 +1323,13 @@ local function RegisterEvents()
         -- When leaving a group, no explicit ML should persist regardless.
         Loothing.explicitMasterLooter = nil
 
+        -- Fresh group = fresh decision; drop any decline latch. The
+        -- equivalent reset inside PerformMLCheck's `not IsInGroup()`
+        -- branch is unreachable when solo (ShouldSkipMLCheck returns
+        -- first), so without this the latch survived leaving the group
+        -- and silently suppressed the ML prompt in the NEXT group.
+        Loothing.handleLootDeclined = false
+
         -- Dismiss any pending ML prompts (usage + handover)
         GetPopups():Hide("LOOTHING_ML_USAGE_PROMPT")
         GetPopups():Hide("LOOTHING_ML_HANDOVER_PROMPT")
@@ -1682,19 +1694,17 @@ local function RegisterSlashCommands()
             return
         end
 
-        local itemLink = argText:match("|c%x+|H(item:[^|]+)|h%[([^%]]+)%]|h|r") or argText
-        if not itemLink then
-            printError(L["SLASH_IGNORE"])
-            return
-        end
-
-        local itemID = Utils.GetItemID(itemLink)
+        -- Accept a pasted item link OR a bare numeric itemID (the usage
+        -- string advertises both; GetItemID only parses "item:N" strings).
+        local itemString, linkName = argText:match("|c%x+|H(item:[^|]+)|h%[([^%]]+)%]|h|r")
+        local itemID = Utils.GetItemID(itemString or argText)
+            or tonumber(argText:match("^%s*(%d+)%s*$"))
         if not itemID then
             printError(L["SLASH_INVALID_ITEM"])
             return
         end
 
-        local itemName = Utils.GetItemName(itemLink) or "Item"
+        local itemName = linkName or Utils.GetItemName(argText) or "Item"
         if Loothing.Settings:IsItemIgnored(itemID) then
             Loothing.Settings:RemoveIgnoredItem(itemID)
             printLine(string.format(L["ITEM_UNIGNORED"], itemName))

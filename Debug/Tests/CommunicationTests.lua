@@ -12,6 +12,7 @@ local _, ns = ...
 local Loothing = ns.Addon
 local Protocol = ns.Protocol
 local TestRunner = ns.TestRunner
+local Utils = ns.Utils
 
 local Loolib = LibStub("Loolib")
 
@@ -497,13 +498,21 @@ local function RunCommunicationTests()
     printGroup("Backpressure (manual)")
 
     if Loolib.Comm then
-        -- Save current queue state
-        local priorCount = Loolib.Comm:GetQueuedMessageCount()
-
-        -- ALERT should always queue regardless of pressure
-        local alertQueued = Loolib.Comm:SendCommMessage(
-            Loothing.ADDON_PREFIX, "test", "PARTY", nil, "ALERT")
-        assert(alertQueued ~= false, "ALERT queues even when pressure is high")
+        -- ALERT should always queue regardless of pressure. Send a REAL
+        -- encoded HEARTBEAT to ourselves via WHISPER: the previous literal
+        -- "test" payload on the PARTY channel transmitted undecodable
+        -- garbage to every Loothing user in the group. HEARTBEAT is
+        -- self-filtered on receive, so this round-trips as a clean no-op,
+        -- and WHISPER-to-self works solo too.
+        local selfName = Utils.GetPlayerFullName()
+        local encodedHb = Protocol and Protocol:Encode(Loothing.MsgType.HEARTBEAT, {})
+        if encodedHb and selfName then
+            local alertQueued = Loolib.Comm:SendCommMessage(
+                Loothing.ADDON_PREFIX, encodedHb, "WHISPER", selfName, "ALERT")
+            assert(alertQueued ~= false, "ALERT queues even when pressure is high")
+        else
+            assert(true, "Backpressure: Protocol/self name unavailable, skip send")
+        end
 
         -- Check IsQueueFull and GetQueuePressure exist and return valid types
         local isFull     = Loolib.Comm:IsQueueFull()
@@ -512,9 +521,9 @@ local function RunCommunicationTests()
         assert(type(pressure) == "number", "GetQueuePressure returns number")
         assert(pressure >= 0.0 and pressure <= 1.0, "GetQueuePressure in [0.0, 1.0]")
 
-        -- Restore queue state
-        Loolib.Comm:ClearSendQueue()
-        print("  Queue cleared after backpressure test")
+        -- NOTE: no ClearSendQueue here — it discarded any REAL queued
+        -- session/vote messages pending at that moment. The one harmless
+        -- self-heartbeat above just drains normally.
     else
         assert(true, "Backpressure: Loolib.Comm not available, skip")
     end

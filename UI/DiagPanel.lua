@@ -922,8 +922,11 @@ function DiagPanelMixin:RefreshSessionItems()
         slot.respLastY = nil
     end
 
-    -- Update scroll child height
-    local totalHeight = self.staticContentHeight + (-y - self.sessionItemsStartY)
+    -- Update scroll child height. Items-section height is (startY - y):
+    -- both are negative offsets from the top, so the old `-y - startY`
+    -- form added the static height a second time (startY == -static) and
+    -- let the scrollbar run ~2x past the content into blank space.
+    local totalHeight = self.staticContentHeight + (self.sessionItemsStartY - y)
     self.scrollChild:SetHeight(totalHeight)
 end
 

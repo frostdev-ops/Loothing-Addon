@@ -93,8 +93,10 @@ end
     real messages flow through WoW addon channels. Also hooks OnMessage
     to capture inbound traffic.
 
-    When solo (ctx.isSimulated == true), outgoing broadcasts are
-    intercepted and fake client responses are injected instead.
+    When solo (ctx.isSimulated == true), fake client responses are
+    injected IN ADDITION to the real send — outgoing messages are NOT
+    intercepted; while grouped, every synthetic SESSION_INIT/VOTE_*
+    this suite emits reaches the real group.
 ----------------------------------------------------------------------]]
 
 local CommLogger = {}

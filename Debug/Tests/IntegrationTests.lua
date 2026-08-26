@@ -67,20 +67,24 @@ end
 ----------------------------------------------------------------------]]
 
 --- Setup test environment
+local enabledTestMode = false
 local function SetupTest()
-    -- Enable test mode
+    -- Enable test mode (remember whether WE turned it on, so teardown
+    -- can restore it — leaving it active blocked all settings writes
+    -- for the rest of the session)
     if TestMode and not TestMode:IsEnabled() then
-        TestMode:SetEnabled(true)
+        enabledTestMode = TestMode:SetEnabled(true) and true or false
+        if not TestMode:IsEnabled() then
+            -- The lead/assist prerequisite gate blocked the enable.
+            -- Fail the test loudly (TestRunner pcalls us) instead of
+            -- proceeding unprotected against LIVE session/settings state.
+            error("SetupTest: test mode blocked by prerequisites (grouped without lead/assist) — aborting test", 0)
+        end
     end
 
     -- Clear any existing session
     if Loothing.Session and Loothing.Session:IsActive() then
         Loothing.Session:EndSession()
-    end
-
-    -- Clear history for clean test state
-    if Loothing.History then
-        Loothing.History:Clear()
     end
 end
 
@@ -89,6 +93,10 @@ local function TeardownTest()
     -- End any active session
     if Loothing.Session and Loothing.Session:IsActive() then
         Loothing.Session:EndSession()
+    end
+    if enabledTestMode and TestMode then
+        TestMode:SetEnabled(false)
+        enabledTestMode = false
     end
 end
 

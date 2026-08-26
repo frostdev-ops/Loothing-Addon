@@ -972,10 +972,11 @@ function CouncilTableMixin:ApplyTheme()
     SkinningMixin:StylePlainButton(self.resultsButton)
 
     if self.items and #self.items > 0 then
+        -- RefreshItemTabs alone: it already re-applies selection styling
+        -- via UpdateItemTabVisuals. Re-running SelectItemTab here nilled
+        -- selectedCandidate, so every theme/accent switch dropped the
+        -- ML's candidate pick and greyed out the Award button.
         self:RefreshItemTabs()
-        if self.currentItem then
-            self:SelectItemTab(self.currentItem.guid)
-        end
     end
 
     if self.RefreshCandidates then

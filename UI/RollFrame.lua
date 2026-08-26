@@ -294,7 +294,34 @@ function RollFrameMixin:DisplayItem(item)
                 item:UnregisterCallback("OnItemInfoLoaded", self)
             end
             if self.item == item then
+                -- Preserve an unsubmitted response click across the
+                -- re-render: DisplayItem starts by nilling
+                -- selectedResponse, so the async reload silently undid
+                -- the raider's pick and disabled Submit.
+                local pendingResponse = self.selectedResponse
+                local pendingNote = self.note
                 self:DisplayItem(item)
+                if pendingResponse then
+                    self.note = pendingNote or ""
+                    -- Re-apply selection through the click path so the
+                    -- glow/border state matches; fall back to bare state
+                    -- if the button set changed under us.
+                    local btn
+                    for _, b in pairs(self.responseButtons or {}) do
+                        if b.buttonId == pendingResponse then
+                            btn = b
+                            break
+                        end
+                    end
+                    if btn then
+                        self:OnResponseClick(btn)
+                    else
+                        self.selectedResponse = pendingResponse
+                    end
+                    if self.UpdateSubmitButton then
+                        self:UpdateSubmitButton()
+                    end
+                end
             end
         end, self)
     end

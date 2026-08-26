@@ -26,11 +26,18 @@ local Loothing = ns.Addon
 ns.ProtocolMixin = ns.ProtocolMixin or {}
 
 -- Monotonically increasing sequence counter for replay-protection msgIDs.
--- Resets to 0 on each reload (intentional: dedup window is 120s, reloads take longer).
+-- Seeded from wall-clock time so a /reload restarts the sequence AHEAD of
+-- any IDs peers still hold in their 120s dedup window. (Seeding at 0 made
+-- every post-reload message collide with the pre-reload msgIDs 1..N and
+-- get replay-dropped by all peers for up to two minutes — reloads take
+-- 5-20s, well inside the window.) time() % 2^20 rolls over every ~12
+-- days; rollover is safe because the dedup window only needs uniqueness
+-- across 120s, and pre-rollover IDs are near the top of the range.
+-- The * 2^10 stride leaves 1024 IDs per second-bucket before the counter
+-- catches the next second's seed — far beyond any real send rate.
 -- Wraps at 2^31 - 1 to keep values safely inside Lua 5.1's integer-exact
--- float range. A single session will never approach this, but the cap
--- prevents any downstream code that assumes int32 from getting surprised.
-local msgSeq = 0
+-- float range and int32-assuming downstream code.
+local msgSeq = (time() % 1048576) * 1024
 local MSG_SEQ_MAX = 0x7FFFFFFF
 
 --[[--------------------------------------------------------------------

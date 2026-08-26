@@ -460,12 +460,15 @@ end
 function FiltersMixin:ShowClassFilterMenu(anchor)
     local L = Loothing.Locale
     local settings = Loothing.Settings
-    local classFilters = settings:GetClassFilters()
+    -- NOTE: read filters LIVE inside every closure — Get*Filters returns a
+    -- DeepCopy, and menu checkboxes use MenuResponse.Refresh (menu stays
+    -- open, re-evaluates isSelected in place). A captured snapshot froze
+    -- checkbox state and made the second click re-ADD instead of remove.
 
     MenuUtil.CreateContextMenu(anchor, function(_, rootDescription)
         -- Add "All Classes" option
         rootDescription:CreateCheckbox(L["ALL_CLASSES"],
-            function() return not next(classFilters) end,
+            function() return not next(settings:GetClassFilters()) end,
             function()
                 settings:SetClassFilters({})
                 self:TriggerEvent("OnFiltersChanged")
@@ -485,9 +488,9 @@ function FiltersMixin:ShowClassFilterMenu(anchor)
         for _, classFile in ipairs(classes) do
             local className = classFile:sub(1, 1) .. classFile:sub(2):lower()
             rootDescription:CreateCheckbox(className,
-                function() return classFilters[classFile] == true end,
+                function() return settings:GetClassFilters()[classFile] == true end,
                 function()
-                    if classFilters[classFile] then
+                    if settings:GetClassFilters()[classFile] then
                         settings:RemoveClassFilter(classFile)
                     else
                         settings:AddClassFilter(classFile)
@@ -505,12 +508,15 @@ end
 function FiltersMixin:ShowResponseFilterMenu(anchor)
     local L = Loothing.Locale
     local settings = Loothing.Settings
-    local responseFilters = settings:GetResponseFilters()
+    -- NOTE: read filters LIVE inside every closure — Get*Filters returns a
+    -- DeepCopy, and menu checkboxes use MenuResponse.Refresh (menu stays
+    -- open, re-evaluates isSelected in place). A captured snapshot froze
+    -- checkbox state and made the second click re-ADD instead of remove.
 
     MenuUtil.CreateContextMenu(anchor, function(_, rootDescription)
         -- Add "All Responses" option
         rootDescription:CreateCheckbox(L["ALL_RESPONSES"],
-            function() return not next(responseFilters) end,
+            function() return not next(settings:GetResponseFilters()) end,
             function()
                 settings:SetResponseFilters({})
                 self:TriggerEvent("OnFiltersChanged")
@@ -523,9 +529,9 @@ function FiltersMixin:ShowResponseFilterMenu(anchor)
         -- Add each response type
         for responseId, responseInfo in pairs(Loothing.ResponseInfo) do
             rootDescription:CreateCheckbox(L[responseInfo.name] or responseInfo.name,
-                function() return responseFilters[responseId] == true end,
+                function() return settings:GetResponseFilters()[responseId] == true end,
                 function()
-                    if responseFilters[responseId] then
+                    if settings:GetResponseFilters()[responseId] then
                         settings:RemoveResponseFilter(responseId)
                     else
                         settings:AddResponseFilter(responseId)
@@ -543,12 +549,15 @@ end
 function FiltersMixin:ShowRankFilterMenu(anchor)
     local L = Loothing.Locale
     local settings = Loothing.Settings
-    local rankFilters = settings:GetGuildRankFilters()
+    -- NOTE: read filters LIVE inside every closure — Get*Filters returns a
+    -- DeepCopy, and menu checkboxes use MenuResponse.Refresh (menu stays
+    -- open, re-evaluates isSelected in place). A captured snapshot froze
+    -- checkbox state and made the second click re-ADD instead of remove.
 
     MenuUtil.CreateContextMenu(anchor, function(_, rootDescription)
         -- Add "All Ranks" option
         rootDescription:CreateCheckbox(L["ALL_RANKS"],
-            function() return not next(rankFilters) end,
+            function() return not next(settings:GetGuildRankFilters()) end,
             function()
                 settings:SetGuildRankFilters({})
                 self:TriggerEvent("OnFiltersChanged")
@@ -565,9 +574,9 @@ function FiltersMixin:ShowRankFilterMenu(anchor)
                 local rankName = GuildControlGetRankName(i)
                 if rankName then
                     rootDescription:CreateCheckbox(rankName,
-                        function() return rankFilters[i] == true end,
+                        function() return settings:GetGuildRankFilters()[i] == true end,
                         function()
-                            if rankFilters[i] then
+                            if settings:GetGuildRankFilters()[i] then
                                 settings:RemoveGuildRankFilter(i)
                             else
                                 settings:AddGuildRankFilter(i)

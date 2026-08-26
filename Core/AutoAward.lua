@@ -86,8 +86,11 @@ end
 --- Find the designated disenchanter in the raid
 -- Priority:
 --   1. Check settings for explicit disenchanter name
---   2. Scan raid for players with "DE" or "Disenchanter" in their notes
---   3. Query online guild members with Enchanting profession
+--   2. Query online guild members with an enchanter note who are in the raid
+-- (An earlier version also scanned "raid notes" for a DE keyword, but no
+-- such API exists — GetRaidRosterInfo has no note return, and the
+-- destructure was actually reading the `online` boolean and crashing on
+-- `note:lower()`, aborting Session:AddItem for every drop.)
 -- @return string|nil - Disenchanter name or nil
 function AutoAwardMixin:FindDisenchanter()
     -- 1. Check if there's a specific disenchanter set in settings
@@ -99,35 +102,7 @@ function AutoAwardMixin:FindDisenchanter()
         end
     end
 
-    -- 2. Scan raid notes for "DE" or "Disenchanter"
-    local numMembers = GetNumGroupMembers()
-    if numMembers > 0 then
-        local isRaid = IsInRaid()
-        for i = 1, numMembers do
-            local unit = isRaid and ("raid" .. i) or ("party" .. i)
-            if UnitExists(unit) then
-                local name = Loolib.SecretUtil.SafeUnitName(unit, true)
-                local note = ""
-
-                -- Get player's raid note if available
-                if isRaid then
-                    local _, _, _, _, _, _, _, publicNote = Loolib.SecretUtil.SafeGetRaidRosterInfo(i)
-                    note = publicNote or ""
-                end
-
-                -- Check for DE/Disenchanter keyword (skip if name is secret/nil)
-                if name then
-                    local lowerNote = note:lower()
-                    if lowerNote:find("disenchant") or lowerNote:find(" de ") or
-                       lowerNote:find("^de ") or lowerNote:find(" de$") or lowerNote == "de" then
-                        return Utils.NormalizeName(name)
-                    end
-                end
-            end
-        end
-    end
-
-    -- 3. Check guild roster for enchanters (if we're in a guild)
+    -- 2. Check guild roster for enchanters (if we're in a guild)
     if IsInGuild() then
         local numGuildMembers = GetNumGuildMembers()
         for i = 1, numGuildMembers do
@@ -150,33 +125,22 @@ function AutoAwardMixin:FindDisenchanter()
 end
 
 --- Check if a player is in the current raid/party
+-- Delegates to Utils.IsGroupMember, whose party path includes the local
+-- player ("player" + party1..N-1). The old inline loop probed party1..N,
+-- which both missed the ML themself and probed a nonexistent unit.
 -- @param playerName string - Player name (with or without realm)
 -- @return boolean - True if player is in group
 function AutoAwardMixin:IsPlayerInRaid(playerName)
     if not playerName then return false end
 
-    local normalized = Utils.NormalizeName(playerName)
-    local numMembers = GetNumGroupMembers()
-
-    if numMembers == 0 then
+    if GetNumGroupMembers() == 0 then
         -- Solo, check if it's us
         local myName = Loolib.SecretUtil.SafeUnitName("player")
         if not myName then return false end
-        return normalized == Utils.NormalizeName(myName)
+        return Utils.IsSamePlayer(playerName, myName)
     end
 
-    local isRaid = IsInRaid()
-    for i = 1, numMembers do
-        local unit = isRaid and ("raid" .. i) or ("party" .. i)
-        if UnitExists(unit) then
-            local name = Loolib.SecretUtil.SafeUnitName(unit, true)
-            if name and Utils.NormalizeName(name) == normalized then
-                return true
-            end
-        end
-    end
-
-    return false
+    return Utils.IsGroupMember(playerName)
 end
 
 -- Reusable tooltip for scanning (created once, reused)

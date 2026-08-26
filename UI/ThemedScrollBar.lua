@@ -271,7 +271,18 @@ function Methods:SetExtents(visible, total)
     local maxScroll = math.max(0, (self._totalExtent) - (self._visibleExtent))
     self._min = 0
     self._max = maxScroll
-    self._value = math.max(0, math.min(maxScroll, self._value or 0))
+    local clamped = math.max(0, math.min(maxScroll, self._value or 0))
+    if clamped ~= self._value then
+        -- Content shrank below the current offset: propagate the clamp
+        -- through _onChanged so the attached ScrollFrame's real
+        -- SetVerticalScroll moves too. The old direct assignment clamped
+        -- only the themed bar's own value, leaving the viewport parked
+        -- past the new content height — every list that shrank while
+        -- scrolled (history search, session items awarded down, award
+        -- matrix filter) rendered blank until the user scrolled.
+        self._value = clamped
+        if self._onChanged then pcall(self._onChanged, self, clamped) end
+    end
     positionThumb(self)
     updateAutoHide(self)
 end

@@ -644,7 +644,15 @@ function SkinningMixin:RefreshButtonVisualState(button)
     -- or OnEnable/OnDisable/OnShow would write the target colors, then be
     -- immediately overwritten by the next animation tick.
     if button._ltColorGroup then button._ltColorGroup:Stop() end
-    if button._ltPressGroup then button._ltPressGroup:Stop() end
+    if button._ltPressGroup then
+        button._ltPressGroup:Stop()
+        -- Stopping mid press-tween freezes the button at a partial scale
+        -- (Award/Submit-style buttons that disable themselves in OnClick
+        -- hit this every time). Snap back to the recorded base scale.
+        if button._ltBaseScale and button.SetScale then
+            button:SetScale(button._ltBaseScale)
+        end
+    end
 
     local palette = self:GetButtonVariantPalette(button.ltButtonVariant)
     local disabled = button.IsEnabled and not button:IsEnabled()
@@ -1225,6 +1233,14 @@ function SkinningMixin:OnCombatEnd()
     for _, entry in ipairs(managedFrames) do
         if entry.wasShown then
             entry.maximize(entry.frame)
+            -- A frame captured mid-hide-fade finishes its tween at alpha
+            -- 0 even after minimize() hid it (the tween runs on Loolib's
+            -- shared updater, which hiding the target does not stop) — a
+            -- bare Show() then presents an invisible, click-swallowing
+            -- frame. Kill any fade and restore full alpha.
+            local fade = entry.frame._loothingFadeGroup
+            if fade and fade.Stop then fade:Stop() end
+            if entry.frame.SetAlpha then entry.frame:SetAlpha(1) end
             entry.wasShown = false
         end
     end

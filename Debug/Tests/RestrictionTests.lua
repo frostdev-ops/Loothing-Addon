@@ -14,6 +14,7 @@
 local _, ns = ...
 local Loothing = ns.Addon
 local TestRunner = ns.TestRunner
+local RestrictionsMixin = ns.RestrictionsMixin
 
 local Loolib = LibStub("Loolib")
 

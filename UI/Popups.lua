@@ -268,6 +268,19 @@ function Popups:Show(name, data, onAccept, onCancel)
     -- Track active dialog
     self.activeDialogs[name] = dialog
 
+    -- Untrack on ANY close path (button click, X, ESC): Loolib recycles
+    -- dialog frames through a pool, so a stale activeDialogs entry later
+    -- aliases a DIFFERENT live dialog — Hide(name) would dismiss an
+    -- unrelated visible prompt (e.g. EndSession hiding the ML's open
+    -- award confirmation) and IsShowing(name) would report an unrelated
+    -- dialog as this one. Fixed owner: pool reuse re-registers in the
+    -- frame's registry instead of stacking closures.
+    dialog:RegisterCallback("OnHide", function()
+        if self.activeDialogs[name] == dialog then
+            self.activeDialogs[name] = nil
+        end
+    end, self)
+
     return dialog
 end
 

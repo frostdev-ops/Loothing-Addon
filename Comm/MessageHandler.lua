@@ -262,8 +262,11 @@ function CommMixin:Init()
     -- send-time recheck, C_ChatInfo.SendAddonMessage returns GeneralError(9)
     -- and Loolib logs a loud error. Reuse the same membership predicate at
     -- the drain gate so those late WHISPERs drop silently.
+    -- Group OR guild: guild-scope unicasts (settings/history sync, profile
+    -- share target lists come from the guild roster) must survive the drain
+    -- gate too, not just raid/party members.
     if Comm.SetTargetValidator then
-        Comm:SetTargetValidator(Loothing.ADDON_PREFIX, Utils.IsGroupMember)
+        Comm:SetTargetValidator(Loothing.ADDON_PREFIX, Utils.IsGroupOrGuildMember)
     end
 
     -- Periodic dedup sweep. The lazy in-OnMessage purge below handles
@@ -437,10 +440,13 @@ function CommMixin.Send(self, command, data, target, priority)
         end
     end
 
-    -- Group membership gate: don't WHISPER players who left the group.
+    -- Membership gate: don't WHISPER players who left the group.
     -- WoW returns GeneralError (9) / TargetOffline (12) for stale targets.
-    if target and not Utils.IsGroupMember(target) then
-        Loothing:Debug("Comm:Send — target left group, dropping WHISPER:",
+    -- Guildmates pass too: SyncPanel offers online guild members as
+    -- settings/history-sync and profile-share targets, and those unicasts
+    -- (request, confirm, and data legs) all route through here.
+    if target and not Utils.IsGroupOrGuildMember(target) then
+        Loothing:Debug("Comm:Send — target not in group or guild, dropping WHISPER:",
             command, "->", target)
         commStats.dropped[command] = (commStats.dropped[command] or 0) + 1
         return
@@ -513,9 +519,12 @@ function CommMixin:QueueForBatch(command, data, target, priority)
         batch = { messages = messages, target = target, priority = priority }
         batchAccumulator[key] = batch
 
-        -- Schedule automatic flush at end of collection window
+        -- Schedule automatic flush at end of collection window. Bind to
+        -- THIS batch instance: an eager MAX_BATCH_SIZE flush can clear the
+        -- key and a new batch can claim it before this timer fires — that
+        -- newer batch has its own timer and deserves its full window.
         C_Timer.After(BATCH_WINDOW, function()
-            if batchAccumulator[key] then
+            if batchAccumulator[key] == batch then
                 self:FlushBatch(key)
             end
         end)
@@ -606,12 +615,15 @@ function CommMixin:SendGuild(command, data, priority)
         return
     end
 
-    -- CommState gate: encounter restrictions block addon messages.
+    -- Encounter/challenge restrictions block ALL addon channels, GUILD
+    -- included. Deliberately NOT CommState:ShouldDefer here: its
+    -- DISCONNECTED state means "not in a raid/party", which is irrelevant
+    -- to the guild channel and silently dropped all guild traffic for
+    -- solo players (version checks, guild sync, intel share).
     -- Guild messages are non-critical and user-initiated, so we drop them
     -- during restrictions rather than queue.
     local prio = priority or "NORMAL"
-    local CommState = Loothing.CommState
-    if CommState and CommState:ShouldDefer(command, prio) then
+    if Loothing.Restrictions and Loothing.Restrictions:IsRestricted() then
         Loothing:Debug("SendGuild: dropped during restriction:", command)
         commStats.dropped[command] = (commStats.dropped[command] or 0) + 1
         return
@@ -1180,9 +1192,11 @@ function CommMixin:SendResponseBatch(responses, masterLooter, sessionID)
 
     -- Broadcast: every receiver applies the responses to its own candidate
     -- state. The masterLooter argument is retained for API compatibility but
-    -- unused. WoW does loop our own broadcast back to us, but the Protocol
-    -- v4 dedup layer drops it at OnMessage — apply locally so the
-    -- responder's own UI updates.
+    -- unused. WoW loops our own broadcast back to us and it IS processed
+    -- (nothing on the send path seeds seenIDs — same as SendPlayerResponse);
+    -- that's harmless because HandlePlayerResponse is idempotent. The eager
+    -- local apply below exists so the responder's own UI updates without
+    -- waiting for the echo.
     self:Send(Loothing.MsgType.RESPONSE_BATCH, {
         responses = responses,
         sessionID = sessionID,

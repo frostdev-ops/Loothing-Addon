@@ -99,6 +99,19 @@ local function isGroupMember(sender)
     return Utils.IsGroupMember(sender)
 end
 
+--- Check if sender is an allowed settings/history-sync peer: group member,
+-- guild channel, or guildmate. The WHISPER legs of guild sync (confirm and
+-- data replies to a guild-broadcast request, and direct guild-target syncs
+-- from SyncPanel) arrive as WHISPER from senders who are NOT in the raid
+-- roster — gating those on isGroupMember alone rejected the entire
+-- guild-sync feature receive-side.
+-- @param sender string
+-- @param distribution string|nil
+-- @return boolean
+local function isSyncSenderAllowed(sender, distribution)
+    return distribution == "GUILD" or Utils.IsGroupOrGuildMember(sender)
+end
+
 --[[--------------------------------------------------------------------
     Per-Handler Schema Definitions
     Derived from the broadcast helpers in MessageHandler.lua.
@@ -679,7 +692,10 @@ function CommMixin:HandleBatch(data, sender, distribution)
     end
 
     for _, inner in ipairs(data.messages) do
-        if inner.command then
+        -- Block nested BATCH: without this, 20 inner BATCHes each carrying
+        -- 20 messages turn one wire message into 400 handler invocations,
+        -- bypassing the cap above. Same recursion guard HandleXRealm has.
+        if inner.command and inner.command ~= Loothing.MsgType.BATCH then
             -- Route each inner message through the normal handler chain.
             -- Security validation happens inside each handler, not here.
             self:RouteMessage(inner.command, inner.data, sender, distribution)
@@ -712,10 +728,10 @@ end
     Settings/History Sync Handlers (delegated to Sync module)
 ----------------------------------------------------------------------]]
 
-function CommMixin:HandleSettingsSyncRequest(data, sender)
+function CommMixin:HandleSettingsSyncRequest(data, sender, distribution)
     if not validateHandler("HandleSettingsSyncRequest", data, SCHEMAS.SYNC_SETTINGS_REQUEST) then return end
-    if not isGroupMember(sender) then
-        Loothing:Debug("Rejected SETTINGS_SYNC_REQUEST from non-group member:", sender)
+    if not isSyncSenderAllowed(sender, distribution) then
+        Loothing:Debug("Rejected SETTINGS_SYNC_REQUEST from non-group/non-guild sender:", sender)
         return
     end
     if Loothing.Sync then
@@ -723,10 +739,10 @@ function CommMixin:HandleSettingsSyncRequest(data, sender)
     end
 end
 
-function CommMixin:HandleSettingsSyncConfirm(data, sender)
+function CommMixin:HandleSettingsSyncConfirm(data, sender, distribution)
     if not validateHandler("HandleSettingsSyncConfirm", data, SCHEMAS.SYNC_SETTINGS_CONFIRM) then return end
-    if not isGroupMember(sender) then
-        Loothing:Debug("Rejected SETTINGS_SYNC_CONFIRM from non-group member:", sender)
+    if not isSyncSenderAllowed(sender, distribution) then
+        Loothing:Debug("Rejected SETTINGS_SYNC_CONFIRM from non-group/non-guild sender:", sender)
         return
     end
     if Loothing.Sync then
@@ -734,10 +750,10 @@ function CommMixin:HandleSettingsSyncConfirm(data, sender)
     end
 end
 
-function CommMixin:HandleSettingsData(data, sender)
+function CommMixin:HandleSettingsData(data, sender, distribution)
     if not validateHandler("HandleSettingsData", data, SCHEMAS.SYNC_SETTINGS_DATA) then return end
-    if not isGroupMember(sender) then
-        Loothing:Debug("Rejected SETTINGS_DATA from non-group member:", sender)
+    if not isSyncSenderAllowed(sender, distribution) then
+        Loothing:Debug("Rejected SETTINGS_DATA from non-group/non-guild sender:", sender)
         return
     end
     if Loothing.Sync then
@@ -745,10 +761,10 @@ function CommMixin:HandleSettingsData(data, sender)
     end
 end
 
-function CommMixin:HandleHistorySyncRequest(data, sender)
+function CommMixin:HandleHistorySyncRequest(data, sender, distribution)
     if not validateHandler("HandleHistorySyncRequest", data, SCHEMAS.SYNC_HISTORY_REQUEST) then return end
-    if not isGroupMember(sender) then
-        Loothing:Debug("Rejected HISTORY_SYNC_REQUEST from non-group member:", sender)
+    if not isSyncSenderAllowed(sender, distribution) then
+        Loothing:Debug("Rejected HISTORY_SYNC_REQUEST from non-group/non-guild sender:", sender)
         return
     end
     if Loothing.Sync then
@@ -757,10 +773,10 @@ function CommMixin:HandleHistorySyncRequest(data, sender)
     end
 end
 
-function CommMixin:HandleHistorySyncConfirm(data, sender)
+function CommMixin:HandleHistorySyncConfirm(data, sender, distribution)
     if not validateHandler("HandleHistorySyncConfirm", data, SCHEMAS.SYNC_HISTORY_CONFIRM) then return end
-    if not isGroupMember(sender) then
-        Loothing:Debug("Rejected HISTORY_SYNC_CONFIRM from non-group member:", sender)
+    if not isSyncSenderAllowed(sender, distribution) then
+        Loothing:Debug("Rejected HISTORY_SYNC_CONFIRM from non-group/non-guild sender:", sender)
         return
     end
     if Loothing.Sync then
@@ -768,10 +784,10 @@ function CommMixin:HandleHistorySyncConfirm(data, sender)
     end
 end
 
-function CommMixin:HandleHistoryData(data, sender)
+function CommMixin:HandleHistoryData(data, sender, distribution)
     if not validateHandler("HandleHistoryData", data, SCHEMAS.SYNC_HISTORY_DATA) then return end
-    if not isGroupMember(sender) then
-        Loothing:Debug("Rejected HISTORY_DATA from non-group member:", sender)
+    if not isSyncSenderAllowed(sender, distribution) then
+        Loothing:Debug("Rejected HISTORY_DATA from non-group/non-guild sender:", sender)
         return
     end
     if Loothing.Sync then
@@ -1008,8 +1024,11 @@ function CommMixin:HandleProfileExportShare(data, sender, distribution)
             Loothing:Debug("Rejected PROFILE_EXPORT_SHARE group broadcast from non-ML:", sender)
             return
         end
-    elseif not isGroupMember(sender) then
-        Loothing:Debug("Rejected PROFILE_EXPORT_SHARE from non-group member:", sender)
+    elseif not isSyncSenderAllowed(sender, distribution) then
+        -- Direct shares whisper to targets picked from SyncPanel, whose
+        -- list includes online guildmates — accept guild peers like the
+        -- settings/history sync handlers do.
+        Loothing:Debug("Rejected PROFILE_EXPORT_SHARE from non-group/non-guild sender:", sender)
         return
     end
 

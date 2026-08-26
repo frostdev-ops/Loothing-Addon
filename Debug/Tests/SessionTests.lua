@@ -6,6 +6,8 @@
 local _, ns = ...
 local Loothing = ns.Addon
 local Utils = ns.Utils
+local SessionMixin = ns.SessionMixin
+local CreateItem = ns.CreateItem
 
 local Loolib = LibStub("Loolib")
 
@@ -63,10 +65,12 @@ local function AssertGreaterThan(actual, threshold, message)
         string.format("%s (expected > %s, got: %s)", message, tostring(threshold), tostring(actual)))
 end
 
+-- Queue suites instead of executing at file load: running here spammed
+-- dozens of failing tests into chat on every login/reload, and the
+-- runner function below never actually invoked anything.
+local suites = {}
 local function Describe(category, func)
-    Tests.categories[#Tests.categories + 1] = category
-    print("\n--- " .. category .. " ---")
-    func()
+    suites[#suites + 1] = { category = category, func = func }
 end
 
 local function It(description, func)
@@ -648,8 +652,21 @@ local function RunAllSessionTests()
     Tests.results = {}
     Tests.categories = {}
 
-    -- Run tests (they call Describe internally)
+    for _, suite in ipairs(suites) do
+        Tests.categories[#Tests.categories + 1] = suite.category
+        print("\n--- " .. suite.category .. " ---")
+        local ok, err = pcall(suite.func)
+        if not ok then
+            Assert(false, suite.category .. " - SUITE ERROR: " .. tostring(err))
+        end
+    end
 
     PrintResults()
+    return Tests.passed, Tests.failed
+end
+
+local TestRunner = ns.TestRunner
+if TestRunner and TestRunner.RegisterTest then
+    TestRunner:RegisterTest("session", RunAllSessionTests)
 end
 

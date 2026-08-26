@@ -84,15 +84,11 @@ function AnnouncerMixin:BuildReplacements(params)
         replacements.winner = Utils.GetShortName(replacements.winner) or replacements.winner
     end
 
-    -- Response/reason — prefer explicit award reason over vote response
-    local reason = params.awardReason or params.reason or ""
-    if reason == "" and Loothing.ResponseManager and (params.reason or "") ~= "" then
-        local responseInfo = Loothing.ResponseManager:GetResponseByName(params.reason)
-        if responseInfo then
-            reason = responseInfo.name
-        end
-    end
-    replacements.reason = reason
+    -- Response/reason — prefer explicit award reason over vote response.
+    -- (A former ResponseManager lookup branch here was unreachable: its
+    -- `reason == ""` and `params.reason ~= ""` conditions are mutually
+    -- exclusive given the line above.)
+    replacements.reason = params.awardReason or params.reason or ""
 
     -- Notes
     replacements.notes = params.notes or ""

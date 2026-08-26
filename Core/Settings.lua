@@ -1283,6 +1283,34 @@ function SettingsMixin:GetAwardReasons()
     return copy
 end
 
+--- Move an award reason to a new position, shifting displaced siblings
+-- (mirrors ReorderResponseButton). Bumping only the moved reason's sort
+-- — the old move-button behavior — tied it with its neighbour and lost
+-- the ascending-id tie-break, a visual no-op for every normally-created
+-- list.
+-- @param id number - Reason ID
+-- @param newSort number - Target 1-based position
+function SettingsMixin:ReorderAwardReason(id, newSort)
+    local reasons = self:GetAwardReasons()  -- normalized, sorted, sort == index
+    local targetIdx
+    for i, reason in ipairs(reasons) do
+        if reason.id == id then
+            targetIdx = i
+            break
+        end
+    end
+    if not targetIdx then return end
+
+    newSort = math.max(1, math.min(#reasons, newSort))
+    if newSort == targetIdx then return end
+
+    local moved = table.remove(reasons, targetIdx)
+    table.insert(reasons, newSort, moved)
+    for i, reason in ipairs(reasons) do reason.sort = i end
+
+    self:Set("awardReasons.reasons", reasons)
+end
+
 --- Get award reason by ID
 -- @param id number - Reason ID
 -- @return table|nil - Award reason entry { id, name, color }

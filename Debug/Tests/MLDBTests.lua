@@ -15,6 +15,8 @@
 local _, ns = ...
 local Loothing = ns.Addon
 local TestRunner = ns.TestRunner
+local MLDBMixin = ns.MLDBMixin
+local Protocol = ns.Protocol
 
 local Loolib = LibStub("Loolib")
 

@@ -301,14 +301,13 @@ function RestrictionsMixin:ReplayQueue()
         return
     end
 
-    -- Cancel any existing replay
-    if self.replayTicker then
-        self.replayTicker:Cancel()
-        self.replayTicker = nil
-    end
-    if self.replayBuffer then
-        Loolib.TempTable:Release(self.replayBuffer)
-        self.replayBuffer = nil
+    -- Salvage any in-flight replay: PauseReplay cancels the ticker and
+    -- re-queues the unprocessed remainder onto guaranteedQueue. The old
+    -- cancel-and-release here silently discarded messages the previous
+    -- replay hadn't sent yet (restriction re-engage + lift within one
+    -- tick interval, with a SendGuaranteed in the window).
+    if self.replayTicker or self.replayBuffer then
+        self:PauseReplay()
     end
 
     -- Sort by priority weight, then FIFO within same priority

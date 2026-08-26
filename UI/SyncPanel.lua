@@ -391,12 +391,25 @@ function SyncPanelMixin:UpdateUI()
     self.historyBtn:GetFontString():SetTextColor(unpack(isHistory and activeColor or dimColor))
     self.intelBtn:GetFontString():SetTextColor(unpack(isIntel and activeColor or dimColor))
 
-    -- Intel-specific: show dataset info, update send button label
+    -- Intel-specific: show dataset info, update send button label.
+    -- Hide the plug ICON too — it shares the Date Range label's anchor
+    -- and used to linger over it after leaving Intel mode.
     if self.intelStatusText then
         self.intelStatusText:SetShown(isIntel)
     end
+    if self.intelStatusIcon then
+        self.intelStatusIcon:SetShown(isIntel)
+    end
     if isIntel then
         self:UpdateIntelStatus()
+    else
+        -- Leaving Intel mode must re-enable Send: UpdateIntelStatus
+        -- disables it when no datasets exist, and nothing else on the
+        -- settings/history paths ever called Enable() — the whole panel
+        -- stayed unusable until /reload.
+        if self.sendBtn and not self.syncInProgress then
+            self.sendBtn:Enable()
+        end
     end
 
     -- Slide the sync-type indicator to the active button.
@@ -464,6 +477,7 @@ function SyncPanelMixin:StartSync()
         self.syncType, self.targetPlayer
     ))
     self.sendBtn:Disable()
+    self.syncInProgress = true
 
     self:TriggerEvent("OnSyncStarted", self.syncType, self.targetPlayer)
 
@@ -483,6 +497,7 @@ function SyncPanelMixin:StartSync()
             if not ok then
                 self.statusText:SetText("|cffff0000" .. (err or "") .. "|r")
                 self.progressBg:Hide()
+                self.syncInProgress = false
                 self.sendBtn:Enable()
                 return
             end
@@ -493,6 +508,7 @@ function SyncPanelMixin:StartSync()
         -- IntelShare module not loaded
         self.statusText:SetText("|cffff0000" .. L["INTEL_SHARE_NO_DATA"] .. "|r")
         self.progressBg:Hide()
+        self.syncInProgress = false
         self.sendBtn:Enable()
         return
     end
@@ -515,6 +531,7 @@ function SyncPanelMixin:SetProgress(pct)
 
     if pct >= 1.0 then
         self.statusText:SetText("|cff00ff00" .. (L["SYNC_COMPLETE"]) .. "|r")
+        self.syncInProgress = false
         self.sendBtn:Enable()
     end
 end
@@ -660,6 +677,7 @@ function SyncPanelMixin:RegisterIntelShareCallbacks()
     Loothing.IntelShare:RegisterCallback("OnIntelShareFailed", function(_, transferID, reason)
         if not self.frame:IsShown() then return end
         self.statusText:SetText("|cffff0000" .. (reason or "Share failed") .. "|r")
+        self.syncInProgress = false
         self.sendBtn:Enable()
     end, self)
 end

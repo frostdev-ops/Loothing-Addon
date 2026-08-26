@@ -423,13 +423,20 @@ end
 
 --- Get all enchanters from the cache
 -- Scans the GUID-keyed cache for players with the enchanter flag set.
--- @return table - Array of { name, class, guid } for each enchanter
+-- @return table - Array of { name, class, guid } for each enchanter.
+--   `name` is the FULL "Name-Realm" identifier — consumers pass it to
+--   AwardItem/GetCandidate, where a bare short name got re-realmed to
+--   the local realm and misattributed cross-realm disenchants.
 function PlayerCacheMixin:GetEnchanters()
     local enchanters = {}
     for guid, player in pairs(self.byGUID) do
         if player.enchanter and self:IsValid(player) then
+            local fullName = player.name or "Unknown"
+            if player.name and player.realm and player.realm ~= "" then
+                fullName = player.name .. "-" .. player.realm
+            end
             enchanters[#enchanters + 1] = {
-                name = player.name or "Unknown",
+                name = fullName,
                 class = player.class,
                 guid = guid,
             }

@@ -716,6 +716,7 @@ end
 function MainFrameMixin:Show()
     -- Stop any in-flight open/close fade before starting a new one.
     if self.frame._loothingFadeGroup then self.frame._loothingFadeGroup:Stop() end
+    self._hiding = nil
 
     self.frame:Show()
 
@@ -723,6 +724,13 @@ function MainFrameMixin:Show()
     local panel = self.panels[self.currentTab]
     if panel and panel.panel and panel.panel.Refresh then
         panel.panel:Refresh()
+    end
+
+    -- Header desktop-sync label: refresh on every open — its only other
+    -- call site is frame construction, which froze it at the load-time
+    -- (usually empty) value for the whole session.
+    if self.UpdateDesktopSyncStatus then
+        self:UpdateDesktopSyncStatus()
     end
 
     -- Snap indicator to the active tab (safe now that layout is final).
@@ -741,14 +749,17 @@ end
 --- Hide the main frame
 function MainFrameMixin:Hide()
     if self.frame._loothingFadeGroup then self.frame._loothingFadeGroup:Stop() end
+    self._hiding = true
 
     if AnimationPresets then
         self.frame._loothingFadeGroup = AnimationPresets.FadeOut(self.frame, HIDE_DURATION, "inCubic", true, function()
             -- Reset alpha for next Show so we don't get a visible starting-alpha pop.
             self.frame:SetAlpha(0)
+            self._hiding = nil
         end)
     else
         self.frame:Hide()
+        self._hiding = nil
     end
 
     self:TriggerEvent("OnHide")
@@ -756,7 +767,10 @@ end
 
 --- Toggle visibility
 function MainFrameMixin:Toggle()
-    if self.frame:IsShown() then
+    -- IsShown() stays true for the whole 0.13s hide fade, so a quick
+    -- re-toggle used to re-Hide instead of reopening — the window felt
+    -- unresponsive. Treat "currently fading out" as hidden.
+    if self.frame:IsShown() and not self._hiding then
         self:Hide()
     else
         self:Show()

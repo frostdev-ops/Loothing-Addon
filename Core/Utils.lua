@@ -688,27 +688,14 @@ function Utils.IsGuildGroup()
 end
 
 --- Check if a player is in our guild
+-- Realm-aware via IsGuildMember: the old short-name-only compare reported
+-- any player as a guildmate whenever their FIRST NAME matched any guild
+-- member ("Jimbo-Stormrage" matched an unrelated guild "Jimbo-Illidan"),
+-- which let the guild-only group-loot gate activate in pugs.
 -- @param name string - Player name
 -- @return boolean
 function Utils.IsPlayerInGuild(name)
-    if not name or not IsInGuild() then
-        return false
-    end
-
-    local numMembers = GetNumGuildMembers()
-    for i = 1, numMembers do
-        local guildName = Loothing.GetGuildRosterInfo and Loothing.GetGuildRosterInfo(i)
-        if guildName then
-            -- Guild names include realm: "Name-Realm"
-            local shortGuild = guildName:match("^([^-]+)") or guildName
-            local shortName = name:match("^([^-]+)") or name
-            if shortGuild == shortName then
-                return true
-            end
-        end
-    end
-
-    return false
+    return Utils.IsGuildMember(name)
 end
 
 --- Get raid roster as a table
@@ -789,6 +776,48 @@ function Utils.IsGroupMember(playerName)
         end
     end
     return false
+end
+
+--- Check if a player is in the player's guild.
+-- Scans the client's cached guild roster (names are full "Name-Realm").
+-- Used alongside IsGroupMember to authorize guild-scope comm flows
+-- (settings/history sync, profile share) whose targets come from the
+-- guild roster rather than the raid roster.
+-- @param playerName string - Player name (with or without realm suffix)
+-- @return boolean
+function Utils.IsGuildMember(playerName)
+    if not playerName or playerName == "" then return false end
+    if not IsInGuild() then return false end
+    if not Loothing.GetGuildRosterInfo then return false end
+    for i = 1, GetNumGuildMembers() do
+        local name = Loothing.GetGuildRosterInfo(i)
+        if name and Utils.IsSamePlayer(name, playerName) then
+            return true
+        end
+    end
+    return false
+end
+
+--- Check if a player is reachable as a comm peer: current raid/party
+-- member or guildmate. The whisper send gate and sync handlers share
+-- this so both sides of the guild-sync flow agree on who is allowed.
+-- @param playerName string - Player name (with or without realm suffix)
+-- @return boolean
+function Utils.IsGroupOrGuildMember(playerName)
+    return Utils.IsGroupMember(playerName) or Utils.IsGuildMember(playerName)
+end
+
+--- Resolve a spec's info with the 12.0 namespace fallback.
+-- Single shim so a future API shape change is patched in one place
+-- (used by the council table spec column and roster tooltips).
+-- @param specID number
+-- @return ... - GetSpecializationInfoForSpecID returns, or nil if unavailable
+function Utils.GetSpecializationInfoForSpecID(specID)
+    local getInfo = C_SpecializationInfo
+        and C_SpecializationInfo.GetSpecializationInfoForSpecID
+        or GetSpecializationInfoForSpecID
+    if not getInfo or not specID then return nil end
+    return getInfo(specID)
 end
 
 --- Get officers from raid (rank >= 1)
@@ -1023,8 +1052,8 @@ function Utils.GetRollResultPattern()
     -- strictly ascending; otherwise fall back to the English literal, which
     -- safely fails to match (the pre-fix behavior on those locales).
     local lastIdx, ordered = 0, true
-    for idx in fmt:gmatch("%%(%d)%$[sd]") do
-        idx = tonumber(idx)
+    for idxStr in fmt:gmatch("%%(%d)%$[sd]") do
+        local idx = tonumber(idxStr)
         if idx ~= lastIdx + 1 then
             ordered = false
             break

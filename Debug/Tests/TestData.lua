@@ -729,18 +729,23 @@ TestData.Protocol.ItemAdd = {
     itemLink = "|cffa335ee|Hitem:212405::::::::80:1::3:1:28:2905:::::|h[Regicide]|h|r",
     guid = "item_abc123",
     looter = "Player-TestRealm",
+    -- sessionID is REQUIRED by SCHEMAS.ITEM_ADD (Comm/Handlers/Core.lua)
+    sessionID = "session_test123",
     encounterID = 2902,
     timestamp = time(),
 }
 
+-- Shape matches SCHEMAS.VOTE_COMMIT: top-level `responses` table
+-- (the old `voter`/`votes` fields predated the broadcast-votes protocol
+-- and would fail schema validation).
 TestData.Protocol.VoteCommit = {
     type = Loothing.MsgType.VOTE_COMMIT,
     itemGUID = "item_abc123",
-    voter = "Councilmember-TestRealm",
-    votes = {
+    responses = {
         { candidate = "Player1-TestRealm", responses = { 1, 2, 3 } }, -- NEED, GREED, OFFSPEC
         { candidate = "Player2-TestRealm", responses = { 2, 3, 5 } }, -- GREED, OFFSPEC, PASS
     },
+    sessionID = "session_test123",
     timestamp = time(),
 }
 

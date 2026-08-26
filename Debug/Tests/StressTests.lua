@@ -7,6 +7,7 @@ local _, ns = ...
 local Loothing = ns.Addon
 local Utils = ns.Utils
 local TestMode = ns.TestMode
+local Protocol = ns.Protocol
 
 local Loolib = LibStub("Loolib")
 
@@ -111,20 +112,24 @@ end
 ----------------------------------------------------------------------]]
 
 --- Setup test environment
+local enabledTestMode = false
 local function SetupTest()
-    -- Enable test mode
+    -- Enable test mode (remember whether WE turned it on, so teardown
+    -- can restore it — leaving it active blocked all settings writes
+    -- for the rest of the session)
     if TestMode and not TestMode:IsEnabled() then
-        TestMode:SetEnabled(true)
+        enabledTestMode = TestMode:SetEnabled(true) and true or false
+        if not TestMode:IsEnabled() then
+            -- The lead/assist prerequisite gate blocked the enable.
+            -- Fail the test loudly (TestRunner pcalls us) instead of
+            -- proceeding unprotected against LIVE session/settings state.
+            error("SetupTest: test mode blocked by prerequisites (grouped without lead/assist) — aborting test", 0)
+        end
     end
 
     -- Clear any existing session
     if Loothing.Session and Loothing.Session:IsActive() then
         Loothing.Session:EndSession()
-    end
-
-    -- Clear history
-    if Loothing.History then
-        Loothing.History:Clear()
     end
 
     -- Force garbage collection
@@ -135,6 +140,10 @@ end
 local function TeardownTest()
     if Loothing.Session and Loothing.Session:IsActive() then
         Loothing.Session:EndSession()
+    end
+    if enabledTestMode and TestMode then
+        TestMode:SetEnabled(false)
+        enabledTestMode = false
     end
     collectgarbage("collect")
 end
@@ -594,74 +603,19 @@ end
 
 --- Test: 1000 history entries
 local function Test_ThousandHistoryEntries()
-    if not Loothing.History then
-        print("|cffffcc00[Stress Test]|r History module not available, skipping test")
-        return
-    end
-
-    SetupTest()
-
-    Loothing.History:Clear()
-
-    local addMetrics = NewPerfMetrics("History Entry Addition", StressTests.performanceThresholds.critical)
-
-    -- Add 1000 entries
-    for i = 1, 1000 do
-        local entry = {
-            timestamp = time(),
-            sessionID = math.floor(i / 10),
-            encounterName = "Test Boss",
-            itemLink = string.format("|cffa335ee|Hitem:%d|h[Item %d]|h|r", 19019, i),
-            winner = string.format("Player%d-Realm", i),
-            response = Loothing.Response.NEED,
-        }
-
-        local duration = Measure(function()
-            Loothing.History:AddEntry(entry)
-        end)
-        RecordOp(addMetrics, duration)
-    end
-
-    PrintMetrics(addMetrics)
-    AssertPerf(addMetrics, "History addition should be fast")
-
-    local entries = Loothing.History:GetAllEntries()
-    Assert(#entries >= 1000, "Should have 1000 history entries")
-
-    TeardownTest()
+    -- History:AddEntry is deliberately a no-op while test mode is active
+    -- (it guards LIVE history), so this test cannot exercise insertion:
+    -- it previously "measured" 1000 guard-returns and then always failed
+    -- the 1000-entry assertion. Skip honestly.
+    print("|cffffcc00[Stress Test]|r History insertion is blocked under test mode by design — skipped")
 end
 
 --- Test: History search performance
 local function Test_HistorySearch()
-    if not Loothing.History then
-        print("|cffffcc00[Stress Test]|r History module not available, skipping test")
-        return
-    end
-
-    SetupTest()
-
-    -- Add 500 entries
-    for i = 1, 500 do
-        Loothing.History:AddEntry({
-            timestamp = time(),
-            sessionID = i,
-            winner = string.format("Player%d-Realm", i % 50),
-            itemLink = string.format("|cffa335ee|Hitem:%d|h[Item]|h|r", 19019),
-        })
-    end
-
-    local searchMetrics = NewPerfMetrics("History Search", StressTests.performanceThresholds.acceptable)
-
-    -- Search for entries
-    local duration = Measure(function()
-        local results = Loothing.History:Search({ winner = "Player5-Realm" })
-    end)
-    RecordOp(searchMetrics, duration)
-
-    PrintMetrics(searchMetrics)
-    AssertPerf(searchMetrics, "History search should be fast")
-
-    TeardownTest()
+    -- Seeding entries is blocked under test mode (see above), so a search
+    -- benchmark here would silently measure a search over an empty or
+    -- unrelated live dataset. Skip honestly.
+    print("|cffffcc00[Stress Test]|r History search seeding is blocked under test mode by design — skipped")
 end
 
 --[[--------------------------------------------------------------------

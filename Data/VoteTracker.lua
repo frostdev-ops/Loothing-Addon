@@ -183,14 +183,18 @@ function VoteTrackerMixin:HandleVotePoll(data)
 
     local voteData = self.submittedVotes[data.itemGUID]
     if voteData and voteData.responses then
-        -- Re-send the stored vote to ML
-        local ml = Loothing.Session and Loothing.Session:GetMasterLooter()
-        if Loothing.Comm and ml then
+        -- Re-broadcast the stored vote. SendVoteCommit's masterLooter
+        -- argument is documented unused (votes broadcast to the group),
+        -- so do NOT gate the resend on resolving an ML — during a
+        -- handover a missing ML silently swallowed both the resend AND
+        -- the never-voted prompt. ResponseTracker:HandleResponsePoll
+        -- removed the identical gate for the same reason.
+        if Loothing.Comm then
             Loothing:Debug("VoteTracker: VOTE_POLL — resending vote for", data.itemGUID)
             Loothing.Comm:SendVoteCommit(
                 data.itemGUID,
                 voteData.responses,
-                ml,
+                nil,
                 data.sessionID or self.sessionID
             )
         end

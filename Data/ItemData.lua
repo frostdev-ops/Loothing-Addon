@@ -182,14 +182,18 @@ local function NeutralizeItemString(itemLink)
     -- non-empty token, doubling the part count and shifting every index below.
     local parts = { strsplit(":", itemString) }
 
-    -- Standard item string: item:ID:enchant:gem1:gem2:gem3:gem4:suffixID:uniqueID:level:specID:upgradeID:difficultyID:...
-    -- Indices (1-based): 1=item, 2=ID, 3=enchant, 4-7=gems, 8=suffixID, 9=uniqueID, 10=level, 11=specID, 12=upgradeID, 13=difficultyID
-    -- We keep: item, ID, enchant, gems, suffixID (positions 1-8)
-    -- We zero out: uniqueID (9), level (10), specID (11), difficultyID (13)
+    -- Standard item string: item:ID:enchant:gem1:gem2:gem3:gem4:suffixID:uniqueID:linkLevel:specID:modifiersMask:itemContext:...
+    -- Indices (1-based): 1=item, 2=ID, 3=enchant, 4-7=gems, 8=suffixID,
+    -- 9=uniqueID, 10=linkLevel, 11=specializationID, 12=modifiersMask,
+    -- 13=itemContext.
+    -- Zero exactly what RCLC's NeutralizeItem blanks: the three
+    -- player-specific fields (uniqueID, linkLevel, specID). Keep 12 and
+    -- 13 — a previous revision zeroed 13 believing it was difficultyID,
+    -- but it's itemContext (upgrade track / source), so candidates'
+    -- reconstructed tooltips lost item context.
     if #parts >= 9 then parts[9] = "0" end    -- uniqueID
-    if #parts >= 10 then parts[10] = "0" end  -- level
-    if #parts >= 11 then parts[11] = "0" end  -- specID
-    if #parts >= 13 then parts[13] = "0" end  -- difficultyID
+    if #parts >= 10 then parts[10] = "0" end  -- linkLevel
+    if #parts >= 11 then parts[11] = "0" end  -- specializationID
 
     return table.concat(parts, ":")
 end
@@ -199,8 +203,10 @@ end
 -- @return string - Compact item string for comms
 local function GetTransmittableItemString(itemLink)
     local neutralized = NeutralizeItemString(itemLink)
-    -- Remove "item:" prefix for compact transmission
-    return neutralized:gsub("^item:", "")
+    -- Remove "item:" prefix for compact transmission. Parenthesized:
+    -- gsub returns (string, count) and a bare tail-return would leak the
+    -- count into multi-value contexts.
+    return (neutralized:gsub("^item:", ""))
 end
 
 --[[--------------------------------------------------------------------

@@ -76,6 +76,11 @@ end
 
 --- Install our error handler, chaining the original
 function ErrorHandlerMixin:InstallHandler()
+    -- Idempotence: a second install would capture our own closure as
+    -- originalHandler and double-capture every error thereafter.
+    if self.handlerInstalled then return end
+    self.handlerInstalled = true
+
     self.originalHandler = geterrorhandler()
 
     local self_ref = self

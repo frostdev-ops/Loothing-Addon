@@ -500,7 +500,7 @@ function HistoryImportMixin:ImportEntries(entries, overwrite)
                 Loothing.History:RemoveEntry(existingEntry.guid)
             end
 
-            local success, entryErr = pcall(function()
+            local success, added = pcall(function()
                 -- Preserve every field from the source row. The previous
                 -- whitelist silently dropped the v2.0.18 candidate /
                 -- councilVote snapshots plus award-reason, gear ilvl, and
@@ -516,14 +516,20 @@ function HistoryImportMixin:ImportEntries(entries, overwrite)
                 if not copy.class and copy.winnerClass then
                     copy.class = copy.winnerClass
                 end
-                Loothing.History:AddEntry(copy)
+                return Loothing.History:AddEntry(copy)
             end)
 
-            if success then
+            if success and added then
                 private.stats.imported = private.stats.imported + 1
+            elseif success then
+                -- AddEntry rejected the row (history disabled, test mode,
+                -- invalid winner). A pcall-success used to count these as
+                -- "imported", so a user with history disabled was told
+                -- "imported: N" while nothing was stored.
+                private.stats.skipped = private.stats.skipped + 1
             else
                 private.stats.errors = private.stats.errors + 1
-                Loothing:Debug("Import error for entry", i, ":", entryErr)
+                Loothing:Debug("Import error for entry", i, ":", added)
             end
 
             if i % 10 == 0 then

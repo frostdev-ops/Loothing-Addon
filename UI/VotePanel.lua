@@ -665,6 +665,14 @@ function VotePanelMixin:RefreshRankDisplay()
             row.colorBar:SetColorTexture(cr, cg, cb, 1)
             row.nameText:SetText(btnData.text)
             row.nameText:SetTextColor(cr, cg, cb)
+        else
+            -- No button for this candidate (left the group, restored vote
+            -- from a stale roster): render the raw name instead of
+            -- whatever the reused row last displayed — a positional reuse
+            -- showed one candidate's name while submitting another.
+            row.colorBar:SetColorTexture(0.5, 0.5, 0.5, 1)
+            row.nameText:SetText(Utils.GetShortName(buttonId) or tostring(buttonId))
+            row.nameText:SetTextColor(0.7, 0.7, 0.7)
         end
 
         -- Show/hide arrows based on position
@@ -772,8 +780,21 @@ function VotePanelMixin:SetItem(item)
             if item.UnregisterCallback then
                 item:UnregisterCallback("OnItemInfoLoaded", self)
             end
-            if self.item == item then
-                self:SetItem(item)
+            -- Only while still open on this item: a late info load must
+            -- not reopen a panel the member already closed (SetItem ends
+            -- with Show()).
+            if self.item ~= item or not self.frame:IsShown() then return end
+            -- Preserve an unsubmitted in-progress ranking: SetItem wipes
+            -- selectedResponses and only restores SUBMITTED votes, so the
+            -- async reload silently discarded the member's clicks.
+            local pending = {}
+            for i, v in ipairs(self.selectedResponses) do pending[i] = v end
+            self:SetItem(item)
+            if #pending > 0 then
+                wipe(self.selectedResponses)
+                for i, v in ipairs(pending) do self.selectedResponses[i] = v end
+                self:RemoveBlockedSelections()
+                self:UpdateResponseButtons()
             end
         end, self)
     end
@@ -1054,13 +1075,19 @@ function VotePanelMixin:UpdateTimer()
         self.timerBar:SetWidth(0.001)
         self.timerBar:SetColorTexture(0.6, 0.2, 0.2, 1)
 
-        -- Auto-close after a delay
-        C_Timer.After(1, function()
-            local itemRemaining = self.frame:IsShown() and self.item and self.item:GetTimeRemaining() or 0
-            if itemRemaining ~= math.huge and itemRemaining <= 0 then
-                self:Hide()
-            end
-        end)
+        -- Auto-close after a delay. Deduplicated: only one pending timer
+        -- at a time (mirrors RollFrame) — the 10 Hz ticker otherwise
+        -- stacked ~10 of these, each restarting the close fade.
+        if not self.autoCloseTimer then
+            self.autoCloseTimer = true
+            C_Timer.After(1, function()
+                self.autoCloseTimer = nil
+                local itemRemaining = self.frame:IsShown() and self.item and self.item:GetTimeRemaining() or 0
+                if itemRemaining ~= math.huge and itemRemaining <= 0 then
+                    self:Hide()
+                end
+            end)
+        end
         return
     end
 

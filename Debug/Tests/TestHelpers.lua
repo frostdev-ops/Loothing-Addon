@@ -1,4 +1,5 @@
 local _, ns = ...
+local ItemMixin = ns.ItemMixin  -- NOT the Blizzard global ItemMixin
 
 --[[--------------------------------------------------------------------
     Loothing - Loot Council Addon for WoW 12.0+

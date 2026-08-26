@@ -1086,7 +1086,10 @@ function SyncMixin:HandleIncrementalSyncRequest(data)
             Loothing:Debug("Sync: observer mismatch from", requester, "— scheduling coalesced broadcast")
             self.pendingObserverBroadcast = C_Timer.NewTimer(2, function()
                 self.pendingObserverBroadcast = nil
-                self:BroadcastObserverRoster()
+                -- force=true: the requester diverged, so the payload-only
+                -- dirty check would skip exactly the broadcast they asked
+                -- for and they'd re-mismatch on every heartbeat forever.
+                self:BroadcastObserverRoster(true)
                 Loothing:Debug("Sync: observer broadcast fired (coalesced)")
             end)
         else

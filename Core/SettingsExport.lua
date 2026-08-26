@@ -60,8 +60,10 @@ function SettingsExportMixin:SanitizeProfileData(data)
         data.rollFrame.position = nil
     end
 
-    -- History belongs in global scope, not profile exports
-    data.history = nil
+    -- NOTE: data.history is kept. History ENTRIES live in global scope and
+    -- were never part of the profile — profile `history` holds settings
+    -- (share, maxEntries, ...), which the export should carry. Stripping it
+    -- here silently reset every importer to share="off"/maxEntries=500.
 
     return data
 end
@@ -162,8 +164,9 @@ end
 
 --- Deep-merge imported settings with PROFILE_DEFAULTS.
 -- Keys only in defaults → filled from defaults.
--- Keys only in import → dropped.
+-- Keys only in import → dropped (unknown top-level namespaces).
 -- Type mismatches → keep default.
+-- Container/array defaults → imported value taken wholesale (see DeepMerge).
 -- @param imported table
 -- @return table
 function SettingsExportMixin:MergeWithDefaults(imported)
@@ -187,7 +190,18 @@ function SettingsExportMixin:DeepMerge(src, def)
         elseif type(importedVal) ~= type(defaultVal) then
             result[k] = Utils.DeepCopy(defaultVal)
         elseif type(defaultVal) == "table" then
-            result[k] = self:DeepMerge(importedVal, defaultVal)
+            if next(defaultVal) == nil or defaultVal[1] ~= nil then
+                -- Data containers, not shape templates: an EMPTY default
+                -- ({} — council.members, ignoreItems.items, observers.list,
+                -- filters.*, responseSets.typeCodeMap) or an ARRAY default
+                -- (awardReasons.reasons, responseSets.sets). Recursing over
+                -- the default's keys emptied the former and truncated the
+                -- latter to the default's length on every import — a
+                -- 12-person council imported as {}. Take the import as-is.
+                result[k] = Utils.DeepCopy(importedVal)
+            else
+                result[k] = self:DeepMerge(importedVal, defaultVal)
+            end
         else
             result[k] = importedVal
         end

@@ -555,8 +555,16 @@ function ResultsPanelMixin:UpdateWinnerSection(winner, totalVotes, candidates)
         return
     end
 
-    -- Detect ties
-    local maxVotes = winner and winner.councilVotes or 0
+    -- Detect ties among the TRUE top vote count. maxVotes used to be the
+    -- resolved winner's own count, so an IRV winner with fewer raw
+    -- councilVotes than a rival made the header print "TIE: ..." while
+    -- the row glow and Award auto-select showed the resolved winner. A
+    -- resolved winner always owns the header; the tie line only shows
+    -- when the tally produced no single winner.
+    local maxVotes = 0
+    for _, c in ipairs(candidates) do
+        if c.councilVotes > maxVotes then maxVotes = c.councilVotes end
+    end
     local tied = {}
     for _, c in ipairs(candidates) do
         if c.councilVotes == maxVotes and maxVotes > 0 then
@@ -564,7 +572,7 @@ function ResultsPanelMixin:UpdateWinnerSection(winner, totalVotes, candidates)
         end
     end
 
-    if #tied > 1 then
+    if not winner and #tied > 1 then
         -- Tie
         local names = {}
         for _, c in ipairs(tied) do

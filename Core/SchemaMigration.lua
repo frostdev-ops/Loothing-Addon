@@ -27,9 +27,35 @@
 
 local _, ns = ...
 local Loothing = ns.Addon
+local Loolib = LibStub("Loolib")
 
 local SchemaMigration = {}
 ns.SchemaMigration = SchemaMigration
+
+--- Non-destructively fill missing default keys into a stored namespace
+-- table, WITHOUT descending into data containers: an EMPTY default ({})
+-- or an ARRAY default (awardReasons.reasons, responseSets.sets) holds
+-- user data, and merging template rows into it would resurrect deleted
+-- default entries and overwrite user rows positionally — the same
+-- container-vs-template flaw SettingsExport:DeepMerge guards against.
+-- @param target table - Stored (raw, metatable-free) namespace table
+-- @param defaults table - Matching defaults sub-table
+local function backfillDefaults(target, defaults)
+    for key, defVal in pairs(defaults) do
+        local cur = target[key]
+        if cur == nil then
+            if type(defVal) == "table" then
+                target[key] = Loolib.TableUtil.DeepCopy(defVal)
+            else
+                target[key] = defVal
+            end
+        elseif type(cur) == "table" and type(defVal) == "table"
+            and next(defVal) ~= nil and defVal[1] == nil then
+            -- Non-empty map default = shape template: recurse.
+            backfillDefaults(cur, defVal)
+        end
+    end
+end
 
 --[[--------------------------------------------------------------------
     Schema v2 — Loothing 2.0.7 settings cleanup
@@ -477,6 +503,7 @@ function SchemaMigration:Run(sv)
     if type(data.profiles) ~= "table" then return end
 
     local target = (Loothing.DefaultSettings and Loothing.DefaultSettings.schemaVersion) or 1
+    local profileDefaults = sv.defaults and sv.defaults.profile
 
     for profileName, profile in pairs(data.profiles) do
         if type(profile) == "table" then
@@ -492,21 +519,62 @@ function SchemaMigration:Run(sv)
             -- actually run for any user" — the partnered fix to 2.0.28's
             -- sv.data.profiles accessor correction above.
             local current = tonumber(rawget(profile, "schemaVersion")) or 1
-            for v = current + 1, target do
-                local fn = migrations[v]
-                if fn then
-                    local ok, err = pcall(fn, profile)
-                    if ok then
-                        profile.schemaVersion = v
-                    else
-                        if Loothing and Loothing.Error then
-                            Loothing:Error(string.format(
-                                "Settings migration v%d failed for profile '%s': %s",
-                                v, tostring(profileName), tostring(err)))
+            if current < target then
+                -- Detach the defaults metatable for the whole migration
+                -- run: its __index deep-copies the DEFAULT sub-table into
+                -- the profile on first read of an absent key, so every
+                -- `profile.X.y == nil` "not yet migrated" guard in the
+                -- migration bodies would see the default value instead of
+                -- nil, skip the legacy copy, and the trailing
+                -- `profile.<legacy> = nil` would destroy the user's
+                -- setting (e.g. settings.uiScale silently reset to 1.0).
+                -- With the metatable off, migrations see only what the
+                -- user actually stored. Migration errors are pcall'd in
+                -- the loop below, so the restore always runs.
+                local mt = getmetatable(profile)
+                setmetatable(profile, nil)
+
+                for v = current + 1, target do
+                    local fn = migrations[v]
+                    if fn then
+                        local ok, err = pcall(fn, profile)
+                        if ok then
+                            profile.schemaVersion = v
+                        else
+                            if Loothing and Loothing.Error then
+                                Loothing:Error(string.format(
+                                    "Settings migration v%d failed for profile '%s': %s",
+                                    v, tostring(profileName), tostring(err)))
+                            end
+                            -- Bail out on this profile so we don't apply
+                            -- subsequent migrations to a half-migrated state.
+                            break
                         end
-                        -- Bail out on this profile so we don't apply
-                        -- subsequent migrations to a half-migrated state.
-                        break
+                    end
+                end
+
+                setmetatable(profile, mt)
+
+                -- Namespace tables the migrations just created are bare
+                -- (built raw, without the materializing __index), but the
+                -- settings system's invariant is that a top-level
+                -- namespace is either ABSENT (metatable serves defaults)
+                -- or default-complete — Settings:Get has no nested
+                -- fallback. Backfill missing defaults into every real
+                -- namespace table non-destructively (containers/arrays
+                -- excluded — see backfillDefaults); migrated and
+                -- user-stored values always win.
+                -- ONLY after full success: if a migration failed and we
+                -- bailed mid-chain, filling defaults now would defeat the
+                -- retry's `== nil` "not yet migrated" guards on the next
+                -- login and permanently orphan the legacy values.
+                if type(profileDefaults) == "table"
+                    and tonumber(rawget(profile, "schemaVersion")) == target then
+                    for key, defVal in pairs(profileDefaults) do
+                        local stored = rawget(profile, key)
+                        if type(stored) == "table" and type(defVal) == "table" then
+                            backfillDefaults(stored, defVal)
+                        end
                     end
                 end
             end

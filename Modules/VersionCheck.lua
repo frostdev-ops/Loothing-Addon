@@ -431,16 +431,8 @@ function VersionCheckMixin:QueryGuild()
         local name, _, _, _, _, _, _, _, online = Loothing.GetGuildRosterInfo(i)
         if online and name then
             name = Utils.NormalizeName(name)
-            local existing = self.versionCache[name] or {}
             guildRosterNames[name] = true
-            self.versionCache[name] = {
-                version = nil,
-                tVersion = nil,
-                timestamp = time(),
-                isOutdated = false,
-                ilvl = existing.ilvl,
-                specID = existing.specID,
-            }
+            self:SeedPendingCacheEntry(name)
         end
     end
 
@@ -448,6 +440,30 @@ function VersionCheckMixin:QueryGuild()
 
     -- Send request via GUILD channel
     Loothing.Comm:SendVersionRequest("guild")
+end
+
+--- Seed (or refresh) a cache row for a roster member at query start,
+-- preserving the last known version data. HandleRequest refuses to
+-- answer during active sessions (anti-flood), so wiping to nil here made
+-- a mid-session query mark the whole roster "Not Installed" and broke
+-- /lt ml handoff's install check. CompleteQuery only degrades entries
+-- that never responded. Shared by QueryGuild and QueryRaid so the
+-- preserved field set cannot drift between the two paths.
+-- @param name string - Normalized player name
+function VersionCheckMixin:SeedPendingCacheEntry(name)
+    local existing = self.versionCache[name] or {}
+    self.versionCache[name] = {
+        version = existing.version,
+        tVersion = existing.tVersion,
+        timestamp = time(),
+        isOutdated = existing.isOutdated or false,
+        ilvl = existing.ilvl,
+        specID = existing.specID,
+        -- Cleared by AddVersionEntry when a response lands (it rebuilds
+        -- the row); CompleteQuery demotes rows still pending.
+        pending = true,
+        misses = existing.misses,
+    }
 end
 
 --- Query raid members
@@ -464,16 +480,8 @@ function VersionCheckMixin:QueryRaid()
     local roster = Utils.GetRaidRoster()
     for _, member in ipairs(roster) do
         if member.online and member.name then
-            local existing = self.versionCache[member.name] or {}
             raidRosterNames[member.name] = true
-            self.versionCache[member.name] = {
-                version = nil,
-                tVersion = nil,
-                timestamp = time(),
-                isOutdated = false,
-                ilvl = existing.ilvl,
-                specID = existing.specID,
-            }
+            self:SeedPendingCacheEntry(member.name)
         end
     end
 
@@ -489,11 +497,45 @@ function VersionCheckMixin:CompleteQuery()
 
     self.queryInProgress = false
 
-    -- Mark unknown versions as "Not Installed"
-    for _, data in pairs(self.versionCache) do
-        if not data.version then
-            data.version = "Not Installed"
-            data.isOutdated = true
+    -- Demote non-responders, scoped to the roster this query covered.
+    -- Suppression detection: receivers refuse version requests during an
+    -- active session (anti-flood), so a query where NOBODY in scope
+    -- responded means "suppressed", not "nobody has the addon" — leave
+    -- the cache untouched (fixes the mid-session query that marked the
+    -- whole raid "Not Installed" and broke /lt ml's install check).
+    -- When others DID respond: a never-seen member demotes immediately
+    -- (old behavior); a member with a previously-known version demotes
+    -- only after two consecutive silent queries, so one laggy reply
+    -- window doesn't flip an installed player — but a genuine uninstall
+    -- does eventually show as "Not Installed" instead of a stale version
+    -- forever.
+    local scope = self.rosterScopeNames or {}
+    local anyResponse = false
+    for name in pairs(scope) do
+        local data = self.versionCache[name]
+        if data and not data.pending then
+            anyResponse = true
+            break
+        end
+    end
+
+    for name in pairs(scope) do
+        local data = self.versionCache[name]
+        if data and data.pending then
+            data.pending = nil
+            if anyResponse then
+                if not data.version then
+                    data.version = "Not Installed"
+                    data.isOutdated = true
+                else
+                    data.misses = (data.misses or 0) + 1
+                    if data.misses >= 2 then
+                        data.version = "Not Installed"
+                        data.isOutdated = true
+                        data.misses = nil
+                    end
+                end
+            end
         end
     end
 

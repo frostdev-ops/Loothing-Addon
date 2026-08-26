@@ -2068,6 +2068,22 @@ end
 --- Update a candidate's voter list based on current votes
 -- @param item table - The item
 -- @param candidateName string - Name of the candidate
+--- Reset per-candidate vote tallies after the authoritative vote set is
+-- flushed for a revote. councilVotes/voters/hasMyVote are derived caches
+-- that are otherwise only recomputed when a NEW vote arrives — without
+-- this sweep the council table kept displaying the previous round's
+-- counts and the ML could award against phantom votes.
+-- @param item table - Session item whose votes were just flushed
+function SessionMixin:ResetCandidateVoteTallies(item)
+    local cm = item and item.GetCandidateManager and item:GetCandidateManager()
+    if not cm then return end
+    for _, candidate in ipairs(cm:GetAllCandidates() or {}) do
+        candidate.councilVotes = 0
+        candidate.voters = nil
+        candidate.hasMyVote = nil
+    end
+end
+
 function SessionMixin:UpdateCandidateVoters(item, candidateName)
     if not item or not candidateName then return end
 
@@ -2177,7 +2193,9 @@ function SessionMixin:RetractVote(itemGUID, candidateName)
     if not itemGUID or not candidateName then return false end
 
     local item = self:GetItemByGUID(itemGUID)
-    if not item or not item:IsVoting() then return false end
+    -- CanAcceptVotes, matching CastVote: during the post-tally late-accept
+    -- grace window a member could still CAST a vote but not undo it.
+    if not item or not item:CanAcceptVotes() then return false end
 
     local voter = Utils.GetPlayerFullName()
     local existing = item:GetVoteByVoter(voter)
@@ -2205,7 +2223,8 @@ function SessionMixin:RetractAllVotes(itemGUID)
     if not itemGUID then return false end
 
     local item = self:GetItemByGUID(itemGUID)
-    if not item or not item:IsVoting() then return false end
+    -- CanAcceptVotes, matching CastVote (see RetractVote).
+    if not item or not item:CanAcceptVotes() then return false end
 
     local voter = Utils.GetPlayerFullName()
 
@@ -2424,8 +2443,12 @@ function SessionMixin:AwardItem(guid, winner, response, awardReasonId, awardReas
             -- Back-reference to the session item, used by RevoteItem(force=true)
             -- to remove superseded history rows when an award is revoked.
             awardedItemGuid = item.guid,
-            -- Winner info (original field names kept for backward compat)
-            winner          = winner,
+            -- Winner info (original field names kept for backward compat).
+            -- item.winner is the SetWinner-normalized form — storing the raw
+            -- argument (free-text from autoAward.awardTo, roster casing, …)
+            -- broke DeleteByPlayer/GetPlayerStats, which normalize their
+            -- input and compare with ==.
+            winner          = item.winner or Utils.NormalizeName(winner) or winner,
             winnerResponse  = response,
             winnerResponseText = responseText,
             winnerClass     = winnerCandidate and winnerCandidate.playerClass or nil,
@@ -2562,6 +2585,7 @@ function SessionMixin:RevoteItem(guid, force)
     if item.votes then
         item.votes:Flush()
     end
+    self:ResetCandidateVoteTallies(item)
     item:SetState(Loothing.ItemState.PENDING)
     item._revotePromptShown = nil
 
@@ -3714,6 +3738,7 @@ function SessionMixin:HandleRemoteVoteRequest(data)
         if item.votes then
             item.votes:Flush()
         end
+        self:ResetCandidateVoteTallies(item)
         item:SetState(Loothing.ItemState.PENDING)
     end
 
@@ -4195,6 +4220,7 @@ function SessionMixin:HandlePlayerInfoResponse(data)
         end
 
         local candidate = candidateManager:GetOrCreateCandidate(data.playerName, candidateClass)
+        if not candidate then return end  -- secret/redacted name normalizes to nil
         candidate:SetGearData(data.slot1Link, data.slot2Link, data.slot1ilvl, data.slot2ilvl)
         candidate:CalculateIlvlDiff(item.itemLevel)
         candidateManager:UpdateCandidateGear(candidate.playerName, candidate.gear1Link, candidate.gear2Link, candidate.gear1ilvl, candidate.gear2ilvl, candidate.ilvlDiff)
@@ -4288,6 +4314,7 @@ function SessionMixin:HandlePlayerResponse(data)
     end
 
     local candidate = candidateManager:GetOrCreateCandidate(sender, senderClass)
+    if not candidate then return end  -- secret/redacted name normalizes to nil
     -- Track whether this is a fresh (first-time) response so ML doesn't
     -- double-count duplicates that arrive via RESPONSE_POLL replay.
     local isFreshResponse = candidate.response == nil
@@ -4514,9 +4541,13 @@ function SessionMixin:HandleRemoteCandidateUpdate(data)
     local candidateName = cData.name
     local candidateClass = type(cData.class) == "string" and cData.class or "UNKNOWN"
     local response = cData.response
-    if response ~= nil and not Loothing.ResponseInfo[response] and not Loothing.SystemResponseInfo[response] then
-        response = nil
-    end
+    -- Track "unrecognized" separately from "absent": an update carrying a
+    -- custom-button response ID the receiver hasn't applied yet must not
+    -- degrade to SetResponse(nil), which WIPED a valid response already
+    -- recorded from the player's own PLAYER_RESPONSE broadcast.
+    local responseRecognized = response == nil
+        or Loothing.ResponseInfo[response] ~= nil
+        or Loothing.SystemResponseInfo[response] ~= nil
     local note = type(cData.note) == "string" and cData.note or nil
     local gear1 = type(cData.gear1) == "string" and cData.gear1 or nil
     local gear2 = type(cData.gear2) == "string" and cData.gear2 or nil
@@ -4527,7 +4558,10 @@ function SessionMixin:HandleRemoteCandidateUpdate(data)
     end
 
     local candidate = candidateManager:GetOrCreateCandidate(candidateName, candidateClass)
-    candidate:SetResponse(response, note)
+    if not candidate then return end  -- secret/redacted name normalizes to nil
+    if responseRecognized then
+        candidate:SetResponse(response, note)
+    end
     if type(cData.roll) == "number" and cData.roll > 0 then
         candidate:SetRoll(cData.roll, 1, 100) -- Range assumed 1-100 for now
     end
@@ -4700,6 +4734,10 @@ function SessionMixin:SyncFromData(data)
                             end
                             if cData.gear1 or cData.gear2 then
                                 candidate:SetGearData(cData.gear1, cData.gear2, cData.ilvl1, cData.ilvl2)
+                                -- Recompute like both live paths do — the
+                                -- 4-arg SetGearData zeroes ilvlDiff, so
+                                -- synced clients showed +0 for everyone.
+                                candidate:CalculateIlvlDiff(item.itemLevel)
                             end
                             if cData.itemsWon then
                                 candidate:SetItemsWon(cData.itemsWon)

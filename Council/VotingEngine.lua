@@ -82,7 +82,7 @@ end
 -- are not counted as abstentions.
 -- @param votes table - DataProvider or array of votes
 -- @param candidates table - Array of candidate names (optional, for filtering)
--- @return table - { winner, response, counts, isTie, tiedCandidates }
+-- @return table - { winningResponse, counts, isTie, tiedResponses, totalVotes }
 function VotingEngine:TallySimple(votes, _candidates)
     local counts = {}
 

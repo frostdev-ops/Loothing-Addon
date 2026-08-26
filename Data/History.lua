@@ -57,35 +57,44 @@ end
     Entry Management
 ----------------------------------------------------------------------]]
 
+--- Should history mutations be blocked by test/simulator state?
+-- Single predicate shared by AddEntry and ClearHistory so the guard set
+-- cannot drift between them. Checks BOTH test-mode sources:
+--   Loothing.TestMode (TestModeState, always loaded via Core/TestModeState.lua)
+--   ns.TestMode        (Debug/TestMode.lua harness — loaded in release TOC too)
+-- They can diverge briefly during init order, so either being active is
+-- enough to block. The Simulator always blocks regardless of the
+-- persistence toggle — it enters test mode with allowPersistence=true
+-- (it needs settings writes), and honoring that here would leak fake
+-- awards into real history. Manual test mode honors "/lt testmode
+-- persist on" as advertised: block only while persistence is disallowed.
+-- @return boolean
+function HistoryMixin:IsPersistenceBlocked()
+    if ns.Simulator and ns.Simulator.IsActive and ns.Simulator:IsActive() then
+        return true
+    end
+    if Loothing.TestMode and Loothing.TestMode.ShouldBlockPersistence
+        and Loothing.TestMode:ShouldBlockPersistence() then
+        return true
+    end
+    if ns.TestMode and ns.TestMode:IsEnabled() then
+        return true
+    end
+    return false
+end
+
 --- Add a history entry
 -- @param entry table - History entry table (see complete schema in Loothing docs)
+-- @return boolean - true if stored; false when rejected (disabled, test
+--   mode, invalid winner). Importers count successes off this.
 function HistoryMixin:AddEntry(entry)
     -- Guard: skip if history is disabled
     if Loothing.Settings and not Loothing.Settings:Get("history.enabled", true) then
-        return
+        return false
     end
 
-    -- Guard: never persist test mode data to history. Check BOTH sources:
-    --   Loothing.TestMode (TestModeState, always loaded via Core/TestModeState.lua)
-    --   ns.TestMode        (Debug/TestMode.lua harness — loaded in release TOC too)
-    -- They can diverge briefly during init order, so testing either being
-    -- active is enough to block a write. Fixes the "remote HISTORY_ENTRY
-    -- slips through in test mode" edge case when only one of the two is up.
-    -- The Simulator always blocks history regardless of the persistence
-    -- toggle — it enters test mode with allowPersistence=true (it needs
-    -- settings writes), and honoring that here would leak fake awards into
-    -- real history.
-    if ns.Simulator and ns.Simulator.IsActive and ns.Simulator:IsActive() then
-        return
-    end
-    -- Manual test mode honors "/lt testmode persist on" as advertised:
-    -- block only while persistence is disallowed.
-    if Loothing.TestMode and Loothing.TestMode.ShouldBlockPersistence
-        and Loothing.TestMode:ShouldBlockPersistence() then
-        return
-    end
-    if ns.TestMode and ns.TestMode:IsEnabled() then
-        return
+    if self:IsPersistenceBlocked() then
+        return false
     end
 
     -- Reject entries with a missing or non-string winner. Remote HISTORY_ENTRY
@@ -97,7 +106,7 @@ function HistoryMixin:AddEntry(entry)
         if Loothing.Debug then
             Loothing:Debug("History: rejecting entry with invalid winner:", tostring(entry.winner))
         end
-        return
+        return false
     end
 
     -- Ensure required fields
@@ -166,6 +175,7 @@ function HistoryMixin:AddEntry(entry)
         self:TriggerEvent("OnEntryAdded", entry)
         self:TriggerEvent("OnHistoryChanged", "add", entry)
     end
+    return true
 end
 
 --- Remove a history entry
@@ -253,10 +263,19 @@ function HistoryMixin:EndBulkUpdate()
         -- An entry both added and removed inside the same bulk window must
         -- not be saved — SaveEntries runs after RemoveSavedEntries, so it
         -- would write a ghost row that isn't in memory and resurrects on
-        -- reload.
+        -- reload. BUT a remove-then-re-add with the SAME guid (overwrite
+        -- import replaces a row and reuses the export's id) must keep the
+        -- replacement — filtering on guid alone silently dropped every
+        -- re-imported row from SavedVariables. Decide by what is actually
+        -- in memory now: keep added[i] only if that exact object survived.
+        local inMemory = {}
+        for _, entry in self.entries:Enumerate() do
+            if entry.guid then inMemory[entry.guid] = entry end
+        end
         for i = #added, 1, -1 do
-            local guid = added[i] and added[i].guid
-            if guid and removed[guid] then
+            local entry = added[i]
+            local guid = entry and entry.guid
+            if guid and removed[guid] and inMemory[guid] ~= entry then
                 table.remove(added, i)
             end
         end
@@ -311,6 +330,15 @@ end
 
 --- Clear all history
 function HistoryMixin:ClearHistory()
+    -- Symmetric with AddEntry's test-mode guard: the SavedVariables half
+    -- below is already blocked by the persistence guard under test mode,
+    -- so flushing only the in-memory copies left memory and SV out of
+    -- sync and made the History panel read as data loss until /reload.
+    -- Test/simulator runs must never clear live history.
+    if self:IsPersistenceBlocked() then
+        return
+    end
+
     self.entries:Flush()
     self.filteredEntries:Flush()
 
@@ -547,10 +575,15 @@ function HistoryMixin:ApplyFilter()
         end
     end
 
-    -- Sort by timestamp descending (newest first)
+    -- Sort by timestamp descending (newest first). DataProvider's
+    -- SetSortComparator only marks the sort PENDING — nothing consumes
+    -- the flag lazily, so without the explicit Sort() the History panel
+    -- and every exporter emitted rows in SV insertion order (oldest
+    -- first) no matter what.
     self.filteredEntries:SetSortComparator(function(a, b)
         return (a.timestamp or 0) > (b.timestamp or 0)
     end)
+    self.filteredEntries:Sort()
 end
 
 --- Check if entry matches current filter
@@ -797,8 +830,15 @@ function HistoryMixin:LoadFromSaved()
         self.entries:Insert(entry)
     end
 
-    -- Auto-prune entries older than 180 days on load
-    self:DeleteByAge(180)
+    -- Auto-prune old entries on load. Controlled by history.maxAgeDays
+    -- (default 180); 0 disables age pruning entirely so guilds can keep a
+    -- full-season audit trail — the old unconditional 180-day purge
+    -- silently and permanently deleted it at login.
+    local maxAgeDays = Loothing.Settings
+        and tonumber(Loothing.Settings:Get("history.maxAgeDays", 180)) or 180
+    if maxAgeDays > 0 then
+        self:DeleteByAge(maxAgeDays)
+    end
     self:PruneSavedHistory()
 
     -- Re-persist if legacy entries were backfilled with new fields
@@ -1038,7 +1078,7 @@ function HistoryMixin:ExportCSV()
         local isAwardReason = (entry.awardReasonId and entry.awardReasonId ~= 0) and 1 or 0
 
         lines[#lines + 1] = table.concat({
-            csv(Utils.GetShortName(entry.winner) or ""),
+            csv(entry.winner or ""),  -- full Name-realm: short names re-realm on import
             csv(dateStr),
             csv(timeStr),
             csv(entry.guid or ""),
@@ -1094,7 +1134,7 @@ function HistoryMixin:ExportTSV()
         local isAwardReason = (entry.awardReasonId and entry.awardReasonId ~= 0) and 1 or 0
 
         lines[#lines + 1] = table.concat({
-            tsv(Utils.GetShortName(entry.winner) or ""),
+            tsv(entry.winner or ""),  -- full Name-realm: short names re-realm on import
             tsv(dateStr),
             tsv(timeStr),
             tsv(entry.guid or ""),
@@ -1401,7 +1441,7 @@ function HistoryMixin:ExportJSON()
             winner          = entry.winner or "",
             winnerClass     = entry.winnerClass or "",
             response        = responseName,
-            responseID      = entry.winnerResponse or 0,
+            responseID      = tostring(entry.winnerResponse or 0),  -- string: matches compact/web format
             winnerNote      = entry.winnerNote or "",
             winnerRoll      = entry.winnerRoll or 0,
             winnerGear1     = entry.winnerGear1 or "",
@@ -1417,7 +1457,7 @@ function HistoryMixin:ExportJSON()
             groupSize       = entry.groupSize or 0,
             mapID           = entry.mapID or 0,
             votes           = entry.votes or 0,
-            awardReasonId   = entry.awardReasonId or 0,
+            awardReasonId   = tostring(entry.awardReasonId or 0),  -- string: matches compact/web format
             awardReason     = entry.awardReason or "",
             owner           = entry.owner or "",
             candidates      = entry.candidates or {},
