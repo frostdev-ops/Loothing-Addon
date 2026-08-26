@@ -41,14 +41,26 @@ function CouncilMixin:LoadFromSettings()
     local savedMembers = Loothing.Settings:Get("council.members")
     if savedMembers then
         for _, memberData in ipairs(savedMembers) do
+            -- Normalize saved names: every runtime lookup (AddMember,
+            -- RemoveMember, IsMember) keys self.members by NormalizeName
+            -- output, so a raw legacy key (e.g. uppercase realm) would be
+            -- unremovable. Normalizing here self-heals saved data on the
+            -- next SaveToSettings.
             if type(memberData) == "string" then
-                self.members[memberData] = {
-                    name = memberData,
-                    addedTime = 0,
-                    addedBy = "unknown",
-                }
-            elseif type(memberData) == "table" then
-                self.members[memberData.name] = memberData
+                local name = Utils.NormalizeName(memberData)
+                if name then
+                    self.members[name] = {
+                        name = name,
+                        addedTime = 0,
+                        addedBy = "unknown",
+                    }
+                end
+            elseif type(memberData) == "table" and type(memberData.name) == "string" then
+                local name = Utils.NormalizeName(memberData.name)
+                if name then
+                    memberData.name = name
+                    self.members[name] = memberData
+                end
             end
         end
     end
